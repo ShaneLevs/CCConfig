@@ -42,10 +42,6 @@ const DB_PREFIX = 'ccswitch_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
 const CLAUDE_MODEL_SLOTS = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel']
 const CLAUDE_SLOT_LABELS = { model: '默认模型', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
-// 1M 上下文：与 Claude 配置页一致，用模型值尾部 [1m] 标记（等价于勾选框勾选态）
-const strip1m = (v) => (v || '').replace(/\[1m\]$/i, '')
-const buildClaudeModelValue = (model) =>
-  Number(model.contextWindow) >= 1000000 ? `${model.id}[1m]` : model.id
 
 const dispatchToClaude = (provider, model) => {
   if ((provider.api || 'openai-completions') !== 'anthropic-messages') {
@@ -76,25 +72,15 @@ const dispatchToClaude = (provider, model) => {
   if (provider.baseUrl) next.baseUrl = provider.baseUrl
   next.authVar = 'ANTHROPIC_AUTH_TOKEN'
   next.updatedAt = now
-  // 模型槽位：已有同模型跳过（若缺 [1m] 标记则原地补上）；否则填第一个空槽位；全满报错
-  // 模型上下文 ≥ 100 万时，值带 [1m] 后缀（等价于配置页勾选 1m）
-  const modelValue = buildClaudeModelValue(model)
-  const existingSlot = CLAUDE_MODEL_SLOTS.find(s => strip1m(next[s]) === model.id)
-  let message
-  if (existingSlot) {
-    if (next[existingSlot] === modelValue) {
-      return `Claude 配置「${provider.name}」中已有模型 ${model.id}`
-    }
-    next[existingSlot] = modelValue
-    message = `已更新 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[existingSlot]}（已勾选 1m 上下文）`
-  } else {
-    const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
-    if (!slot) {
-      throw new Error(`Claude 配置「${provider.name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发`)
-    }
-    next[slot] = modelValue
-    message = `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}${modelValue !== model.id ? '（已勾选 1m 上下文）' : ''}`
+  // 模型槽位：已有同模型跳过；否则填第一个空槽位；全满报错
+  if (CLAUDE_MODEL_SLOTS.some(s => next[s] === model.id)) {
+    return `Claude 配置「${provider.name}」中已有模型 ${model.id}`
   }
+  const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
+  if (!slot) {
+    throw new Error(`Claude 配置「${provider.name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发`)
+  }
+  next[slot] = model.id
   let res
   try {
     res = window.utools.db.put(next)
@@ -104,7 +90,7 @@ const dispatchToClaude = (provider, model) => {
   if (!res || !res.ok) {
     throw new Error('保存 Claude 配置失败' + (res && res.message ? `：${res.message}` : ''))
   }
-  return message
+  return `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}`
 }
 
 // OpenCode CLI：provider[id]（options.baseURL/apiKey）+ models[id]
