@@ -1,11 +1,12 @@
 // 通用配置主数据 → 各 Agent 模型配置下发
-// 把通用库（uTools DB）中的 provider + model 写入 6 个 agent 的模型配置：
+// 把通用库（uTools DB）中的 provider + model 写入 7 个 agent 的模型配置：
 //   claude   → ~/.claude/settings.json  env（ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL）
 //   opencode → ~/.config/opencode.json(.jsonc)  provider[id]（options.baseURL/apiKey + models[id]）
 //   pi       → ~/.pi/agent/models.json  providers[name] + settings.json（可选默认）
 //   omp      → ~/.omp/agent/models.yml  providers[name]（无默认模型概念，modelRoles 由用户自行配置）
 //   reasonix → ~/.reasonix/config.toml  providers[] + .env（可选 default_model）
 //   codex    → ~/.codex/config.toml  [model_providers.<id>] + 顶层 model_provider/model（可选默认）
+//   kimi     → ~/.kimi-code/config.toml  [providers.<name>] + [models."<name>/<id>"] + default_model（可选默认）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -14,6 +15,7 @@ const pi = require('./pi')
 const omp = require('./omp')
 const reasonix = require('./reasonix')
 const codex = require('./codex')
+const kimi = require('./kimi')
 const autoroute = require('./autoroute')
 
 // cost 规范化（与 pi/omp 一致：全 0 省略，Pi schema 约定 0 无效）
@@ -40,6 +42,10 @@ const DB_PREFIX = 'ccswitch_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
 const CLAUDE_MODEL_SLOTS = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel']
 const CLAUDE_SLOT_LABELS = { model: '默认模型', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
+// 1M 上下文：与 Claude 配置页一致，用模型值尾部 [1m] 标记（等价于勾选框勾选态）
+const strip1m = (v) => (v || '').replace(/\[1m\]$/i, '')
+const buildClaudeModelValue = (model) =>
+  Number(model.contextWindow) >= 1000000 ? `${model.id}[1m]` : model.id
 
 const dispatchToClaude = (provider, model) => {
   if ((provider.api || 'openai-completions') !== 'anthropic-messages') {
@@ -70,15 +76,25 @@ const dispatchToClaude = (provider, model) => {
   if (provider.baseUrl) next.baseUrl = provider.baseUrl
   next.authVar = 'ANTHROPIC_AUTH_TOKEN'
   next.updatedAt = now
-  // 模型槽位：已有同模型跳过；否则填第一个空槽位；全满报错
-  if (CLAUDE_MODEL_SLOTS.some(s => next[s] === model.id)) {
-    return `Claude 配置「${provider.name}」中已有模型 ${model.id}`
+  // 模型槽位：已有同模型跳过（若缺 [1m] 标记则原地补上）；否则填第一个空槽位；全满报错
+  // 模型上下文 ≥ 100 万时，值带 [1m] 后缀（等价于配置页勾选 1m）
+  const modelValue = buildClaudeModelValue(model)
+  const existingSlot = CLAUDE_MODEL_SLOTS.find(s => strip1m(next[s]) === model.id)
+  let message
+  if (existingSlot) {
+    if (next[existingSlot] === modelValue) {
+      return `Claude 配置「${provider.name}」中已有模型 ${model.id}`
+    }
+    next[existingSlot] = modelValue
+    message = `已更新 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[existingSlot]}（已勾选 1m 上下文）`
+  } else {
+    const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
+    if (!slot) {
+      throw new Error(`Claude 配置「${provider.name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发`)
+    }
+    next[slot] = modelValue
+    message = `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}${modelValue !== model.id ? '（已勾选 1m 上下文）' : ''}`
   }
-  const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
-  if (!slot) {
-    throw new Error(`Claude 配置「${provider.name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发`)
-  }
-  next[slot] = model.id
   let res
   try {
     res = window.utools.db.put(next)
@@ -88,7 +104,7 @@ const dispatchToClaude = (provider, model) => {
   if (!res || !res.ok) {
     throw new Error('保存 Claude 配置失败' + (res && res.message ? `：${res.message}` : ''))
   }
-  return `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}`
+  return message
 }
 
 // OpenCode CLI：provider[id]（options.baseURL/apiKey）+ models[id]
@@ -266,6 +282,28 @@ const dispatchToCodex = (provider, model, opts) => {
   return `供应商 ${id} 已更新，模型 ${model.id} 已写入${suffix}`
 }
 
+// Kimi Code CLI：config.toml [providers.<name>] + [models."<name>/<id>"] + 可选 default_model。
+// 通用库四种协议全部有对应供应商类型，无协议守卫
+const KIMI_PROVIDER_TYPE = {
+  'openai-completions': 'openai',
+  'openai-responses': 'openai_responses',
+  'anthropic-messages': 'anthropic',
+  'google-generative-ai': 'google-genai',
+}
+
+const dispatchToKimi = (provider, model, opts) => {
+  const name = opts.providerName || provider.name
+  const type = KIMI_PROVIDER_TYPE[provider.api || 'openai-completions'] || 'openai'
+  kimi.upsertKimiProvider(name, { type, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
+  const alias = kimi.upsertKimiModel(name, model.id, { contextWindow: model.contextWindow })
+  let suffix = ''
+  if (opts.setDefault) {
+    kimi.setKimiDefaultModel(alias)
+    suffix = '，已设为默认模型'
+  }
+  return `供应商 ${name} 已更新，模型别名 ${alias} 已写入${suffix}`
+}
+
 // ==================== 自动路由下发 ====================
 
 // 自动路由网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
@@ -323,6 +361,17 @@ const cleanupLegacyAutoRoute = (app) => {
     } else if (app === "codex") {
       // deleteCodexProvider 在条目不存在或它是当前使用供应商时抛错 → 跳过即可
       codex.deleteCodexProvider(LEGACY_AUTOROUTE_NAME);
+    } else if (app === "kimi") {
+      // 清理旧版本可能下发的中文「自动路由」：其全部模型别名 + 供应商条目；被默认模型引用时跳过
+      const kProvs = kimi.getKimiProviderList();
+      if (!kProvs.some((p) => p.name === LEGACY_AUTOROUTE_NAME)) return;
+      const kAliases = kimi
+        .getKimiModelList()
+        .filter((m) => m.provider === LEGACY_AUTOROUTE_NAME)
+        .map((m) => m.alias);
+      if (kAliases.includes(kimi.getKimiDefaultModel())) return;
+      kAliases.forEach((a) => kimi.deleteKimiModel(a));
+      kimi.deleteKimiProvider(LEGACY_AUTOROUTE_NAME);
     }
   } catch (e) {
     /* 清理失败不影响本次下发 */
@@ -345,12 +394,14 @@ const dispatchAutoRoute = (targets) => {
       continue;
     }
     const isCodex = (t && t.app) === "codex";
+    // kimi openai 类型按 SDK 约定向 base_url 追加 /chat/completions，网关路径需带 /v1（同 Codex）
+    const isKimi = (t && t.app) === "kimi";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // codex 走网关的 /v1/responses 入站（Responses 是 Codex 原生 wire_api），base_url 需带 /v1
       api: (t && t.app) === "claude" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
-      baseUrl: isCodex ? `${baseUrl}/v1` : baseUrl,
+      baseUrl: isCodex || isKimi ? `${baseUrl}/v1` : baseUrl,
       models,
     };
     const targetResults = [];
@@ -378,6 +429,7 @@ const APP_DISPATCHERS = {
   omp: { run: dispatchToOmp },
   reasonix: { run: dispatchToReasonix },
   codex: { run: dispatchToCodex },
+  kimi: { run: dispatchToKimi },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -411,5 +463,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi,
 }

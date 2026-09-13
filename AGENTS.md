@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex 六应用的 API 配置切换、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动路由网关、模型下发）。
+CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code CLI 七应用的 API 配置切换、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动路由网关、模型下发）。
 
 ## 技术栈与命令
 
@@ -21,10 +21,10 @@ npm run build   # 生产构建（含 esbuild 打包 preload）
 - **App Context 单例**：`useAppContext` 用模块级 ref（非 provide/inject）在 index.vue 与各子视图间共享状态。
 - **视图组织**：`src/Switch/<app>/ConfigView|McpView|SkillView|PluginView|UsageView.vue` + 同名 `styles/` CSS；跨应用共享组件在 `src/components/`，共享逻辑在 `src/composables/`。
 - **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动路由、Env 额外字段）用 `_<nativeId>` 后缀分文档。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccswitch_active_config_id`。
-- **Claude 认证方式**：每配置可选 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`（互斥，切换时写一清一）。模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。OpenCode Go：URL 精确等于 `https://opencode.ai/zen/go`（不带 /v1）时自动切 API_KEY 认证。
 - **Skill 启停**：`.disabled/` 目录机制（物理移动目录），Claude → `~/.claude/skills`，OpenCode → `~/.config/opencode/skills`，通用 → `~/.agents/skills`。
 - **自动路由**（`autoroute.js` + `autoroute-convert/`）：本地网关（默认 127.0.0.1:17877），入站 Anthropic Messages / OpenAI Chat / Responses 三协议，同协议透传、跨协议经 canonical 中间格式转换（含 SSE 流式）；随机 key 防滥用；请求日志存内存（最近 50 条）。
-- **Codex**：`~/.codex/config.toml`（smol-toml，解析失败抛错阻断写回，仅管模型相关字段其余原样保留）；「模型目录」= 合并各供应商模型写 `~/.codex/models.json` + `model_catalog_json` 绝对路径（正斜杠）；条目必须符合 Codex ModelInfo schema（reasoning level 键名必须是 `effort`，含 instructions_template），带「由 CCSwitch 生成」标记的旧条目同步时原地升级。
+
+各应用配置文件的具体读写规则与字段约定见 [README.md](README.md)「数据流」与「认证与模型选择细节」两节。
 
 ## Agent 启停 ↔ 启动指令
 

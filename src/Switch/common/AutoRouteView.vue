@@ -15,6 +15,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "omp", value: "omp" },
   { label: "Reasonix", value: "reasonix" },
   { label: "Codex", value: "codex" },
+  { label: "Kimi Code CLI", value: "kimi" },
 ];
 
 const loading = ref(false);

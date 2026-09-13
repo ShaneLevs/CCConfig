@@ -30,6 +30,7 @@ import OpenCodeUsageView from "./opencode/UsageView.vue";
 import OmpConfigView from "./omp/ConfigView.vue";
 import ReasonixConfigView from "./reasonix/ConfigView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
+import KimiConfigView from "./kimi/ConfigView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -43,7 +44,7 @@ const props = defineProps({
   payload: String,
 });
 
-const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isCommon } = useAppContext();
+const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isCommon } = useAppContext();
 
 // 自动路由开启状态：「路由」tab 按钮右上角绿点标识（AutoRouteView 开关切换时同步）
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
@@ -95,6 +96,7 @@ const appLabel = computed(() => {
   if (isOmp.value) return "omp";
   if (isReasonix.value) return "Reasonix";
   if (isCodex.value) return "Codex Desktop";
+  if (isKimi.value) return "Kimi Code CLI";
   return "通用";
 });
 
@@ -130,6 +132,9 @@ const pageTitleSuffix = computed(() => {
     codex: {
       config: "模型配置",
     },
+    kimi: {
+      config: "模型配置",
+    },
     common: {
       config: "配置",
       autoroute: "路由",
@@ -158,7 +163,7 @@ const switchApp = (app) => {
 // 否则 uTools 以 file:// 加载时绝对路径会指向文件系统根目录导致图标丢失）
 const ASSET_BASE = import.meta.env.BASE_URL;
 const VISIBLE_AGENTS_DB = "ccswitch_visible_agents";
-const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex"];
+const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi"];
 const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}claudecode.png` },
   opencode: { name: "OpenCode CLI", icon: `${ASSET_BASE}icon-opencode.png` },
@@ -166,6 +171,7 @@ const AGENT_META = {
   omp: { name: "omp", icon: `${ASSET_BASE}omp-icon.svg` },
   reasonix: { name: "Reasonix", icon: `${ASSET_BASE}reasonix.svg` },
   codex: { name: "Codex Desktop", icon: `${ASSET_BASE}icon-codex.png` },
+  kimi: { name: "Kimi Code CLI", icon: `${ASSET_BASE}kimi.svg` },
 };
 
 // 可见 agent：有记录用记录（缺键默认启用，兼容未来新增 agent），无记录默认全部启用并写库；检测结果只在首次参与，之后不覆盖用户选择
@@ -285,6 +291,7 @@ onMounted(() => {
     ompConfig: "omp",
     reasonixConfig: "reasonix",
     codexConfig: "codex",
+    kimiConfig: "kimi",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -357,6 +364,7 @@ onMounted(() => {
         <img v-else-if="isOmp" :src="`${ASSET_BASE}omp-icon.svg`" alt="logo" class="logo" />
         <img v-else-if="isReasonix" :src="`${ASSET_BASE}reasonix.svg`" alt="logo" class="logo" />
         <img v-else-if="isCodex" :src="`${ASSET_BASE}icon-codex.png`" alt="logo" class="logo" />
+        <img v-else-if="isKimi" :src="`${ASSET_BASE}kimi.svg`" alt="logo" class="logo" />
         <img v-else-if="isPi" :src="`${ASSET_BASE}icon-pi.png`" alt="logo" class="logo" />
         <img v-else-if="isCommon" :src="`${ASSET_BASE}gen.svg`" alt="logo" class="logo" />
         <Dropdown
@@ -538,6 +546,17 @@ onMounted(() => {
             <template #icon><DashboardIcon /></template> 配置
           </Button>
         </div>
+        <!-- Kimi tabs（仅模型配置） -->
+        <div v-else-if="isKimi" class="tab-buttons">
+          <Button
+            size="small"
+            :theme="activeTab === 'config' ? 'primary' : 'default'"
+            :variant="activeTab === 'config' ? 'base' : 'outline'"
+            @click="activeTab = 'config'"
+          >
+            <template #icon><DashboardIcon /></template> 配置
+          </Button>
+        </div>
         <!-- OpenCode tabs -->
         <div v-else class="tab-buttons">
           <Button
@@ -681,6 +700,11 @@ onMounted(() => {
     <!-- Codex views（仅模型配置） -->
     <template v-if="isAppReady('codex')">
       <CodexConfigView v-if="isCodex && activeTab === 'config'" />
+    </template>
+
+    <!-- Kimi views（仅模型配置） -->
+    <template v-if="isAppReady('kimi')">
+      <KimiConfigView v-if="isKimi && activeTab === 'config'" />
     </template>
 
     <Dialog

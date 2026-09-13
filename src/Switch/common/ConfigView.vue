@@ -551,6 +551,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "omp", value: "omp" },
   { label: "Reasonix", value: "reasonix" },
   { label: "Codex", value: "codex" },
+  { label: "Kimi Code CLI", value: "kimi" },
 ];
 
 // 供应商 + 模型合并为一个级联选择器：按供应商分组，value 用 "供应商::模型ID" 区分同名；
@@ -1186,7 +1187,7 @@ onMounted(refresh);
               <Checkbox v-else :value="opt.value" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
             </label>
           </CheckboxGroup>
-          <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml</div>
+          <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）</div>
         </div>
       </div>
     </Dialog>

@@ -10,6 +10,7 @@ const usage = require("./services/usage");
 const pi = require("./services/pi");
 const omp = require("./services/omp");
 const reasonix = require("./services/reasonix");
+const kimi = require("./services/kimi");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -1987,7 +1988,27 @@ window.services = {
   generateReasonixApiKeyEnv: reasonix.generateReasonixApiKeyEnv,
   openReasonixDir: reasonix.openReasonixDir,
   isReasonixInstalled: reasonix.isReasonixInstalled,
-  // 检测 5 个 agent 是否已有配置数据（本地文件 + DB，无网络，全部 try/catch）
+  // ==================== Kimi Code CLI（~/.kimi-code/config.toml，仅模型配置） ====================
+  getKimiConfigPath: kimi.getKimiConfigPath,
+  readKimiConfig: kimi.readKimiConfig,
+  writeKimiConfig: kimi.writeKimiConfig,
+  getKimiProviderList: kimi.getKimiProviderList,
+  addKimiProvider: kimi.addKimiProvider,
+  updateKimiProvider: kimi.updateKimiProvider,
+  deleteKimiProvider: kimi.deleteKimiProvider,
+  getKimiModelList: kimi.getKimiModelList,
+  addKimiModel: kimi.addKimiModel,
+  updateKimiModel: kimi.updateKimiModel,
+  deleteKimiModel: kimi.deleteKimiModel,
+  getKimiDefaultModel: kimi.getKimiDefaultModel,
+  setKimiDefaultModel: kimi.setKimiDefaultModel,
+  openKimiDir: kimi.openKimiDir,
+  isKimiInstalled: kimi.isKimiInstalled,
+  // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
+  KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
+  KIMI_EFFORTS: kimi.KIMI_EFFORTS,
+  MODEL_EXTRA_KEYS: kimi.MODEL_EXTRA_KEYS,
+  // 检测各 agent 是否已有配置数据（本地文件 + DB，无网络，全部 try/catch）
   detectAgentsConfig() {
     const hasData = {
       claude: false,
@@ -1996,6 +2017,7 @@ window.services = {
       omp: false,
       reasonix: false,
       codex: false,
+      kimi: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -2056,6 +2078,17 @@ window.services = {
       hasData.codex = !!(
         (cfg && cfg.model_providers && Object.keys(cfg.model_providers).length > 0) ||
         (cfg && (cfg.model || cfg.model_provider))
+      );
+    } catch (e) {
+      /* ignore */
+    }
+    // kimi：config.toml 有 providers 或 models
+    try {
+      const cfg = kimi.readKimiConfig();
+      hasData.kimi = !!(
+        cfg &&
+        (Object.keys(cfg.providers || {}).length > 0 ||
+          Object.keys(cfg.models || {}).length > 0)
       );
     } catch (e) {
       /* ignore */

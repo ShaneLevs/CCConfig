@@ -95,6 +95,12 @@ const FEATURE_DEFINITIONS = {
     icon: "icon-codex.png",
     cmds: ["Codex配置"],
   },
+  kimiConfig: {
+    code: "kimiConfig",
+    explain: "Kimi Code CLI 模型配置管理工具",
+    icon: "kimi.svg",
+    cmds: ["Kimi配置"],
+  },
 };
 
 // 各智能体 → 其启动命令对应的 feature code（同时覆盖「功能指令」与「匹配指令」）。
@@ -106,6 +112,7 @@ const AGENT_FEATURES = {
   omp: ["ompConfig"],
   reasonix: ["reasonixConfig"],
   codex: ["codexConfig"],
+  kimi: ["kimiConfig"],
 };
 
 const VISIBLE_AGENTS_DB = "ccswitch_visible_agents";

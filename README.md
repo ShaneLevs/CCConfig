@@ -1,16 +1,18 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode CLI**、**Pi Agent**、**omp**、**Reasonix** 五个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode CLI**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code CLI** 七个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
 
 ## 功能特性
 
-- **应用切换** — Claude Code / OpenCode CLI / Pi Agent / omp / Reasonix + 通用配置，各自独立配置，一键切换
+- **应用切换** — Claude Code / OpenCode CLI / Pi Agent / omp / Reasonix / Codex / Kimi Code CLI + 通用配置，各自独立配置，一键切换
 - **配置管理** — 读取、保存、切换各应用的 API 配置：
   - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
   - OpenCode CLI：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
   - Pi Agent：`~/.pi/agent/settings.json` + `models.json`
   - omp：`~/.omp/agent/models.yml` 供应商/模型 + `config.yml` modelRoles
   - Reasonix：`~/.reasonix/config.toml`（smol-toml 读写，保留未知扩展字段）+ `~/.reasonix/.env` 密钥管理
+  - Codex：`~/.codex/config.toml` + `~/.codex/models.json` 模型目录（仅管模型字段，其余原样保留）
+  - Kimi Code CLI：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 本地（`~/.mcp.json`）与云端（uTools DB）双存储、合并为单一列表管理；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停
 - **自动路由（本地模型网关）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
@@ -64,6 +66,8 @@ npm run build
 | `Pi Agents配置` | 打开 Pi Agent 配置管理 |
 | `omp配置` | 打开 omp 配置管理 |
 | `Reasonix配置` | 打开 Reasonix 配置管理 |
+| `Codex配置` | 打开 Codex 配置管理 |
+| `Kimi配置` | 打开 Kimi Code CLI 模型配置 |
 | 粘贴 SkillHub / 魔搭链接 | 自动进入 Skill 安装（通用 / Claude Code / OpenCode CLI） |
 | `pi install <包名>` | 自动进入 Pi Extension 安装 |
 
@@ -75,7 +79,7 @@ npm run build
 - [uTools API](https://u.tools/docs/developer/api.html)
 - [json5](https://github.com/json5/json5)（OpenCode json/jsonc 配置解析）
 - [js-yaml](https://github.com/nodeca/js-yaml)（omp models.yml / config.yml 读写）
-- [smol-toml](https://github.com/squirrelchat/smol-toml)（Reasonix config.toml 读写）
+- [smol-toml](https://github.com/squirrelchat/smol-toml)（Reasonix / Codex / Kimi Code config.toml 读写）
 - [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MCP 工具发现）
 - [ogl](https://github.com/oframe/ogl)（深色背景特效 WebGL 渲染）
 
@@ -101,7 +105,7 @@ src/
 │   ├── Aurora.vue             # 深色背景特效：流动极光
 │   └── Galaxy.vue             # 深色背景特效：星河漫游
 ├── composables/
-│   ├── useAppContext.js       # 应用切换状态（Claude / OpenCode / Pi / omp / Reasonix / 通用）
+│   ├── useAppContext.js       # 应用切换状态（Claude / OpenCode / Pi / omp / Reasonix / Codex / Kimi / 通用）
 │   ├── useConfigColumns.js    # 双列可拖拽瀑布流布局
 │   ├── useConfigImportExport.js  # 压缩字符串导入导出
 │   ├── useConfigSwitch.js     # 应用配置到 settings.json
@@ -142,6 +146,12 @@ src/
     ├── reasonix/              # Reasonix 视图
     │   ├── ConfigView.vue     # 供应商/模型/默认模型 + .env 密钥管理
     │   └── styles/
+    ├── codex/                 # Codex 视图（仅配置 tab）
+    │   ├── ConfigView.vue     # 供应商 CRUD + 模型目录同步（~/.codex/models.json）
+    │   └── styles/
+    ├── kimi/                  # Kimi Code CLI 视图（仅配置 tab）
+    │   ├── ConfigView.vue     # 供应商手风琴 + 模型别名标签（星标设默认，含扩展字段高级选项）
+    │   └── styles/
     └── common/                # 通用配置（跨 agent 主数据）
         ├── ConfigView.vue     # 供应商/模型主数据库 CRUD（四协议）
         ├── McpView.vue        # MCP：本地 ~/.mcp.json + 云端 DB 合并单一列表
@@ -153,7 +163,7 @@ public/
 ├── logo.png                   # 插件主 logo（45° 彩虹星芒）
 ├── gen.svg                    # 通用配置功能图标
 ├── claudecode.png             # Claude Code 专属图标
-├── icon-opencode.png / icon-pi.png / omp-icon.svg / reasonix.svg
+├── icon-opencode.png / icon-pi.png / omp-icon.svg / reasonix.svg / icon-codex.png / kimi.svg
 └── preload/
     ├── services.js            # 服务入口 → window.services
     ├── package.json           # Preload 依赖清单（json5 / js-yaml / smol-toml）
@@ -167,6 +177,9 @@ public/
         ├── pi.js              # Pi Agent 供应商/模型/扩展 CRUD + /models API 自动拉取
         ├── omp.js             # omp modelRoles + models.yml providers CRUD（js-yaml）
         ├── reasonix.js        # Reasonix config.toml + .env 读写（smol-toml）
+        ├── codex.js           # Codex config.toml + models.json 模型目录读写（smol-toml）
+        ├── kimi.js            # Kimi Code CLI config.toml 读写（providers/models/default_model，smol-toml）
+        ├── commands.js        # 各 agent 动态启动指令注册/移除（FEATURE_DEFINITIONS ↔ 启停状态同步）
         ├── dispatch.js        # 通用库 → 各 agent 模型配置下发（dispatchCommonModel / dispatchAutoRoute）
         ├── autoroute.js       # 自动路由本地网关（uTools DB 配置、http server 启停、路由、请求日志）
         ├── autoroute-convert/ # 协议转换层：canonical.js + source.js/target.js + stream.js
@@ -222,7 +235,32 @@ Reasonix:
   ~/.reasonix/config.toml（Windows: %APPDATA%\reasonix\config.toml）→ smol-toml 读写
   ~/.reasonix/.env → API Key / 环境变量管理（掩码编辑，支持按 Reasonix 官方规则自动生成变量名）
   供应商支持多种协议（openai 兼容等），未知扩展字段写回时原样保留
+
+Codex:
+  ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）
+  「模型目录」= 合并各供应商模型写 ~/.codex/models.json + model_catalog_json 绝对路径（正斜杠）
+  条目必须符合 Codex ModelInfo schema（reasoning level 键名必须是 effort，含 instructions_template）
+  带「由 CCSwitch 生成」标记的旧条目同步时原地升级
+
+Kimi Code CLI:
+  ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）
+  只管理三处：顶层 default_model、[providers.<name>]（type/base_url/api_key）、[models."<alias>"]（provider/model/max_context_size 必填）
+  api_key 明文写入文件：CLI 不从 shell 环境取凭证（文档要求）
+  官方可选扩展字段 display_name / max_input_size / max_output_size / capabilities / support_efforts /
+    default_effort / off_effort / reasoning_key / adaptive_thinking 经 MODEL_*_FIELDS 表管理
+  协议守卫：max_output_size + adaptive_thinking 仅 anthropic；reasoning_key 仅 openai/openai_responses
+  overrides / base_url / protocol 等 CLI 自动写入字段走 _extra 原样往返，UI 不暴露编辑入口
+  含 oauth 字段的 /login 托管供应商只读禁改禁删；下发别名 = 供应商/模型ID
+  通用库四种协议全支持（openai / openai_responses / anthropic / google-genai 映射）
 ```
+
+## 认证与模型选择细节
+
+### Claude 认证方式
+
+- 每配置可选 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`（互斥，切换时写一清一）。
+- 模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。
+- OpenCode Go：URL 精确等于 `https://opencode.ai/zen/go`（不带 /v1）时自动切 API_KEY 认证。
 
 ## 开发
 
