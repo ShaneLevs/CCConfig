@@ -46,31 +46,26 @@ const allWeeks = computed(() => {
   const keyOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
   // GitHub 风格：固定展示最近 maxWeeks 周（截止到今天），数据不足的早期周补空单元格，保证铺满整行
+  // 起点回退到上一个周日对齐，因此列数恒为 maxWeeks（最多 +1 列，由 visibleWeeks 截断最左侧）
   const today = new Date();
   const start = new Date(today);
   start.setDate(start.getDate() - (maxWeeks.value * 7 - 1));
   start.setDate(start.getDate() - start.getDay()); // 对齐到周日
 
-  // 结束于最后一个完整周的周六：新的一周开始时整列一次性铺满，
-  // 而不是随着日子一天天过去逐格生成（未来日期渲染为无数据的空格子）
-  const end = new Date(start);
-  end.setDate(end.getDate() + maxWeeks.value * 7 - 1);
-
   const result = [];
   let currentWeek = [];
+  const lastKey = keyOf(today); // 用日期字符串比较，避开 Date 对象携带的时分判（跨夏令时会漏掉今天那一格）
   const cursor = new Date(start);
-  while (cursor <= end) {
-    const isFuture = cursor > today;
+  while (keyOf(cursor) <= lastKey) {
     const key = keyOf(cursor);
-    const d = isFuture ? undefined : byDate.get(key);
+    const d = byDate.get(key);
     let level = 0;
     if (d && d.tokens > 0) {
       const ratio = d.tokens / maxTokens;
       level = ratio <= 0.1 ? 1 : ratio <= 0.3 ? 2 : ratio <= 0.6 ? 3 : 4;
     }
     currentWeek.push({
-      // 未来日期不挂 tooltip，渲染为普通空格子
-      date: isFuture ? "" : key,
+      date: key,
       tokens: d ? d.tokens : 0,
       models: d ? d.models : undefined,
       level,
@@ -86,6 +81,7 @@ const allWeeks = computed(() => {
     if (currentWeek.length === 7) { result.push(currentWeek); currentWeek = []; }
     cursor.setDate(cursor.getDate() + 1);
   }
+  // 本周未过完：最后一列补不可见占位格（.level--1 为 visibility:hidden），保持列宽稳定
   if (currentWeek.length > 0) {
     while (currentWeek.length < 7) currentWeek.push({ date: "", level: -1 });
     result.push(currentWeek);
