@@ -1,5 +1,5 @@
 // 通用配置主数据 → 各 Agent 模型配置下发
-// 把通用库（uTools DB）中的 provider + model 写入 7 个 agent 的模型配置：
+// 把通用库（uTools DB）中的 provider + model 写入 8 个 agent 的模型配置：
 //   claude   → ~/.claude/settings.json  env（ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL）
 //   opencode → ~/.config/opencode.json(.jsonc)  provider[id]（options.baseURL/apiKey + models[id]）
 //   pi       → ~/.pi/agent/models.json  providers[name] + settings.json（可选默认）
@@ -7,6 +7,7 @@
 //   reasonix → ~/.reasonix/config.toml  providers[] + .env（可选 default_model）
 //   codex    → ~/.codex/config.toml  [model_providers.<id>] + 顶层 model_provider/model（可选默认）
 //   kimi     → ~/.kimi-code/config.toml  [providers.<name>] + [models."<name>/<id>"] + default_model（可选默认）
+//   minimax  → ~/.minimax/config.yaml  custom_provider.<key>（API 格式与通用库协议同名）+ models.<id> + defaultModel（可选默认）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -16,6 +17,7 @@ const omp = require('./omp')
 const reasonix = require('./reasonix')
 const codex = require('./codex')
 const kimi = require('./kimi')
+const minimax = require('./minimax')
 const autoroute = require('./autoroute')
 
 // cost 规范化（与 pi/omp 一致：全 0 省略，Pi schema 约定 0 无效）
@@ -290,6 +292,32 @@ const dispatchToKimi = (provider, model, opts) => {
   return `供应商 ${name} 已更新，模型别名 ${alias} 已写入${suffix}`
 }
 
+// MiniMax Code：config.yaml custom_provider.<key>.models.<id> + 可选 defaultModel。
+// 三种 API 格式与通用库协议同名（identity 映射），仅 google-generative-ai 不支持需守卫；
+// 通用库供应商名可为中文 → providerKeyFor 确定性清洗为 ASCII 键（同名恒同键，upsert 幂等）
+const dispatchToMinimax = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  if (!minimax.MINIMAX_API_FORMATS.includes(api)) {
+    throw new Error(`供应商「${provider.name}」协议为 ${api}，MiniMax Code 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+  }
+  const name = opts.providerName || provider.name
+  const key = minimax.providerKeyFor(name)
+  minimax.upsertMinimaxProvider(key, { name, api, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
+  const ref = minimax.upsertMinimaxModel(key, model.id, {
+    name: model.name || model.id,
+    contextWindow: model.contextWindow,
+    outputWindow: model.maxTokens,
+    inputTypes: Array.isArray(model.input) ? model.input : undefined,
+  })
+  let suffix = ''
+  if (opts.setDefault) {
+    minimax.setMinimaxDefaultModel(ref)
+    suffix = '，已设为默认模型'
+  }
+  const keyNote = key === name ? '' : `（键 ${key}）`
+  return `供应商 ${name}${keyNote} 已更新，模型 ${model.id} 已写入${suffix}`
+}
+
 // ==================== 自动路由下发 ====================
 
 // 自动路由网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
@@ -416,6 +444,7 @@ const APP_DISPATCHERS = {
   reasonix: { run: dispatchToReasonix },
   codex: { run: dispatchToCodex },
   kimi: { run: dispatchToKimi },
+  minimax: { run: dispatchToMinimax },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -449,5 +478,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax,
 }

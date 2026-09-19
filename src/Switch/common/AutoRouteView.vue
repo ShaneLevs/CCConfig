@@ -16,6 +16,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Reasonix", value: "reasonix" },
   { label: "Codex", value: "codex" },
   { label: "Kimi Code", value: "kimi" },
+  { label: "MiniMax Code", value: "minimax" },
 ];
 
 const loading = ref(false);

@@ -189,6 +189,44 @@ const buildProviderYaml = (cfg) => {
 
 // ==================== Providers ====================
 
+// 通用库供应商名可能是中文/任意符号，而 provider 键参与 custom_provider:<key>/ 引用，必须是 ASCII 安全值。
+// 确定性清洗（同一下发名永远得到同一键 → upsert 幂等）：合法名原样用；否则取 ASCII 骨架 + 原名稳定哈希防碰撞
+const hashName = (s) => {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
+  return h.toString(36)
+}
+const providerKeyFor = (name) => {
+  const raw = String(name || '').trim()
+  if (PROVIDER_KEY_RE.test(raw)) return raw
+  const base = raw.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'p'
+  return `${base}-${hashName(raw)}`
+}
+
+// 下发用：存在则合并更新（空值不覆盖既有 baseUrl/apiKey，同 kimi.upsertKimiProvider 纪律），否则创建。
+// 未知字段经 normalizeProvider._extra / _optionsExtra 原样往返，不会被抹掉。
+const upsertMinimaxProvider = (key, cfg) => {
+  if (!PROVIDER_KEY_RE.test(String(key))) throw new Error(`Provider 键 ${key} 不合法（仅限字母/数字/下划线/中划线）`)
+  assertApiFormat(cfg.api)
+  const doc = readMinimaxConfig()
+  const tables = getCustomProviderTables(doc)
+  const prev = tables[key] ? normalizeProvider(key, tables[key], false) : null
+  const merged = {
+    id: key,
+    name: (cfg.name && String(cfg.name).trim()) || (prev && prev.name) || key,
+    api: cfg.api || (prev && prev.api) || 'openai-completions',
+    baseUrl: cfg.baseUrl || (prev && prev.baseUrl) || '',
+    apiKey: cfg.apiKey || (prev && prev.apiKey) || '',
+    enabled: prev ? prev.enabled : true,
+    models: prev ? prev.models : [],
+    _extra: (prev && prev._extra) || {},
+    _optionsExtra: (prev && prev._optionsExtra) || {},
+  }
+  tables[key] = buildProviderYaml(merged)
+  writeMinimaxConfig(doc)
+  return true
+}
+
 // 内置（provider 节，只读）+ 第三方（custom_provider 节，可编辑）合并返回；内置排前
 const getMinimaxProviderList = () => {
   const doc = readMinimaxConfig()
@@ -332,6 +370,28 @@ const deleteMinimaxModel = (providerId, modelId) => {
   return true
 }
 
+// 下发用：模型已存在时只刷新传入的受管字段（limit/附件模态/名称，未传的保留既有值），不存在则新建；
+// 返回 defaultModel 可引用的模型 ref（custom_provider:<key>/<modelId>）
+const upsertMinimaxModel = (providerId, modelId, opts = {}) => {
+  const id = String(modelId || '').trim()
+  if (!MODEL_ID_RE.test(id)) throw new Error(`模型 ID ${id} 含非法字符，无法下发到 MiniMax Code`)
+  const doc = readMinimaxConfig()
+  const tables = getCustomProviderTables(doc)
+  const provider = requireCustomProvider(doc, tables, providerId)
+  const models = (provider.models && typeof provider.models === 'object' && provider.models) || {}
+  const prev = models[id] ? normalizeModel(id, models[id]) : null
+  const merged = prev || { id, enabled: true, _raw: {} }
+  if (opts.name) merged.name = String(opts.name).trim()
+  if (Number(opts.contextWindow) > 0) merged.contextWindow = Number(opts.contextWindow)
+  if (Number(opts.outputWindow) > 0) merged.outputWindow = Number(opts.outputWindow)
+  // 输入模态：通用库 model.input（含 text）过滤为非文本模态后重建 modalities；不传 = 不动
+  if (Array.isArray(opts.inputTypes)) merged.inputTypes = opts.inputTypes.filter((x) => INPUT_MODALITY_VALUES.includes(x))
+  models[id] = buildModelYaml(merged, id)
+  provider.models = models
+  writeMinimaxConfig(doc)
+  return buildModelRef({ id: providerId, managed: false }, id)
+}
+
 // ==================== defaultModel ====================
 
 // "minimax/MiniMax-M3" → builtin；"custom_provider:probe/test-model" → custom；兼容 #variant 后缀
@@ -398,7 +458,8 @@ module.exports = {
   getMinimaxHome, getMinimaxConfigPath,
   readMinimaxConfig, writeMinimaxConfig,
   getMinimaxProviderList, addMinimaxProvider, updateMinimaxProvider, deleteMinimaxProvider,
-  addMinimaxModel, updateMinimaxModel, deleteMinimaxModel,
+  upsertMinimaxProvider, providerKeyFor,
+  addMinimaxModel, updateMinimaxModel, deleteMinimaxModel, upsertMinimaxModel,
   getMinimaxDefaultModel, setMinimaxDefaultModel, isMinimaxDefaultModel,
   parseMinimaxModelRef, buildModelRef,
   openMinimaxDir, isMinimaxInstalled,
