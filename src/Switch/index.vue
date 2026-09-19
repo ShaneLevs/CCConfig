@@ -35,6 +35,7 @@ import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
 import CommonAutoRouteView from "./common/AutoRouteView.vue";
+import CommonUsageView from "./common/UsageView.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
 import { useDarkBackground } from "../composables/useDarkBackground";
@@ -140,6 +141,7 @@ const pageTitleSuffix = computed(() => {
       autoroute: "路由",
       mcp: "MCP",
       skill: "Skill",
+      usage: "使用统计",
     },
   };
   return map[activeApp.value]?.[activeTab.value] || "配置切换";
@@ -448,6 +450,14 @@ onMounted(() => {
           >
             <template #icon><BookIcon /></template> Skill
           </Button>
+          <Button
+            size="small"
+            :theme="activeTab === 'usage' ? 'primary' : 'default'"
+            :variant="activeTab === 'usage' ? 'base' : 'outline'"
+            @click="activeTab = 'usage'"
+          >
+            <template #icon><ChartIcon /></template> 统计
+          </Button>
         </div>
         <!-- Claude Code tabs -->
         <div v-else-if="isClaude" class="tab-buttons">
@@ -640,6 +650,10 @@ onMounted(() => {
       <CommonAutoRouteView
         v-if="isTabVisited('common', 'autoroute')"
         v-show="isCommon && activeTab === 'autoroute'"
+      />
+      <CommonUsageView
+        v-if="isTabVisited('common', 'usage')"
+        v-show="isCommon && activeTab === 'usage'"
       />
     </template>
 

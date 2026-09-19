@@ -261,7 +261,8 @@ const getOpencodeSkillsPath = () => {
 
 // ==================== Usage Statistics ====================
 
-const readOpencodeUsage = () => {
+// 统计计算（SQLite 优先、JSON storage 回退，多层出口）
+const readOpencodeUsageRaw = () => {
   const usage = require('./usage')
   // 优先 SQLite，回退 JSON storage
   if (fs.existsSync(OPENCODE_DB_PATH)) {
@@ -280,6 +281,17 @@ const readOpencodeUsage = () => {
     }
   }
   return usage.calculateStats([], new Map())
+}
+
+// 入口：计算完成后统一落库（「通用」统计页数据源；全零结果由落库层跳过，不会清空历史）
+const readOpencodeUsage = () => {
+  const stats = readOpencodeUsageRaw()
+  try {
+    require('./usage').saveAgentUsage('opencode', stats.contributions)
+  } catch (e) {
+    console.error('[opencode] usage 落库失败:', e)
+  }
+  return stats
 }
 
 const readOpencodeUsageFromDb = (dbPath) => {

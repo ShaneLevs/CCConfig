@@ -1613,6 +1613,8 @@ window.services = {
 
       const contributions = this._fillEmptyContributions(merged);
       setTimeout(() => saveHeatmapHistory(contributions), 0);
+      // 「通用」统计统一落库（与热力图同源数据）：同步写，保证紧随其后的读库能看到最新数据
+      usage.saveAgentUsage("claude", contributions);
 
       // 从合并后的 contributions 重新计算 summary + modelStats，确保与热力图口径一致
       let mergedTotal = 0,
@@ -1885,6 +1887,24 @@ window.services = {
   getPiMcpTools: pi.getPiMcpTools,
   fetchProviderModels: pi.fetchProviderModels,
   readPiUsage: pi.readPiUsage,
+  // 「通用」统计页：打开时先采集各 agent 最新数据落库，再纯读 DB 合并展示
+  collectCommonUsage() {
+    const collected = {}
+    try {
+      const s = this.readClaudeUsage(true)
+      collected.claude = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Claude 采集失败:', e); collected.claude = false }
+    try {
+      const s = opencode.readOpencodeUsage()
+      collected.opencode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] OpenCode 采集失败:', e); collected.opencode = false }
+    try {
+      const s = pi.readPiUsage()
+      collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
+    return collected
+  },
+  readCommonUsage: usage.readAllAgentUsage,
   openPiDir: pi.openPiDir,
   openPiExtDir: pi.openPiExtDir,
   resolvePiPath: pi.resolvePiPath,

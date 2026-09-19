@@ -13,7 +13,7 @@
   - Reasonix：`~/.reasonix/config.toml`（smol-toml 读写，保留未知扩展字段）+ `~/.reasonix/.env` 密钥管理
   - Codex：`~/.codex/config.toml` + `~/.codex/models.json` 模型目录（仅管模型字段，其余原样保留）
   - Kimi Code CLI：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
-- **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 本地（`~/.mcp.json`）与云端（uTools DB）双存储、合并为单一列表管理；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停
+- **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 本地（`~/.mcp.json`）与云端（uTools DB）双存储、合并为单一列表管理；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动路由（本地模型网关）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
   - Claude MCP 读写 `~/.claude.json` 顶层 `mcpServers`（Claude Code 官方位置，单一来源，全局生效）
@@ -23,6 +23,7 @@
   - Claude：DB 缓存加速二次打开（`file_count:max_mtime` 签名校验），热力图历史持久化，JSONL 读取失败时从历史兜底重建
   - OpenCode CLI：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
   - Pi Agent：JSONL sessions 解析聚合
+  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问
 - **模型 CRUD** — Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，Pi 支持从 `/models` API 自动拉取模型列表、设置默认模型自动切换供应商
 - **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
 - **导入导出** — 支持 JSON 文件方式或压缩加密字符串方式
@@ -157,6 +158,7 @@ src/
         ├── McpView.vue        # MCP：本地 ~/.mcp.json + 云端 DB 合并单一列表
         ├── SkillView.vue      # Skill：只读扫描 ~/.agents/skills + 链接安装 + .disabled 启停
         ├── AutoRouteView.vue  # 自动路由：本地模型网关（开关/端口/key/模型勾选/下发/请求日志）
+        ├── UsageView.vue      # 汇总统计：纯读 DB 合并 Claude/OpenCode/Pi 落库数据
         └── styles/
 public/
 ├── plugin.json                # uTools 插件配置（关键词/特性）
@@ -183,7 +185,7 @@ public/
         ├── dispatch.js        # 通用库 → 各 agent 模型配置下发（dispatchCommonModel / dispatchAutoRoute）
         ├── autoroute.js       # 自动路由本地网关（uTools DB 配置、http server 启停、路由、请求日志）
         ├── autoroute-convert/ # 协议转换层：canonical.js + source.js/target.js + stream.js
-        └── usage.js           # 共享统计聚合（Claude / OpenCode / Pi）
+        └── usage.js           # 共享统计聚合（Claude / OpenCode / Pi）+ 跨 agent 统一落库（saveAgentUsage / readAllAgentUsage → ccswitch_agent_usage_*）
 ```
 
 ## 数据流
@@ -203,6 +205,8 @@ Claude:
   通用 MCP → uTools DB（ccswitch_common_mcp）+ 本地 ~/.mcp.json 双存储，按名称合并单一列表，本地/云端 tag 标注，支持双端复制/移除
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
+  汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（days 按日期存 tokens/input/output/models，全零跳过防误清）
+    通用统计页纯读这三个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
   自动路由 → 本地模型网关（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400

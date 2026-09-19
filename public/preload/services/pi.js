@@ -1504,9 +1504,12 @@ const readPiUsage = () => {
     }
   }
 
-  return usage.calculateStats(messageRecords, sessionMap, {
+  const stats = usage.calculateStats(messageRecords, sessionMap, {
     includeCost: true,
   });
+  // 「通用」统计统一落库
+  usage.saveAgentUsage("pi", stats.contributions);
+  return stats;
 };
 
 const emptyResult = () => {
