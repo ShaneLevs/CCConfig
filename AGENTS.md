@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code CLI 七应用的 API 配置切换、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动路由网关、模型下发）。
+CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code / MiniMax Code 八应用的 API 配置切换、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动路由网关、模型下发）。
 
 ## 技术栈与命令
 
@@ -33,7 +33,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 ## 样式规范
 
 - 文本/背景色一律用 TDesign CSS 变量（`--td-text-color-primary`、`--td-bg-color-container` 等）以支持暗色；暗色覆盖写 `:root[theme-mode="dark"] .class {}`。
-- 所有 Checkbox 统一绿色主题：`--td-brand-color: var(--td-success-color)` 覆盖。
+- 复选框/下拉勾选态统一绿色：已在 `src/main.css` 全局固定（`.t-checkbox` / `.t-select-option.t-is-selected` / `.t-cascader__item.t-is-selected` 上重绑 `--td-brand-color: var(--td-success-color)`），新增复选框/多选组件无需也不要再逐视图覆盖。
 - 每个视图对应 `src/Switch/<app>/styles/` 同名 CSS；共享组件样式写在组件内部。
 
 ## 构建注意

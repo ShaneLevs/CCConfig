@@ -31,6 +31,7 @@ import OmpConfigView from "./omp/ConfigView.vue";
 import ReasonixConfigView from "./reasonix/ConfigView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
+import MinimaxConfigView from "./minimax/ConfigView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -45,7 +46,7 @@ const props = defineProps({
   payload: String,
 });
 
-const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isCommon } = useAppContext();
+const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isCommon } = useAppContext();
 
 // 自动路由开启状态：「路由」tab 按钮右上角绿点标识（AutoRouteView 开关切换时同步）
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
@@ -97,7 +98,8 @@ const appLabel = computed(() => {
   if (isOmp.value) return "omp";
   if (isReasonix.value) return "Reasonix";
   if (isCodex.value) return "Codex Desktop";
-  if (isKimi.value) return "Kimi Code CLI";
+  if (isKimi.value) return "Kimi Code";
+  if (isMinimax.value) return "MiniMax Code";
   return "通用";
 });
 
@@ -134,6 +136,9 @@ const pageTitleSuffix = computed(() => {
       config: "模型配置",
     },
     kimi: {
+      config: "模型配置",
+    },
+    minimax: {
       config: "模型配置",
     },
     common: {
@@ -174,7 +179,7 @@ const VISIBLE_AGENTS_DB = (() => {
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
 })();
 const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
-const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi"];
+const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax"];
 const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}claudecode.png` },
   opencode: { name: "OpenCode CLI", icon: `${ASSET_BASE}icon-opencode.png` },
@@ -182,7 +187,8 @@ const AGENT_META = {
   omp: { name: "omp", icon: `${ASSET_BASE}omp-icon.svg` },
   reasonix: { name: "Reasonix", icon: `${ASSET_BASE}reasonix.svg` },
   codex: { name: "Codex Desktop", icon: `${ASSET_BASE}icon-codex.png` },
-  kimi: { name: "Kimi Code CLI", icon: `${ASSET_BASE}kimi.svg` },
+  kimi: { name: "Kimi Code", icon: `${ASSET_BASE}kimi.svg` },
+  minimax: { name: "MiniMax Code", icon: `${ASSET_BASE}minimax.svg` },
 };
 
 // 可见 agent：有记录用记录（缺键默认启用，兼容未来新增 agent），无记录默认全部启用并写库；检测结果只在首次参与，之后不覆盖用户选择
@@ -319,6 +325,7 @@ onMounted(() => {
     reasonixConfig: "reasonix",
     codexConfig: "codex",
     kimiConfig: "kimi",
+    minimaxConfig: "minimax",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -389,6 +396,7 @@ onMounted(() => {
         <img v-else-if="isReasonix" :src="`${ASSET_BASE}reasonix.svg`" alt="logo" class="logo" />
         <img v-else-if="isCodex" :src="`${ASSET_BASE}icon-codex.png`" alt="logo" class="logo" />
         <img v-else-if="isKimi" :src="`${ASSET_BASE}kimi.svg`" alt="logo" class="logo" />
+        <img v-else-if="isMinimax" :src="`${ASSET_BASE}minimax.svg`" alt="logo" class="logo" />
         <img v-else-if="isPi" :src="`${ASSET_BASE}icon-pi.png`" alt="logo" class="logo" />
         <img v-else-if="isCommon" :src="`${ASSET_BASE}gen.svg`" alt="logo" class="logo" />
         <Dropdown
@@ -589,6 +597,17 @@ onMounted(() => {
             <template #icon><DashboardIcon /></template> 配置
           </Button>
         </div>
+        <!-- MiniMax Code tabs（仅模型配置） -->
+        <div v-else-if="isMinimax" class="tab-buttons">
+          <Button
+            size="small"
+            :theme="activeTab === 'config' ? 'primary' : 'default'"
+            :variant="activeTab === 'config' ? 'base' : 'outline'"
+            @click="activeTab = 'config'"
+          >
+            <template #icon><DashboardIcon /></template> 配置
+          </Button>
+        </div>
         <!-- OpenCode tabs -->
         <div v-else class="tab-buttons">
           <Button
@@ -741,6 +760,11 @@ onMounted(() => {
     <!-- Kimi views（仅模型配置） -->
     <template v-if="isAppReady('kimi')">
       <KimiConfigView v-if="isKimi && activeTab === 'config'" />
+    </template>
+
+    <!-- MiniMax Code views（仅模型配置） -->
+    <template v-if="isAppReady('minimax')">
+      <MinimaxConfigView v-if="isMinimax && activeTab === 'config'" />
     </template>
 
     <Dialog
@@ -1005,9 +1029,7 @@ onMounted(() => {
   padding: 1px 6px;
   border-radius: 4px;
 }
-.agent-visibility-checkbox {
-  --td-brand-color: var(--td-success-color);
-}
+/* agent 启停复选框绿色由 main.css 全局规则统一处理 */
 .effect-cards {
   display: flex;
   flex-wrap: wrap;

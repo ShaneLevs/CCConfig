@@ -97,9 +97,15 @@ const FEATURE_DEFINITIONS = {
   },
   kimiConfig: {
     code: "kimiConfig",
-    explain: "Kimi Code CLI 模型配置管理工具",
+    explain: "Kimi Code 模型配置管理工具",
     icon: "kimi.svg",
-    cmds: ["Kimi配置"],
+    cmds: ["Kimi Code配置"],
+  },
+  minimaxConfig: {
+    code: "minimaxConfig",
+    explain: "MiniMax Code 模型配置管理工具（CLI / Desktop）",
+    icon: "minimax.svg",
+    cmds: ["MiniMax Code配置"],
   },
 };
 
@@ -113,6 +119,7 @@ const AGENT_FEATURES = {
   reasonix: ["reasonixConfig"],
   codex: ["codexConfig"],
   kimi: ["kimiConfig"],
+  minimax: ["minimaxConfig"],
 };
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：

@@ -551,7 +551,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "omp", value: "omp" },
   { label: "Reasonix", value: "reasonix" },
   { label: "Codex", value: "codex" },
-  { label: "Kimi Code CLI", value: "kimi" },
+  { label: "Kimi Code", value: "kimi" },
 ];
 
 // 供应商 + 模型合并为一个级联选择器：按供应商分组，value 用 "供应商::模型ID" 区分同名；

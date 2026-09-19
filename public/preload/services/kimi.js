@@ -3,7 +3,7 @@ const path = require('node:path')
 const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
 
-// Kimi Code CLI：模型配置在 ~/.kimi-code/config.toml（官方文档 configuration/config-files.html）。
+// Kimi Code：模型配置在 ~/.kimi-code/config.toml（官方文档 configuration/config-files.html）。
 // 主目录可用 KIMI_CODE_HOME 环境变量重定向（同 Codex 的 CODEX_HOME：客户端读写哪边、插件就改哪边）。
 // 本服务只管理模型相关三处，其余配置节（thinking / loop_control / permission / [[hooks]] 等）读改写原样保留：
 //   顶层 default_model   — 默认模型别名，必须是 models 表中的 key

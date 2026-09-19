@@ -11,6 +11,7 @@ const pi = require("./services/pi");
 const omp = require("./services/omp");
 const reasonix = require("./services/reasonix");
 const kimi = require("./services/kimi");
+const minimax = require("./services/minimax");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -2008,7 +2009,7 @@ window.services = {
   generateReasonixApiKeyEnv: reasonix.generateReasonixApiKeyEnv,
   openReasonixDir: reasonix.openReasonixDir,
   isReasonixInstalled: reasonix.isReasonixInstalled,
-  // ==================== Kimi Code CLI（~/.kimi-code/config.toml，仅模型配置） ====================
+  // ==================== Kimi Code（~/.kimi-code/config.toml，仅模型配置） ====================
   getKimiConfigPath: kimi.getKimiConfigPath,
   readKimiConfig: kimi.readKimiConfig,
   writeKimiConfig: kimi.writeKimiConfig,
@@ -2022,6 +2023,21 @@ window.services = {
   deleteKimiModel: kimi.deleteKimiModel,
   getKimiDefaultModel: kimi.getKimiDefaultModel,
   setKimiDefaultModel: kimi.setKimiDefaultModel,
+
+  // ==================== MiniMax Code（~/.minimax/config.yaml，仅模型配置） ====================
+  getMinimaxConfigPath: minimax.getMinimaxConfigPath,
+  getMinimaxProviderList: minimax.getMinimaxProviderList,
+  addMinimaxProvider: minimax.addMinimaxProvider,
+  updateMinimaxProvider: minimax.updateMinimaxProvider,
+  deleteMinimaxProvider: minimax.deleteMinimaxProvider,
+  addMinimaxModel: minimax.addMinimaxModel,
+  updateMinimaxModel: minimax.updateMinimaxModel,
+  deleteMinimaxModel: minimax.deleteMinimaxModel,
+  getMinimaxDefaultModel: minimax.getMinimaxDefaultModel,
+  setMinimaxDefaultModel: minimax.setMinimaxDefaultModel,
+  isMinimaxDefaultModel: minimax.isMinimaxDefaultModel,
+  openMinimaxDir: minimax.openMinimaxDir,
+  isMinimaxInstalled: minimax.isMinimaxInstalled,
   openKimiDir: kimi.openKimiDir,
   isKimiInstalled: kimi.isKimiInstalled,
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）

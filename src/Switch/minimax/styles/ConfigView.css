@@ -1,0 +1,73 @@
+.minimax-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.minimax-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.minimax-toolbar-left { min-width: 0; flex: 1; }
+.minimax-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.minimax-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.minimax-toolbar-right { display: flex; gap: 4px; }
+
+.minimax-config-warning { margin-bottom: 0; }
+.minimax-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.minimax-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.minimax-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.minimax-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.minimax-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.minimax-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.minimax-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.minimax-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.minimax-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.minimax-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); }
+.minimax-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.minimax-provider-body { padding: 10px 0 4px; }
+.minimax-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.minimax-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.minimax-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.minimax-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* 模型子区（MiniMax Code 的模型 = custom_provider.<id>.models.<模型ID> 条目） */
+.minimax-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.minimax-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; }
+.minimax-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.minimax-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.minimax-model-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: var(--td-bg-color-container-hover);
+  border-radius: var(--td-radius-default);
+  border: 1px solid var(--td-border-level-1-color);
+  transition: border-color 0.15s;
+}
+.minimax-model-tag:hover { border-color: var(--td-brand-color); }
+.minimax-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
+.minimax-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.minimax-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.minimax-model-tag-star:hover { background: var(--td-warning-color-1); }
+.minimax-model-tag-edit { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.minimax-model-tag-edit:hover { color: var(--td-brand-color); background: var(--td-brand-color-light); }
+.minimax-model-tag-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.minimax-model-tag-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
+
+/* ===== 表单弹窗 ===== */
+.minimax-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.minimax-form-item { display: flex; flex-direction: column; gap: 4px; }
+.minimax-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.minimax-form-item .t-input-number { width: 220px; }
+.minimax-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.minimax-form-required { color: var(--td-error-color); }
+.minimax-fetch-error { color: var(--td-error-color); }
+.minimax-fetch-retry { color: var(--td-brand-color); cursor: pointer; margin-left: 4px; }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }

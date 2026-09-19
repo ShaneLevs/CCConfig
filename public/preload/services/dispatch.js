@@ -268,7 +268,7 @@ const dispatchToCodex = (provider, model, opts) => {
   return `供应商 ${id} 已更新，模型 ${model.id} 已写入${suffix}`
 }
 
-// Kimi Code CLI：config.toml [providers.<name>] + [models."<name>/<id>"] + 可选 default_model。
+// Kimi Code：config.toml [providers.<name>] + [models."<name>/<id>"] + 可选 default_model。
 // 通用库四种协议全部有对应供应商类型，无协议守卫
 const KIMI_PROVIDER_TYPE = {
   'openai-completions': 'openai',

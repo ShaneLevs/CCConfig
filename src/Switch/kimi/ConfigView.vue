@@ -490,7 +490,7 @@ onMounted(refresh);
           <label>API Key</label>
           <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="明文写入 config.toml api_key 字段" />
         </div>
-        <div class="kimi-form-hint">Kimi CLI 不从 shell 环境变量取凭证，密钥必须显式写入配置文件</div>
+        <div class="kimi-form-hint">Kimi Code 不从 shell 环境变量取凭证，密钥必须显式写入配置文件</div>
       </div>
     </Dialog>
 
