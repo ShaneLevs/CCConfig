@@ -35,7 +35,7 @@
 .codex-current-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .codex-current-effort { display: flex; align-items: center; gap: 8px; }
 .codex-current-effort-label { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
-.codex-current-auth { font-size: 12px; white-space: nowrap; --td-brand-color: var(--td-success-color); }
+.codex-current-auth { font-size: 12px; white-space: nowrap; }
 .codex-current-main { display: flex; align-items: center; gap: 8px; font-size: 13px; font-family: monospace; }
 .codex-current-provider { color: var(--td-text-color-primary); word-break: break-all; }
 .codex-current-arrow { color: var(--td-text-color-placeholder); }

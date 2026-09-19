@@ -67,9 +67,7 @@
 }
 .star-default { color: var(--td-warning-color); }
 .common-advanced-collapse { margin-top: 4px; }
-/* Checkbox 统一绿色主题（同 omp/Claude 配置约定） */
-.common-checkbox-group { --td-brand-color: var(--td-success-color); }
-.common-reasoning-checkbox { --td-brand-color: var(--td-success-color); }
+/* 复选框绿色已收敛到 main.css 全局规则 */
 .hint-link { cursor: pointer; text-decoration: underline; color: var(--td-brand-color); }
 .hint-link:hover { opacity: 0.8; }
 .mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
@@ -77,17 +75,13 @@
 .common-dispatch-agents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .common-dispatch-agent { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: var(--td-radius-default); }
 .common-dispatch-agent:hover { background: var(--td-bg-color-container-hover); }
-.common-dispatch-checkbox { --td-brand-color: var(--td-success-color); }
-/* 级联/下拉面板（teleport 到 body）里的复选框统一绿色主题 */
-.common-dispatch-select-popup .t-checkbox { --td-brand-color: var(--td-success-color); }
+/* 下发弹窗 / 级联下拉面板（teleport 到 body）复选框绿色已收敛到 main.css 全局规则 */
 
 
 /* 批量添加模型弹窗 */
 .common-batch-toolbar { display: flex; align-items: center; gap: 10px; }
 .common-batch-filter { flex: 1; }
 .common-batch-count { font-size: 12px; color: var(--td-text-color-secondary); white-space: nowrap; }
-.common-batch-table .t-checkbox,
-.common-batch-checkbox { --td-brand-color: var(--td-success-color); }
 .common-batch-table .t-select { width: 100%; }
 .common-batch-id-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .common-batch-item-id { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: var(--td-text-color-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

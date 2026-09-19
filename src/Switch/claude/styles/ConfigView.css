@@ -2,7 +2,7 @@
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
 .section-tip { font-size: 12px; color: var(--td-text-color-placeholder); display: flex; align-items: center; gap: 0; }
 .section-tip-divider { margin: 0 8px; opacity: 0.4; }
-.skip-login-checkbox { font-size: 12px; color: var(--td-text-color-placeholder); --td-brand-color: var(--td-success-color); }
+.skip-login-checkbox { font-size: 12px; color: var(--td-text-color-placeholder); }
 .skip-login-checkbox .t-checkbox__label { font-size: 12px; }
 .hint-link { color: var(--td-brand-color); cursor: pointer; text-decoration: underline; }
 .empty-state { padding: 40px 0; }
@@ -131,8 +131,7 @@
   animation: effort-spin 2s linear infinite;
 }
 
-/* 预设区复选框统一绿色主题 */
-.preset-checkboxes { --td-brand-color: var(--td-success-color); }
+/* 预设区复选框绿色已收敛到 main.css 全局规则 */
 
 /* 深色模式 */
 :root[theme-mode="dark"] .effort-xhigh .t-radio-group__bg-block::before {
@@ -154,7 +153,7 @@
 .auth-var-group .t-radio-button__label { justify-content: center; }
 .auth-var-group .t-radio-button + .t-radio-button { margin-left: 8px; }
 .form-item .required { color: var(--td-error-color); }
-.model-1m-checkbox { font-size: 12px; white-space: nowrap; --td-brand-color: var(--td-success-color); margin-right: -4px; max-width: 50px; }
+.model-1m-checkbox { font-size: 12px; white-space: nowrap; margin-right: -4px; max-width: 50px; }
 .model-1m-checkbox .t-checkbox__label { font-size: 12px; font-family: monospace; padding-left: 2px; }
 .dialog-footer { display: flex; justify-content: space-between; align-items: center; }
 .dialog-footer-right { display: flex; gap: 8px; }

@@ -130,9 +130,7 @@
   margin-left: 6px;
 }
 .omp-advanced-collapse { margin-top: 4px; }
-/* Checkbox 统一绿色主题（同 Claude 配置约定） */
-.omp-checkbox-group { --td-brand-color: var(--td-success-color); }
-.omp-reasoning-checkbox { --td-brand-color: var(--td-success-color); }
+/* omp 复选框绿色已收敛到 main.css 全局规则 */
 .hint-link { cursor: pointer; text-decoration: underline; color: var(--td-brand-color); }
 .hint-link:hover { opacity: 0.8; }
 .mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }

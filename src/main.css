@@ -32,3 +32,16 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--td-scrollbar-hover-color);
 }
+
+/* ==================== 复选框 / 下拉勾选态统一绿色（全局固定） ==================== */
+/* 主题把品牌色改成了灰阶，勾选框选中态（白勾落在灰白底上）在深色模式下近乎不可见。
+   在组件类上重绑 --td-brand-color：TDesign 的选中背景 / hover 边框 / 半选态等规则
+   均引用该变量，整体自动派生为 success 绿；Select/Cascader 弹层 teleport 到 body 也同样命中。
+   新增复选框、多选/单选下拉无需再逐视图写覆盖（历史散落覆盖已收敛至此块）。
+   disabled 选中态走 TDesign 中性灰（--td-border-level-2-color），不受影响。 */
+.t-checkbox,
+.t-select-option.t-is-selected,
+.t-cascader__item.t-is-selected,
+.t-tree__label.t-is-checked {
+  --td-brand-color: var(--td-success-color);
+}

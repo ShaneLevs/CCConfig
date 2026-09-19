@@ -30,14 +30,7 @@
 .autoroute-cascader { flex: 1; min-width: 320px; }
 /* 级联弹层：TDesign 默认每列写死 148px，改为适应内容宽度 */
 .autoroute-cascader-popup .t-cascader__menu { width: auto; min-width: 200px; max-width: 40vw; }
-/* 路由页复选框选中态用绿色（主题品牌色为灰阶，深色模式下白勾落在近白底上不可见） */
-.autoroute-cascader-popup .t-checkbox.t-is-checked .t-checkbox__input,
-.autoroute-cascader-popup .t-checkbox.t-is-checked:not(.t-is-disabled):hover .t-checkbox__input,
-.autoroute-dispatch-dialog .t-checkbox.t-is-checked .t-checkbox__input,
-.autoroute-dispatch-dialog .t-checkbox.t-is-checked:not(.t-is-disabled):hover .t-checkbox__input {
-  background-color: var(--td-success-color);
-  border-color: var(--td-success-color);
-}
+/* 路由页复选框绿色已由 main.css 全局规则统一处理（含 teleport 弹层） */
 .autoroute-hint { font-size: 12px; color: var(--td-text-color-placeholder); line-height: 1.6; }
 .autoroute-endpoints { gap: 6px; }
 .autoroute-endpoints-title { font-size: 12px; font-weight: 500; color: var(--td-text-color-secondary); }
