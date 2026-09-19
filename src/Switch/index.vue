@@ -162,7 +162,16 @@ const switchApp = (app) => {
 // 图标位于 public/ 目录：必须用 BASE_URL 前缀拼接（base: './' 打包后为相对路径，
 // 否则 uTools 以 file:// 加载时绝对路径会指向文件系统根目录导致图标丢失）
 const ASSET_BASE = import.meta.env.BASE_URL;
-const VISIBLE_AGENTS_DB = "ccswitch_visible_agents";
+// 启停状态按设备区分：主档 ccswitch_visible_agents_<nativeId>，旧共享档作首次迁移种子（只读）
+function getNativeId() {
+  try { return window.utools.getNativeId() || ""; } catch (e) { return ""; }
+}
+const VISIBLE_AGENTS_DB_BASE = "ccswitch_visible_agents";
+const VISIBLE_AGENTS_DB = (() => {
+  const id = getNativeId();
+  return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
+})();
+const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
 const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi"];
 const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}claudecode.png` },
@@ -192,6 +201,18 @@ const saveVisibleAgents = () => {
 const initVisibleAgents = () => {
   let doc = null;
   try { doc = window.utools.db.get(VISIBLE_AGENTS_DB); } catch (e) { /* ignore */ }
+  // 本机尚无记录：从旧共享档取种子，并升级写入本机档（避免下次启动又读旧档）
+  let seededFromLegacy = false;
+  if (!doc && VISIBLE_AGENTS_DB !== LEGACY_VISIBLE_AGENTS_DB) {
+    try {
+      doc = window.utools.db.get(LEGACY_VISIBLE_AGENTS_DB);
+      if (doc) {
+        seededFromLegacy = true;
+        doc = { ...doc, _id: VISIBLE_AGENTS_DB };
+        delete doc._rev;
+      }
+    } catch (e) { /* ignore */ }
+  }
   const stored = doc?.visible || null;
   const storedOrder = doc?.order || null;
   if (Array.isArray(storedOrder) && storedOrder.length) {
@@ -205,6 +226,10 @@ const initVisibleAgents = () => {
     const result = {};
     AGENT_ORDER.forEach((app) => { result[app] = stored[app] ?? true; });
     visibleAgents.value = result;
+    // 刚从旧共享档升级而来：立即写一次本机档，后续不再读旧档
+    if (seededFromLegacy) {
+      try { saveVisibleAgents(); } catch (e) { console.error("保存可见 agent 失败", e); }
+    }
   } else {
     // 无记录：默认全部启用（与「Agent 启停管理」语义一致：默认开启，由用户自行停用），写库
     const result = {};
@@ -348,10 +373,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    class="container"
-    :class="{ 'container--solid-bg': !darkBackgroundEnabled }"
-  >
+  <div class="container">
     <div class="header">
       <div class="header-left">
         <img v-if="isClaude" :src="`${ASSET_BASE}claudecode.png`" alt="logo" class="logo" />
@@ -758,7 +780,7 @@ onMounted(() => {
           <div class="settings-label">
             <div class="settings-title">黑暗模式背景特效</div>
             <div class="settings-desc">
-              深色模式下的动态背景特效，开启后可能会导致电脑卡顿
+              深色模式下的动态背景特效，开启后会覆盖毛玻璃背景，并可能导致电脑卡顿
             </div>
           </div>
           <Switch
@@ -813,15 +835,8 @@ onMounted(() => {
   padding: 10px 20px 10px;
   min-height: 100vh;
   box-sizing: border-box;
-  background: var(--td-bg-color-container);
-}
-/* 深色模式下容器背景透明，展示 PrismaticBurst WebGL 背景 */
-:root[theme-mode="dark"] .container {
+  /* 玻璃背景：不涂色，透出 uTools 8 宿主窗口的原生亚克力模糊（与底栏同源） */
   background: transparent;
-}
-/* 背景开关关闭时，使用纯色底色替代 WebGL 背景 */
-:root[theme-mode="dark"] .container.container--solid-bg {
-  background-color: #303133;
 }
 .header {
   display: flex;

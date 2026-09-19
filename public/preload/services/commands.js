@@ -115,7 +115,23 @@ const AGENT_FEATURES = {
   kimi: ["kimiConfig"],
 };
 
-const VISIBLE_AGENTS_DB = "ccswitch_visible_agents";
+// 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：
+// 各机器性能/安装的 agent 不同，启停只对单机有意义；但数据层仍全量同步到其他机器供参考。
+// 旧版共享文档 ccswitch_visible_agents 作为回退只读（首次在新设备上是拷）。
+const VISIBLE_AGENTS_DB_BASE = "ccswitch_visible_agents";
+
+function getNativeId() {
+  try {
+    return window.utools.getNativeId() || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function visibleAgentsDocId() {
+  const id = getNativeId();
+  return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
+}
 
 // 归一化启停状态：缺键默认启用（兼容未来新增 agent / 首次运行无记录）
 function normalizeVisible(visible) {
@@ -159,12 +175,18 @@ function syncAgentCommands(visible) {
   return { ok: failed.length === 0, removed, registered, failed };
 }
 
-// 从 uTools DB 读取启停状态并同步（preload 装载 / onPluginEnter 自愈调用）
+// 从 uTools DB 读取本机启停状态并同步（preload 装载 / onPluginEnter 自愈调用）
 function initFromDb() {
   try {
     let visible = null;
     try {
-      const doc = window.utools.db.get(VISIBLE_AGENTS_DB);
+      const docId = visibleAgentsDocId();
+      let doc = null;
+      try { doc = window.utools.db.get(docId); } catch (e) { /* ignore */ }
+      // 本机尚无记录：回退读旧版共享文档（旧文档可能仍含其他机器的状态，仅作种子）
+      if (!doc && docId !== VISIBLE_AGENTS_DB_BASE) {
+        try { doc = window.utools.db.get(VISIBLE_AGENTS_DB_BASE); } catch (e) { /* ignore */ }
+      }
       visible = doc && doc.visible ? doc.visible : null;
     } catch (e) {
       /* ignore */

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import Switch from './Switch/index.vue'
 import PrismaticBurst from './components/PrismaticBurst.vue'
 import FaultyTerminal from './components/FaultyTerminal.vue'
@@ -11,6 +11,11 @@ const route = ref('')
 const payload = ref('')
 const isDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
 const { darkBackgroundEnabled, darkEffect } = useDarkBackground()
+
+// 特效开启时恢复深色实底色，让 WebGL canvas（含 mix-blend）在原有底上合成；关闭时回到纯玻璃背景
+watch([isDark, darkBackgroundEnabled], () => {
+  document.documentElement.classList.toggle('effect-active', isDark.value && darkBackgroundEnabled.value)
+}, { immediate: true })
 
 let darkQuery
 onMounted(() => {

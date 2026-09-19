@@ -2,7 +2,13 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* uTools 8 亚克力玻璃背景：页面根节点保持透明，透出宿主窗口原生模糊材质 */
+  background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#app {
+  background: transparent;
 }
 
 body {

@@ -297,8 +297,11 @@
   --cc-stat-pink-dark: rgba(235, 47, 150, 0.12);
 }
 
-/* 深色模式全局背景（供 PrismaticBurst WebGL 背景混合） */
+/* 深色模式不涂底色，透出 uTools 8 原生亚克力；开启 WebGL 背景特效时恢复深色实底供 canvas 合成 */
 :root[theme-mode="dark"] body {
+  background-color: transparent;
+}
+:root[theme-mode="dark"].effect-active body {
   background-color: #0a0a0f;
 }
 
