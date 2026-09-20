@@ -97,7 +97,7 @@ const appLabel = computed(() => {
   if (isPi.value) return "Pi Agent";
   if (isOmp.value) return "omp";
   if (isReasonix.value) return "Reasonix";
-  if (isCodex.value) return "Codex Desktop";
+  if (isCodex.value) return "Codex";
   if (isKimi.value) return "Kimi Code";
   if (isMinimax.value) return "MiniMax Code";
   return "通用";
@@ -186,7 +186,7 @@ const AGENT_META = {
   pi: { name: "Pi Agent", icon: `${ASSET_BASE}icon-pi.png` },
   omp: { name: "omp", icon: `${ASSET_BASE}omp-icon.svg` },
   reasonix: { name: "Reasonix", icon: `${ASSET_BASE}reasonix.svg` },
-  codex: { name: "Codex Desktop", icon: `${ASSET_BASE}icon-codex.png` },
+  codex: { name: "Codex", icon: `${ASSET_BASE}icon-codex.png` },
   kimi: { name: "Kimi Code", icon: `${ASSET_BASE}kimi.svg` },
   minimax: { name: "MiniMax Code", icon: `${ASSET_BASE}minimax.svg` },
 };
