@@ -14,7 +14,7 @@
   - Codex：`~/.codex/config.toml` + `~/.codex/models.json` 模型目录（仅管模型字段，其余原样保留）
   - Kimi Code：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
   - MiniMax Code：`~/.minimax/config.yaml`（仅模型配置：custom_provider 第三方供应商/模型 + 顶层 defaultModel，内置 minimax 只读；跟随 MINIMAX_DATA_DIR / MAVIS_DATA_DIR）
-- **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 本地（`~/.mcp.json`）与云端（uTools DB）双存储、合并为单一列表管理；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
+- **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 本地（多个本地 JSON 文件，存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`）与云端（uTools DB）双存储、合并为单一列表管理；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动路由（本地模型网关）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
   - Claude MCP 读写 `~/.claude.json` 顶层 `mcpServers`（Claude Code 官方位置，单一来源，全局生效）
@@ -89,110 +89,13 @@ npm run build
 ## 项目结构
 
 ```
-src/
-├── main.js                    # 入口，主题检测与初始化
-├── App.vue                    # 根组件：uTools 路由分发 + 深色模式背景特效渲染
-├── constants.js               # 托管 env 字段 + 环境变量预设
-├── main.css / theme.css       # 全局样式与主题变量
-├── components/                # 跨应用共享组件
-│   ├── ApiKeyInput.vue        # 密码输入框（可见性切换）
-│   ├── DynamicKvEditor.vue    # 可复用 K/V 编辑器（自动补全）
-│   ├── PresetCustomInput.vue  # 预设 + 自定义输入
-│   ├── McpServerCard.vue      # 通用 MCP 卡片（#tags 插槽，本地/云端 tag）
-│   ├── McpServerDialog.vue    # 通用 MCP 添加/编辑弹窗（表单 ↔ JSON 切换，可选 showTarget）
-│   ├── McpToolDrawer.vue      # MCP 工具发现抽屉
-│   ├── SkillCard.vue          # 通用 Skill 卡片
-│   ├── SkillInstallDialog.vue # Skill 链接安装弹窗
-│   ├── PrismaticBurst.vue     # 深色背景特效：棱镜光谱爆裂
-│   ├── FaultyTerminal.vue     # 深色背景特效：故障像素终端
-│   ├── Aurora.vue             # 深色背景特效：流动极光
-│   └── Galaxy.vue             # 深色背景特效：星河漫游
-├── composables/
-│   ├── useAppContext.js       # 应用切换状态（Claude / OpenCode / Pi / omp / Reasonix / Codex / Kimi / 通用）
-│   ├── useConfigColumns.js    # 双列可拖拽瀑布流布局
-│   ├── useConfigImportExport.js  # 压缩字符串导入导出
-│   ├── useConfigSwitch.js     # 应用配置到 settings.json
-│   ├── useExtraFields.js      # 全局 vs 配置特定 env 额外字段
-│   ├── useDarkBackground.js   # 深色模式背景开关 + 效果选择（DB 持久化）
-│   └── useSkillInstall.js     # SkillHub / ModelScope 安装流程
-├── utils/
-│   └── time.js                # 时间格式化工具
-└── Switch/                    # 每个应用一个子目录（views + styles）
-    ├── index.vue              # 主界面（应用切换 + 各应用 Tab 栏 + 设置弹窗）
-    ├── shared/
-    │   ├── ContributionGrid.vue  # GitHub 风格贡献墙热力图
-    │   └── styles/
-    ├── claude/                # Claude Code 视图
-    │   ├── ConfigView.vue     # 配置 CRUD + 双列布局
-    │   ├── McpView.vue        # MCP 管理（读写 ~/.claude.json 顶层 mcpServers）
-    │   ├── SkillView.vue      # Skill 管理（全局/项目级）
-    │   ├── PluginView.vue     # Marketplace 仓库 + 插件生命周期
-    │   ├── UsageView.vue      # 使用统计（DB 缓存 + 热力图历史合并）
-    │   └── styles/
-    ├── opencode/              # OpenCode CLI 视图
-    │   ├── ConfigView.vue     # Provider CRUD（Provider Collapse + 卡片内模型管理）
-    │   ├── McpView.vue        # MCP 管理（LOCAL/REMOTE）
-    │   ├── SkillView.vue      # Skill 管理
-    │   ├── PluginView.vue     # plugin 数组管理
-    │   ├── UsageView.vue      # 使用统计（opencode.db SQLite + JSON 兜底）
-    │   └── styles/
-    ├── pi/                    # Pi Agent 视图
-    │   ├── ConfigView.vue     # 供应商/模型 CRUD + 自动拉取 + 默认模型自动切换供应商
-    │   ├── McpView.vue        # MCP（来自扩展）
-    │   ├── SkillView.vue      # Skill（来自扩展）
-    │   ├── PluginView.vue     # Extension（npm/git + pi.dev 市场浏览）
-    │   ├── UsageView.vue      # 使用统计（JSONL sessions）
-    │   └── styles/
-    ├── omp/                   # omp 视图
-    │   ├── ConfigView.vue     # modelRoles + 供应商/模型 CRUD
-    │   └── styles/
-    ├── reasonix/              # Reasonix 视图
-    │   ├── ConfigView.vue     # 供应商/模型/默认模型 + .env 密钥管理
-    │   └── styles/
-    ├── codex/                 # Codex 视图（仅配置 tab）
-    │   ├── ConfigView.vue     # 供应商 CRUD + 模型目录同步（~/.codex/models.json）
-    │   └── styles/
-    ├── kimi/                  # Kimi Code 视图（仅配置 tab）
-    │   ├── ConfigView.vue     # 供应商手风琴 + 模型别名标签（星标设默认，含扩展字段高级选项）
-    │   └── styles/
-    ├── minimax/               # MiniMax Code 视图（仅配置 tab）
-    │   ├── ConfigView.vue     # 供应商手风琴 + 模型标签（内置只读可设默认，星标设 defaultModel）
-    │   └── styles/
-    └── common/                # 通用配置（跨 agent 主数据）
-        ├── ConfigView.vue     # 供应商/模型主数据库 CRUD（四协议）
-        ├── McpView.vue        # MCP：本地 ~/.mcp.json + 云端 DB 合并单一列表
-        ├── SkillView.vue      # Skill：只读扫描 ~/.agents/skills + 链接安装 + .disabled 启停
-        ├── AutoRouteView.vue  # 自动路由：本地模型网关（开关/端口/key/模型勾选/下发/请求日志）
-        ├── UsageView.vue      # 汇总统计：纯读 DB 合并 Claude/OpenCode/Pi 落库数据
-        └── styles/
-public/
-├── plugin.json                # uTools 插件配置（关键词/特性）
-├── logo.png                   # 插件主 logo（45° 彩虹星芒）
-├── gen.svg                    # 通用配置功能图标
-├── claudecode.png             # Claude Code 专属图标
-├── icon-opencode.png / icon-pi.png / omp-icon.svg / reasonix.svg / icon-codex.png / kimi.svg
-└── preload/
-    ├── services.js            # 服务入口 → window.services
-    ├── package.json           # Preload 依赖清单（json5 / js-yaml / smol-toml）
-    └── services/
-        ├── config.js          # Claude settings.json / ~/.claude.json I/O（含顶层 mcpServers）、压缩、持久化
-        ├── common.js          # 通用配置：供应商/模型主数据 + 本地/云端 MCP + ~/.agents/skills Skill
-        ├── crypto.js          # AES-256-CBC 加密 + 替换加密
-        ├── mcp.js             # MCP 启停 + SDK 工具发现（STDIO/HTTP/SSE）
-        ├── plugins.js         # Claude 插件 Marketplace / 组件发现
-        ├── opencode.js        # OpenCode CLI 配置 CRUD（json5/jsonc）+ SQLite/JSON 统计
-        ├── pi.js              # Pi Agent 供应商/模型/扩展 CRUD + /models API 自动拉取
-        ├── omp.js             # omp modelRoles + models.yml providers CRUD（js-yaml）
-        ├── reasonix.js        # Reasonix config.toml + .env 读写（smol-toml）
-        ├── codex.js           # Codex config.toml + models.json 模型目录读写（smol-toml）
-        ├── kimi.js            # Kimi Code config.toml 读写（providers/models/default_model，smol-toml）
-        ├── minimax.js         # MiniMax Code config.yaml 读写（custom_provider/models/defaultModel，js-yaml）
-        ├── commands.js        # 各 agent 动态启动指令注册/移除（FEATURE_DEFINITIONS ↔ 启停状态同步）
-        ├── dispatch.js        # 通用库 → 各 agent 模型配置下发（dispatchCommonModel / dispatchAutoRoute）
-        ├── autoroute.js       # 自动路由本地网关（uTools DB 配置、http server 启停、路由、请求日志）
-        ├── autoroute-convert/ # 协议转换层：canonical.js + source.js/target.js + stream.js
-        └── usage.js           # 共享统计聚合（Claude / OpenCode / Pi）+ 跨 agent 统一落库（saveAgentUsage / readAllAgentUsage → ccswitch_agent_usage_*）
+src/          # Vue 3 渲染层
+public/       # uTools 静态资源（plugin.json、各应用图标）
+docs/         # 设计文档与计划
 ```
+
+- **`src/`** — 渲染层。`main.js`/`App.vue` 入口与主题；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、背景特效等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
+- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / plugins / dispatch / autoroute / commands / usage / crypto），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
 
 ## 数据流
 
@@ -208,7 +111,7 @@ Claude:
 
 通用配置（跨 agent 主数据）:
   供应商/模型主数据 → uTools DB（ccswitch_common_providers，API Key 加密）
-  通用 MCP → uTools DB（ccswitch_common_mcp）+ 本地 ~/.mcp.json 双存储，按名称合并单一列表，本地/云端 tag 标注，支持双端复制/移除
+  通用 MCP → uTools DB（ccswitch_common_mcp）+ 本地多个 JSON 文件双存储，按名称合并单一列表，本地/云端 tag 标注，支持双端复制/移除。本地存放位置按机器隔离存 ccswitch_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义。本地端为镜像语义：所有选中位置保持同一份配置，添加/编辑/删除写入全部文件；保存位置与点「刷新」时合并各文件（同名以 ~/.mcp.json 优先）后统一写回，自动对齐外部修改
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
   汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（days 按日期存 tokens/input/output/models，全零跳过防误清）

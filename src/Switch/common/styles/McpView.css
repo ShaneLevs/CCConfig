@@ -56,3 +56,64 @@
   font-family: monospace;
   word-break: break-all;
 }
+
+/* ---------- 本地存放位置设置弹窗 ---------- */
+.mcp-targets-body {
+  font-size: 13px;
+  color: var(--td-text-color-primary);
+}
+
+.mcp-targets-desc {
+  margin: 0 0 12px;
+  color: var(--td-text-color-secondary);
+  line-height: 1.6;
+}
+
+.mcp-targets-section-title {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--td-text-color-secondary);
+}
+
+.mcp-targets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mcp-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.mcp-target-row .t-checkbox__label {
+  font-family: monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.mcp-target-remove {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.mcp-targets-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-targets-add-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-targets-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}

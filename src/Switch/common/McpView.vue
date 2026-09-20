@@ -4,22 +4,25 @@ import { ref, computed, onMounted } from "vue";
 import {
   Empty, Button, Tag, Space, Tooltip, MessagePlugin, Popconfirm,
   Dropdown, DropdownMenu, DropdownItem, DialogPlugin,
-  RadioGroup, RadioButton,
+  RadioGroup, RadioButton, Dialog, Checkbox, Input,
 } from "tdesign-vue-next";
 import {
   RefreshIcon, AddIcon, MoreIcon, ToolsIcon, EditIcon, DeleteIcon,
+  SettingIcon, FolderOpenIcon,
 } from "tdesign-icons-vue-next";
 import McpToolDrawer from "../../components/McpToolDrawer.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
 import "./styles/McpView.css";
 
-// 通用 MCP 库：本地 (~/.mcp.json) 与云端 (uTools DB) 合并为单一列表
+// 通用 MCP 库：本地（多个本地 JSON 文件，位置可设置，见头部齿轮按钮）与云端 (uTools DB) 合并为单一列表
 //   - 每条卡片用 tag 标注来源（本地 / 云端，可同时存在）
 //   - 顶部按钮组可按 全部/本地/云端 快速筛选
 //   - 删除 = 两端同时删除；三点菜单按归属差异化：仅本地→「本地到云端」、
 //     仅云端→「云端到本地」、双端→「移除本地/移除云端」
 //   - 添加/编辑弹窗内可选择保存目标端
+//   - 本地端为镜像语义：所有选中位置保持同一份配置，保存位置/刷新时合并后写回全部文件
+//   - 本地存放位置：预置四个常见路径多选 + 自定义文件，未配置时默认 ~/.mcp.json
 
 const loading = ref(false);
 
@@ -37,23 +40,40 @@ const filteredServers = computed(() => {
 const localServers = ref([]);
 const cloudServers = ref([]);
 
-// MCP 添加/编辑弹窗（通用组件）
+// MCP 添加/编辑弹窗（通用组件）：「保存到」本地/云端为多选，勾选几端写几端；
+// 编辑时取消勾选某端 = 从该端删除副本（统一控制语义，同位置设置里的取消勾选）
 const mcpDialogRef = ref(null);
 const openCreateDialog = () => {
-  mcpDialogRef.value?.open('create', '', null, 'local');
+  mcpDialogRef.value?.open('create', '', null, ['local', 'cloud']);
 };
 const openEditDialog = (item) => {
-  const target = item.hasLocal ? 'local' : 'cloud';
-  mcpDialogRef.value?.open('edit', item.name, item[target].config, target);
+  const targets = [
+    ...(item.hasLocal ? ['local'] : []),
+    ...(item.hasCloud ? ['cloud'] : []),
+  ];
+  mcpDialogRef.value?.open('edit', item.name, item.config, targets);
 };
 const handleSaveMcp = ({ mode, name, config, target }) => {
   try {
-    if (target === 'local') {
-      window.services.upsertLocalMcpServer(name, config);
-    } else {
-      window.services.upsertCommonMcpServer(name, config);
+    const targets = Array.isArray(target) ? target : [target];
+    const done = [];
+    const removed = [];
+    for (const t of ['local', 'cloud']) {
+      if (targets.includes(t)) {
+        if (t === 'local') window.services.upsertLocalMcpServer(name, config);
+        else window.services.upsertCommonMcpServer(name, config);
+        done.push(t === 'local' ? '本地' : '云端');
+      } else if (mode === 'edit') {
+        // 取消勾选的端：删除副本（返回 true = 原本存在并已删）
+        const ok = t === 'local'
+          ? window.services.deleteLocalMcpServer(name)
+          : window.services.deleteCommonMcpServer(name);
+        if (ok) removed.push(t === 'local' ? '本地' : '云端');
+      }
     }
-    MessagePlugin.success(`${target === 'local' ? '本地' : '云端'}服务器 ${name} ${mode === 'create' ? '已添加' : '已更新'}`);
+    let msg = `${done.join('、')}服务器 ${name} ${mode === 'create' ? '已添加' : '已更新'}`;
+    if (removed.length) msg += `，已移除${removed.join('、')}副本`;
+    MessagePlugin.success(msg);
     mcpDialogRef.value?.close();
     loadServers();
   } catch (e) {
@@ -107,9 +127,114 @@ const loadServers = () => {
   }
 };
 
+// 刷新 = 先镜像同步再重载：若外部（agent / 手工）改过某个选中文件，
+// 刷新会把所有文件的 mcpServers 合并后写回全部位置，保证各处完全一致
 const refresh = () => {
   loading.value = true;
-  setTimeout(() => { loadServers(); loading.value = false; }, 50);
+  setTimeout(() => {
+    try {
+      const res = window.services.syncLocalMcpTargets();
+      if (res && res.failed && res.failed.length) {
+        MessagePlugin.warning(`同步失败 ${res.failed.length} 个文件: ${res.failed.map((f) => window.services.toDisplayMcpPath(f)).join('、')}`);
+      }
+    } catch (e) {
+      console.error("镜像同步本地 MCP 失败:", e);
+    }
+    loadServers();
+    loading.value = false;
+  }, 50);
+};
+
+// ---------- 本地存放位置设置（齿轮弹窗） ----------
+const targetsDialogVisible = ref(false);
+const targetsSelected = ref([]); // 选中的绝对路径集合（预置 + 自定义）
+const targetsInfo = ref({ presets: [], custom: [] });
+const customInput = ref("");
+const targetsSummary = ref("");
+
+const refreshTargetsSummary = () => {
+  try {
+    const paths = window.services.getLocalMcpTargetPaths() || [];
+    targetsSummary.value = paths.length === 1
+      ? window.services.toDisplayMcpPath(paths[0])
+      : `${paths.length} 个本地文件`;
+  } catch (e) {
+    targetsSummary.value = "~/.mcp.json";
+  }
+};
+refreshTargetsSummary();
+
+const openTargetsDialog = () => {
+  try {
+    targetsInfo.value = window.services.getLocalMcpTargetsInfo();
+    targetsSelected.value = [...(targetsInfo.value.selected || [])];
+    customInput.value = "";
+    targetsDialogVisible.value = true;
+  } catch (e) {
+    MessagePlugin.error('读取存放位置失败: ' + e.message);
+  }
+};
+
+const toggleTarget = (p, checked) => {
+  const set = new Set(targetsSelected.value);
+  if (checked) set.add(p); else set.delete(p);
+  targetsSelected.value = [...set];
+};
+
+// 浏览选择已有文件，填入自定义输入框（路径解析在保存时统一处理，支持 ~ 前缀）
+const browseCustomFile = () => {
+  const picked = window.services.selectLocalMcpTargetFile();
+  if (picked) customInput.value = window.services.toDisplayMcpPath(picked);
+};
+
+const addCustomTarget = () => {
+  const raw = customInput.value.trim();
+  if (!raw) { MessagePlugin.warning('请输入文件路径或先选择文件'); return; }
+  const abs = window.services.resolveMcpPath(raw);
+  const all = [
+    ...targetsInfo.value.presets.map((p) => p.path),
+    ...targetsInfo.value.custom.map((p) => p.path),
+  ];
+  if (all.includes(abs)) {
+    if (!targetsSelected.value.includes(abs)) toggleTarget(abs, true);
+    customInput.value = '';
+    MessagePlugin.info('该路径已在列表中，已为你勾选');
+    return;
+  }
+  targetsInfo.value = {
+    ...targetsInfo.value,
+    custom: [...targetsInfo.value.custom, { path: abs, label: window.services.toDisplayMcpPath(abs), exists: false }],
+  };
+  targetsSelected.value = [...targetsSelected.value, abs];
+  customInput.value = "";
+};
+
+const removeCustomTarget = (p) => {
+  targetsInfo.value = {
+    ...targetsInfo.value,
+    custom: targetsInfo.value.custom.filter((c) => c.path !== p),
+  };
+  targetsSelected.value = targetsSelected.value.filter((x) => x !== p);
+};
+
+const saveTargets = () => {
+  try {
+    const res = window.services.saveLocalMcpTargets(targetsSelected.value);
+    // 兼容旧 preload（返回裸数组）：uTools 开发时渲染层热更新但 preload 只在插件
+    // 重新载入时才刷新，两种形态都归一化处理
+    const savedPaths = Array.isArray(res) ? res : (res && res.paths) || [];
+    const removedList = Array.isArray(res) ? [] : (res && res.removed) || [];
+    targetsSelected.value = savedPaths;
+    let msg = `已保存并同步到 ${savedPaths.length} 个位置（配置保持一致）`;
+    if (removedList.length)
+      msg += `，已从 ${removedList.length} 个取消位置删除本库配置`;
+    MessagePlugin.success(msg);
+    targetsDialogVisible.value = false;
+    refreshTargetsSummary();
+    loadServers();
+  } catch (e) {
+    MessagePlugin.error('保存失败: ' + e.message);
+  }
 };
 
 // 删除 = 两端同时删除
@@ -193,7 +318,10 @@ const openToolDrawer = (item) => {
   showToolDrawer.value = true;
 };
 
-onMounted(loadServers);
+onMounted(() => {
+  loadServers();
+  refreshTargetsSummary();
+});
 </script>
 
 <template>
@@ -205,10 +333,15 @@ onMounted(loadServers);
           <RadioButton value="local">本地</RadioButton>
           <RadioButton value="cloud">云端</RadioButton>
         </RadioGroup>
-        <span>通用 MCP 服务器库 — 本地 (~/.mcp.json) 与云端 (DB) 合并展示</span>
+        <span>通用 MCP 服务器库 — 本地（{{ targetsSummary }}）与云端 (DB) 合并展示</span>
         <span class="common-mcp-count">{{ filteredServers.length }} 个</span>
       </div>
       <div class="common-mcp-actions">
+        <Tooltip content="本地存放位置设置" placement="top">
+          <Button size="small" variant="outline" @click="openTargetsDialog">
+            <template #icon><SettingIcon /></template>
+          </Button>
+        </Tooltip>
         <Button size="small" theme="primary" @click="openCreateDialog">
           <template #icon><AddIcon /></template> 添加
         </Button>
@@ -305,5 +438,69 @@ onMounted(loadServers);
       :server-name="toolServerName"
       :config="toolServerConfig"
     />
+
+    <!-- 本地 MCP 存放位置设置：预置多选 + 自定义路径（多选 = 写入时同步到全部文件） -->
+    <Dialog
+      v-model:visible="targetsDialogVisible"
+      header="本地 MCP 存放位置"
+      width="560px"
+      confirm-btn="保存"
+      cancel-btn="取消"
+      :close-on-confirm="false"
+      @confirm="saveTargets"
+    >
+      <div class="mcp-targets-body">
+        <p class="mcp-targets-desc">
+          所有勾选的位置保持同一份 MCP 配置（镜像）：保存时会把已勾选文件的服务器合并后写回全部位置；
+          添加 / 编辑 / 删除同步到所有文件，点「刷新」也会重新对齐（同名冲突以 ~/.mcp.json 优先）。
+          取消勾选某个位置并保存，会删除该文件中本库管理的服务器（其他来源独有的条目保留）。
+          很多 Agent 并不读 ~/.mcp.json，请按你实际使用的 Agent 勾选对应位置。
+        </p>
+        <div class="mcp-targets-section-title">预置位置</div>
+        <div class="mcp-targets-list">
+          <div v-for="p in targetsInfo.presets" :key="p.path" class="mcp-target-row">
+            <Checkbox
+              :checked="targetsSelected.includes(p.path)"
+              :label="p.label"
+              @change="(checked) => toggleTarget(p.path, checked)"
+            />
+            <Tag v-if="p.exists" size="small" theme="success" variant="light">文件已存在</Tag>
+          </div>
+        </div>
+        <template v-if="targetsInfo.custom.length">
+          <div class="mcp-targets-section-title">自定义位置</div>
+          <div class="mcp-targets-list">
+            <div v-for="c in targetsInfo.custom" :key="c.path" class="mcp-target-row">
+              <Checkbox
+                :checked="targetsSelected.includes(c.path)"
+                :label="c.label"
+                @change="(checked) => toggleTarget(c.path, checked)"
+              />
+              <Tag v-if="c.exists" size="small" theme="success" variant="light">文件已存在</Tag>
+              <Button class="mcp-target-remove" size="small" variant="text" theme="danger" @click="removeCustomTarget(c.path)">
+                删除
+              </Button>
+            </div>
+          </div>
+        </template>
+        <div class="mcp-targets-section-title">添加自定义路径</div>
+        <div class="mcp-targets-add-row">
+          <Input
+            v-model="customInput"
+            class="mcp-targets-add-input"
+            placeholder="如 ~/my-agent/mcp.json（支持 ~ 前缀）"
+            clearable
+            @enter="addCustomTarget"
+          />
+          <Tooltip content="选择已有文件" placement="top">
+            <Button variant="outline" @click="browseCustomFile">
+              <template #icon><FolderOpenIcon /></template>
+            </Button>
+          </Tooltip>
+          <Button theme="primary" @click="addCustomTarget">添加</Button>
+        </div>
+        <div class="mcp-targets-hint">建议文件名使用 .mcp.json 或 mcp.json，所在目录不存在时会自动创建</div>
+      </div>
+    </Dialog>
   </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from "vue";
-import { Dialog, Input, Button, RadioGroup, RadioButton, Textarea, MessagePlugin } from "tdesign-vue-next";
+import { Dialog, Input, Button, RadioGroup, Radio, RadioButton, CheckboxGroup, Checkbox, Textarea, MessagePlugin } from "tdesign-vue-next";
 import DynamicKvEditor from "./DynamicKvEditor.vue";
 
 // 通用 MCP 服务器添加/编辑弹窗（表单 + JSON 双模式）
@@ -12,9 +12,10 @@ import DynamicKvEditor from "./DynamicKvEditor.vue";
 // props：
 //   headerPrefix          弹窗标题前缀（如「本地 · 」），默认空
 //   nameDisabledOnEdit    编辑时名称是否禁用（common 按名 upsert 需禁用；claude 支持改名）
-//   showTarget            是否显示「本地/云端」目标选择（common 合并列表用），默认 false
+//   showTarget            是否显示「本地/云端」目标多选（common 合并列表用），默认 false
 //   targetOptions         目标选项 [{ value, label }]，默认 [本地, 云端]
-//   open(mode, name, config, target) 的 target 为初始选中目标
+//   open(mode, name, config, target) 的 target 为初始选中端（数组，也兼容单值字符串）
+//   @save 事件里 target 统一为选中端数组（claude 等不启用 showTarget 的使用方可忽略）
 
 const props = defineProps({
   headerPrefix: { type: String, default: "" },
@@ -33,7 +34,7 @@ const emit = defineEmits(["save"]);
 
 const showDialog = ref(false);
 const dialogMode = ref('create'); // create | edit
-const dialogTarget = ref('local'); // 保存目标端（showTarget 时可选）
+const dialogTarget = ref(['local', 'cloud']); // 保存目标端数组（showTarget 时多选；新建默认两端全勾）
 const mcpName = ref('');
 const mcpType = ref('stdio');
 const mcpCommand = ref('');
@@ -109,7 +110,7 @@ const switchEditMode = (mode) => {
 
 const open = (mode, name, config, target) => {
   dialogMode.value = mode === 'edit' ? 'edit' : 'create';
-  dialogTarget.value = target || 'local';
+  dialogTarget.value = Array.isArray(target) ? [...target] : (target ? [target] : ['local', 'cloud']);
   mcpName.value = (mode === 'edit' && name) ? name : '';
   if (config && typeof config === 'object') {
     applyConfigToForm(config);
@@ -147,6 +148,10 @@ const useHttpTemplate = () => {
 const submit = () => {
   const name = mcpName.value.trim();
   if (!name) { MessagePlugin.warning('请输入服务器名称'); return; }
+  if (props.showTarget && !dialogTarget.value.length) {
+    MessagePlugin.warning('请至少勾选一个保存位置');
+    return;
+  }
   let config;
   if (editMode.value === 'json') {
     try {
@@ -179,14 +184,14 @@ defineExpose({ open, close });
   >
     <div class="mcp-dialog-form">
       <div v-if="showTarget" class="mcp-dialog-form-item">
-        <label>保存到</label>
-        <RadioGroup v-model="dialogTarget" variant="default-filled">
-          <RadioButton
+        <label>保存到 <span class="mcp-dialog-required">*</span></label>
+        <CheckboxGroup v-model="dialogTarget">
+          <Checkbox
             v-for="opt in targetOptions"
             :key="opt.value"
             :value="opt.value"
-          >{{ opt.label }}</RadioButton>
-        </RadioGroup>
+          >{{ opt.label }}</Checkbox>
+        </CheckboxGroup>
       </div>
 
       <div class="mcp-dialog-form-item">
@@ -209,9 +214,9 @@ defineExpose({ open, close });
       <template v-if="editMode === 'form'">
         <div class="mcp-dialog-form-item">
           <label>类型</label>
-          <RadioGroup v-model="mcpType" variant="default-filled">
-            <RadioButton value="stdio">STDIO</RadioButton>
-            <RadioButton value="http">HTTP</RadioButton>
+          <RadioGroup v-model="mcpType">
+            <Radio value="stdio">STDIO</Radio>
+            <Radio value="http">HTTP</Radio>
           </RadioGroup>
         </div>
 
@@ -312,6 +317,8 @@ defineExpose({ open, close });
   display: flex;
   gap: 8px;
 }
+
+/* 单选组保持 TDesign 原生样式与间距，不额外覆盖 */
 
 .mcp-dialog-footer {
   display: flex;

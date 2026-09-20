@@ -183,12 +183,152 @@ const deleteCommonModel = (providerName, modelId) => {
   return writeCommonProviders({ providers });
 };
 
-// ==================== MCP（本地 ~/.mcp.json + 云端 uTools DB 双存储） ====================
-// 本地：直接读写用户级 ~/.mcp.json（多数 agent 共同读取），保留文件中其他字段
+// ==================== MCP（本地多文件 + 云端 uTools DB 双存储） ====================
+// 本地：MCP 配置写入多个本地 JSON 文件（预置常见路径 + 用户自定义，按机器隔离存
+//   ccswitch_mcp_local_targets_<nativeId>）。读 = 全部选中文件合并（先到先得），
+//   写 = 同步写入所有选中文件，并保留各文件中 mcpServers 之外的其他字段（如 $schema）。
 // 云端：uTools DB 单 doc：ccswitch_common_mcp -> { mcpServers: { name: config } }
 const DOC_MCP = "ccswitch_common_mcp";
-const LOCAL_MCP_PATH = () =>
-  path.join(window.utools.getPath("home"), ".mcp.json");
+const DOC_MCP_TARGETS = "ccswitch_mcp_local_targets";
+
+const mcpHomePath = () => window.utools.getPath("home");
+
+// 预置的常见本地 MCP 配置路径（~/.mcp.json 排首位：兼容旧默认位置，读取合并优先级最高）
+const MCP_LOCAL_PRESETS = () => {
+  const home = mcpHomePath();
+  return [
+    path.join(home, ".mcp.json"),
+    path.join(home, ".config", "mcp", "mcp.json"),
+    path.join(home, ".agents", "mcp.json"),
+    path.join(home, ".agents", "mcp", "mcp.json"),
+  ];
+};
+
+// 绝对路径 → 带 ~ 前缀的展示路径
+const toDisplayMcpPath = (p) => {
+  const home = mcpHomePath();
+  if (!p) return p;
+  if (p === home) return "~";
+  return p.startsWith(home + path.sep) ? "~/" + p.slice(home.length + 1) : p;
+};
+
+// 支持 ~ 前缀与相对路径，解析为绝对路径
+const resolveMcpPath = (p) => {
+  const raw = String(p || "").trim();
+  if (!raw) return "";
+  if (raw === "~") return mcpHomePath();
+  if (raw.startsWith("~/") || raw.startsWith("~\\"))
+    return path.join(mcpHomePath(), raw.slice(2));
+  return path.isAbsolute(raw)
+    ? path.normalize(raw)
+    : path.join(mcpHomePath(), raw);
+};
+
+// 当前选中的本地 MCP 存放路径列表。未配置 → 默认 [~/.mcp.json]（兼容旧行为）
+const getLocalMcpTargetPaths = () => {
+  const data = readDoc(
+    `${DOC_MCP_TARGETS}_${window.utools.getNativeId() || ""}`,
+    null,
+  );
+  const list =
+    data && Array.isArray(data.paths)
+      ? data.paths.map(resolveMcpPath).filter(Boolean)
+      : [];
+  const uniq = [...new Set(list)];
+  return uniq.length ? uniq : [path.join(mcpHomePath(), ".mcp.json")];
+};
+
+// 设置弹窗用：预置路径 + 自定义路径（不在预置列表内）+ 当前选中
+const getLocalMcpTargetsInfo = () => {
+  const presets = MCP_LOCAL_PRESETS();
+  const selected = getLocalMcpTargetPaths();
+  const wrap = (p) => ({
+    path: p,
+    label: toDisplayMcpPath(p),
+    exists: fs.existsSync(p),
+  });
+  return {
+    presets: presets.map(wrap),
+    custom: selected.filter((p) => !presets.includes(p)).map(wrap),
+    selected,
+  };
+};
+
+// 镜像同步：合并所有选中文件的 mcpServers（路径顺序先到先得，~/.mcp.json 优先），
+// 再统一写回全部选中文件 → 保证各位置的 MCP 配置完全一致（镜像）。
+// 返回 { servers, failed }：failed = 写入失败的文件列表（磁盘满/权限等）。
+const syncLocalMcpTargets = () => {
+  const merged = getLocalMcpServers();
+  const failed = [];
+  for (const p of getLocalMcpTargetPaths()) {
+    const doc = readMcpDocFile(p);
+    doc.mcpServers = JSON.parse(JSON.stringify(merged));
+    if (!writeMcpDocFile(p, doc)) failed.push(p);
+  }
+  return { servers: Object.keys(merged).length, failed };
+};
+
+// 保存选中列表（至少一个；排序：预置顺序在前，自定义在后）。
+// 保存时：
+//   1. 被取消勾选的位置 → 删除本库管理的服务器（当前合并集），该文件里其他来源
+//      独有的条目不动，避免误伤；
+//   2. 镜像同步 → 新选中文件里已有的服务器并入统一配置，各位置从此完全一致。
+// 返回 { paths, removed }（removed = 被取消并清理的位置列表）
+const saveLocalMcpTargets = (paths) => {
+  const oldPaths = getLocalMcpTargetPaths();
+  const list = [
+    ...new Set(
+      (Array.isArray(paths) ? paths : []).map(resolveMcpPath).filter(Boolean),
+    ),
+  ];
+  if (list.length === 0)
+    throw new Error("请至少保留一个本地存放位置（否则本地端将无文件可写）");
+  const presets = MCP_LOCAL_PRESETS();
+  const ordered = [
+    ...presets.filter((p) => list.includes(p)),
+    ...list.filter((p) => !presets.includes(p)),
+  ];
+  writeDoc(`${DOC_MCP_TARGETS}_${window.utools.getNativeId() || ""}`, {
+    paths: ordered,
+  });
+  // 被取消勾选的位置：删除本库管理的服务器（= 保存后新选中文件的合并集），
+  // 其他来源独有的条目保留
+  const removed = oldPaths.filter((p) => !ordered.includes(p));
+  if (removed.length) {
+    const managed = getLocalMcpServers();
+    for (const p of removed) {
+      const doc = readMcpDocFile(p);
+      let dirty = false;
+      for (const name of Object.keys(managed)) {
+        if (name in doc.mcpServers) {
+          delete doc.mcpServers[name];
+          dirty = true;
+        }
+      }
+      if (dirty) writeMcpDocFile(p, doc);
+    }
+  }
+  syncLocalMcpTargets();
+  return { paths: ordered, removed };
+};
+
+// 系统文件选择器选一个本地文件（用于自定义路径），取消返回 null
+const selectLocalMcpTargetFile = () => {
+  try {
+    const result = window.utools.showOpenDialog({
+      title: "选择 MCP 配置文件",
+      properties: ["openFile"],
+      filters: [
+        { name: "MCP 配置 (*.json)", extensions: ["json"] },
+        { name: "所有文件", extensions: ["*"] },
+      ],
+    });
+    return Array.isArray(result) && result.length ? result[0] : null;
+  } catch (e) {
+    console.error("选择 MCP 配置文件失败:", e);
+    return null;
+  }
+};
 
 // ---------- 云端（uTools DB） ----------
 
@@ -220,76 +360,98 @@ const writeCommonMcpServers = (mcpServers) => {
   return writeDoc(DOC_MCP, { mcpServers: obj });
 };
 
-// ---------- 本地（~/.mcp.json 文件） ----------
+// ---------- 本地（多文件：读取合并、写入全部同步） ----------
 
-const readLocalMcpRaw = () => {
+// 读单个文件（保留 mcpServers 之外的其他字段，如 $schema）；缺失/解析失败返回空壳
+const readMcpDocFile = (filePath) => {
+  let doc = null;
   try {
-    if (!fs.existsSync(LOCAL_MCP_PATH())) return null;
-    return JSON.parse(fs.readFileSync(LOCAL_MCP_PATH(), { encoding: "utf-8" }));
+    if (fs.existsSync(filePath)) {
+      const raw = JSON.parse(fs.readFileSync(filePath, { encoding: "utf-8" }));
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) doc = raw;
+    }
   } catch (e) {
-    console.error("读取本地 MCP 配置失败:", e);
-    return null;
+    console.error(`读取 MCP 配置文件失败 (${filePath}):`, e);
   }
-};
-
-// 读整份文件（保留 mcpServers 之外的其他字段，如 $schema）
-const readLocalMcpDoc = () => {
-  const raw = readLocalMcpRaw();
-  const doc =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? raw
-      : { mcpServers: {} };
-  if (!doc.mcpServers || typeof doc.mcpServers !== "object")
+  if (!doc) doc = {};
+  if (
+    !doc.mcpServers ||
+    typeof doc.mcpServers !== "object" ||
+    Array.isArray(doc.mcpServers)
+  )
     doc.mcpServers = {};
   return doc;
 };
 
-const writeLocalMcpDoc = (doc) => {
+const writeMcpDocFile = (filePath, doc) => {
   try {
-    fs.writeFileSync(LOCAL_MCP_PATH(), JSON.stringify(doc, null, 2), {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(doc, null, 2), {
       encoding: "utf-8",
     });
     return true;
   } catch (e) {
-    console.error("写入本地 MCP 配置失败:", e);
+    console.error(`写入 MCP 配置文件失败 (${filePath}):`, e);
     return false;
   }
 };
 
-const getLocalMcpServers = () => readLocalMcpDoc().mcpServers;
+// 合并所有选中文件的 mcpServers（同名以路径顺序先到先得，~/.mcp.json 优先）
+const getLocalMcpServers = () => {
+  const merged = {};
+  for (const p of getLocalMcpTargetPaths()) {
+    const servers = readMcpDocFile(p).mcpServers;
+    for (const [name, cfg] of Object.entries(servers)) {
+      if (!(name in merged)) merged[name] = cfg;
+    }
+  }
+  return merged;
+};
 
 const upsertLocalMcpServer = (name, serverConfig) => {
-  const doc = readLocalMcpDoc();
-  doc.mcpServers[name] = serverConfig;
-  return writeLocalMcpDoc(doc);
+  let ok = true;
+  for (const p of getLocalMcpTargetPaths()) {
+    const doc = readMcpDocFile(p);
+    doc.mcpServers[name] = serverConfig;
+    if (!writeMcpDocFile(p, doc)) ok = false;
+  }
+  return ok;
 };
 
 const deleteLocalMcpServer = (name) => {
-  const doc = readLocalMcpDoc();
-  if (!doc.mcpServers[name]) return false;
-  delete doc.mcpServers[name];
-  return writeLocalMcpDoc(doc);
+  let changed = false;
+  for (const p of getLocalMcpTargetPaths()) {
+    const doc = readMcpDocFile(p);
+    if (doc.mcpServers[name]) {
+      delete doc.mcpServers[name];
+      changed = writeMcpDocFile(p, doc) || changed;
+    }
+  }
+  return changed;
 };
 
+// 把整份 { mcpServers: {...} } 一次性写回每个选中文件（用于批量导入/覆盖）
 const writeLocalMcpServers = (mcpServers) => {
-  const doc = readLocalMcpDoc();
   const obj = mcpServers && typeof mcpServers === "object" ? mcpServers : {};
-  doc.mcpServers = obj;
-  return writeLocalMcpDoc(doc);
+  let ok = true;
+  for (const p of getLocalMcpTargetPaths()) {
+    const doc = readMcpDocFile(p);
+    doc.mcpServers = JSON.parse(JSON.stringify(obj));
+    if (!writeMcpDocFile(p, doc)) ok = false;
+  }
+  return ok;
 };
 
 // ---------- 跨端操作 ----------
 
-// 把另一端的一个 server 复制到本端（同名覆盖）。target: 'local'（云端→本地）| 'cloud'（本地→云端）
+// 把另一端的一个 server 复制到本端（同名覆盖，本地端 = 写入全部选中文件）。target: 'local'（云端→本地）| 'cloud'（本地→云端）
 const copyCommonMcpServer = (name, target) => {
   if (target === "local") {
     const cloud = readCommonMcpDoc().mcpServers;
     if (!cloud[name]) throw new Error(`云端不存在 ${name}`);
-    const doc = readLocalMcpDoc();
-    doc.mcpServers[name] = JSON.parse(JSON.stringify(cloud[name]));
-    return writeLocalMcpDoc(doc);
+    return upsertLocalMcpServer(name, JSON.parse(JSON.stringify(cloud[name])));
   } else {
-    const local = readLocalMcpDoc().mcpServers;
+    const local = getLocalMcpServers();
     if (!local[name]) throw new Error(`本地不存在 ${name}`);
     const data = readCommonMcpDoc();
     data.mcpServers[name] = JSON.parse(JSON.stringify(local[name]));
@@ -494,6 +656,13 @@ module.exports = {
   deleteLocalMcpServer,
   writeLocalMcpServers,
   copyCommonMcpServer,
+  getLocalMcpTargetPaths,
+  getLocalMcpTargetsInfo,
+  saveLocalMcpTargets,
+  syncLocalMcpTargets,
+  selectLocalMcpTargetFile,
+  resolveMcpPath,
+  toDisplayMcpPath,
   readCommonSkills,
   openCommonSkillsDir,
   getCommonSkillsPath,
