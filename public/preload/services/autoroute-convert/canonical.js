@@ -1,4 +1,4 @@
-// 自动路由 · 协议转换层 —— 标准中间格式（canonical）与公共工具
+// 自动网关 · 协议转换层 —— 标准中间格式（canonical）与公共工具
 // 星型转换：入站协议(source 适配器) → canonical → 出站协议(target 适配器)，响应原路反向。
 // canonical 请求采用 OpenAI Responses 风格：
 //   {

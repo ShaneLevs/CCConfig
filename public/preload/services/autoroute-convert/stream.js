@@ -1,4 +1,4 @@
-// 自动路由 · 流式管道
+// 自动网关 · 流式管道
 // 上游 SSE → target.readStream（canonical 事件流）→ source.createFrameWriter（入站协议帧）→ 客户端
 // 非流式路径不经过本模块（server 直接 buffer + parse/format）。
 

@@ -1,4 +1,4 @@
-// 自动路由 · 出站协议适配（target）
+// 自动网关 · 出站协议适配（target）
 // 职责：把 canonical 构建为上游请求体（buildRequest），把上游非流式响应解析回 canonical
 // （parseResponse），流式时由 readStream 把上游 SSE 读成 canonical 事件流。
 // 支持三种出站协议：anthropic-messages、openai-completions、openai-responses。

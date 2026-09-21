@@ -5,8 +5,8 @@ import { CopyIcon, RefreshIcon, SendIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
 
-// 自动路由：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
-// 开启状态同步到共享 ref，驱动 index.vue「路由」tab 按钮的绿点标识
+// 自动网关：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
+// 开启状态同步到共享 ref，驱动 index.vue「网关」tab 按钮的绿点标识
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
 const AGENT_DISPATCH_OPTIONS = [
   { label: "Claude Code", value: "claude" },
@@ -49,7 +49,7 @@ const loadAll = () => {
     selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
     portDraft.value = config.value.port;
   } catch (e) {
-    MessagePlugin.error("加载自动路由配置失败: " + e.message);
+    MessagePlugin.error("加载自动网关配置失败: " + e.message);
   }
 };
 
@@ -86,7 +86,7 @@ const saveSelection = () => {
   try {
     config.value = window.services.writeAutoRouteConfig({ selection: flattenSelection(selectionKeys.value) });
   } catch (e) {
-    MessagePlugin.error("保存路由模型失败: " + e.message);
+    MessagePlugin.error("保存网关模型失败: " + e.message);
   }
 };
 
@@ -94,7 +94,7 @@ const onToggleEnabled = async (val) => {
   try {
     status.value = await window.services.setAutoRouteEnabled(!!val);
     autoRouteEnabled.value = !!val;
-    MessagePlugin.success(val ? "自动路由已开启" : "自动路由已关闭");
+    MessagePlugin.success(val ? "自动网关已开启" : "自动网关已关闭");
   } catch (e) {
     config.value.enabled = !val;
     // 启动失败时 preload 已回写 enabled=false，从 DB 重读保持绿点一致
@@ -147,7 +147,7 @@ const dispatchSubmitting = ref(false);
 const dispatchTargets = ref([]);
 
 const openDispatchDialog = () => {
-  if (modelCount.value === 0) return MessagePlugin.warning("请先勾选要路由的模型");
+  if (modelCount.value === 0) return MessagePlugin.warning("请先勾选要接入网关的模型");
   dispatchTargets.value = [];
   dispatchDialog.value = true;
 };
@@ -224,7 +224,7 @@ onUnmounted(() => {
     <div class="autoroute-header">
       <span class="autoroute-tip">本地模型网关 — 把勾选的主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，任意 agent 均可用三种协议请求，跨协议自动转换</span>
       <div class="autoroute-actions">
-        <Tooltip content="把自动路由作为虚拟供应商写入各 agent 的模型配置" placement="top">
+        <Tooltip content="把自动网关作为虚拟供应商写入各 agent 的模型配置" placement="top">
           <Button size="small" variant="outline" :disabled="modelCount === 0" @click="openDispatchDialog">
             <template #icon><SendIcon /></template> 下发到 Agent
           </Button>
@@ -264,7 +264,7 @@ onUnmounted(() => {
       </div>
 
       <div class="autoroute-form-row">
-        <span class="autoroute-label">路由模型</span>
+        <span class="autoroute-label">网关模型</span>
         <Cascader
           v-model="selectionKeys"
           :options="routeOptions"
@@ -312,7 +312,7 @@ onUnmounted(() => {
     <!-- 下发到 Agent 弹窗 -->
     <Dialog
       v-model:visible="dispatchDialog"
-      header="下发自动路由到 Agent"
+      header="下发自动网关到 Agent"
       width="520px"
       dialog-class-name="autoroute-dispatch-dialog"
       :confirm-btn="{ content: '下发', theme: 'primary', loading: dispatchSubmitting }"

@@ -1,4 +1,4 @@
-// 自动路由 · 入站协议适配（source）
+// 自动网关 · 入站协议适配（source）
 // 职责：把 agent 发来的请求解析为 canonical（parseRequest），把 canonical 响应格式化回入站协议
 // （formatResponse），流式时由 createFrameWriter 把 canonical 事件流重写为入站协议的 SSE 帧。
 // 支持三种入站协议：anthropic（/v1/messages）、chat（/v1/chat/completions）、responses（/v1/responses）。

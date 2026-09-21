@@ -357,9 +357,9 @@ const dispatchToMinimax = (provider, model, opts) => {
   return `供应商 ${name}${keyNote} 已更新，模型 ${model.id} 已写入${suffix}`
 }
 
-// ==================== 自动路由下发 ====================
+// ==================== 自动网关下发 ====================
 
-// 自动路由网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
+// 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
 //（对外就是 Anthropic 协议端点，可通过协议守卫），其余目标用 openai-completions；
 // baseUrl 指向 http://127.0.0.1:<port>，key 为网关随机 key（agent 侧是占位符，网关侧用于鉴权）。
 // 供应商名用英文 router：该名字同时用作 Codex 的 model_providers.<id>（TOML ID 仅支持英文，
@@ -434,7 +434,7 @@ const cleanupLegacyAutoRoute = (app) => {
 const dispatchAutoRoute = (targets) => {
   const config = autoroute.readAutoRouteConfig();
   const enabled = autoroute.resolveAutoRouteModels(config);
-  if (!enabled.length) throw new Error("请先在通用配置 · 自动路由中勾选要路由的模型");
+  if (!enabled.length) throw new Error("请先在通用配置 · 自动网关中勾选要接入网关的模型");
   const list = Array.isArray(targets) ? targets : [];
   if (list.length === 0) throw new Error("请选择目标 agent");
   const models = enabled.map(({ model }) => model);

@@ -1,4 +1,4 @@
-// 自动路由 · 本地模型网关
+// 自动网关 · 本地模型服务
 // 把通用配置主数据中勾选的供应商+模型，通过本地 HTTP 服务（默认 http://127.0.0.1:17877）暴露给本机 agent：
 //   POST /v1/messages        → Anthropic Messages 入站
 //   POST /v1/chat/completions → OpenAI Chat Completions 入站
@@ -18,7 +18,7 @@ const { getTarget } = require("./autoroute-convert/target");
 const { pipeStream, collectBody } = require("./autoroute-convert/stream");
 const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage } = require("./autoroute-convert/canonical");
 
-// 路由配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
+// 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
 // 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccswitch_overridden_env_<nativeId> 先例）。
 // 旧版共用文档 ccswitch_autoroute_config 作为升级回退：机器首次读取尚无本机文档时继承旧配置作为起点，
 // 之后各自独立演进；旧文档保留不删（其他机器可能还没迁移过）。
@@ -57,9 +57,9 @@ const writeAutoRouteConfig = (patch) => {
   try {
     res = window.utools.db.put(payload);
   } catch (e) {
-    throw new Error("保存自动路由配置失败: " + (e.message || e));
+    throw new Error("保存自动网关配置失败: " + (e.message || e));
   }
-  if (!res || !res.ok) throw new Error("保存自动路由配置失败" + (res && res.message ? `：${res.message}` : ""));
+  if (!res || !res.ok) throw new Error("保存自动网关配置失败" + (res && res.message ? `：${res.message}` : ""));
   return config;
 };
 
@@ -97,7 +97,7 @@ const resolveAutoRouteModels = (config) => {
   return list;
 };
 
-// model 字段 → 路由目标：模型 ID 精确匹配（按勾选顺序取第一个），兼容「供应商/模型ID」消歧
+// model 字段 → 网关目标：模型 ID 精确匹配（按勾选顺序取第一个），兼容「供应商/模型ID」消歧
 const resolveRoute = (enabled, requested) => {
   const name = typeof requested === "string" ? requested.trim() : "";
   if (!name) return null;
@@ -193,7 +193,7 @@ const handleRequest = async (req, res) => {
 
     const key = extractKey(req);
     if (!config.key || key !== config.key) {
-      fail(sourceProtocol, 401, "无效的 API Key（请在 CCConfig 自动路由页复制正确的 key）");
+      fail(sourceProtocol, 401, "无效的 API Key（请在 CCConfig 自动网关页复制正确的 key）");
       return;
     }
 
@@ -231,13 +231,13 @@ const handleRequest = async (req, res) => {
     const enabled = resolveAutoRouteModels(config);
     const route = resolveRoute(enabled, body.model);
     if (!route) {
-      fail(sourceProtocol, 404, `模型 ${body.model || "(空)"} 未在自动路由中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧`, body.model || "");
+      fail(sourceProtocol, 404, `模型 ${body.model || "(空)"} 未在自动网关中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧`, body.model || "");
       return;
     }
     const { provider, model } = route;
 
     if (!getTarget(provider.api)) {
-      fail(sourceProtocol, 400, `供应商「${provider.name}」的协议 ${provider.api} 暂不支持自动路由`, model.id);
+      fail(sourceProtocol, 400, `供应商「${provider.name}」的协议 ${provider.api} 暂不支持自动网关`, model.id);
       return;
     }
     const url = buildUpstreamUrl(provider.baseUrl, provider.api);

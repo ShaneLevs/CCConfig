@@ -48,7 +48,7 @@ const props = defineProps({
 
 const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isCommon } = useAppContext();
 
-// 自动路由开启状态：「路由」tab 按钮右上角绿点标识（AutoRouteView 开关切换时同步）
+// 自动网关开启状态：「网关」tab 按钮右上角绿点标识（AutoRouteView 开关切换时同步）
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
 
 const { darkBackgroundEnabled, setDarkBackground, darkEffect, setDarkEffect } =
@@ -143,7 +143,7 @@ const pageTitleSuffix = computed(() => {
     },
     common: {
       config: "配置",
-      autoroute: "路由",
+      autoroute: "网关",
       mcp: "MCP",
       skill: "Skill",
       usage: "使用统计",
@@ -313,7 +313,7 @@ const handleAppSelect = (data) => {
 };
 
 onMounted(() => {
-  // 自动路由开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
+  // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
   refreshAutoRouteEnabled();
 
   // 根据入口命令预选对应应用
@@ -437,9 +437,9 @@ onMounted(() => {
               :variant="activeTab === 'autoroute' ? 'base' : 'outline'"
               @click="activeTab = 'autoroute'"
             >
-              <template #icon><MapRoutePlanningIcon /></template> 路由
+              <template #icon><MapRoutePlanningIcon /></template> 网关
             </Button>
-            <!-- 自动路由开启标识：按钮右上角绿点（外层包裹定位，.t-button 自身 overflow: hidden 会裁切溢出角标） -->
+            <!-- 自动网关开启标识：按钮右上角绿点（外层包裹定位，.t-button 自身 overflow: hidden 会裁切溢出角标） -->
             <span v-if="autoRouteEnabled" class="route-on-dot" />
           </span>
           <Button
@@ -907,7 +907,7 @@ onMounted(() => {
   gap: 4px;
   align-items: center;
 }
-/* 路由 tab 按钮：自动路由开启时右上角绿点标识（表示网关已开启） */
+/* 网关 tab 按钮：自动网关开启时右上角绿点标识（表示网关已开启） */
 .route-tab-btn {
   position: relative;
   display: inline-flex;

@@ -1984,7 +1984,7 @@ window.services = {
   deleteCommonSkill: common.deleteCommonSkill,
   // 通用库 provider + model → 各 Agent 模型配置下发
   dispatchCommonModel: dispatch.dispatchCommonModel,
-  // 自动路由网关：本地模型代理（配置 / 启停 / 状态 / 下发）
+  // 自动网关：本地模型代理（配置 / 启停 / 状态 / 下发）
   readAutoRouteConfig: autoroute.readAutoRouteConfig,
   writeAutoRouteConfig: autoroute.writeAutoRouteConfig,
   regenerateAutoRouteKey: autoroute.regenerateAutoRouteKey,
