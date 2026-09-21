@@ -1,13 +1,12 @@
 <script setup>
 
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import {
   Empty, Button, Tag, Space, Tooltip, MessagePlugin, Popconfirm,
-  Dropdown, DropdownMenu, DropdownItem, DialogPlugin,
-  RadioGroup, RadioButton, Dialog, Checkbox, Input,
+  Dialog, Checkbox, Input, Switch,
 } from "tdesign-vue-next";
 import {
-  RefreshIcon, AddIcon, MoreIcon, ToolsIcon, EditIcon, DeleteIcon,
+  RefreshIcon, AddIcon, ToolsIcon, EditIcon, DeleteIcon,
   SettingIcon, FolderOpenIcon,
 } from "tdesign-icons-vue-next";
 import McpToolDrawer from "../../components/McpToolDrawer.vue";
@@ -15,65 +14,31 @@ import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
 import "./styles/McpView.css";
 
-// 通用 MCP 库：本地（多个本地 JSON 文件，位置可设置，见头部齿轮按钮）与云端 (uTools DB) 合并为单一列表
-//   - 每条卡片用 tag 标注来源（本地 / 云端，可同时存在）
-//   - 顶部按钮组可按 全部/本地/云端 快速筛选
-//   - 删除 = 两端同时删除；三点菜单按归属差异化：仅本地→「本地到云端」、
-//     仅云端→「云端到本地」、双端→「移除本地/移除云端」
-//   - 添加/编辑弹窗内可选择保存目标端
-//   - 本地端为镜像语义：所有选中位置保持同一份配置，保存位置/刷新时合并后写回全部文件
-//   - 本地存放位置：预置四个常见路径多选 + 自定义文件，未配置时默认 ~/.mcp.json
+// 通用 MCP 库：云端 (uTools DB) 是唯一主档，所有服务器都存一份；本地（多个 JSON 文件，
+//   位置由头部齿轮按钮设置）是它的镜像，每条卡片一个启用开关：
+//   - 开启 = 写入全部选中本地文件（镜像一致）；关闭 = 从本地文件移除（云端仍保留一份）
+//   - 启停状态按机器隔离；首次进入按「本地文件中已存在 → 启用」初始化
+//   - 顶部不再按启停筛选，全部服务器统一展示（卡片开关 + tag 区分启用态）；删除 = 主档与本地一并删除
+//   - 添加/编辑总是写主档，再按当前启用状态同步本地文件
+//   - 多文件镜像 / 存放位置逻辑不变：刷新/保存位置时先把文件中主档没有的服务器并入主档，再写回全部位置
 
 const loading = ref(false);
 
-// 来源筛选：all | local | cloud
-const filterType = ref('all');
+// 主档服务器列表 [{ name, config, enabled }]
+const servers = ref([]);
 
-// 筛选后的展示列表
-const filteredServers = computed(() => {
-  if (filterType.value === 'local') return mergedServers.value.filter((s) => s.hasLocal);
-  if (filterType.value === 'cloud') return mergedServers.value.filter((s) => s.hasCloud);
-  return mergedServers.value;
-});
-
-// 两个存储端
-const localServers = ref([]);
-const cloudServers = ref([]);
-
-// MCP 添加/编辑弹窗（通用组件）：「保存到」本地/云端为多选，勾选几端写几端；
-// 编辑时取消勾选某端 = 从该端删除副本（统一控制语义，同位置设置里的取消勾选）
+// MCP 添加/编辑弹窗（通用组件）：保存总是写云端主档，并按该服务器当前启用状态同步本地文件
 const mcpDialogRef = ref(null);
 const openCreateDialog = () => {
-  mcpDialogRef.value?.open('create', '', null, ['local', 'cloud']);
+  mcpDialogRef.value?.open('create', '', null);
 };
 const openEditDialog = (item) => {
-  const targets = [
-    ...(item.hasLocal ? ['local'] : []),
-    ...(item.hasCloud ? ['cloud'] : []),
-  ];
-  mcpDialogRef.value?.open('edit', item.name, item.config, targets);
+  mcpDialogRef.value?.open('edit', item.name, item.config);
 };
-const handleSaveMcp = ({ mode, name, config, target }) => {
+const handleSaveMcp = ({ mode, name, config }) => {
   try {
-    const targets = Array.isArray(target) ? target : [target];
-    const done = [];
-    const removed = [];
-    for (const t of ['local', 'cloud']) {
-      if (targets.includes(t)) {
-        if (t === 'local') window.services.upsertLocalMcpServer(name, config);
-        else window.services.upsertCommonMcpServer(name, config);
-        done.push(t === 'local' ? '本地' : '云端');
-      } else if (mode === 'edit') {
-        // 取消勾选的端：删除副本（返回 true = 原本存在并已删）
-        const ok = t === 'local'
-          ? window.services.deleteLocalMcpServer(name)
-          : window.services.deleteCommonMcpServer(name);
-        if (ok) removed.push(t === 'local' ? '本地' : '云端');
-      }
-    }
-    let msg = `${done.join('、')}服务器 ${name} ${mode === 'create' ? '已添加' : '已更新'}`;
-    if (removed.length) msg += `，已移除${removed.join('、')}副本`;
-    MessagePlugin.success(msg);
+    window.services.upsertCommonMcpServer(name, config);
+    MessagePlugin.success(mode === 'create' ? `服务器 ${name} 已添加（默认开启并写入本地）` : `服务器 ${name} 已更新`);
     mcpDialogRef.value?.close();
     loadServers();
   } catch (e) {
@@ -81,54 +46,22 @@ const handleSaveMcp = ({ mode, name, config, target }) => {
   }
 };
 
-// 合并列表：以名称为键合并两端，同名的本地/云端并列展示
-const mergedServers = computed(() => {
-  const map = new Map();
-  for (const s of localServers.value) {
-    map.set(s.name, { name: s.name, local: s, cloud: null });
-  }
-  for (const s of cloudServers.value) {
-    const ex = map.get(s.name);
-    if (ex) ex.cloud = s;
-    else map.set(s.name, { name: s.name, local: null, cloud: s });
-  }
-  return [...map.values()]
-    .map((item) => ({
-      ...item,
-      hasLocal: !!item.local,
-      hasCloud: !!item.cloud,
-      // 生效配置：本地优先（本地是 agent 实际读取的）
-      config: (item.local || item.cloud).config,
-      diff: !!item.local && !!item.cloud
-        && JSON.stringify(item.local.config) !== JSON.stringify(item.cloud.config),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-});
-
 // 工具抽屉
 const showToolDrawer = ref(false);
 const toolServerName = ref('');
 const toolServerConfig = ref(null);
 
-const targetLabel = (t) => (t === 'local' ? '本地' : '云端');
-
 const loadServers = () => {
   try {
-    localServers.value = Object.entries(window.services.getLocalMcpServers() || {}).map(([name, config]) => ({ name, config }));
+    servers.value = (window.services.listCommonMcpServers() || []).sort((a, b) => a.name.localeCompare(b.name));
   } catch (e) {
-    console.error("加载本地 MCP 服务器失败:", e);
-    localServers.value = [];
-  }
-  try {
-    cloudServers.value = Object.entries(window.services.getCommonMcpServers() || {}).map(([name, config]) => ({ name, config }));
-  } catch (e) {
-    console.error("加载云端 MCP 服务器失败:", e);
-    cloudServers.value = [];
+    console.error("加载 MCP 服务器失败:", e);
+    servers.value = [];
   }
 };
 
-// 刷新 = 先镜像同步再重载：若外部（agent / 手工）改过某个选中文件，
-// 刷新会把所有文件的 mcpServers 合并后写回全部位置，保证各处完全一致
+// 刷新 = 回收 + 镜像：先把本地文件中主档没有的服务器并入主档，再把已启用服务器写回全部位置；
+// 若外部（agent / 手工）改过某个选中文件，同名条目以云端主档为准
 const refresh = () => {
   loading.value = true;
   setTimeout(() => {
@@ -191,6 +124,10 @@ const addCustomTarget = () => {
   const raw = customInput.value.trim();
   if (!raw) { MessagePlugin.warning('请输入文件路径或先选择文件'); return; }
   const abs = window.services.resolveMcpPath(raw);
+  if (!/\.json$/i.test(abs)) {
+    MessagePlugin.warning('仅支持 .json 文件（非 JSON 会被整文件覆盖破坏）');
+    return;
+  }
   const all = [
     ...targetsInfo.value.presets.map((p) => p.path),
     ...targetsInfo.value.custom.map((p) => p.path),
@@ -237,64 +174,32 @@ const saveTargets = () => {
   }
 };
 
-// 删除 = 两端同时删除
-const deleteBoth = (item) => {
-  const removed = [];
+// 启用开关：开 = 写入全部选中本地文件，关 = 从本地移除（云端主档始终保留一份）
+const onToggleEnabled = (item, val) => {
   try {
-    if (item.hasLocal) {
-      window.services.deleteLocalMcpServer(item.name);
-      removed.push('本地');
-    }
-    if (item.hasCloud) {
-      window.services.deleteCommonMcpServer(item.name);
-      removed.push('云端');
-    }
-    if (removed.length === 0) { MessagePlugin.warning('未找到该服务器'); return; }
-    MessagePlugin.success(`已删除 ${item.name}（${removed.join('、')}）`);
+    const res = window.services.setCommonMcpEnabled(item.name, !!val);
+    item.enabled = !!val;
+    const failed = (res && res.failed) || [];
+    if (failed.length)
+      MessagePlugin.warning(
+        `本地 ${failed.length} 个文件操作失败: ${failed.map((f) => window.services.toDisplayMcpPath(f)).join('、')}`,
+      );
+    else
+      MessagePlugin.success(val ? `${item.name} 已开启，写入本地` : `${item.name} 已关闭，从本地移除（云端保留一份）`);
+  } catch (e) {
+    MessagePlugin.error('切换失败: ' + e.message);
+    loadServers();
+  }
+};
+
+// 删除 = 从云端主档与全部本地文件一并移除
+const deleteServer = (item) => {
+  try {
+    window.services.deleteCommonMcpServer(item.name);
+    MessagePlugin.success(`已删除 ${item.name}（云端主档与本地文件）`);
     loadServers();
   } catch (e) {
     MessagePlugin.error('删除失败: ' + e.message);
-  }
-};
-
-// 单端移除（仅删某一端副本）
-const removeSide = (item, side) => {
-  try {
-    if (side === 'local') {
-      window.services.deleteLocalMcpServer(item.name);
-    } else {
-      window.services.deleteCommonMcpServer(item.name);
-    }
-    MessagePlugin.success(`已移除${targetLabel(side)}副本 ${item.name}`);
-    loadServers();
-  } catch (e) {
-    MessagePlugin.error('移除失败: ' + e.message);
-  }
-};
-const confirmRemoveSide = (item, side) => {
-  // TDesign v1.20.3 的 DialogPlugin.confirm 不会在 onConfirm 后自动关闭，
-  // 需用返回的实例手动 destroy（否则弹窗会一直挂着）
-  const dialog = DialogPlugin.confirm({
-    header: '移除确认',
-    body: `确定移除「${item.name}」的${targetLabel(side)}副本吗？（${targetLabel(side === 'local' ? 'cloud' : 'local')}端保留）`,
-    confirmBtn: '移除',
-    cancelBtn: '取消',
-    onConfirm: () => {
-      removeSide(item, side);
-      dialog.destroy();
-    },
-  });
-};
-
-// 单端复制：source 为源端（local → 复制到云端；cloud → 复制到本地），同名覆盖目标端
-const copyFrom = (item, source) => {
-  const dest = source === 'local' ? 'cloud' : 'local';
-  try {
-    window.services.copyCommonMcpServer(item.name, dest);
-    MessagePlugin.success(`已复制 "${item.name}" ${targetLabel(source)} → ${targetLabel(dest)}`);
-    loadServers();
-  } catch (e) {
-    MessagePlugin.error('复制失败: ' + e.message);
   }
 };
 
@@ -328,13 +233,8 @@ onMounted(() => {
   <div class="common-mcp-container">
     <div class="common-mcp-header">
       <div class="common-mcp-tip">
-        <RadioGroup v-model="filterType" variant="default-filled" size="small" class="common-mcp-filter">
-          <RadioButton value="all">全部</RadioButton>
-          <RadioButton value="local">本地</RadioButton>
-          <RadioButton value="cloud">云端</RadioButton>
-        </RadioGroup>
-        <span>通用 MCP 服务器库 — 本地（{{ targetsSummary }}）与云端 (DB) 合并展示</span>
-        <span class="common-mcp-count">{{ filteredServers.length }} 个</span>
+        <span>通用 MCP 服务器库 — 云端 (DB) 统一保管，开启的服务器镜像写入本地（{{ targetsSummary }}）</span>
+        <span class="common-mcp-count">{{ servers.length }} 个</span>
       </div>
       <div class="common-mcp-actions">
         <Tooltip content="本地存放位置设置" placement="top">
@@ -353,25 +253,27 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="filteredServers.length === 0" class="common-mcp-empty">
-      <Empty :description="mergedServers.length === 0 ? '还没有 MCP 服务器，点击右上角「添加」创建' : '当前筛选条件下没有 MCP 服务器'" />
+    <div v-if="servers.length === 0" class="common-mcp-empty">
+      <Empty description="还没有 MCP 服务器，点击右上角「添加」创建" />
     </div>
 
     <div v-else class="common-mcp-list">
       <McpServerCard
-        v-for="item in filteredServers"
+        v-for="item in servers"
         :key="item.name"
         :srv="{ name: item.name, config: item.config }"
-        :target="item.hasLocal ? 'local' : 'cloud'"
+        :disabled="!item.enabled"
       >
         <template #tags>
-          <Tag v-if="item.hasLocal" size="small" theme="success" variant="light">本地</Tag>
-          <Tag v-if="item.hasCloud" size="small" theme="primary" variant="light">云端</Tag>
-          <Tag v-if="item.diff" size="small" theme="warning" variant="light">配置不同</Tag>
+          <Tag v-if="item.enabled" size="small" theme="success" variant="light">已开启</Tag>
+          <Tag v-else size="small" theme="default" variant="light">已关闭</Tag>
         </template>
 
         <template #actions>
-          <Space size="small">
+          <Space size="small" align="center">
+            <Tooltip :content="item.enabled ? '已开启：已写入本地文件，点击关闭并从本地移除' : '已关闭：未写入本地，点击开启并写入本地'" placement="top">
+              <Switch :value="item.enabled" size="small" @change="(v) => onToggleEnabled(item, v)" />
+            </Tooltip>
             <Tooltip content="查看工具" placement="top">
               <Button size="small" variant="text" @click="openToolDrawer(item)">
                 <template #icon><ToolsIcon /></template>
@@ -382,33 +284,10 @@ onMounted(() => {
                 <template #icon><EditIcon /></template>
               </Button>
             </Tooltip>
-            <Dropdown trigger="click" placement="bottom-right">
-              <Button size="small" variant="text" title="更多操作">
-                <template #icon><MoreIcon /></template>
-              </Button>
-              <template #dropdown>
-                <DropdownMenu>
-                  <!-- 仅本地：本地 → 云端 -->
-                  <DropdownItem
-                    v-if="item.hasLocal && !item.hasCloud"
-                    @click="copyFrom(item, 'local')"
-                  >本地到云端</DropdownItem>
-                  <!-- 仅云端：云端 → 本地 -->
-                  <DropdownItem
-                    v-if="item.hasCloud && !item.hasLocal"
-                    @click="copyFrom(item, 'cloud')"
-                  >云端到本地</DropdownItem>
-                  <!-- 同时存在两端：移除单端 -->
-                  <template v-if="item.hasLocal && item.hasCloud">
-                    <DropdownItem @click="confirmRemoveSide(item, 'local')">移除本地</DropdownItem>
-                    <DropdownItem @click="confirmRemoveSide(item, 'cloud')">移除云端</DropdownItem>
-                  </template>
-                </DropdownMenu>
-              </template>
-            </Dropdown>
             <Popconfirm
-              content="将从本地与云端同时删除该服务器，确定？"
-              @confirm="deleteBoth(item)"
+              theme="danger"
+              content="将从云端主档与本地文件一并删除，确定？"
+              @confirm="deleteServer(item)"
             >
               <Button size="small" variant="text" theme="danger">
                 <template #icon><DeleteIcon /></template>
@@ -428,7 +307,6 @@ onMounted(() => {
 
     <McpServerDialog
       ref="mcpDialogRef"
-      :show-target="true"
       :name-disabled-on-edit="true"
       @save="handleSaveMcp"
     />
@@ -451,9 +329,9 @@ onMounted(() => {
     >
       <div class="mcp-targets-body">
         <p class="mcp-targets-desc">
-          所有勾选的位置保持同一份 MCP 配置（镜像）：保存时会把已勾选文件的服务器合并后写回全部位置；
-          添加 / 编辑 / 删除同步到所有文件，点「刷新」也会重新对齐（同名冲突以 ~/.mcp.json 优先）。
-          取消勾选某个位置并保存，会删除该文件中本库管理的服务器（其他来源独有的条目保留）。
+          所有勾选的位置保持同一份 MCP 配置（= 云端主档中已启用服务器的镜像）：切换开关 / 添加 / 编辑 / 删除都会同步到全部位置；
+          点「刷新」会先把文件中主档没有的服务器并入主档，再写回全部位置（同名条目以云端主档为准）。
+          取消勾选某个位置并保存，会删除该文件中已启用的服务器（其他来源独有的条目保留）。
           很多 Agent 并不读 ~/.mcp.json，请按你实际使用的 Agent 勾选对应位置。
         </p>
         <div class="mcp-targets-section-title">预置位置</div>
@@ -488,7 +366,7 @@ onMounted(() => {
           <Input
             v-model="customInput"
             class="mcp-targets-add-input"
-            placeholder="如 ~/my-agent/mcp.json（支持 ~ 前缀）"
+            placeholder="如 ~/my-agent/mcp.json（仅支持 .json，支持 ~ 前缀）"
             clearable
             @enter="addCustomTarget"
           />
@@ -499,7 +377,7 @@ onMounted(() => {
           </Tooltip>
           <Button theme="primary" @click="addCustomTarget">添加</Button>
         </div>
-        <div class="mcp-targets-hint">建议文件名使用 .mcp.json 或 mcp.json，所在目录不存在时会自动创建</div>
+        <div class="mcp-targets-hint">仅限 .json 文件，建议文件名使用 .mcp.json 或 mcp.json，所在目录不存在时会自动创建</div>
       </div>
     </Dialog>
   </div>

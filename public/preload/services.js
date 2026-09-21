@@ -1960,16 +1960,12 @@ window.services = {
   addCommonModels: common.addCommonModels,
   updateCommonModel: common.updateCommonModel,
   deleteCommonModel: common.deleteCommonModel,
-  getCommonMcpServers: common.getCommonMcpServers,
+  // 通用 MCP：云端主档 + 本机启用开关（开启写入本地镜像文件，关闭从本地移除）
+  listCommonMcpServers: common.listCommonMcpServers,
   upsertCommonMcpServer: common.upsertCommonMcpServer,
   deleteCommonMcpServer: common.deleteCommonMcpServer,
-  writeCommonMcpServers: common.writeCommonMcpServers,
-  getLocalMcpServers: common.getLocalMcpServers,
-  upsertLocalMcpServer: common.upsertLocalMcpServer,
-  deleteLocalMcpServer: common.deleteLocalMcpServer,
-  writeLocalMcpServers: common.writeLocalMcpServers,
-  copyCommonMcpServer: common.copyCommonMcpServer,
-  // 本地 MCP 存放位置（预置多选 + 自定义，按机器隔离）
+  setCommonMcpEnabled: common.setCommonMcpEnabled,
+  // 本地镜像存放位置（预置多选 + 自定义，按机器隔离）
   getLocalMcpTargetPaths: common.getLocalMcpTargetPaths,
   getLocalMcpTargetsInfo: common.getLocalMcpTargetsInfo,
   saveLocalMcpTargets: common.saveLocalMcpTargets,
