@@ -546,7 +546,7 @@ const handleDeleteModel = async (providerName, modelId) => {
 
 const AGENT_DISPATCH_OPTIONS = [
   { label: "Claude Code", value: "claude" },
-  { label: "OpenCode CLI", value: "opencode" },
+  { label: "OpenCode", value: "opencode" },
   { label: "Pi Agent", value: "pi" },
   { label: "omp", value: "omp" },
   { label: "Reasonix", value: "reasonix" },

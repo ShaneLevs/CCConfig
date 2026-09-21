@@ -1,13 +1,13 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode CLI**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code** 八个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code** 八个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
 
 ## 功能特性
 
-- **应用切换** — Claude Code / OpenCode CLI / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code + 通用配置，各自独立配置，一键切换
+- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code + 通用配置，各自独立配置，一键切换
 - **配置管理** — 读取、保存、切换各应用的 API 配置：
   - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
-  - OpenCode CLI：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
+  - OpenCode：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
   - Pi Agent：`~/.pi/agent/settings.json` + `models.json`
   - omp：`~/.omp/agent/models.yml` 供应商/模型 + `config.yml` modelRoles
   - Reasonix：`~/.reasonix/config.toml`（smol-toml 读写，保留未知扩展字段）+ `~/.reasonix/.env` 密钥管理
@@ -18,14 +18,14 @@
 - **自动路由（本地模型网关）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
   - Claude MCP 读写 `~/.claude.json` 顶层 `mcpServers`（Claude Code 官方位置，单一来源，全局生效）
-- **Skill 管理** — 从 SkillHub / 魔搭社区一键安装 Skill（通用 / Claude Code / OpenCode CLI），支持全局与项目级 Skill 启用/禁用（`.disabled` 目录机制）
-- **Plugin / Extension 管理** — Claude Marketplace 仓库 + 插件生命周期、OpenCode CLI plugin 数组、Pi Extension (npm/git + pi.dev 包市场浏览)
+- **Skill 管理** — 从 SkillHub / 魔搭社区一键安装 Skill（通用 / Claude Code / OpenCode），支持全局与项目级 Skill 启用/禁用（`.disabled` 目录机制）
+- **Plugin / Extension 管理** — Claude Marketplace 仓库 + 插件生命周期、OpenCode plugin 数组、Pi Extension (npm/git + pi.dev 包市场浏览)
 - **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图：
   - Claude：DB 缓存加速二次打开（`file_count:max_mtime` 签名校验），热力图历史持久化，JSONL 读取失败时从历史兜底重建
-  - OpenCode CLI：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
+  - OpenCode：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
   - Pi Agent：JSONL sessions 解析聚合
   - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问
-- **模型 CRUD** — Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，Pi 支持从 `/models` API 自动拉取模型列表、设置默认模型自动切换供应商
+- **模型 CRUD** — OpenCode / Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，支持自动从 `/models` API 拉取模型列表；OpenCode / Pi / omp 模型支持上下文窗口与最大输出预设+自定义，OpenCode 另支持 reasoning / modalities（输入输出模态）/ options.effort / options.thinking 思考参数配置，设置默认模型自动切换供应商
 - **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
 - **导入导出** — 支持 JSON 文件方式或压缩加密字符串方式
 - **密钥加密** — API Key 使用 AES-256-CBC 加密存储到 uTools 数据库
@@ -64,14 +64,14 @@ npm run build
 |--------|------|
 | `通用配置` | 打开通用配置（跨 agent 供应商/模型主数据、MCP、Skill） |
 | `Claude Code配置` | 打开 Claude Code 配置管理 |
-| `OpenCode配置` | 打开 OpenCode CLI 配置管理 |
+| `OpenCode配置` | 打开 OpenCode 配置管理 |
 | `Pi Agents配置` | 打开 Pi Agent 配置管理 |
 | `omp配置` | 打开 omp 配置管理 |
 | `Reasonix配置` | 打开 Reasonix 配置管理 |
 | `Codex配置` | 打开 Codex 配置管理 |
 | `Kimi Code配置` | 打开 Kimi Code 模型配置 |
 | `MiniMax Code配置` | 打开 MiniMax Code 模型配置 |
-| 粘贴 SkillHub / 魔搭链接 | 自动进入 Skill 安装（通用 / Claude Code / OpenCode CLI） |
+| 粘贴 SkillHub / 魔搭链接 | 自动进入 Skill 安装（通用 / Claude Code / OpenCode） |
 | `pi install <包名>` | 自动进入 Pi Extension 安装 |
 
 ## 技术栈
@@ -123,8 +123,11 @@ Claude:
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
     配置存 uTools DB（ccswitch_autoroute_config），onPluginReady/onPluginEnter 幂等自启动，uTools 退出即停
 
-OpenCode CLI:
+OpenCode:
   ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  uTools DB
+  模型配置：provider[id].models[id]（name / limit.context / limit.output / reasoning /
+    modalities.input、output（text|image|audio|video|pdf）/ options.effort / options.thinking，
+    其余未识别字段原样往返；协议→npm 映射见 dispatch.js OPENCODE_NPM_BY_API）
   使用统计：
     数据目录（全平台）：~/.local/share/opencode/opencode.db
     回退候选：%LOCALAPPDATA%\opencode\ → ~/AppData/Local/opencode\ → storage/*.json

@@ -35,6 +35,44 @@ const normalizeCost = (cost) => {
 
 // ==================== 各 Agent 写入实现 ====================
 
+// Pi / omp 模型条目写入（数组按 id 匹配）：新建直接 push；已存在则合并更新——
+// 与 OpenCode / MiniMax 下发语义对齐：通用库「非空才覆盖、空值不清旧」，
+// 通用库没有的字段（本地手加键、compat 未下发子键等）原样保留。
+// 返回 'added' | 'updated' 供结果文案区分。
+const upsertDispatchModel = (list, model) => {
+  const hasCompat = model.compat && typeof model.compat === 'object' && Object.keys(model.compat).length
+  const idx = list.findIndex(m => m && m.id === model.id)
+  if (idx === -1) {
+    const cost = normalizeCost(model.cost)
+    const entry = {
+      id: model.id,
+      name: model.name || model.id,
+      contextWindow: model.contextWindow || undefined,
+      maxTokens: model.maxTokens || undefined,
+      reasoning: !!model.reasoning,
+      input: model.input || ['text'],
+    }
+    if (cost) entry.cost = cost
+    if (hasCompat) entry.compat = model.compat
+    list.push(entry)
+    return 'added'
+  }
+  const prev = list[idx]
+  const next = { ...prev }
+  if (model.name) next.name = model.name
+  const context = Number(model.contextWindow) || 0
+  const output = Number(model.maxTokens) || 0
+  if (context) next.contextWindow = context
+  if (output) next.maxTokens = output
+  if (model.reasoning) next.reasoning = true
+  if (Array.isArray(model.input) && model.input.length) next.input = [...model.input]
+  const cost = normalizeCost(model.cost)
+  if (cost) next.cost = cost
+  if (hasCompat) next.compat = { ...(prev.compat && typeof prev.compat === 'object' ? prev.compat : {}), ...model.compat }
+  list[idx] = next
+  return 'updated'
+}
+
 // Claude Code：下发 = 在 uTools DB 保存一份「以 provider 命名」的配置（ccswitch_config_dispatch_<provider>），
 // 与 Claude 配置页的配置列表互通（切换时由 useConfigSwitch 写入 settings.json）。
 // 一个 provider 一份配置；模型自动填入空闲槽位（默认 → Haiku → Sonnet → Opus → Subagent），
@@ -95,7 +133,15 @@ const dispatchToClaude = (provider, model) => {
   return `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}`
 }
 
-// OpenCode CLI：provider[id]（options.baseURL/apiKey）+ models[id]
+// OpenCode：provider[id]（options.baseURL/apiKey）+ models[id]；通用库协议 → opencode npm 包
+//（opencode 文档：chat/completions 用 openai-compatible，responses 用 @ai-sdk/openai；Anthropic/Google 用各自 SDK）
+const OPENCODE_NPM_BY_API = {
+  'openai-completions': '@ai-sdk/openai-compatible',
+  'openai-responses': '@ai-sdk/openai',
+  'anthropic-messages': '@ai-sdk/anthropic',
+  'google-generative-ai': '@ai-sdk/google',
+}
+
 const dispatchToOpencode = (provider, model, opts) => {
   const id = opts.providerName || provider.name
   const current = opencode.readOpencodeConfig()
@@ -104,12 +150,31 @@ const dispatchToOpencode = (provider, model, opts) => {
   const nextOptions = { ...(prev.options || {}) }
   if (provider.baseUrl) nextOptions.baseURL = provider.baseUrl
   if (provider.apiKey) nextOptions.apiKey = provider.apiKey
+  // 接口类型复用：按通用库协议映射 npm；未知协议保留已有值，兜底 openai-compatible
+  const nextNpm = OPENCODE_NPM_BY_API[provider.api || 'openai-completions'] || prev.npm || '@ai-sdk/openai-compatible'
+  // 模型条目合并写入：保留 opencode 侧已有字段（cost/tool_call 等），透传上下文/最大输出
   const nextModels = { ...(prev.models || {}) }
-  const nextModel = { name: model.name || model.id }
-  if (model.contextWindow || model.maxTokens) {
-    nextModel.limit = {}
-    if (model.contextWindow) nextModel.limit.context = model.contextWindow
-    if (model.maxTokens) nextModel.limit.output = model.maxTokens
+  const prevModel = nextModels[model.id] || {}
+  const nextModel = { ...prevModel, name: model.name || prevModel.name || model.id }
+  const context = Number(model.contextWindow) || 0
+  const output = Number(model.maxTokens) || 0
+  if (context || output) {
+    nextModel.limit = { ...(prevModel.limit || {}) }
+    if (context) nextModel.limit.context = context
+    if (output) nextModel.limit.output = output
+  }
+  // 推理能力与输入模态透传（通用库 model.reasoning / model.input，值为 opencode modalities 子集；有值才写，不清 opencode 侧已有声明）
+  if (model.reasoning) nextModel.reasoning = true
+  if (Array.isArray(model.input) && model.input.length) {
+    nextModel.modalities = { ...(prevModel.modalities || {}), input: [...model.input] }
+  }
+  // 费用透传（全 0 省略；opencode 配置为扁平 cache_read/cache_write 键）
+  if (model.cost && typeof model.cost === 'object') {
+    const c = Number(model.cost.input) || 0, o = Number(model.cost.output) || 0
+    const cr = Number(model.cost.cacheRead) || 0, cw = Number(model.cost.cacheWrite) || 0
+    if (c || o || cr || cw) {
+      nextModel.cost = { input: c, output: o, cache_read: cr, cache_write: cw }
+    }
   }
   // 兼容性字段（compat）平铺进模型条目，与 opencode 配置模型可携带自定义字段一致
   if (model.compat && typeof model.compat === 'object') {
@@ -118,13 +183,13 @@ const dispatchToOpencode = (provider, model, opts) => {
   nextModels[model.id] = nextModel
   current.provider[id] = {
     ...prev,
-    npm: prev.npm || '@ai-sdk/openai-compatible',
+    npm: nextNpm,
     name: prev.name || provider.name,
     options: nextOptions,
     models: nextModels,
   }
   if (!opencode.writeOpencodeConfig(current)) throw new Error('写入 opencode 配置失败')
-  return `provider[${id}] 已更新，模型 ${model.id} 已写入`
+  return `provider[${id}]（${nextNpm.replace('@ai-sdk/', '')}）已更新，模型 ${model.id} 已写入`
 }
 
 // Pi Agent：models.json providers[name] + settings.json（可选默认）
@@ -143,20 +208,7 @@ const dispatchToPi = (provider, model, opts) => {
     models: Array.isArray(prev.models) ? prev.models : [],
   }
   const list = models.providers[name].models
-  if (!list.some(m => m.id === model.id)) {
-    const cost = normalizeCost(model.cost)
-    const entry = {
-      id: model.id,
-      name: model.name || model.id,
-      contextWindow: model.contextWindow || undefined,
-      maxTokens: model.maxTokens || undefined,
-      reasoning: !!model.reasoning,
-      input: model.input || ['text'],
-    }
-    if (cost) entry.cost = cost
-    if (model.compat && typeof model.compat === 'object' && Object.keys(model.compat).length) entry.compat = model.compat
-    list.push(entry)
-  }
+  const act = upsertDispatchModel(list, model)
   pi.writePiModels(models)
   let suffix = ''
   if (opts.setDefault) {
@@ -166,7 +218,7 @@ const dispatchToPi = (provider, model, opts) => {
     pi.writePiSettings(settings)
     suffix = '，已设为默认模型'
   }
-  return `供应商 ${name} 已更新，模型 ${model.id} 已写入${suffix}`
+  return `供应商 ${name} 已更新，模型 ${model.id} ${act === 'updated' ? '已合并更新' : '已写入'}${suffix}`
 }
 
 // omp：models.yml providers[name]（无默认模型概念，modelRoles 需用户自行配置）
@@ -185,22 +237,9 @@ const dispatchToOmp = (provider, model, opts) => {
     models: Array.isArray(prev.models) ? prev.models : [],
   }
   const list = models.providers[name].models
-  if (!list.some(m => m.id === model.id)) {
-    const cost = normalizeCost(model.cost)
-    const entry = {
-      id: model.id,
-      name: model.name || model.id,
-      contextWindow: model.contextWindow || undefined,
-      maxTokens: model.maxTokens || undefined,
-      reasoning: !!model.reasoning,
-      input: model.input || ['text'],
-    }
-    if (cost) entry.cost = cost
-    if (model.compat && typeof model.compat === 'object' && Object.keys(model.compat).length) entry.compat = model.compat
-    list.push(entry)
-  }
+  const act = upsertDispatchModel(list, model)
   omp.writeOmpModels(models)
-  return `供应商 ${name} 已更新，模型 ${model.id} 已写入（默认模型请到 omp 配置页配置 modelRoles）`
+  return `供应商 ${name} 已更新，模型 ${model.id} ${act === 'updated' ? '已合并更新' : '已写入'}（默认模型请到 omp 配置页配置 modelRoles）`
 }
 
 // Reasonix：config.toml providers[] + .env key + 可选 default_model

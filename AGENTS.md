@@ -41,4 +41,4 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 - 构建后清理 Vite 复制到 `dist/preload` 的 node_modules（js-yaml 的 .map 会导致 uTools 打包拒绝）及 .DS_Store。
 - `@modelcontextprotocol/sdk` 在 `mcp.js` try/catch 懒加载，缺失时工具发现自动降级。
 - Base path `./`（uTools file:// 加载）。
-- 普通 CSS 文件（非 SFC scoped）中 `:deep()` 不会被 Vue 转换，是无效选择器（已知遗留：`src/Switch/claude/styles/PluginView.css`）。
+- 普通 CSS 文件（非 SFC scoped）中 `:deep()` 不会被 Vue 转换，是无效选择器，不要使用。

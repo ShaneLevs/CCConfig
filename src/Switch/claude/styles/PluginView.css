@@ -72,15 +72,15 @@
   cursor: pointer;
 }
 
-.mp-card :deep(.t-card__header) {
+.mp-card .t-card__header {
   padding: 8px 12px 0;
 }
 
-.mp-card :deep(.t-card__body) {
+.mp-card .t-card__body {
   padding: 0 12px 6px;
 }
 
-.mp-card :deep(.t-card__actions) {
+.mp-card .t-card__actions {
   padding: 0 12px 8px;
 }
 
@@ -297,7 +297,7 @@
   gap: 4px;
 }
 
-.installed-card :deep(.t-card__header) {
+.installed-card .t-card__header {
   padding: 4px 10px 0;
 }
 
@@ -309,7 +309,7 @@
   padding: 2px 16px 16px 16px !important;
 }
 
-.installed-card :deep(.t-card__body) {
+.installed-card .t-card__body {
   padding: 0 10px 6px;
 }
 

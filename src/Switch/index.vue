@@ -93,7 +93,7 @@ watch([activeTab, activeApp], () => {
 
 const appLabel = computed(() => {
   if (isClaude.value) return "Claude Code";
-  if (isOpenCode.value) return "OpenCode CLI";
+  if (isOpenCode.value) return "OpenCode";
   if (isPi.value) return "Pi Agent";
   if (isOmp.value) return "omp";
   if (isReasonix.value) return "Reasonix";
@@ -182,7 +182,7 @@ const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
 const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax"];
 const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}claudecode.png` },
-  opencode: { name: "OpenCode CLI", icon: `${ASSET_BASE}icon-opencode.png` },
+  opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
   pi: { name: "Pi Agent", icon: `${ASSET_BASE}icon-pi.png` },
   omp: { name: "omp", icon: `${ASSET_BASE}omp-icon.svg` },
   reasonix: { name: "Reasonix", icon: `${ASSET_BASE}reasonix.svg` },
