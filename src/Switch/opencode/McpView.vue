@@ -2,26 +2,66 @@
 
 import { ref, onMounted } from "vue";
 import {
-  Card, Empty, Tag, Button, Tooltip, Dialog, Input, MessagePlugin, Space, Popconfirm,
+  Empty, Tag, Button, Tooltip, MessagePlugin, Space, Popconfirm, Switch,
 } from "tdesign-vue-next";
-import { RefreshIcon, AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
+import {
+  RefreshIcon, AddIcon, EditIcon, DeleteIcon, ToolsIcon,
+} from "tdesign-icons-vue-next";
+import McpToolDrawer from "../../components/McpToolDrawer.vue";
+import McpServerDialog from "../../components/McpServerDialog.vue";
+import McpServerCard from "../../components/McpServerCard.vue";
 import "./styles/McpView.css";
 
 const loading = ref(false);
 const servers = ref([]);
-const addDialog = ref(false);
-const editingServer = ref(null);
-const form = ref({ name: '', command: '', args: [], enabled: true });
+
+// ---------- OpenCode mcp 格式 ⇄ 通用（Claude 组件）格式转换 ----------
+// OpenCode: local → { type:'local', command:[cmd,...args], environment:{}, enabled }
+//           remote → { type:'remote', url, headers:{}, enabled }
+// 通用：      { type:'stdio'|'http', command, args, env, url, headers }
+const toGeneric = (cfg) => {
+  const isRemote = cfg.type === 'remote' || (!cfg.type && !!cfg.url);
+  if (isRemote) {
+    const g = { type: 'http', url: String(cfg.url || '') };
+    if (cfg.headers && Object.keys(cfg.headers).length) g.headers = { ...cfg.headers };
+    return g;
+  }
+  const cmd = Array.isArray(cfg.command)
+    ? cfg.command.map(String)
+    : String(cfg.command || '').trim().split(/\s+/).filter(Boolean);
+  const g = { type: 'stdio' };
+  if (cmd.length) g.command = cmd[0];
+  if (cmd.length > 1) g.args = cmd.slice(1);
+  const env = cfg.environment || cfg.env;
+  if (env && Object.keys(env).length) g.env = { ...env };
+  return g;
+};
+
+// 通用格式写回 OpenCode 格式：保留原有未知字段与 enabled 状态
+const toOpencode = (generic, prevRaw, isEdit) => {
+  const out = { ...(prevRaw || {}) };
+  for (const k of ['type', 'command', 'url', 'environment', 'env', 'headers']) delete out[k];
+  if (generic.type === 'http') {
+    out.type = 'remote';
+    if (generic.url) out.url = generic.url;
+    if (generic.headers && Object.keys(generic.headers).length) out.headers = generic.headers;
+  } else {
+    out.type = 'local';
+    out.command = [generic.command, ...(generic.args || [])].filter((s) => s !== '' && s != null);
+    if (generic.env && Object.keys(generic.env).length) out.environment = generic.env;
+  }
+  if (!isEdit) out.enabled = true;
+  return out;
+};
 
 const loadServers = () => {
   try {
-    const raw = window.services.getOpencodeMcpServers();
+    const raw = window.services.getOpencodeMcpServers() || {};
     servers.value = Object.entries(raw).map(([name, cfg]) => ({
       name,
-      type: cfg.type || 'local',
-      command: Array.isArray(cfg.command) ? cfg.command.join(' ') : (String(cfg.command || '')),
       enabled: cfg.enabled !== false,
       raw: cfg,
+      config: toGeneric(cfg),
     }));
   } catch (e) {
     console.error("加载 OpenCode MCP 失败:", e);
@@ -34,64 +74,78 @@ const refresh = () => {
   setTimeout(() => { loadServers(); loading.value = false; }, 50);
 };
 
-// 点击复制 MCP 名称
-const copyMcpName = (name) => {
-  try {
-    window.utools.copyText(name);
-    MessagePlugin.success("名称已复制");
-  } catch { MessagePlugin.error("复制失败"); }
-};
+// ---------- 添加/编辑弹窗（通用组件） ----------
+const mcpDialogRef = ref(null);
+const editingName = ref("");
 
-const openAddDialog = () => {
-  editingServer.value = null;
-  form.value = { name: '', command: '', args: [], enabled: true };
-  addDialog.value = true;
+const openCreateDialog = () => {
+  editingName.value = "";
+  mcpDialogRef.value?.open('create');
 };
-
 const openEditDialog = (srv) => {
-  editingServer.value = srv.name;
-  const cmd = srv.raw.command || [];
-  const cmdStr = Array.isArray(cmd) ? cmd : [cmd];
-  form.value = {
-    name: srv.name,
-    command: cmdStr[0] || '',
-    args: cmdStr.slice(1).map(String),
-    enabled: srv.enabled,
-  };
-  addDialog.value = true;
+  editingName.value = srv.name;
+  mcpDialogRef.value?.open('edit', srv.name, srv.config);
 };
-
-const handleSave = () => {
-  const name = form.value.name.trim();
-  if (!name) { MessagePlugin.warning('请输入 MCP 名称'); return; }
-  if (!form.value.command.trim()) { MessagePlugin.warning('请输入启动命令'); return; }
+const handleSaveMcp = ({ mode, name, config }) => {
   try {
-    const fullCmd = [form.value.command.trim(), ...form.value.args.map(a => a.trim()).filter(Boolean)];
-    window.services.setOpencodeMcpServer(name, {
-      type: 'local',
-      command: fullCmd,
-      enabled: form.value.enabled,
-    });
-    MessagePlugin.success(editingServer.value ? '已更新' : '已添加');
-    addDialog.value = false;
+    const raw = window.services.getOpencodeMcpServers() || {};
+    // 编辑改名：删除旧键
+    if (mode === 'edit' && editingName.value && editingName.value !== name) {
+      window.services.removeOpencodeMcpServer(editingName.value);
+    }
+    const isEdit = mode === 'edit' && !!raw[name];
+    window.services.setOpencodeMcpServer(name, toOpencode(config, raw[name], isEdit));
+    MessagePlugin.success(mode === 'create' ? 'MCP 配置已添加' : 'MCP 配置已更新');
+    mcpDialogRef.value?.close();
     loadServers();
   } catch (e) {
     MessagePlugin.error('保存失败: ' + e.message);
   }
 };
 
-const handleRemove = (name) => {
+// ---------- 启用/禁用（写 mcp 条目的 enabled 字段） ----------
+const toggleMcpStatus = (srv) => {
   try {
-    window.services.removeOpencodeMcpServer(name);
-    MessagePlugin.success('已删除');
+    window.services.setOpencodeMcpServer(srv.name, { ...srv.raw, enabled: !srv.enabled });
+    MessagePlugin.success(srv.enabled ? 'MCP 已关闭' : 'MCP 已开启');
+    loadServers();
+  } catch (e) {
+    MessagePlugin.error('操作失败: ' + e.message);
+  }
+};
+
+const deleteMcpServer = (srv) => {
+  try {
+    window.services.removeOpencodeMcpServer(srv.name);
+    MessagePlugin.success('MCP 配置已删除');
     loadServers();
   } catch (e) {
     MessagePlugin.error('删除失败: ' + e.message);
   }
 };
 
-const addArg = () => { form.value.args.push(''); };
-const removeArg = (idx) => { form.value.args.splice(idx, 1); };
+// ---------- 工具查看（探活在通用组件 McpToolDrawer 内） ----------
+const showToolDrawer = ref(false);
+const toolServerName = ref("");
+const toolServerConfig = ref(null);
+const openToolDrawer = (srv) => {
+  if (!srv.enabled) {
+    return MessagePlugin.warning("请先开启 MCP 后再查看工具");
+  }
+  toolServerName.value = srv.name;
+  toolServerConfig.value = srv.config;
+  showToolDrawer.value = true;
+};
+
+// ---------- 打开 opencode.json ----------
+const openConfigFile = () => {
+  const filePath = window.services.getOpencodeConfigPath();
+  window.utools.shellOpenPath(filePath);
+};
+
+// 类型标签
+const getTypeTag = (config) => (config.type === 'http' ? 'HTTP' : 'STDIO');
+const getTypeTagTheme = (config) => (config.type === 'http' ? 'primary' : 'success');
 
 onMounted(loadServers);
 
@@ -101,10 +155,10 @@ onMounted(loadServers);
   <div class="oc-mcp-container">
     <div class="oc-mcp-header">
       <div class="oc-mcp-header-left">
-        <span class="oc-mcp-tip">OpenCode MCP 服务器配置（直接编辑 opencode.json/mcp）</span>
+        <span class="oc-mcp-tip">OpenCode MCP 服务器配置（直接编辑 <span class="hint-link" @click="openConfigFile">opencode.json/mcp</span>）</span>
       </div>
       <div class="oc-mcp-actions">
-        <Button size="small" variant="outline" @click="openAddDialog">
+        <Button size="small" theme="primary" @click="openCreateDialog">
           <template #icon><AddIcon /></template> 添加 MCP
         </Button>
         <Tooltip content="刷新" placement="top">
@@ -118,7 +172,7 @@ onMounted(loadServers);
     <div v-if="servers.length === 0" class="oc-mcp-empty">
       <Empty description="暂无 MCP 配置">
         <template #action>
-          <Button size="small" theme="primary" @click="openAddDialog">
+          <Button size="small" theme="primary" @click="openCreateDialog">
             <template #icon><AddIcon /></template> 添加 MCP
           </Button>
         </template>
@@ -126,84 +180,53 @@ onMounted(loadServers);
     </div>
 
     <div v-else class="oc-mcp-list">
-      <Card v-for="srv in servers" :key="srv.name" :bordered="true">
-        <template #header>
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div class="oc-mcp-card-header">
-              <Tooltip content="点击复制名称" placement="top">
-                <span class="oc-mcp-srv-name" @click.stop="copyMcpName(srv.name)">{{ srv.name }}</span>
-              </Tooltip>
-              <Tag size="small" variant="light" :theme="srv.enabled ? 'success' : 'default'">
-                {{ srv.enabled ? '已启用' : '已禁用' }}
-              </Tag>
-              <Tag size="small" variant="outline">{{ srv.type }}</Tag>
-            </div>
-            <Space size="small">
-              <Tooltip content="编辑" placement="top">
-                <Button size="small" variant="text" @click="openEditDialog(srv)">编辑</Button>
-              </Tooltip>
-              <Popconfirm content="确定删除此 MCP 配置？" @confirm="handleRemove(srv.name)">
+      <McpServerCard
+        v-for="srv in servers"
+        :key="srv.name"
+        :srv="{ name: srv.name, config: srv.config }"
+        :disabled="!srv.enabled"
+        :type-text="getTypeTag(srv.config)"
+        :type-theme="getTypeTagTheme(srv.config)"
+      >
+        <template #tags>
+          <Tag size="small" variant="light" :theme="srv.enabled ? 'success' : 'default'">
+            {{ srv.enabled ? '已启用' : '已禁用' }}
+          </Tag>
+        </template>
+        <template #actions>
+          <Space size="small">
+            <Switch :value="srv.enabled" size="small" @change="toggleMcpStatus(srv)" />
+            <Tooltip content="查看工具" placement="top">
+              <Button size="small" variant="text" :disabled="!srv.enabled" @click="openToolDrawer(srv)">
+                <template #icon><ToolsIcon /></template>
+              </Button>
+            </Tooltip>
+            <Tooltip content="编辑" placement="top">
+              <Button size="small" variant="text" @click="openEditDialog(srv)">
+                <template #icon><EditIcon /></template>
+              </Button>
+            </Tooltip>
+            <Popconfirm content="确定删除此 MCP 配置？" @confirm="deleteMcpServer(srv)">
+              <Tooltip content="删除" placement="top">
                 <Button size="small" variant="text" theme="danger">
                   <template #icon><DeleteIcon /></template>
                 </Button>
-              </Popconfirm>
-            </Space>
-          </div>
+              </Tooltip>
+            </Popconfirm>
+          </Space>
         </template>
-        <div class="oc-mcp-card-body">
-          <div class="oc-mcp-info-row">
-            <span class="oc-mcp-label">启动命令</span>
-            <span class="oc-mcp-value mono">{{ srv.command || '未设置' }}</span>
-          </div>
-        </div>
-      </Card>
+      </McpServerCard>
     </div>
 
-    <Dialog
-      v-model:visible="addDialog"
-      :header="editingServer ? '编辑 MCP' : '添加 MCP'"
-      width="560px"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
-      @confirm="handleSave"
-    >
-      <div class="oc-mcp-form">
-        <div class="oc-mcp-form-item">
-          <label>MCP 名称</label>
-          <Input v-model="form.name" :disabled="!!editingServer" placeholder="例如：filesystem、fetch" />
-        </div>
-        <div class="oc-mcp-form-item">
-          <label>可执行文件（命令首段）</label>
-          <Input v-model="form.command" placeholder="例如：npx、uvx、node" />
-        </div>
-        <div class="oc-mcp-form-item">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <label>参数列表</label>
-            <Button size="small" variant="text" @click="addArg">
-              <template #icon><AddIcon /></template> 添加
-            </Button>
-          </div>
-          <div v-if="form.args.length === 0" class="oc-empty-hint">无参数</div>
-          <div v-for="(arg, i) in form.args" :key="i" class="oc-mcp-arg-row">
-            <Input v-model="form.args[i]" placeholder="参数" />
-            <Button size="small" variant="text" theme="danger" @click="removeArg(i)">
-              <template #icon><DeleteIcon /></template>
-            </Button>
-          </div>
-        </div>
-        <div class="oc-mcp-form-item">
-          <label>
-            <input type="checkbox" v-model="form.enabled" /> 启用
-          </label>
-        </div>
-      </div>
-    </Dialog>
+    <McpServerDialog
+      ref="mcpDialogRef"
+      @save="handleSaveMcp"
+    />
+
+    <McpToolDrawer
+      v-model:visible="showToolDrawer"
+      :server-name="toolServerName"
+      :config="toolServerConfig"
+    />
   </div>
 </template>
-
-<style scoped>
-.oc-mcp-form { display: flex; flex-direction: column; gap: 12px; }
-.oc-mcp-form-item { display: flex; flex-direction: column; gap: 4px; }
-.oc-mcp-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
-.oc-mcp-arg-row { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
-.oc-empty-hint { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
-</style>

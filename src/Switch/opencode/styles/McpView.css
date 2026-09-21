@@ -5,11 +5,5 @@
 .oc-mcp-actions { display: flex; gap: 8px; }
 .oc-mcp-empty { margin-top: 40px; }
 .oc-mcp-list { display: flex; flex-direction: column; gap: 8px; }
-.oc-mcp-card-header { display: flex; align-items: center; gap: 8px; }
-.oc-mcp-srv-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); cursor: pointer; }
-.oc-mcp-srv-name:hover { text-decoration: underline; }
-.oc-mcp-card-body { display: flex; flex-direction: column; gap: 6px; }
-.oc-mcp-info-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.oc-mcp-label { color: var(--td-text-color-placeholder); min-width: 80px; }
-.oc-mcp-value { color: var(--td-text-color-primary); word-break: break-all; }
-.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+.hint-link { font-size: 12px; cursor: pointer; text-decoration: underline; color: var(--td-brand-color); }
+.hint-link:hover { opacity: 0.8; }
