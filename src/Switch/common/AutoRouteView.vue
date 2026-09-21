@@ -21,7 +21,7 @@ const AGENT_DISPATCH_OPTIONS = [
 
 const loading = ref(false);
 const config = ref({ enabled: false, port: 17877, key: "", selection: [] });
-const status = ref({ running: false, port: 17877, baseUrl: "", logs: [] });
+const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: null });
 const providers = ref([]);
 const selectionKeys = ref([]);
 const portDraft = ref(17877); // 端口输入框草稿值，失焦/回车时校验并保存
@@ -129,7 +129,7 @@ const onPortChange = async (val) => {
 const onRegenKey = () => {
   try {
     config.value = { ...config.value, key: window.services.regenerateAutoRouteKey() };
-    MessagePlugin.success("已重新生成 Key，此前下发的 key 将失效");
+    MessagePlugin.success("已重新生成 Key，旧 key 失效");
   } catch (e) {
     MessagePlugin.error(e.message);
   }
@@ -181,10 +181,10 @@ const handleDispatch = async () => {
 
 // 网关支持的入站接口
 const endpoints = [
-  { method: "POST", path: "/v1/chat/completions", desc: "OpenAI Chat Completions 格式" },
-  { method: "POST", path: "/v1/messages", desc: "Anthropic Messages 格式" },
-  { method: "POST", path: "/v1/responses", desc: "OpenAI Responses 格式" },
-  { method: "GET", path: "/v1/models", desc: "查询已启用的模型" },
+  { method: "POST", path: "/v1/chat/completions", desc: "OpenAI Chat Completions" },
+  { method: "POST", path: "/v1/messages", desc: "Anthropic Messages" },
+  { method: "POST", path: "/v1/responses", desc: "OpenAI Responses" },
+  { method: "GET", path: "/v1/models", desc: "已启用模型列表" },
 ];
 
 // 日志协议显示名：源为适配器标识（anthropic/chat/responses），目标为供应商 api 标识（anthropic-messages 等）
@@ -200,12 +200,62 @@ const formatTime = (ts) => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
+// 日志行每条 usage 展示：prompt→completion + 缓存读标记（c 前缀），悬停 title 看精确值。
+// anthropic 的 input 不含缓存，展示用总 prompt 需加回 cache_read/write（与统计口径一致）
+const fmtTokensK = (n) => {
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+};
+const logUsage = (log) => {
+  const u = log.usage;
+  if (!u) return null;
+  const cached = u.cacheReadTokens || 0;
+  const prompt = log.target === "anthropic-messages"
+    ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0)
+    : u.inputTokens || 0;
+  const out = u.outputTokens || 0;
+  if (!prompt && !out) return null;
+  let text = `${fmtTokensK(prompt)}→${fmtTokensK(out)}`;
+  const titleParts = [`prompt ${prompt}`, `completion ${out}`];
+  if (cached) {
+    text += ` c${fmtTokensK(cached)}`;
+    titleParts.push(`缓存读 ${cached}`);
+  }
+  if (u.cacheWriteTokens) titleParts.push(`缓存写 ${u.cacheWriteTokens}`);
+  return { text, title: titleParts.join(" / ") };
+};
+
 const formatNumber = (n) => {
   if (!n) return "默认";
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(1) + "K";
   return String(n);
 };
+
+// 本次运行统计（随网关重启清零，数据来自 preload getAutoRouteStatus.stats，随 3s 轮询刷新）
+const sessionStats = computed(() => {
+  const s = status.value.stats || {};
+  const requests = s.requests || 0;
+  const prompt = s.promptTokens || 0;
+  const output = s.outputTokens || 0;
+  const cached = s.cachedTokens || 0;
+  const pct = (r) => {
+    const v = Math.round(r * 1000) / 10;
+    return (v % 1 ? v.toFixed(1) : String(v)) + "%";
+  };
+  const tokens = (n) => {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+    if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+    return String(n);
+  };
+  return {
+    requests,
+    successRate: requests ? pct((s.successes || 0) / requests) : "—",
+    tokens: prompt || output ? tokens(prompt + output) : "—",
+    cacheHit: prompt ? pct(cached / prompt) : "—",
+  };
+});
 
 let logTimer = null;
 onMounted(() => {
@@ -222,9 +272,9 @@ onUnmounted(() => {
 <template>
   <div class="autoroute-container">
     <div class="autoroute-header">
-      <span class="autoroute-tip">本地模型网关 — 把勾选的主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，任意 agent 均可用三种协议请求，跨协议自动转换</span>
+      <span class="autoroute-tip">把勾选的主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，跨协议自动转换</span>
       <div class="autoroute-actions">
-        <Tooltip content="把自动网关作为虚拟供应商写入各 agent 的模型配置" placement="top">
+        <Tooltip content="作为虚拟供应商写入各 agent" placement="top">
           <Button size="small" variant="outline" :disabled="modelCount === 0" @click="openDispatchDialog">
             <template #icon><SendIcon /></template> 下发到 Agent
           </Button>
@@ -244,7 +294,7 @@ onUnmounted(() => {
           </Button>
         </template>
       </div>
-      <div class="autoroute-hint">网关随 uTools 存活，uTools 退出后自动停止；重启后若开关已开启会自动拉起。本机访问，不对外网暴露。</div>
+      <div class="autoroute-hint">随 uTools 启停，仅本机访问。</div>
 
       <div class="autoroute-form-row">
         <span class="autoroute-label">端口</span>
@@ -256,7 +306,7 @@ onUnmounted(() => {
             <template #icon><CopyIcon /></template>
           </Button>
         </Tooltip>
-        <Tooltip content="重新生成（此前下发的 key 失效，需重新下发）" placement="top">
+        <Tooltip content="重新生成（旧 key 失效）" placement="top">
           <Button size="small" variant="text" @click="onRegenKey">
             <template #icon><RefreshIcon /></template> 重新生成
           </Button>
@@ -273,12 +323,12 @@ onUnmounted(() => {
           clearable
           :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
           class="autoroute-cascader"
-          placeholder="选择供应商与模型（可多选，勾选供应商 = 全选其模型）"
+          placeholder="选择供应商与模型（勾选供应商 = 全选）"
           @change="saveSelection"
         />
       </div>
       <div class="autoroute-hint">
-        已启用 {{ modelCount }} 个模型。请求的 model 填模型 ID 即可（多供应商存在同 ID 模型时按勾选顺序取第一个）；仅重名模型会在 GET {{ baseUrl }}/v1/models 中以「供应商/模型ID」形式返回，用完整 ID 指定。
+        已启用 {{ modelCount }} 个模型。请求 model 填模型 ID；重名模型用「供应商/模型ID」。
       </div>
     </div>
 
@@ -291,8 +341,27 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div v-if="sessionStats.requests" class="autoroute-stats">
+      <div class="autoroute-stat">
+        <span class="autoroute-stat-label">累计调用</span>
+        <span class="autoroute-stat-value">{{ sessionStats.requests }}</span>
+      </div>
+      <div class="autoroute-stat">
+        <span class="autoroute-stat-label">成功率</span>
+        <span class="autoroute-stat-value">{{ sessionStats.successRate }}</span>
+      </div>
+      <div class="autoroute-stat">
+        <span class="autoroute-stat-label">Token 消耗</span>
+        <span class="autoroute-stat-value">{{ sessionStats.tokens }}</span>
+      </div>
+      <div class="autoroute-stat">
+        <span class="autoroute-stat-label">缓存命中率</span>
+        <span class="autoroute-stat-value">{{ sessionStats.cacheHit }}</span>
+      </div>
+    </div>
+
     <div class="autoroute-logs">
-      <div class="autoroute-logs-title">最近请求（网关运行期间，最多保留 50 条）</div>
+      <div class="autoroute-logs-title">最近请求（最多 10 条）</div>
       <div v-if="!status.logs.length" class="autoroute-logs-empty">暂无请求</div>
       <div v-for="(log, i) in status.logs" :key="i" class="autoroute-log-row">
         <span class="autoroute-log-time">{{ formatTime(log.time) }}</span>
@@ -304,6 +373,7 @@ onUnmounted(() => {
         <span class="autoroute-log-model">{{ log.model || "-" }}</span>
         <span v-if="log.passthrough" class="autoroute-log-flag">直通</span>
         <Tag size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>
+        <span v-if="logUsage(log)" class="autoroute-log-usage" :title="logUsage(log).title">{{ logUsage(log).text }}</span>
         <span v-if="log.error" class="autoroute-log-error" :title="log.error">{{ log.error }}</span>
         <span class="autoroute-log-ms">{{ log.ms }}ms</span>
       </div>
@@ -325,7 +395,7 @@ onUnmounted(() => {
           </label>
         </CheckboxGroup>
         <div class="autoroute-hint">
-          将写入虚拟供应商「router」：baseUrl = {{ baseUrl }}，模型为全部已启用的 {{ modelCount }} 个模型。Claude Code 目标为 Anthropic 协议，其余目标为 OpenAI 兼容协议。
+          写入虚拟供应商「router」（{{ baseUrl }}，全部已启用的 {{ modelCount }} 个模型）；Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。
         </div>
       </div>
     </Dialog>

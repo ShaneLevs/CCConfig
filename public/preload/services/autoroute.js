@@ -16,7 +16,7 @@ const { readCommonProviders } = require("./common");
 const { getSource } = require("./autoroute-convert/source");
 const { getTarget } = require("./autoroute-convert/target");
 const { pipeStream, collectBody } = require("./autoroute-convert/stream");
-const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage } = require("./autoroute-convert/canonical");
+const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText } = require("./autoroute-convert/canonical");
 
 // 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
 // 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccswitch_overridden_env_<nativeId> 先例）。
@@ -67,11 +67,37 @@ const regenerateAutoRouteKey = () => writeAutoRouteConfig({ key: generateKey() }
 
 // ==================== 运行状态 ====================
 
-const serverState = { server: null, port: 0, startedAt: 0, logs: [] };
+const serverState = { server: null, port: 0, startedAt: 0, logs: [], stats: newSessionStats() };
 
+// 本次运行统计（随网关重启清零）：仅统计已路由转发的模型调用（entry.target 非空），
+// 401 鉴权失败 / 模型未启用 / /v1/models 等控制面请求不计入。
+function newSessionStats() {
+  return { requests: 0, successes: 0, promptTokens: 0, cachedTokens: 0, outputTokens: 0 };
+}
+
+// usage 语义差异归一：anthropic 的 input_tokens 不含缓存（cache_read/cache_creation 分列），
+// openai 的 prompt_tokens/input_tokens 已含 cached → 统一折成 promptTokens（含缓存）+ cachedTokens。
+const recordStats = (entry) => {
+  if (!entry || !entry.target || typeof entry.status !== "number") return;
+  const s = serverState.stats;
+  s.requests++;
+  if (entry.status < 400) s.successes++;
+  const u = entry.usage;
+  if (!u) return;
+  const cached = u.cacheReadTokens || 0;
+  s.promptTokens += entry.target === "anthropic-messages"
+    ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0)
+    : u.inputTokens || 0;
+  s.cachedTokens += cached;
+  s.outputTokens += u.outputTokens || 0;
+};
+
+// 请求日志存内存，仅保留最近 10 条（新条目插头部；多了渲染/轮询拷贝会卡）
 const pushLog = (entry) => {
-  serverState.logs.unshift({ time: Date.now(), ...entry });
-  if (serverState.logs.length > 50) serverState.logs.length = 50;
+  const log = { time: Date.now(), ...entry };
+  serverState.logs.unshift(log);
+  if (serverState.logs.length > 10) serverState.logs.length = 10;
+  recordStats(log);
 };
 
 const getAutoRouteStatus = () => ({
@@ -79,6 +105,7 @@ const getAutoRouteStatus = () => ({
   port: serverState.server ? serverState.port : readAutoRouteConfig().port,
   baseUrl: serverState.server ? `http://127.0.0.1:${serverState.port}` : "",
   logs: [...serverState.logs],
+  stats: { ...serverState.stats },
 });
 
 // ==================== 模型解析 ====================
@@ -261,19 +288,46 @@ const handleRequest = async (req, res) => {
           fail(sourceProtocol, upstreamRes.statusCode || 502, extractUpstreamErrorMessage(text, upstreamRes.statusCode), model.id);
           return;
         }
-        finish({ protocol: sourceProtocol, model: model.id, status: 200, passthrough: true });
         res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
+        // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
+        // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
+        const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        let pending = "";
+        const settle = (error) => {
+          finish({
+            protocol: sourceProtocol,
+            model: model.id,
+            status: error ? 502 : 200,
+            passthrough: true,
+            usage,
+            ...(error ? { error } : {}),
+          });
+        };
+        upstreamRes.on("data", (chunk) => {
+          try {
+            pending += chunk.toString("utf8");
+            const found = scanUsageFromText(pending);
+            for (const k of Object.keys(usage)) if (found[k] > usage[k]) usage[k] = found[k];
+            if (pending.length > 8192) pending = pending.slice(-2048); // 只留尾部，防数字被分片切开漏匹配；不截断长流内存
+          } catch (e) {
+            /* 统计旁路异常不影响转发 */
+          }
+        });
+        upstreamRes.once("end", () => settle());
+        upstreamRes.once("close", () => settle());
+        upstreamRes.once("error", (e) => settle((e && e.message) || "上游流中断"));
         upstreamRes.pipe(res);
         return;
       }
       const text = await collectBody(upstreamRes);
       const status = upstreamRes.statusCode || 502;
-      // 原样转发上游错误体给客户端，同时把可读原因记入日志
+      // 原样转发上游错误体给客户端，同时把可读原因记入日志；响应体里抓 usage 供统计
       finish({
         protocol: sourceProtocol,
         model: model.id,
         status,
         passthrough: true,
+        usage: scanUsageFromText(text),
         ...(status >= 400 ? { error: extractUpstreamErrorMessage(text, status) } : {}),
       });
       res.writeHead(status, { "content-type": upstreamRes.headers["content-type"] || "application/json; charset=utf-8" });
@@ -294,8 +348,8 @@ const handleRequest = async (req, res) => {
         fail(sourceProtocol, upstreamRes.statusCode || 502, extractUpstreamErrorMessage(text, upstreamRes.statusCode), model.id);
         return;
       }
-      finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true });
-      await pipeStream({ upstreamRes, target, source, res });
+      const usage = await pipeStream({ upstreamRes, target, source, res });
+      finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage });
       return;
     }
 
@@ -311,9 +365,10 @@ const handleRequest = async (req, res) => {
       fail(sourceProtocol, 502, "上游返回了无法解析的响应", model.id);
       return;
     }
-    const out = source.formatResponse(target.parseResponse(upstreamJson));
+    const canonicalRes = target.parseResponse(upstreamJson);
+    const out = source.formatResponse(canonicalRes);
     sendJson(res, 200, out);
-    finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true });
+    finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage: canonicalRes.usage });
   } catch (e) {
     const message = (e && e.message) || String(e);
     try {
@@ -349,6 +404,9 @@ const startAutoRoute = () => {
       serverState.server = server;
       serverState.port = config.port;
       serverState.startedAt = Date.now();
+      // 新一次运行：请求日志与本次统计从零开始
+      serverState.logs = [];
+      serverState.stats = newSessionStats();
       resolve(getAutoRouteStatus());
     });
   });

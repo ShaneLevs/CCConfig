@@ -20,7 +20,8 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
   return Buffer.concat(chunks).toString("utf8");
 };
 
-// 流式转发：消费上游响应并把重写后的 SSE 帧写到客户端响应
+// 流式转发：消费上游响应并把重写后的 SSE 帧写到客户端响应。
+// 返回规范 end 事件里的 usage（供网关统计），无则 null。
 // upstreamRes: 上游 IncomingMessage（已 200）；target: 出站适配器；source: 入站适配器；res: 客户端 ServerResponse
 const pipeStream = async ({ upstreamRes, target, source, res }) => {
   res.writeHead(200, sseHeaders());
@@ -29,8 +30,10 @@ const pipeStream = async ({ upstreamRes, target, source, res }) => {
     closed = true;
   });
   const writer = source.createFrameWriter();
+  let endUsage = null;
   try {
     for await (const event of target.readStream(upstreamRes)) {
+      if (event.type === "end" && event.usage) endUsage = event.usage;
       if (closed) break;
       for (const frame of writer.push(event)) {
         if (!closed) res.write(frame);
@@ -52,6 +55,7 @@ const pipeStream = async ({ upstreamRes, target, source, res }) => {
     // 确保上游连接释放
     if (upstreamRes && typeof upstreamRes.destroy === "function") upstreamRes.destroy();
   }
+  return endUsage;
 };
 
 module.exports = { pipeStream, collectBody, sseHeaders };

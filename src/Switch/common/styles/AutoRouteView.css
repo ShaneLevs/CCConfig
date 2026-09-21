@@ -38,6 +38,19 @@
 .autoroute-endpoint-method { flex-shrink: 0; font-variant-numeric: tabular-nums; min-width: 44px; justify-content: center; }
 .autoroute-endpoint-path { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); color: var(--td-text-color-primary); }
 .autoroute-endpoint-desc { color: var(--td-text-color-placeholder); }
+/* 本次运行统计条（有调用后才展示） */
+.autoroute-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.autoroute-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--td-radius-default);
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-level-1-color);
+}
+.autoroute-stat-label { font-size: 12px; color: var(--td-text-color-placeholder); }
+.autoroute-stat-value { font-size: 18px; font-weight: 600; color: var(--td-text-color-primary); font-variant-numeric: tabular-nums; }
 .autoroute-logs { display: flex; flex-direction: column; gap: 4px; }
 .autoroute-logs-title { font-size: 12px; color: var(--td-text-color-placeholder); margin-bottom: 2px; }
 .autoroute-logs-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
@@ -46,6 +59,8 @@
 .autoroute-log-time { color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; }
 .autoroute-log-model { color: var(--td-text-color-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .autoroute-log-flag { font-size: 11px; color: var(--td-brand-color); }
+/* 每条 usage：紧凑小字，悬停看精确值 */
+.autoroute-log-usage { font-size: 11px; color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 /* 报错原因：占满剩余宽度，超长省略，悬停 title 看全文 */
 .autoroute-log-error { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--td-error-color); }
 .autoroute-log-arrow { color: var(--td-text-color-placeholder); }

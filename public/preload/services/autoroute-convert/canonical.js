@@ -95,9 +95,40 @@ const stopFromAnthropicReason = (r) => {
 const normalizeUsage = (u = {}) => ({
   inputTokens: Number(u.inputTokens || u.input_tokens || u.prompt_tokens) || 0,
   outputTokens: Number(u.outputTokens || u.output_tokens || u.completion_tokens) || 0,
-  cacheReadTokens: Number(u.cacheReadTokens || u.cache_read_input_tokens || (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens)) || 0,
+  cacheReadTokens:
+    Number(
+      u.cacheReadTokens ||
+        u.cache_read_input_tokens ||
+        (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) ||
+        (u.input_tokens_details && u.input_tokens_details.cached_tokens),
+    ) || 0,
   cacheWriteTokens: Number(u.cacheWriteTokens || u.cache_creation_input_tokens) || 0,
 });
+
+// 从原始响应文本（整段 JSON 或 SSE 流分片）扫描 usage 数值字段，取各字段最大值，返回 normalizeUsage 同形结果。
+// 供同协议直通流式路径旁路采集统计用：不解析事件结构，只正则抓已知 usage key；
+// key 带引号边界，不会把 cache_read_input_tokens 误配成 input_tokens。
+const USAGE_SCAN_KEYS = {
+  inputTokens: ["input_tokens", "prompt_tokens"],
+  outputTokens: ["output_tokens", "completion_tokens"],
+  cacheReadTokens: ["cache_read_input_tokens", "cached_tokens"],
+  cacheWriteTokens: ["cache_creation_input_tokens"],
+};
+const scanUsageFromText = (text) => {
+  const out = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  if (!text) return out;
+  for (const [field, keys] of Object.entries(USAGE_SCAN_KEYS)) {
+    for (const k of keys) {
+      const re = new RegExp('"' + k + '"\\s*:\\s*(\\d+)', "g");
+      let m;
+      while ((m = re.exec(text))) {
+        const v = Number(m[1]);
+        if (v > out[field]) out[field] = v;
+      }
+    }
+  }
+  return out;
+};
 
 const totalTokens = (usage) => (usage ? usage.inputTokens + usage.outputTokens : 0);
 
@@ -145,6 +176,7 @@ module.exports = {
   stopFromFinishReason,
   stopFromAnthropicReason,
   normalizeUsage,
+  scanUsageFromText,
   totalTokens,
   errorBody,
   safeJsonParse,
