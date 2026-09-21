@@ -14,16 +14,32 @@ const LABEL_WIDTH = 24;
 const containerRef = ref(null);
 const containerWidth = ref(700);
 
+let resizeObserver = null;
 const measureWidth = () => {
-  if (containerRef.value) containerWidth.value = containerRef.value.clientWidth;
+  const w = containerRef.value?.clientWidth || 0;
+  // 面板隐藏（v-show display:none）或尚未完成布局时宽度为 0，不覆盖上一次有效值，
+  // 否则 maxWeeks 会塌到最小 10 列，热力图只占一小截
+  if (w > 0 && w !== containerWidth.value) containerWidth.value = w;
 };
 
 onMounted(() => {
   measureWidth();
+  // 首次进入统计页时组件可能在 v-show 尚未生效的同一帧挂载（clientWidth=0），
+  // 下一帧再补测一次
+  requestAnimationFrame(measureWidth);
   window.addEventListener("resize", measureWidth);
+  // 监听容器自身尺寸：uTools 窗口重新唤起、面板 0→非 0 都不会触发 window.resize，
+  // ResizeObserver 能捕获这些变化
+  if (window.ResizeObserver && containerRef.value) {
+    resizeObserver = new ResizeObserver(measureWidth);
+    resizeObserver.observe(containerRef.value);
+  }
 });
 
-onUnmounted(() => window.removeEventListener("resize", measureWidth));
+onUnmounted(() => {
+  window.removeEventListener("resize", measureWidth);
+  if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+});
 
 const maxWeeks = computed(() => {
   const available = containerWidth.value - LABEL_WIDTH;

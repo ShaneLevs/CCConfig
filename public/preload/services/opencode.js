@@ -16,15 +16,16 @@ const resolveOpencodeConfigPath = () => {
 
 const OPENCODE_DATA_DIR = (() => {
   // 新版 Opencode (>= 2025) 数据目录（按优先级）：
-  //   1. %LOCALAPPDATA%\opencode          （Windows 常规安装）
-  //   2. ~/.local/share/opencode          （Windows XDG 模式 + macOS/Linux）
+  //   1. ~/.local/share/opencode          （macOS/Linux + Windows XDG 模式，通用优先）
+  //   2. %LOCALAPPDATA%\opencode          （Windows 常规安装，上面找不到才回退）
   // 注意：preload 环境 process.env.LOCALAPPDATA 可能为空（uTools Electron 精简）
   const home = window.utools.getPath('home')
-  const candidates = []
+  const candidates = [
+    path.join(home, '.local', 'share', 'opencode'),
+  ]
   if (process.env.LOCALAPPDATA) {
     candidates.push(path.join(process.env.LOCALAPPDATA, 'opencode'))
   }
-  candidates.push(path.join(home, '.local', 'share', 'opencode'))
   // Windows 兜底：HOME\AppData\Local\opencode
   if (process.platform === 'win32') {
     candidates.push(path.join(home, 'AppData', 'Local', 'opencode'))
@@ -362,65 +363,71 @@ const readOpencodeUsageFromDbNative = (dbPath, DatabaseSync) => {
   const db = new DatabaseSync(dbPath, { open: true, readOnly: true })
   try {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name)
-    if (!tables.includes('session')) return usage.calculateStats([], new Map())
+    // 新版 OpenCode 会话数据迁到了 session_v2（旧 session 表仅存历史且新行 token 恒为 0），两表并集按 id 去重
+    const sessionTables = ['session', 'session_v2'].filter((t) => tables.includes(t))
+    if (!sessionTables.length) return usage.calculateStats([], new Map())
 
-    const sessionCols = new Set(db.prepare("PRAGMA table_info(session)").all().map(c => c.name))
-    const sInputCol = sessionCols.has('tokens_input') ? 'tokens_input' : null
-    const sOutputCol = sessionCols.has('tokens_output') ? 'tokens_output' : null
-    const sReasonCol = sessionCols.has('tokens_reasoning') ? 'tokens_reasoning' : null
-    const sCacheReadCol = sessionCols.has('tokens_cache_read') ? 'tokens_cache_read' : null
-    const sCacheWriteCol = sessionCols.has('tokens_cache_write') ? 'tokens_cache_write' : null
-
-    const sessionSql = 'SELECT id, title, directory, model, time_created, time_updated FROM session'
-    const sessions = db.prepare(sessionSql).all()
     const sessionMap = new Map()
-    for (const s of sessions) {
-      const ts = new Date(s.time_created).toISOString()
-      sessionMap.set(s.id, {
-        sessionId: s.id,
-        timestamp: ts,
-        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
-        project: s.directory || s.title || 'unknown',
-        projectPath: s.directory || 'unknown',
-        title: s.title || '',
-        model: parseOpenCodeModel(s.model),
-      })
-    }
-
-    // 修复 WHERE 子句：动态构建条件，避免引用不存在的列导致 SQL 报错
-    const conditions = []
-    if (sInputCol) conditions.push(`${sInputCol} > 0`)
-    if (sOutputCol) conditions.push(`${sOutputCol} > 0`)
-    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' OR ')}` : ''
-    const tokenSql = `SELECT id, model,${sInputCol} as inp,${sOutputCol} as out,${sReasonCol} as reas,${sCacheReadCol} as cread,${sCacheWriteCol} as cwrite,time_created FROM session${whereClause}`
-    const rows = db.prepare(tokenSql).all()
     const messageRecords = []
-    for (const r of rows) {
-      const tsMs = r.time_created
-      if (!tsMs || tsMs <= 0) continue
-      const ts = new Date(tsMs).toISOString()
-      const total = (r.inp || 0) + (r.out || 0) + (r.reas || 0) + (r.cread || 0) + (r.cwrite || 0)
-      if (total === 0) continue
-      messageRecords.push({
-        sessionId: r.id,
-        model: parseOpenCodeModel(r.model) || sessionMap.get(r.id)?.model || 'unknown',
-        project: sessionMap.get(r.id)?.project || 'unknown',
-        projectPath: sessionMap.get(r.id)?.projectPath || 'unknown',
-        timestamp: ts,
-        date: ts.split('T')[0],
-        inputTokens: r.inp || 0,
-        outputTokens: r.out || 0,
-        cacheReadTokens: r.cread || 0,
-        cacheCreationTokens: r.cwrite || 0,
-        totalTokens: total,
-      })
-      if (sessionMap.has(r.id)) {
-        const sess = sessionMap.get(r.id)
-        sess.inputTokens = r.inp || 0
-        sess.outputTokens = r.out || 0
-        sess.cacheReadTokens = r.cread || 0
-        sess.cacheCreationTokens = r.cwrite || 0
-        sess.timestamp = ts
+    for (const tbl of sessionTables) {
+      const cols = new Set(db.prepare(`PRAGMA table_info(${tbl})`).all().map(c => c.name))
+      if (!cols.has('id') || !cols.has('time_created')) continue
+      const has = (n) => (cols.has(n) ? n : null)
+      const sel = (c, alias) => (c ? `${c} as ${alias}` : `null as ${alias}`)
+      const sInputCol = has('tokens_input')
+      const sOutputCol = has('tokens_output')
+
+      const sessions = db.prepare(
+        `SELECT id, ${sel(has('title'), 'title')}, ${sel(has('directory'), 'directory')}, ${sel(has('model'), 'model')}, time_created, time_updated FROM ${tbl}`
+      ).all()
+      for (const s of sessions) {
+        if (sessionMap.has(s.id)) continue
+        const ts = new Date(s.time_created).toISOString()
+        sessionMap.set(s.id, {
+          sessionId: s.id,
+          timestamp: ts,
+          inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
+          project: s.directory || s.title || 'unknown',
+          projectPath: s.directory || 'unknown',
+          title: s.title || '',
+          model: parseOpenCodeModel(s.model),
+        })
+      }
+
+      // WHERE 子句动态构建，避免引用不存在的列导致 SQL 报错
+      const conditions = []
+      if (sInputCol) conditions.push(`${sInputCol} > 0`)
+      if (sOutputCol) conditions.push(`${sOutputCol} > 0`)
+      const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' OR ')}` : ''
+      const tokenSql = `SELECT id, ${sel(has('model'), 'model')}, ${sel(sInputCol, 'inp')}, ${sel(sOutputCol, 'out')}, ${sel(has('tokens_reasoning'), 'reas')}, ${sel(has('tokens_cache_read'), 'cread')}, ${sel(has('tokens_cache_write'), 'cwrite')}, time_created FROM ${tbl}${whereClause}`
+      const rows = db.prepare(tokenSql).all()
+      for (const r of rows) {
+        const tsMs = r.time_created
+        if (!tsMs || tsMs <= 0) continue
+        const ts = new Date(tsMs).toISOString()
+        const total = (r.inp || 0) + (r.out || 0) + (r.reas || 0) + (r.cread || 0) + (r.cwrite || 0)
+        if (total === 0) continue
+        messageRecords.push({
+          sessionId: r.id,
+          model: parseOpenCodeModel(r.model) || sessionMap.get(r.id)?.model || 'unknown',
+          project: sessionMap.get(r.id)?.project || 'unknown',
+          projectPath: sessionMap.get(r.id)?.projectPath || 'unknown',
+          timestamp: ts,
+          date: ts.split('T')[0],
+          inputTokens: r.inp || 0,
+          outputTokens: r.out || 0,
+          cacheReadTokens: r.cread || 0,
+          cacheCreationTokens: r.cwrite || 0,
+          totalTokens: total,
+        })
+        if (sessionMap.has(r.id)) {
+          const sess = sessionMap.get(r.id)
+          sess.inputTokens = r.inp || 0
+          sess.outputTokens = r.out || 0
+          sess.cacheReadTokens = r.cread || 0
+          sess.cacheCreationTokens = r.cwrite || 0
+          sess.timestamp = ts
+        }
       }
     }
 
@@ -469,15 +476,17 @@ const readOpencodeUsageFromDbViaChildProcess = (dbPath) => {
     const {DatabaseSync} = require('node:sqlite');
     const db = new DatabaseSync(${JSON.stringify(dbPath)}, {open:true, readOnly:true});
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name);
-    if (!tables.includes('session')) { db.close(); process.stdout.write('[]'); process.exit(0); }
-    const cols = new Set(db.prepare("PRAGMA table_info(session)").all().map(c=>c.name));
-    const sIn = cols.has('tokens_input') ? 'tokens_input' : 'null';
-    const sOut = cols.has('tokens_output') ? 'tokens_output' : 'null';
-    const sReas = cols.has('tokens_reasoning') ? 'tokens_reasoning' : 'null';
-    const sCread = cols.has('tokens_cache_read') ? 'tokens_cache_read' : 'null';
-    const sCwrite = cols.has('tokens_cache_write') ? 'tokens_cache_write' : 'null';
-    const sql = 'SELECT id, model, '+sIn+' as inp, '+sOut+' as out, '+sReas+' as reas, '+sCread+' as cread, '+sCwrite+' as cwrite, time_created, directory, title FROM session';
-    const rows = db.prepare(sql).all();
+    const sessionTables = ['session','session_v2'].filter(t=>tables.includes(t));
+    if (!sessionTables.length) { db.close(); process.stdout.write('[]'); process.exit(0); }
+    const rows = [];
+    const seen = new Set();
+    for (const tbl of sessionTables) {
+      const cols = new Set(db.prepare('PRAGMA table_info('+tbl+')').all().map(c=>c.name));
+      if (!cols.has('id') || !cols.has('time_created')) continue;
+      const h = function(n){ return cols.has(n) ? n : 'null'; };
+      const sql = 'SELECT id, '+h('model')+' as model, '+h('tokens_input')+' as inp, '+h('tokens_output')+' as out, '+h('tokens_reasoning')+' as reas, '+h('tokens_cache_read')+' as cread, '+h('tokens_cache_write')+' as cwrite, time_created, '+h('directory')+' as directory, '+h('title')+' as title FROM '+tbl;
+      for (const r of db.prepare(sql).all()) { if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); } }
+    }
 
     // 回退：session token 全为 0 时，从 part 表计算
     const allZero = rows.every(r => !((r.inp||0) + (r.out||0) + (r.reas||0) + (r.cread||0) + (r.cwrite||0)));

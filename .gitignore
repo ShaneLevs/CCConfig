@@ -32,3 +32,6 @@ dist-ssr
 .claude/settings.local.json
 .delivery-review
 .zcode/
+/opencode.db*
+
+
