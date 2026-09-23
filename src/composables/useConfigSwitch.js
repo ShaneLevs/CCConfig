@@ -29,6 +29,7 @@ export function useConfigSwitch(currentConfig, loadCurrentConfig) {
       { key: 'defaultHaikuModel', env: 'ANTHROPIC_DEFAULT_HAIKU_MODEL' },
       { key: 'defaultSonnetModel', env: 'ANTHROPIC_DEFAULT_SONNET_MODEL' },
       { key: 'defaultOpusModel', env: 'ANTHROPIC_DEFAULT_OPUS_MODEL' },
+      { key: 'defaultFableModel', env: 'ANTHROPIC_DEFAULT_FABLE_MODEL' },
       { key: 'subagentModel', env: 'CLAUDE_CODE_SUBAGENT_MODEL' },
     ];
 
@@ -83,6 +84,7 @@ export function useConfigSwitch(currentConfig, loadCurrentConfig) {
     (config.defaultHaikuModel || "") === (currentConfig.value.defaultHaikuModel || "") &&
     (config.defaultSonnetModel || "") === (currentConfig.value.defaultSonnetModel || "") &&
     (config.defaultOpusModel || "") === (currentConfig.value.defaultOpusModel || "") &&
+    (config.defaultFableModel || "") === (currentConfig.value.defaultFableModel || "") &&
     (config.subagentModel || "") === (currentConfig.value.subagentModel || "");
 
   return { switchConfig, isCurrentConfig };

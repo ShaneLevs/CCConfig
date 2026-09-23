@@ -77,6 +77,8 @@ const formData = ref({
   defaultSonnetModel1m: false,
   defaultOpusModel: "",
   defaultOpusModel1m: false,
+  defaultFableModel: "",
+  defaultFableModel1m: false,
   subagentModel: "",
   subagentModel1m: false,
   extraFields: [],
@@ -122,7 +124,7 @@ watch(() => formData.value.key, scheduleLoadModelCandidates);
 
 // 当用户手动在输入框输入 [1m] 时，同步勾选复选框并自动清除输入中的 [1m]
 // 输入框为空时，同步取消勾选 1m
-const modelFields = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel'];
+const modelFields = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'defaultFableModel', 'subagentModel'];
 modelFields.forEach(field => {
   watch(() => formData.value[field], (val) => {
     if (!val || val.trim() === '') {
@@ -151,7 +153,7 @@ const dialogTitle = computed(() => (editingConfig.value ? "编辑配置" : "新�
 const hasModelFields = computed(() =>
   currentConfig.value.model || currentConfig.value.defaultHaikuModel ||
   currentConfig.value.defaultSonnetModel || currentConfig.value.defaultOpusModel ||
-  currentConfig.value.subagentModel
+  currentConfig.value.defaultFableModel || currentConfig.value.subagentModel
 );
 
 const loadCurrentConfig = () => {
@@ -169,6 +171,7 @@ const loadCurrentConfig = () => {
       defaultHaikuModel: settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || "",
       defaultSonnetModel: settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL || "",
       defaultOpusModel: settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL || "",
+      defaultFableModel: settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL || "",
       subagentModel: settings.env.CLAUDE_CODE_SUBAGENT_MODEL || "",
     };
   }
@@ -191,6 +194,7 @@ const loadSavedConfigs = () => {
           defaultHaikuModel: d.defaultHaikuModel || "",
           defaultSonnetModel: d.defaultSonnetModel || "",
           defaultOpusModel: d.defaultOpusModel || "",
+          defaultFableModel: d.defaultFableModel || "",
           subagentModel: d.subagentModel || "",
           authVar: d.authVar || 'ANTHROPIC_AUTH_TOKEN',
           extraFields: d.extraFields || [],
@@ -209,6 +213,7 @@ const loadSavedConfigs = () => {
         defaultHaikuModel: d.defaultHaikuModel || "",
         defaultSonnetModel: d.defaultSonnetModel || "",
         defaultOpusModel: d.defaultOpusModel || "",
+        defaultFableModel: d.defaultFableModel || "",
         subagentModel: d.subagentModel || "",
         extraFields: d.extraFields || [],
         updatedAt: d.updatedAt,
@@ -345,6 +350,7 @@ const saveConfig = () => {
     defaultHaikuModel: buildModelValue('defaultHaikuModel', formData.value.defaultHaikuModel1m),
     defaultSonnetModel: buildModelValue('defaultSonnetModel', formData.value.defaultSonnetModel1m),
     defaultOpusModel: buildModelValue('defaultOpusModel', formData.value.defaultOpusModel1m),
+    defaultFableModel: buildModelValue('defaultFableModel', formData.value.defaultFableModel1m),
     subagentModel: buildModelValue('subagentModel', formData.value.subagentModel1m),
     extraFields: cleanExtraFields,
     updatedAt: now,
@@ -467,7 +473,7 @@ const checkFirstOpen = () => {
 const hasSensitiveConfig = computed(() =>
   !!(currentConfig.value.key || currentConfig.value.baseUrl || currentConfig.value.model ||
      currentConfig.value.defaultHaikuModel || currentConfig.value.defaultSonnetModel ||
-     currentConfig.value.defaultOpusModel || currentConfig.value.subagentModel)
+     currentConfig.value.defaultOpusModel || currentConfig.value.defaultFableModel || currentConfig.value.subagentModel)
 );
 
 const showClearDialog = ref(false);
@@ -480,6 +486,7 @@ const clearConfirmContent = computed(() => {
   if (currentConfig.value.defaultHaikuModel) items.push('Haiku 模型');
   if (currentConfig.value.defaultSonnetModel) items.push('Sonnet 模型');
   if (currentConfig.value.defaultOpusModel) items.push('Opus 模型');
+  if (currentConfig.value.defaultFableModel) items.push('Fable 模型');
   if (currentConfig.value.subagentModel) items.push('Subagent 模型');
   return items.map((s, i) => (i + 1) + '. ' + s).join('\n');
 });
@@ -593,6 +600,7 @@ onMounted(() => { loadCurrentConfig(); checkFirstOpen(); loadSavedConfigs(); loa
           <Tag v-if="currentConfig.defaultHaikuModel" size="medium" variant="outline" class="model-tag" @click="copyModelName(currentConfig.defaultHaikuModel)">HAIKU: {{ currentConfig.defaultHaikuModel }}</Tag>
           <Tag v-if="currentConfig.defaultSonnetModel" size="medium" variant="outline" class="model-tag" @click="copyModelName(currentConfig.defaultSonnetModel)">SONNET: {{ currentConfig.defaultSonnetModel }}</Tag>
           <Tag v-if="currentConfig.defaultOpusModel" size="medium" variant="outline" class="model-tag" @click="copyModelName(currentConfig.defaultOpusModel)">OPUS: {{ currentConfig.defaultOpusModel }}</Tag>
+          <Tag v-if="currentConfig.defaultFableModel" size="medium" variant="outline" class="model-tag" @click="copyModelName(currentConfig.defaultFableModel)">FABLE: {{ currentConfig.defaultFableModel }}</Tag>
           <Tag v-if="currentConfig.subagentModel" size="medium" variant="outline" class="model-tag" @click="copyModelName(currentConfig.subagentModel)">SUBAGENT: {{ currentConfig.subagentModel }}</Tag>
         </div>
       </div>
@@ -696,6 +704,7 @@ onMounted(() => { loadCurrentConfig(); checkFirstOpen(); loadSavedConfigs(); loa
         <div class="form-item"><label>HAIKU</label><AutoComplete v-model="formData.defaultHaikuModel" :options="modelCandidates" filterable placeholder="ANTHROPIC_DEFAULT_HAIKU_MODEL"><template #suffix><Tooltip content="模型支持一百万个上下文时勾选"><Checkbox v-model="formData.defaultHaikuModel1m" size="small" :disabled="!formData.defaultHaikuModel" class="model-1m-checkbox">1m</Checkbox></Tooltip></template></AutoComplete></div>
         <div class="form-item"><label>SONNET</label><AutoComplete v-model="formData.defaultSonnetModel" :options="modelCandidates" filterable placeholder="ANTHROPIC_DEFAULT_SONNET_MODEL"><template #suffix><Tooltip content="模型支持一百万个上下文时勾选"><Checkbox v-model="formData.defaultSonnetModel1m" size="small" :disabled="!formData.defaultSonnetModel" class="model-1m-checkbox">1m</Checkbox></Tooltip></template></AutoComplete></div>
         <div class="form-item"><label>OPUS</label><AutoComplete v-model="formData.defaultOpusModel" :options="modelCandidates" filterable placeholder="ANTHROPIC_DEFAULT_OPUS_MODEL"><template #suffix><Tooltip content="模型支持一百万个上下文时勾选"><Checkbox v-model="formData.defaultOpusModel1m" size="small" :disabled="!formData.defaultOpusModel" class="model-1m-checkbox">1m</Checkbox></Tooltip></template></AutoComplete></div>
+<div class="form-item"><label>FABLE</label><AutoComplete v-model="formData.defaultFableModel" :options="modelCandidates" filterable placeholder="ANTHROPIC_DEFAULT_FABLE_MODEL"><template #suffix><Tooltip content="模型支持一百万个上下文时勾选"><Checkbox v-model="formData.defaultFableModel1m" size="small" :disabled="!formData.defaultFableModel" class="model-1m-checkbox">1m</Checkbox></Tooltip></template></AutoComplete></div>
         <div class="form-hint">设置子代理（工具调用、后台任务等）使用的模型</div>
         <div class="form-item"><label>SUBAGENT</label><AutoComplete v-model="formData.subagentModel" :options="modelCandidates" filterable placeholder="CLAUDE_CODE_SUBAGENT_MODEL"><template #suffix><Tooltip content="模型支持一百万个上下文时勾选"><Checkbox v-model="formData.subagentModel1m" size="small" :disabled="!formData.subagentModel" class="model-1m-checkbox">1m</Checkbox></Tooltip></template></AutoComplete></div>
       </div>
@@ -791,10 +800,11 @@ onMounted(() => { loadCurrentConfig(); checkFirstOpen(); loadSavedConfigs(); loa
         <div class="preview-item"><span class="preview-label">{{ previewConfig.authVar || 'ANTHROPIC_AUTH_TOKEN' }}</span><span class="preview-value">{{ maskKey(previewConfig.key) || "未设置" }}</span></div>
         <div class="preview-item"><span class="preview-label">BASE_URL</span><span class="preview-value">{{ previewConfig.baseUrl || "未设置" }}</span></div>
         <div class="preview-item"><span class="preview-label">MODEL</span><span class="preview-value">{{ previewConfig.model || "未设置" }}</span></div>
-        <div v-if="previewConfig.defaultHaikuModel || previewConfig.defaultSonnetModel || previewConfig.defaultOpusModel" class="preview-divider"></div>
+        <div v-if="previewConfig.defaultHaikuModel || previewConfig.defaultSonnetModel || previewConfig.defaultOpusModel || previewConfig.defaultFableModel" class="preview-divider"></div>
         <div v-if="previewConfig.defaultHaikuModel" class="preview-item"><span class="preview-label">HAIKU_MODEL</span><span class="preview-value">{{ previewConfig.defaultHaikuModel }}</span></div>
         <div v-if="previewConfig.defaultSonnetModel" class="preview-item"><span class="preview-label">SONNET_MODEL</span><span class="preview-value">{{ previewConfig.defaultSonnetModel }}</span></div>
         <div v-if="previewConfig.defaultOpusModel" class="preview-item"><span class="preview-label">OPUS_MODEL</span><span class="preview-value">{{ previewConfig.defaultOpusModel }}</span></div>
+        <div v-if="previewConfig.defaultFableModel" class="preview-item"><span class="preview-label">FABLE_MODEL</span><span class="preview-value">{{ previewConfig.defaultFableModel }}</span></div>
         <div v-if="previewConfig.subagentModel" class="preview-item"><span class="preview-label">SUBAGENT_MODEL</span><span class="preview-value">{{ previewConfig.subagentModel }}</span></div>
         <template v-if="previewConfig.extraFields && previewConfig.extraFields.length">
           <div class="preview-divider"></div>
