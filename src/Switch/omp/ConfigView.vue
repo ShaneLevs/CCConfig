@@ -11,7 +11,7 @@ import {
 import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
-import PresetCustomInput from "../../components/PresetCustomInput.vue";
+import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import "./styles/ConfigView.css";
 
 // ==================== Constants ====================
@@ -45,27 +45,6 @@ const API_TYPE_OPTIONS = [
 const INPUT_TYPE_OPTIONS = [
   { label: "文本 (text)", value: "text" },
   { label: "图像 (image)", value: "image" },
-];
-
-// 上下文窗口 / 最大输出 常见值选项
-const CTX_OPTIONS = [
-  { label: "默认", value: 0 },
-  { label: "32K", value: 32000 },
-  { label: "64K", value: 64000 },
-  { label: "128K", value: 128000 },
-  { label: "200K", value: 200000 },
-  { label: "1M", value: 1000000 },
-];
-const TOKENS_OPTIONS = [
-  { label: "默认", value: 0 },
-  { label: "4K", value: 4096 },
-  { label: "8K", value: 8192 },
-  { label: "16K", value: 16384 },
-  { label: "32K", value: 32768 },
-  { label: "64K", value: 65536 },
-  { label: "128K", value: 128000 },
-  { label: "256K", value: 256000 },
-  { label: "384K", value: 384000 },
 ];
 
 const HEADER_KEY_OPTIONS = ["x-portkey-api-key", "x-api-key", "Authorization", "x-secret"];
@@ -808,24 +787,7 @@ onMounted(refresh);
             <Checkbox v-model="addModelForm.reasoning" class="omp-reasoning-checkbox">推理模型</Checkbox>
           </Space>
         </div>
-        <div class="omp-form-item">
-          <label>上下文窗口</label>
-          <PresetCustomInput
-            v-model="addModelForm.contextWindow"
-            :options="CTX_OPTIONS"
-            :step="1000"
-            :default-custom="128000"
-          />
-        </div>
-        <div class="omp-form-item">
-          <label>最大输出</label>
-          <PresetCustomInput
-            v-model="addModelForm.maxTokens"
-            :options="TOKENS_OPTIONS"
-            :step="1000"
-            :default-custom="16384"
-          />
-        </div>
+        <ModelLimitsFields v-model:context="addModelForm.contextWindow" v-model:output="addModelForm.maxTokens" item-class="omp-form-item" />
         <Collapse v-model="modelAdvancedOpen" class="omp-advanced-collapse">
           <CollapsePanel value="1" header="高级配置（思考级别 / 费用 / 兼容性）">
             <div class="omp-form-item">
@@ -905,24 +867,7 @@ onMounted(refresh);
             <Checkbox v-model="editModelForm.reasoning" class="omp-reasoning-checkbox">推理模型</Checkbox>
           </Space>
         </div>
-        <div class="omp-form-item">
-          <label>上下文窗口</label>
-          <PresetCustomInput
-            v-model="editModelForm.contextWindow"
-            :options="CTX_OPTIONS"
-            :step="1000"
-            :default-custom="128000"
-          />
-        </div>
-        <div class="omp-form-item">
-          <label>最大输出</label>
-          <PresetCustomInput
-            v-model="editModelForm.maxTokens"
-            :options="TOKENS_OPTIONS"
-            :step="1000"
-            :default-custom="16384"
-          />
-        </div>
+        <ModelLimitsFields v-model:context="editModelForm.contextWindow" v-model:output="editModelForm.maxTokens" item-class="omp-form-item" />
         <Collapse v-model="modelAdvancedOpen" class="omp-advanced-collapse">
           <CollapsePanel value="1" header="高级配置（思考级别 / 费用 / 兼容性）">
             <div class="omp-form-item">

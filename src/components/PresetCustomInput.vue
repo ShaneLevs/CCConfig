@@ -1,19 +1,30 @@
 <script setup>
 // 预设值 + 自定义输入框 二合一选择器
-// 用于上下文窗口 / 最大输出等带常见值预设的数字字段（Pi / omp 共用）
+// 用于上下文窗口 / 最大输出等带常见值预设的数字字段。
+// 传 kind="context|output" 即自动带出共享预设档位（src/constants.js），无需各视图自写选项；
+// 也可显式传 options 覆盖（如批量导入表格需合并非标准值）。
 // modelValue 始终为最终数值：选中预设时 = 预设值；自定义时 = 输入框值
 import { ref, computed, watch } from "vue";
 import { RadioGroup, RadioButton, InputNumber } from "tdesign-vue-next";
+import { MODEL_LIMIT_PRESETS } from "../constants";
 
 const props = defineProps({
   modelValue: { type: Number, required: true },
-  options: { type: Array, required: true }, // [{ label, value }]
-  step: { type: Number, default: 1000 },
-  defaultCustom: { type: Number, default: 32000 },
+  kind: { type: String, default: "" }, // "context" | "output"，自动带预设
+  options: { type: Array, default: null }, // [{ label, value }]，不传则取 kind 预设
+  step: { type: Number, default: 0 },
+  defaultCustom: { type: Number, default: 0 },
 });
 const emit = defineEmits(["update:modelValue"]);
 
-const isPreset = (v) => props.options.some((o) => o.value === v);
+const kindPreset = computed(() => MODEL_LIMIT_PRESETS[props.kind] || {});
+const options = computed(() => props.options || kindPreset.value.options || []);
+const step = computed(() => props.step || kindPreset.value.step || 1000);
+const defaultCustom = computed(
+  () => props.defaultCustom || kindPreset.value.defaultCustom || 32000,
+);
+
+const isPreset = (v) => options.value.some((o) => o.value === v);
 
 // 是否处于"自定义"模式：初始为非预设值即自定义；命中预设时显示预设按钮
 const customMode = ref(!isPreset(props.modelValue));
@@ -25,7 +36,7 @@ const radio = computed({
     if (v === -1) {
       // 进入自定义：沿用当前值；若是预设/默认则给一个常见默认值
       customMode.value = true;
-      customVal.value = isPreset(props.modelValue) || !props.modelValue ? props.defaultCustom : props.modelValue;
+      customVal.value = isPreset(props.modelValue) || !props.modelValue ? defaultCustom.value : props.modelValue;
       setValue(customVal.value);
     } else {
       customMode.value = false;

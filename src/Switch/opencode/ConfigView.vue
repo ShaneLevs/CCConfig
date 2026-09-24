@@ -32,7 +32,7 @@ import {
 } from "tdesign-icons-vue-next";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
-import PresetCustomInput from "../../components/PresetCustomInput.vue";
+import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import "./styles/ConfigView.css";
 
 // ==================== Constants ====================
@@ -47,27 +47,6 @@ const NPM_OPTIONS = [
 
 const KNOWN_PROVIDER_OPTION_KEYS = ["baseURL", "apiKey", "headers"];
 const KNOWN_MODEL_KEYS = ["name", "limit", "options", "reasoning", "modalities"];
-
-// 上下文窗口 / 最大输出常用预设（与 Pi / omp 配置页统一）
-const CTX_OPTIONS = [
-  { label: "默认", value: 0 },
-  { label: "32K", value: 32000 },
-  { label: "64K", value: 64000 },
-  { label: "128K", value: 128000 },
-  { label: "200K", value: 200000 },
-  { label: "1M", value: 1000000 },
-];
-const TOKENS_OPTIONS = [
-  { label: "默认", value: 0 },
-  { label: "4K", value: 4096 },
-  { label: "8K", value: 8192 },
-  { label: "16K", value: 16384 },
-  { label: "32K", value: 32768 },
-  { label: "64K", value: 65536 },
-  { label: "128K", value: 128000 },
-  { label: "256K", value: 256000 },
-  { label: "384K", value: 384000 },
-];
 
 // 输入/输出模态（opencode modalities 合法值，源自 provider.ts capabilities 解析）
 const MODALITY_OPTIONS = [
@@ -802,24 +781,7 @@ onMounted(() => {
           <label>显示名称</label>
           <Input v-model="autoModelForm.name" placeholder="留空则使用模型 ID" />
         </div>
-        <div class="oc-form-item">
-          <label>上下文窗口</label>
-          <PresetCustomInput
-            v-model="autoModelForm.context"
-            :options="CTX_OPTIONS"
-            :step="1000"
-            :default-custom="128000"
-          />
-        </div>
-        <div class="oc-form-item">
-          <label>最大输出</label>
-          <PresetCustomInput
-            v-model="autoModelForm.output"
-            :options="TOKENS_OPTIONS"
-            :step="1000"
-            :default-custom="16384"
-          />
-        </div>
+        <ModelLimitsFields v-model:context="autoModelForm.context" v-model:output="autoModelForm.output" item-class="oc-form-item" />
         <div class="oc-form-item">
           <Checkbox v-model="autoModelForm.reasoning">推理模型 (reasoning)</Checkbox>
         </div>
@@ -871,24 +833,7 @@ onMounted(() => {
           <label>显示名称</label>
           <Input v-model="editModelForm.name" placeholder="留空则使用模型 ID" />
         </div>
-        <div class="oc-form-item">
-          <label>上下文窗口</label>
-          <PresetCustomInput
-            v-model="editModelForm.context"
-            :options="CTX_OPTIONS"
-            :step="1000"
-            :default-custom="128000"
-          />
-        </div>
-        <div class="oc-form-item">
-          <label>最大输出</label>
-          <PresetCustomInput
-            v-model="editModelForm.output"
-            :options="TOKENS_OPTIONS"
-            :step="1000"
-            :default-custom="16384"
-          />
-        </div>
+        <ModelLimitsFields v-model:context="editModelForm.context" v-model:output="editModelForm.output" item-class="oc-form-item" />
         <div class="oc-form-item">
           <Checkbox v-model="editModelForm.reasoning">推理模型 (reasoning)</Checkbox>
         </div>
