@@ -12,6 +12,7 @@ const omp = require("./services/omp");
 const reasonix = require("./services/reasonix");
 const kimi = require("./services/kimi");
 const minimax = require("./services/minimax");
+const qoder = require("./services/qoder");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -1885,7 +1886,6 @@ window.services = {
   isPiInstalled: pi.isPiInstalled,
   getPiSkills: pi.getPiSkills,
   getPiMcpServers: pi.getPiMcpServers,
-  getPiMcpTools: pi.getPiMcpTools,
   fetchProviderModels: pi.fetchProviderModels,
   readPiUsage: pi.readPiUsage,
   // 「通用」统计页：打开时先采集各 agent 最新数据落库，再纯读 DB 合并展示
@@ -2044,6 +2044,23 @@ window.services = {
   isMinimaxInstalled: minimax.isMinimaxInstalled,
   openKimiDir: kimi.openKimiDir,
   isKimiInstalled: kimi.isKimiInstalled,
+
+  // ==================== Qoder（~/.qoder/settings.json，仅模型配置） ====================
+  getQoderConfigPath: qoder.getQoderConfigPath,
+  getQoderProviderList: qoder.getQoderProviderList,
+  addQoderProvider: qoder.addQoderProvider,
+  updateQoderProvider: qoder.updateQoderProvider,
+  deleteQoderProvider: qoder.deleteQoderProvider,
+  addQoderModel: qoder.addQoderModel,
+  updateQoderModel: qoder.updateQoderModel,
+  deleteQoderModel: qoder.deleteQoderModel,
+  getQoderDefaultModel: qoder.getQoderDefaultModel,
+  setQoderDefaultModel: qoder.setQoderDefaultModel,
+  openQoderDir: qoder.openQoderDir,
+  isQoderInstalled: qoder.isQoderInstalled,
+  QODER_PROTOCOLS: qoder.PROTOCOL_VALUES,
+  QODER_EFFORTS: qoder.EFFORT_VALUES,
+
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
   KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
   KIMI_EFFORTS: kimi.KIMI_EFFORTS,
@@ -2058,6 +2075,7 @@ window.services = {
       reasonix: false,
       codex: false,
       kimi: false,
+      qoder: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -2129,6 +2147,15 @@ window.services = {
         cfg &&
         (Object.keys(cfg.providers || {}).length > 0 ||
           Object.keys(cfg.models || {}).length > 0)
+      );
+    } catch (e) {
+      /* ignore */
+    }
+    // qoder：settings.json 有自定义 providers
+    try {
+      const cfg = qoder.readQoderConfig();
+      hasData.qoder = !!(
+        cfg && Object.keys(cfg.providers || {}).length > 0
       );
     } catch (e) {
       /* ignore */

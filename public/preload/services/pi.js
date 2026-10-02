@@ -1370,36 +1370,37 @@ const getPiSkills = () => {
   return all;
 };
 
-// ==================== MCP Servers from Extensions ====================
+// ==================== MCP Servers（pi mcp list --json） ====================
 
-const getPiMcpServers = () => {
-  const extensions = getPiExtensions();
-  const all = [];
-  for (const ext of extensions) {
-    const claudePlugin = readJson(
-      path.join(PI_NPM_DIR(), ext.name, ".claude-plugin", "plugin.json"),
-    );
-    if (claudePlugin?.mcpServers) {
-      for (const [name, cfg] of Object.entries(claudePlugin.mcpServers)) {
-        all.push({
-          serverName: name,
-          package: ext.name,
-          command: cfg.command,
-          args: cfg.args || [],
-          config: cfg,
-        });
-      }
+// 通过 pi 官方 CLI 读取 MCP 配置（~/.pi/agent/mcp.json 及受信项目 .pi/mcp.json），
+// 返回字段：serverName/name/scope/source/enabled/exposure/transport/state/tools
+const getPiMcpServers = async () => {
+  try {
+    const result = await runPiCmd(["mcp", "list", "--json"], PI_CMD_TIMEOUT.list);
+    if (!result.success) {
+      console.error("pi mcp list --json 失败:", result.stderr);
+      return [];
     }
+    const start = result.stdout.indexOf("{");
+    if (start < 0) return [];
+    const data = JSON.parse(result.stdout.slice(start));
+    const servers = Array.isArray(data?.servers) ? data.servers : [];
+    return servers.map((s) => ({
+      serverName: s.name,
+      name: s.name,
+      scope: s.scope,
+      source: s.source,
+      enabled: s.enabled !== false,
+      exposure: s.exposure,
+      transport: s.transport || "",
+      state: s.state,
+      tools: Array.isArray(s.tools) ? s.tools : [],
+      config: s,
+    }));
+  } catch (e) {
+    console.error("读取 Pi MCP 配置失败:", e);
+    return [];
   }
-  return all;
-};
-
-const getPiMcpTools = async (mcpConfig) => {
-  const { getMcpServerTools } = require("./mcp");
-  return getMcpServerTools({
-    command: mcpConfig.command,
-    args: mcpConfig.args || [],
-  });
 };
 
 // ==================== Usage ====================
@@ -1613,7 +1614,6 @@ module.exports = {
   isPiInstalled,
   getPiSkills,
   getPiMcpServers,
-  getPiMcpTools,
   readPiUsage,
   fetchProviderModels,
   openPiDir,

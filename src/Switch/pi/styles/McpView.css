@@ -9,6 +9,9 @@
 .pi-mcp-srv-name:hover { text-decoration: underline; }
 .pi-mcp-card-body { display: flex; flex-direction: column; gap: 6px; }
 .pi-mcp-info-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.pi-mcp-tools-row { align-items: flex-start; }
+.pi-mcp-tools-row .pi-mcp-label { margin-top: 2px; }
+.pi-mcp-tools-row .pi-mcp-value { line-height: 1.5; }
 .pi-mcp-label { color: var(--td-text-color-placeholder); min-width: 80px; }
 .pi-mcp-value { color: var(--td-text-color-primary); }
 .mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; word-break: break-all; }
