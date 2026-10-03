@@ -163,78 +163,49 @@ const buildProviderJson = (cfg) => {
   return p
 }
 
-// ==================== 跨版本合并 / 同步写回 ====================
+// ==================== 跨版本同步（最新编辑的文件为准） ====================
 
-// 读取合并后的 providers 表：perEdition 记录各版本同步前的原始表（一致性比较用）
-const loadMergedTable = () => {
-  const variants = {}
-  const perEdition = {}
-  for (const ed of EDITIONS) {
-    const doc = readEditionDoc(ed)
-    const table = doc ? providersOf(doc) : {}
-    perEdition[ed.id] = table
-    for (const [id, p] of Object.entries(table)) {
-      if (!p || typeof p !== 'object' || Array.isArray(p)) continue
-      ;(variants[id] ||= []).push(p)
-    }
-  }
-  const tables = {}
-  // 键排序：写回顺序稳定，读取顺序与文件顺序一致（避免列表次序在刷新间跳动）
-  for (const id of Object.keys(variants).sort()) tables[id] = mergeProviderVariants(variants[id])
-  return { tables, perEdition }
+// 键排序后的 JSON 串，用于内容一致性比较（避免对象键顺序造成假不一致）
+const sortedProviders = (table) => {
+  const out = {}
+  for (const k of Object.keys(table || {}).sort()) out[k] = table[k]
+  return out
 }
 
 const modelIdOf = (m) => (m && typeof m.model === 'string' ? m.model : '')
 
-// 「最全」判据：模型条数为主，其次已填的受管字段与未识别扩展字段
-const providerCompleteness = (p) => {
-  let score = (Array.isArray(p.models) ? p.models.length : 0) * 100
-  for (const k of ['baseUrl', 'apiKey', 'protocol', 'model']) if (p[k]) score += 1
-  for (const k of Object.keys(p)) if (!KNOWN_PROVIDER_FIELDS.includes(k)) score += 1
-  return score
-}
-
-// 同名 provider 在两边都存在时：以最完整的那条为基准，缺失/空字段用另一条补（含未识别扩展字段），
-// 模型取并集（基准侧在前）
-const mergeProviderVariants = (variants) => {
-  let base = variants[0]
-  for (const p of variants) if (providerCompleteness(p) > providerCompleteness(base)) base = p
-  const merged = JSON.parse(JSON.stringify(base))
-  for (const p of variants) {
-    for (const [k, v] of Object.entries(p)) {
-      if (merged[k] === undefined || merged[k] === '') {
-        if (v !== undefined && v !== '') merged[k] = JSON.parse(JSON.stringify(v))
-      }
-    }
+// 读取并同步：比较两个 settings.json 的编辑时间，最新的 providers 表整体为准；
+// 不一致时只把基准的 providers 字段写进另一边（其余顶层字段原样保留）。
+// 以 mtime 判定而非字段级合并：单边在 Qoder 内的删除/改名也能正确传播（不会被另一边复活）。
+const loadMergedTable = () => {
+  const docs = {}
+  const mtimes = {}
+  for (const ed of EDITIONS) {
+    if (!fs.existsSync(editionConfigPath(ed))) continue
+    docs[ed.id] = readEditionDoc(ed)
+    try { mtimes[ed.id] = fs.statSync(editionConfigPath(ed)).mtimeMs } catch { mtimes[ed.id] = 0 }
   }
-  const models = Array.isArray(merged.models) ? merged.models : []
-  const seen = new Set(models.map(modelIdOf))
-  for (const p of variants) {
-    for (const m of (Array.isArray(p.models) ? p.models : [])) {
-      const id = modelIdOf(m)
-      if (id && !seen.has(id)) {
-        seen.add(id)
-        models.push(JSON.parse(JSON.stringify(m)))
-      }
-    }
+  const present = EDITIONS.filter((ed) => docs[ed.id])
+  if (!present.length) return {}
+
+  // 最新编辑的文件为基准
+  let source = present[0]
+  for (const ed of present) {
+    if ((mtimes[ed.id] || 0) > (mtimes[source.id] || 0)) source = ed
   }
-  merged.models = models
-  if (merged.model && !models.some((m) => modelIdOf(m) === merged.model)) delete merged.model
-  return merged
-}
+  const table = providersOf(docs[source.id])
+  const json = JSON.stringify(sortedProviders(table))
 
-// 两边 providers 是否已与合并结果一致（两侧都按键排序后比较，避免对象键顺序造成假不一致）
-const sortedProviders = (table) => {
-  const out = {}
-  for (const k of Object.keys(table).sort()) out[k] = table[k]
-  return out
-}
-
-const isEditionsSynced = (tables, perEdition) => {
-  const expected = JSON.stringify(sortedProviders(tables))
-  return EDITIONS.every(
-    (ed) => JSON.stringify(sortedProviders(perEdition[ed.id] || {})) === expected
-  )
+  // 同步其余版本：仅替换 providers 字段；目录缺失则创建（文件只含 providers）
+  for (const ed of EDITIONS) {
+    if (ed.id === source.id) continue
+    if (docs[ed.id] && JSON.stringify(sortedProviders(providersOf(docs[ed.id]))) === json) continue
+    const doc = docs[ed.id] || {}
+    doc.providers = JSON.parse(json)
+    fs.mkdirSync(editionHome(ed), { recursive: true })
+    fs.writeFileSync(editionConfigPath(ed), JSON.stringify(doc, null, 2), { encoding: 'utf-8' })
+  }
+  return table
 }
 
 // 写回全部版本：文件不存在则创建目录与文件，存在则只替换 providers 字段
@@ -249,17 +220,10 @@ const commitTable = (table) => {
   return true
 }
 
-// 读取即同步：发现两边不一致（含某版本目录缺失）就把合并结果写回全部版本
-const loadTableAndSync = () => {
-  const { tables, perEdition } = loadMergedTable()
-  if (!isEditionsSynced(tables, perEdition)) commitTable(tables)
-  return tables
-}
-
 // ==================== Providers ====================
 
 const getQoderProviderList = () => {
-  const table = loadTableAndSync()
+  const table = loadMergedTable()
   return Object.entries(table).map(([id, p]) => normalizeProvider(id, p))
 }
 
@@ -303,7 +267,8 @@ const updateQoderProvider = (id, updates) => {
 
 const deleteQoderProvider = (id) => {
   const table = loadMergedTable()
-  if (!table[id]) throw new Error(`Provider ${id} 不存在`)
+  // 幂等：可能刚在 Qoder 内被删除/改名（同步已吸收），不视为错误
+  if (!table[id]) return true
   delete table[id]
   commitTable(table)
   return true
