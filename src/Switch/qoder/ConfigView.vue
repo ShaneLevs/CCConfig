@@ -1,8 +1,6 @@
 <script setup>
-// Qoder 模型配置页：国际版 ~/.qoder 与 国内版 ~/.qoder-cn 的 settings.json
+// Qoder 模型配置页：~/.qoder/settings.json
 // 管理 providers 表（第三方 openai-compatible 供应商 CRUD + 模型 CRUD + 默认模型 provider.model）。
-// 两个版本的 providers 由服务层强制保持一致：读取即合并、不一致即写回全部目录（缺失目录会创建），
-// 因此这里是单一合并列表，不按版本切换；卡片上的版本标记表示本次读取时该供应商出现在哪一版本。
 // 风格与 MiniMax 配置页一致：供应商手风琴 + 模型标签（星标设默认）。
 import { ref, computed, onMounted } from "vue";
 import {
@@ -28,28 +26,8 @@ const loading = ref(false);
 const warningMsg = ref("");
 const providers = ref([]);
 const expandedList = ref([]);
-// 两个版本的落盘状态（同步前快照）+ 本次读取补齐了哪些 provider
-const editions = ref([]);
-const syncedIds = ref([]);
 
 const isDefaultProvider = (p) => !!p.model && p.models.some((m) => m.model === p.model);
-
-const editionName = (id) => editions.value.find((e) => e.id === id)?.label || id;
-
-// 卡片版本标记：两边都有 = 「两边」；仅某一版本发现 = 该版本 + 已补齐（另一侧本次写入）
-const editionTag = (p) => {
-  const ids = p.editions || [];
-  const total = editions.value.length || 2;
-  if (!ids.length || ids.length >= total) return { label: "两边", theme: "default" };
-  return { label: `${ids.map(editionName).join("/")} · 已补齐`, theme: "warning" };
-};
-
-// 工具栏版本状态：目录缺失 / 与另一边不一致 / 一致
-const editionStateText = (ed) => {
-  if (!ed.installed) return syncedIds.value.length ? "本次新建" : "未检测到";
-  if (ed.providerCount !== providers.value.length) return `原有 ${ed.providerCount} → 已同步 ${providers.value.length}`;
-  return `${ed.providerCount} 个供应商`;
-};
 
 const formatNumber = (n) => {
   if (!n) return "";
@@ -64,10 +42,7 @@ const refresh = () => {
   loading.value = true;
   warningMsg.value = "";
   try {
-    // 先取列表（服务层内部完成合并 + 必要的同步写回），再取同步后的状态快照
     providers.value = window.services.getQoderProviderList() || [];
-    editions.value = window.services.getQoderEditionStatus() || [];
-    syncedIds.value = window.services.getQoderSyncState()?.syncedIds || [];
   } catch (e) {
     console.error("加载 Qoder 配置失败:", e);
     warningMsg.value = e.message || "加载失败";
@@ -76,17 +51,17 @@ const refresh = () => {
   }
 };
 
-const openQoderDir = (editionId) => {
-  try { window.services.openQoderDir(editionId); } catch { /* ignore */ }
+const openQoderDir = () => {
+  try { window.services.openQoderDir(); } catch { /* ignore */ }
 };
 
 // ==================== 弹窗状态 ====================
 
 const addProviderDialog = ref(false);
-const addProviderForm = ref({ id: "", protocol: "anthropic", baseUrl: "", apiKey: "" });
+const addProviderForm = ref({ protocol: "anthropic", baseUrl: "", apiKey: "" });
 const editDialog = ref(false);
 const editingProvider = ref("");
-const editForm = ref({ id: "", protocol: "anthropic", baseUrl: "", apiKey: "" });
+const editForm = ref({ protocol: "anthropic", baseUrl: "", apiKey: "" });
 // 编辑弹窗初始加载的 key，保存时判断是否被用户改动/清空
 const originalApiKey = ref("");
 
@@ -110,14 +85,14 @@ const fetchModelError = ref("");
 // ==================== 供应商 CRUD ====================
 
 const openAddProviderDialog = () => {
-  addProviderForm.value = { id: "", protocol: "anthropic", baseUrl: "", apiKey: "" };
+  addProviderForm.value = { protocol: "anthropic", baseUrl: "", apiKey: "" };
   addProviderDialog.value = true;
 };
 
 const handleAddProvider = () => {
   try {
+    // Provider ID 不由用户输入，服务层按官方规范自动生成 qoder-custom-<uuid>
     window.services.addQoderProvider({
-      id: addProviderForm.value.id.trim(),
       protocol: addProviderForm.value.protocol,
       baseUrl: addProviderForm.value.baseUrl.trim(),
       apiKey: addProviderForm.value.apiKey,
@@ -133,7 +108,6 @@ const handleAddProvider = () => {
 const handleEdit = (provider) => {
   editingProvider.value = provider.id;
   editForm.value = {
-    id: provider.id,
     protocol: provider.protocol || "openai",
     baseUrl: provider.baseUrl || "",
     apiKey: provider.apiKey || "",
@@ -144,10 +118,8 @@ const handleEdit = (provider) => {
 
 const handleSaveProvider = () => {
   try {
-    const newId = String(editForm.value.id || "").trim();
-    if (!newId) { MessagePlugin.warning("请输入 Provider ID"); return; }
+    // 不改 Provider ID（界面不展示也不编辑该键），仅更新协议 / Base URL / API Key
     const payload = {
-      id: newId,
       protocol: editForm.value.protocol,
       baseUrl: editForm.value.baseUrl.trim(),
     };
@@ -155,7 +127,7 @@ const handleSaveProvider = () => {
     if (!editForm.value.apiKey && originalApiKey.value) payload.clearApiKey = true;
     else if (editForm.value.apiKey !== originalApiKey.value) payload.apiKey = editForm.value.apiKey;
     window.services.updateQoderProvider(editingProvider.value, payload);
-    MessagePlugin.success(newId !== editingProvider.value ? `已更新并重命名为 ${newId}` : "Provider 配置已更新");
+    MessagePlugin.success("Provider 配置已更新");
     editDialog.value = false;
     refresh();
   } catch (e) {
@@ -293,19 +265,13 @@ onMounted(refresh);
 
 <template>
   <div class="qoder-config-container">
-    <!-- 顶部工具栏：两个版本的目录与状态 + 操作 -->
+    <!-- 顶部工具栏：路径提示 + 操作 -->
     <div class="qoder-toolbar">
       <div class="qoder-toolbar-left">
-        <div class="qoder-ed-list">
-          <span v-for="ed in editions" :key="ed.id" class="qoder-ed-item">
-            <span class="qoder-ed-label">{{ ed.label }}</span>
-            <Link theme="primary" :underline="true" @click="openQoderDir(ed.id)">{{ ed.dir }}</Link>
-            <span class="qoder-toolbar-sub">{{ editionStateText(ed) }}</span>
-          </span>
-        </div>
-        <div class="qoder-toolbar-sub qoder-ed-hint">
-          providers 两边强制一致，写入会同步到全部版本（缺失目录自动创建）
-        </div>
+        <span class="qoder-toolbar-tip">
+          <Link theme="primary" :underline="true" @click="openQoderDir">~/.qoder/</Link>
+          <span class="qoder-toolbar-sub">settings.json（providers）</span>
+        </span>
       </div>
       <div class="qoder-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddProviderDialog">
@@ -319,17 +285,13 @@ onMounted(refresh);
       </div>
     </div>
 
-    <div v-if="syncedIds.length" class="qoder-sync-notice">
-      <TAlert :message="`检测到两边不一致，已按最全配置同步：${syncedIds.join('、')}`" theme="info" show-icon />
-    </div>
-
     <div v-if="warningMsg" class="qoder-config-warning">
       <TAlert :message="warningMsg" theme="warning" show-icon />
     </div>
 
     <template v-if="!loading">
       <div v-if="providers.length === 0" class="qoder-config-empty">
-        <Empty description="未检测到 Qoder 自定义供应商；可在 Qoder 内添加，或在此手动添加（写入会同步到两个版本）" />
+        <Empty description="未检测到 Qoder 自定义供应商；可在 Qoder 内添加，或在此手动添加" />
       </div>
 
       <div v-else class="qoder-provider-list">
@@ -337,8 +299,7 @@ onMounted(refresh);
           <CollapsePanel v-for="p in providers" :key="p.id" :value="p.id">
               <template #header>
                 <div class="qoder-provider-header-left">
-                  <span class="qoder-provider-name">{{ p.id }}</span>
-                  <Tag size="small" :theme="editionTag(p).theme" variant="light">{{ editionTag(p).label }}</Tag>
+                  <span class="qoder-provider-name">{{ p.baseUrl || "未配置 Base URL" }}</span>
                   <Tag size="small" variant="outline">{{ p.protocol }}</Tag>
                   <Tag v-if="isDefaultProvider(p)" size="small" theme="warning" variant="light">默认 {{ p.model }}</Tag>
                   <span class="qoder-model-count">{{ p.models.length }} 个模型</span>
@@ -351,7 +312,7 @@ onMounted(refresh);
                   </Button>
                   <Tooltip content="删除供应商（其模型一并删除）">
                     <Popconfirm
-                      :content="`删除 Provider ${p.id}？其模型与 apiKey 将从两个版本的 settings.json 一并移除`"
+                      content="删除该 Provider？其模型与 apiKey 将一并从 settings.json 移除"
                       theme="danger"
                       @confirm="handleDeleteProvider(p.id)"
                     >
@@ -418,32 +379,24 @@ onMounted(refresh);
     <Dialog v-model:visible="addProviderDialog" header="添加供应商" width="520px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
       <div class="qoder-edit-form">
         <div class="qoder-form-item">
-          <label>Provider ID</label>
-          <Input v-model="addProviderForm.id" placeholder="留空自动生成 qoder-custom-<uuid>" />
-          <div class="qoder-form-hint">providers 表键；Qoder 官方生成的键为 qoder-custom-&lt;uuid&gt; 形态</div>
-        </div>
-        <div class="qoder-form-item">
           <label>协议（protocol）</label>
           <Select v-model="addProviderForm.protocol" :options="protocolOptions" />
         </div>
         <div class="qoder-form-item">
-          <label>Base URL</label>
+          <label>Base URL <span class="qoder-form-required">*</span></label>
           <Input v-model="addProviderForm.baseUrl" placeholder="https://api.example.com" />
         </div>
         <div class="qoder-form-item">
           <label>API Key</label>
           <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="明文写入 settings.json apiKey" />
         </div>
+        <div class="qoder-form-hint">Provider ID 将按官方规范自动生成（qoder-custom-&lt;uuid&gt;）</div>
       </div>
     </Dialog>
 
     <!-- 编辑供应商弹窗 -->
     <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="520px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="qoder-edit-form">
-        <div class="qoder-form-item">
-          <label>Provider ID <span class="qoder-form-required">*</span></label>
-          <Input v-model="editForm.id" />
-        </div>
         <div class="qoder-form-item">
           <label>协议（protocol）</label>
           <Select v-model="editForm.protocol" :options="protocolOptions" />
@@ -504,7 +457,7 @@ onMounted(refresh);
             <Select v-model="addModelForm.effortLevels" multiple :options="effortOptions" placeholder="不选 = 不声明档位" clearable />
           </div>
         </template>
-        <div class="qoder-form-hint">供应商：{{ addModelProvider }}</div>
+        <div class="qoder-form-hint">供应商：{{ providers.find((x) => x.id === addModelProvider)?.baseUrl || addModelProvider }}</div>
       </div>
     </Dialog>
 

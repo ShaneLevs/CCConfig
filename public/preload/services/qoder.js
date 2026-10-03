@@ -2,8 +2,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 
-// Qoder（AI IDE）有两个发行版，配置文件结构完全一致、只有家目录不同：
-//   国际版 ~/.qoder/settings.json、国内版 ~/.qoder-cn/settings.json
+// Qoder（AI IDE）的两个发行版配置文件结构完全一致、只有家目录不同：
+//   ~/.qoder/settings.json 与 ~/.qoder-cn/settings.json
 // 本服务把两边当成同一张 providers 表管理：每次读取先合并，发现两边不一致就立刻写回全部目录
 //（缺失的目录会创建），保证 provider 设置两边一模一样。
 // providers.<providerId> — {
@@ -17,11 +17,9 @@ const os = require('node:os')
 // 各文件除 providers 外的顶层字段（enabledPlugins 等）读改写原样保留（同 kimi / minimax 纪律）。
 
 const EDITIONS = [
-  { id: 'intl', label: '国际版', dirName: '.qoder' },
-  { id: 'cn', label: '国内版', dirName: '.qoder-cn' },
+  { id: 'intl', dirName: '.qoder' },
+  { id: 'cn', dirName: '.qoder-cn' },
 ]
-const ALL_EDITION_IDS = EDITIONS.map((e) => e.id)
-
 const editionHome = (ed) => path.join(os.homedir(), ed.dirName)
 const editionConfigPath = (ed) => path.join(editionHome(ed), 'settings.json')
 const editionOf = (id) => EDITIONS.find((e) => e.id === id)
@@ -36,10 +34,10 @@ const readEditionDoc = (ed) => {
   try {
     doc = JSON.parse(raw)
   } catch (e) {
-    throw new Error(`${ed.label} ${p} 解析失败，已阻止修改与同步（请先修复 JSON 语法）: ${e.message}`)
+    throw new Error(`${p} 解析失败，已阻止修改与同步（请先修复 JSON 语法）: ${e.message}`)
   }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    throw new Error(`${ed.label} ${p} 顶层不是 JSON 对象，已阻止修改与同步`)
+    throw new Error(`${p} 顶层不是 JSON 对象，已阻止修改与同步`)
   }
   return doc
 }
@@ -167,11 +165,24 @@ const buildProviderJson = (cfg) => {
 
 // ==================== 跨版本合并 / 同步写回 ====================
 
-// 本次读取的快照：perEdition = 各版本同步前的 providers 原样，
-// sources = 各 provider 同步前存在于哪些版本（UI 版本标记用），
-// exists = 同步前各版本家目录是否已存在，preCounts = 同步前各版本的 provider 数，
-// syncedIds = 本次写回时被补齐的键
-const snapshot = { perEdition: {}, sources: {}, tables: {}, exists: {}, preCounts: {}, syncedIds: [] }
+// 读取合并后的 providers 表：perEdition 记录各版本同步前的原始表（一致性比较用）
+const loadMergedTable = () => {
+  const variants = {}
+  const perEdition = {}
+  for (const ed of EDITIONS) {
+    const doc = readEditionDoc(ed)
+    const table = doc ? providersOf(doc) : {}
+    perEdition[ed.id] = table
+    for (const [id, p] of Object.entries(table)) {
+      if (!p || typeof p !== 'object' || Array.isArray(p)) continue
+      ;(variants[id] ||= []).push(p)
+    }
+  }
+  const tables = {}
+  // 键排序：写回顺序稳定，读取顺序与文件顺序一致（避免列表次序在刷新间跳动）
+  for (const id of Object.keys(variants).sort()) tables[id] = mergeProviderVariants(variants[id])
+  return { tables, perEdition }
+}
 
 const modelIdOf = (m) => (m && typeof m.model === 'string' ? m.model : '')
 
@@ -212,33 +223,6 @@ const mergeProviderVariants = (variants) => {
   return merged
 }
 
-const loadMergedTable = () => {
-  const variants = {}
-  const sources = {}
-  const perEdition = {}
-  for (const ed of EDITIONS) {
-    snapshot.exists[ed.id] = fs.existsSync(editionHome(ed))
-    const doc = readEditionDoc(ed)
-    const table = doc ? providersOf(doc) : {}
-    perEdition[ed.id] = table
-    for (const [id, p] of Object.entries(table)) {
-      if (!p || typeof p !== 'object' || Array.isArray(p)) continue
-      ;(variants[id] ||= []).push(p)
-      ;(sources[id] ||= []).push(ed.id)
-    }
-  }
-  const tables = {}
-  // 键排序：写回顺序稳定，读取顺序与文件顺序一致（避免列表次序在刷新间跳动）
-  for (const id of Object.keys(variants).sort()) tables[id] = mergeProviderVariants(variants[id])
-  snapshot.perEdition = perEdition
-  snapshot.sources = sources
-  snapshot.tables = tables
-  snapshot.preCounts = Object.fromEntries(
-    EDITIONS.map((ed) => [ed.id, Object.keys(perEdition[ed.id]).length])
-  )
-  return tables
-}
-
 // 两边 providers 是否已与合并结果一致（两侧都按键排序后比较，避免对象键顺序造成假不一致）
 const sortedProviders = (table) => {
   const out = {}
@@ -246,10 +230,10 @@ const sortedProviders = (table) => {
   return out
 }
 
-const isEditionsSynced = () => {
-  const expected = JSON.stringify(sortedProviders(snapshot.tables))
+const isEditionsSynced = (tables, perEdition) => {
+  const expected = JSON.stringify(sortedProviders(tables))
   return EDITIONS.every(
-    (ed) => JSON.stringify(sortedProviders(snapshot.perEdition[ed.id] || {})) === expected
+    (ed) => JSON.stringify(sortedProviders(perEdition[ed.id] || {})) === expected
   )
 }
 
@@ -261,59 +245,22 @@ const commitTable = (table) => {
     doc.providers = JSON.parse(json)
     fs.mkdirSync(editionHome(ed), { recursive: true })
     fs.writeFileSync(editionConfigPath(ed), JSON.stringify(doc, null, 2), { encoding: 'utf-8' })
-    snapshot.perEdition[ed.id] = doc.providers
   }
-  snapshot.tables = table
   return true
 }
 
 // 读取即同步：发现两边不一致（含某版本目录缺失）就把合并结果写回全部版本
 const loadTableAndSync = () => {
-  const table = loadMergedTable()
-  if (!isEditionsSynced()) {
-    snapshot.syncedIds = ALL_EDITION_IDS.reduce(
-      (acc, edId) => {
-        for (const [id, eds] of Object.entries(snapshot.sources)) {
-          if (!eds.includes(edId) && !acc.includes(id)) acc.push(id)
-        }
-        return acc
-      },
-      []
-    )
-    commitTable(table)
-  } else {
-    snapshot.syncedIds = []
-  }
-  return table
+  const { tables, perEdition } = loadMergedTable()
+  if (!isEditionsSynced(tables, perEdition)) commitTable(tables)
+  return tables
 }
-
-// ==================== 版本状态（UI 用） ====================
-
-const getQoderEditionStatus = () =>
-  EDITIONS.map((ed) => ({
-    id: ed.id,
-    label: ed.label,
-    dir: `~/${ed.dirName}`,
-    homePath: editionHome(ed),
-    // 同步前该版本目录是否已存在（不存在但本次写了文件 = 新建并同步）
-    installed: snapshot.exists[ed.id] === undefined
-      ? fs.existsSync(editionHome(ed))
-      : snapshot.exists[ed.id],
-    // 本次读取（同步前）该版本已有的 provider 数
-    providerCount: snapshot.preCounts[ed.id] || 0,
-  }))
-
-// 本次读取是否发生了自动同步，以及被补齐到缺失版本的 provider 键
-const getQoderSyncState = () => ({ syncedIds: [...snapshot.syncedIds] })
 
 // ==================== Providers ====================
 
 const getQoderProviderList = () => {
   const table = loadTableAndSync()
-  return Object.entries(table).map(([id, p]) => ({
-    ...normalizeProvider(id, p),
-    editions: snapshot.sources[id] || ALL_EDITION_IDS,
-  }))
+  return Object.entries(table).map(([id, p]) => normalizeProvider(id, p))
 }
 
 // 新建 provider：沿用 Qoder 官方命名 qoder-custom-<uuid>（实测 settings.json 键形态）
@@ -543,8 +490,7 @@ const crypto = {
 }
 
 module.exports = {
-  EDITIONS,
-  getQoderEditionStatus, getQoderSyncState, hasQoderProviders,
+  hasQoderProviders,
   getQoderProviderList, addQoderProvider, updateQoderProvider, deleteQoderProvider,
   upsertQoderProvider, providerKeyFor,
   addQoderModel, updateQoderModel, deleteQoderModel, upsertQoderModel,

@@ -1,19 +1,13 @@
 .qoder-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
 
 /* ===== 顶部工具栏 ===== */
-.qoder-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.qoder-toolbar { display: flex; justify-content: space-between; align-items: center; }
 .qoder-toolbar-left { min-width: 0; flex: 1; }
+.qoder-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
 .qoder-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
-.qoder-toolbar-right { display: flex; gap: 4px; flex-shrink: 0; }
-
-/* 国际版 / 国内版两个落点 */
-.qoder-ed-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.qoder-ed-item { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
-.qoder-ed-label { font-size: 12px; color: var(--td-text-color-secondary); }
-.qoder-ed-hint { margin-top: 3px; }
+.qoder-toolbar-right { display: flex; gap: 4px; }
 
 .qoder-config-warning { margin-bottom: 0; }
-.qoder-sync-notice { margin-bottom: 0; }
 .qoder-config-empty { margin-top: 32px; }
 
 /* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
