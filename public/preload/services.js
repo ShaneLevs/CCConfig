@@ -2045,8 +2045,10 @@ window.services = {
   openKimiDir: kimi.openKimiDir,
   isKimiInstalled: kimi.isKimiInstalled,
 
-  // ==================== Qoder（~/.qoder/settings.json，仅模型配置） ====================
-  getQoderConfigPath: qoder.getQoderConfigPath,
+  // ==================== Qoder（~/.qoder 与 ~/.qoder-cn 的 settings.json，仅模型配置） ====================
+  QODER_EDITIONS: qoder.EDITIONS,
+  getQoderEditionStatus: qoder.getQoderEditionStatus,
+  getQoderSyncState: qoder.getQoderSyncState,
   getQoderProviderList: qoder.getQoderProviderList,
   addQoderProvider: qoder.addQoderProvider,
   updateQoderProvider: qoder.updateQoderProvider,
@@ -2151,12 +2153,9 @@ window.services = {
     } catch (e) {
       /* ignore */
     }
-    // qoder：settings.json 有自定义 providers
+    // qoder：国际版 / 国内版任一 settings.json 有自定义 providers
     try {
-      const cfg = qoder.readQoderConfig();
-      hasData.qoder = !!(
-        cfg && Object.keys(cfg.providers || {}).length > 0
-      );
+      hasData.qoder = qoder.hasQoderProviders();
     } catch (e) {
       /* ignore */
     }
