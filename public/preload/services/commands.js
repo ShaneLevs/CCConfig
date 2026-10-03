@@ -20,13 +20,13 @@ const FEATURE_DEFINITIONS = {
   claudeConfig: {
     code: "claudeConfig",
     explain: "Claude Code 配置管理工具",
-    icon: "claudecode.png",
+    icon: "icon-claude.png",
     cmds: ["Claude Code配置"],
   },
   installClaudeSkill: {
     code: "installClaudeSkill",
     explain: "从 SkillHub/魔搭社区 安装 Claude Code Skill",
-    icon: "claudecode.png",
+    icon: "icon-claude.png",
     cmds: [
       {
         type: "regex",
@@ -80,13 +80,13 @@ const FEATURE_DEFINITIONS = {
   ompConfig: {
     code: "ompConfig",
     explain: "omp CLI 配置管理工具",
-    icon: "omp-icon.svg",
+    icon: "icon-omp.svg",
     cmds: ["omp配置"],
   },
   reasonixConfig: {
     code: "reasonixConfig",
     explain: "Reasonix 配置管理工具",
-    icon: "reasonix.svg",
+    icon: "icon-reasonix.svg",
     cmds: ["Reasonix配置"],
   },
   codexConfig: {
@@ -98,19 +98,19 @@ const FEATURE_DEFINITIONS = {
   kimiConfig: {
     code: "kimiConfig",
     explain: "Kimi Code 模型配置管理工具",
-    icon: "kimi.svg",
+    icon: "icon-kimi.svg",
     cmds: ["Kimi Code配置"],
   },
   minimaxConfig: {
     code: "minimaxConfig",
     explain: "MiniMax Code 模型配置管理工具（CLI / Desktop）",
-    icon: "minimax.svg",
+    icon: "icon-minimax.svg",
     cmds: ["MiniMax Code配置"],
   },
   qoderConfig: {
     code: "qoderConfig",
     explain: "Qoder 模型配置管理工具",
-    icon: "icon-qoder.svg",
+    icon: "icon-qoder.png",
     cmds: ["Qoder配置"],
   },
 };
