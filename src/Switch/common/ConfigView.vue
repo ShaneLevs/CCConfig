@@ -2,10 +2,10 @@
 
 import { ref, computed, onMounted, watch, h } from "vue";
 import {
-  Empty, Button, Tag, Space, Tooltip, Dialog, Input, InputNumber, MessagePlugin, Popconfirm, Alert as TAlert, Select, Switch, CheckboxGroup, Checkbox, Collapse, CollapsePanel, AutoComplete, Cascader, Table,
+  Empty, Button, Tag, Space, Tooltip, Dialog, Input, InputNumber, MessagePlugin, Popconfirm, Alert as TAlert, Select, Switch, CheckboxGroup, Checkbox, Collapse, CollapsePanel, AutoComplete, Cascader, Table, Textarea,
 } from "tdesign-vue-next";
 import {
-  RefreshIcon, EditIcon, AddIcon, DeleteIcon, SendIcon,
+  RefreshIcon, EditIcon, AddIcon, DeleteIcon, SendIcon, DownloadIcon, UploadIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
@@ -679,6 +679,54 @@ const refresh = () => {
   setTimeout(() => { loadProviders(); loading.value = false; }, 50);
 };
 
+const copyText = (text) => {
+  window.utools.copyText(text);
+  MessagePlugin.success('已复制');
+};
+
+// ==================== 导入 / 导出（与 Claude Code 配置页同一套压缩 + 混淆字符串机制） ====================
+const showImportDialog = ref(false);
+const importString = ref("");
+
+const handleExport = () => {
+  if (!providers.value.length) return MessagePlugin.warning("没有可导出的供应商");
+  window.utools.copyText(window.services.encryptString(window.services.compressConfigs(providers.value)));
+  MessagePlugin.success("通用库已复制到剪贴板");
+};
+
+const openImportDialog = () => { importString.value = ""; showImportDialog.value = true; };
+
+const handleImport = () => {
+  const str = importString.value.trim();
+  if (!str) return MessagePlugin.warning("请输入通用库字符串");
+  const list = window.services.decompressConfigs(window.services.decryptString(str));
+  if (!list || !Array.isArray(list)) return MessagePlugin.error("通用库字符串格式不正确");
+  let ok = 0, skip = 0, fail = 0;
+  for (const p of list) {
+    if (!p || !p.name) { fail++; continue; }
+    try {
+      window.services.addCommonProvider({
+        name: p.name,
+        apiKey: p.apiKey || "",
+        baseUrl: p.baseUrl || "",
+        api: p.api || "openai-completions",
+        headers: p.headers || {},
+        authHeader: p.authHeader !== undefined ? p.authHeader : true,
+        models: Array.isArray(p.models) ? p.models : [],
+      });
+      ok++;
+    } catch (e) {
+      if ((e.message || "").includes("已存在")) skip++; else fail++;
+    }
+  }
+  loadProviders();
+  showImportDialog.value = false;
+  if (ok > 0 && skip === 0 && fail === 0) MessagePlugin.success(`成功导入 ${ok} 个供应商`);
+  else if (ok > 0) MessagePlugin.warning(`成功导入 ${ok} 个，跳过 ${skip} 个已存在，失败 ${fail} 个`);
+  else if (skip > 0) MessagePlugin.warning(`全部 ${skip} 个供应商已存在，未导入`);
+  else MessagePlugin.error("导入失败");
+};
+
 onMounted(refresh);
 </script>
 
@@ -686,9 +734,15 @@ onMounted(refresh);
   <div class="common-config-container">
     <div class="common-config-header">
       <span class="common-config-tip">
-        通用供应商与模型库（存 uTools DB）— 维护一份主数据，后续可下发到各 agent
+        供应商与模型主数据，可一键下发到各 agent
       </span>
       <div class="common-config-actions">
+        <Button size="small" variant="outline" @click="handleExport">
+          <template #icon><DownloadIcon /></template> 导出
+        </Button>
+        <Button size="small" variant="outline" @click="openImportDialog">
+          <template #icon><UploadIcon /></template> 导入
+        </Button>
         <Tooltip content="把通用库的供应商与模型写入各 agent 的模型配置" placement="top">
           <Button size="small" variant="outline" @click="openDispatchDialog()">
             <template #icon><SendIcon /></template> 下发到 Agent
@@ -746,11 +800,13 @@ onMounted(refresh);
           <div class="common-provider-info">
             <div class="common-info-row">
               <span class="common-info-label">API Key</span>
-              <span class="common-info-value mono">{{ prov.apiKey ? prov.apiKey.slice(0, 8) + '...' + prov.apiKey.slice(-4) : '未设置' }}</span>
+              <span v-if="prov.apiKey" class="common-info-value mono common-copyable" title="点击复制" @click="copyText(prov.apiKey)">{{ prov.apiKey.slice(0, 8) + '...' + prov.apiKey.slice(-4) }}</span>
+              <span v-else class="common-info-value mono">未设置</span>
             </div>
             <div class="common-info-row">
               <span class="common-info-label">Base URL</span>
-              <span class="common-info-value mono">{{ prov.baseUrl || '默认' }}</span>
+              <span v-if="prov.baseUrl" class="common-info-value mono common-copyable" title="点击复制" @click="copyText(prov.baseUrl)">{{ prov.baseUrl }}</span>
+              <span v-else class="common-info-value mono">默认</span>
             </div>
           </div>
 
@@ -768,7 +824,7 @@ onMounted(refresh);
             </div>
             <div class="common-model-item" v-for="m in prov.models" :key="m.id">
               <div class="common-model-info">
-                <span class="common-model-name">{{ m.name || m.id }}</span>
+                <span class="common-model-name common-copyable" title="点击复制" @click="copyText(m.id)">{{ m.name || m.id }}</span>
                 <Tag v-if="m.reasoning" size="small" theme="warning" variant="light">推理</Tag>
               </div>
               <div class="common-model-meta">
@@ -1172,6 +1228,21 @@ onMounted(refresh);
             </label>
           </CheckboxGroup>
           <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）</div>
+        </div>
+      </div>
+    </Dialog>
+
+    <Dialog v-model:visible="showImportDialog" header="导入通用库" @confirm="handleImport" width="480px">
+      <div class="common-edit-form">
+        <div class="common-form-item">
+          <label>通用库字符串</label>
+          <Textarea
+            v-if="showImportDialog"
+            v-model="importString"
+            placeholder="粘贴导出的通用库字符串"
+            :autosize="{ minRows: 4, maxRows: 8 }"
+          />
+          <div class="common-form-hint">同名供应商会跳过，其余自动合并导入（含模型与 API Key）</div>
         </div>
       </div>
     </Dialog>

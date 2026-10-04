@@ -39,6 +39,10 @@
 }
 .common-model-meta { display: flex; gap: 12px; font-size: 12px; color: var(--td-text-color-secondary); }
 .common-model-stat { white-space: nowrap; }
+/* 点击复制（API Key / Base URL / 模型 ID） */
+.common-copyable { cursor: pointer; border-radius: 3px; padding: 0 2px; transition: background 0.15s; }
+.common-copyable:hover { background: var(--td-brand-color-1); }
+.common-copyable:active { opacity: 0.7; }
 .common-model-actions {
   margin-left: auto;
   display: flex;
