@@ -534,6 +534,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Kimi Code", value: "kimi" },
   { label: "MiniMax Code", value: "minimax" },
   { label: "Qoder", value: "qoder" },
+  { label: "ZCode", value: "zcode" },
 ];
 
 // 供应商 + 模型合并为一个级联选择器：按供应商分组，value 用 "供应商::模型ID" 区分同名；
@@ -610,6 +611,21 @@ const qoderDispatchDisabled = computed(() => {
 });
 watch(qoderDispatchDisabled, (disabled) => {
   if (disabled) dispatchTargets.value = dispatchTargets.value.filter((t) => t !== "qoder");
+});
+
+// ZCode 支持 Anthropic Messages / OpenAI Chat / Responses 协议：所选供应商全部不适用时禁用
+const zcodeDispatchDisabled = computed(() => {
+  const names = new Set(dispatchModelKeys.value.map((k) => k.split("::")[0]));
+  const selected = providers.value.filter((p) => names.has(p.name));
+  return (
+    selected.length > 0 &&
+    !selected.some((p) =>
+      ["openai-completions", "openai-responses", "anthropic-messages"].includes(p.api || "openai-completions")
+    )
+  );
+});
+watch(zcodeDispatchDisabled, (disabled) => {
+  if (disabled) dispatchTargets.value = dispatchTargets.value.filter((t) => t !== "zcode");
 });
 
 const openDispatchDialog = (providerName = "", modelId = "") => {
@@ -1224,10 +1240,13 @@ onMounted(refresh);
               <Tooltip v-else-if="opt.value === 'qoder'" content="仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 Qoder；中文供应商名会自动清洗为 ASCII 供应商键">
                 <Checkbox :value="opt.value" :disabled="qoderDispatchDisabled" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
               </Tooltip>
+              <Tooltip v-else-if="opt.value === 'zcode'" content="仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 ZCode；供应商名会按 ZCode 规则清洗为小写 ID">
+                <Checkbox :value="opt.value" :disabled="zcodeDispatchDisabled" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
+              </Tooltip>
               <Checkbox v-else :value="opt.value" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
             </label>
           </CheckboxGroup>
-          <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）</div>
+          <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）；ZCode → ~/.zcode/v2/provider_config.json（自定义模型，ID 按 ZCode 规则清洗）</div>
         </div>
       </div>
     </Dialog>

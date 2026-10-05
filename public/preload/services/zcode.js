@@ -462,6 +462,97 @@ const setZcodeDefaultModel = (providerId, modelId) => {
   return true
 }
 
+// ==================== 下发用 upsert（dispatch.js 调用，语义同 qoder.upsert*） ====================
+
+// 通用库供应商名可能是中文/任意符号，而 ZCode providerId 只由小写字母/数字/中划线构成，
+// 需确定性清洗（同一下发名永远得到同一 ID → upsert 幂等）：合法名原样用；
+// 否则取 ASCII 骨架 + 原名稳定哈希防碰撞（纯中文名直接 slugify 会都落到 new-provider 互相覆盖）
+const PROVIDER_ID_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/
+const hashName = (s) => {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
+  return h.toString(36)
+}
+const providerIdFor = (name) => {
+  const raw = String(name || '').trim()
+  if (PROVIDER_ID_RE.test(raw)) return raw
+  const base = raw.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'provider'
+  return `${base}-${hashName(raw)}`
+}
+
+// 存在则合并更新（空值不覆盖既有 name/apiType/baseUrl/apiKey），否则创建
+//（group 与 ZCode 原生个人供应商一致 standard-personal，并追加进 providerOrder 尾部）
+const upsertZcodeProvider = (id, cfg) => {
+  const pid = String(id || '').trim()
+  if (!pid) throw new Error('Provider ID 不能为空')
+  assertApiType(cfg.apiType)
+  const doc = readOrCreate()
+  const cfgNode = configOf(doc)
+  const rules = cfgNode.providerConfigRules.providerRules
+  const rule = findProviderRule(cfgNode, pid)
+  if (rule) {
+    const norm = normalizeProvider(rule, cfgNode.modelConfigRules.providerModelRules, 0)
+    const merged = {
+      ...norm,
+      name: String(cfg.name || '').trim() || norm.name,
+      apiType: cfg.apiType || norm.apiType,
+      baseUrl: String(cfg.baseUrl || '').trim() || norm.baseUrl,
+      apiKey: String(cfg.apiKey || '').trim() || norm.apiKey,
+      id: pid,
+      models: norm.models, // 供应商 upsert 不动模型
+    }
+    rules[rules.indexOf(rule)] = buildProviderRule(merged)
+  } else {
+    rules.push(buildProviderRule({
+      id: pid,
+      name: String(cfg.name || '').trim(),
+      accessType: 'api-key',
+      apiKey: String(cfg.apiKey || '').trim(),
+      apiType: cfg.apiType || 'anthropic-messages',
+      baseUrl: String(cfg.baseUrl || '').trim(),
+      models: [],
+      _extra: { cfgExtra: { group: 'standard-personal' } },
+    }))
+    if (!cfgNode.providerOrder.includes(pid)) cfgNode.providerOrder.push(pid)
+  }
+  commit(doc)
+  return true
+}
+
+// 模型已存在时只刷新传入的受管字段（上下文/最大输出/输入模态，未传或为假保留既有值），不存在则新建；
+// 追加进 personalModelIds 与 modelOrder 尾部（不打乱既有顺序）；返回模型 ID
+const upsertZcodeModel = (providerId, modelId, opts = {}) => {
+  const id = String(modelId || '').trim()
+  if (!id) throw new Error('模型 ID 不能为空')
+  const doc = readOrCreate()
+  const cfg = configOf(doc)
+  const rule = findProviderRule(cfg, providerId)
+  if (!rule) throw new Error(`Provider ${providerId} 不存在`)
+  const { personalIds, order } = orderArraysOf(rule)
+  const modelRule = findModelRule(cfg.modelConfigRules.providerModelRules, providerId, id)
+  const merged = modelRule
+    ? normalizeModel(cfg.modelConfigRules.providerModelRules, providerId, id)
+    : {
+        modelId: id, enabled: true, contextWindow: 0, maxOutputTokens: 0,
+        image: false, video: false, audio: false, pdf: false,
+        jsonSchema: false, webSearch: false, midSystem: false,
+        reasoningLevels: [], _extra: {},
+      }
+  if (Number(opts.contextWindow) > 0) merged.contextWindow = Number(opts.contextWindow)
+  if (Number(opts.maxOutputTokens) > 0) merged.maxOutputTokens = Number(opts.maxOutputTokens)
+  if (opts.image === true) merged.image = true
+  if (opts.video === true) merged.video = true
+  if (opts.audio === true) merged.audio = true
+  if (opts.pdf === true) merged.pdf = true
+  const nextConfig = buildModelRuleConfig(merged)
+  if (modelRule) modelRule.config = nextConfig
+  else cfg.modelConfigRules.providerModelRules.push({ providerId, modelId: id, config: nextConfig })
+  if (!personalIds.includes(id)) personalIds.push(id)
+  if (!order.includes(id)) order.push(id)
+  commit(doc)
+  return id
+}
+
 // ==================== 目录 / 安装检测 ====================
 
 const openZcodeDir = () => {
@@ -493,7 +584,8 @@ module.exports = {
   hasZcodeProviders,
   getZcodeProviderList,
   addZcodeProvider, updateZcodeProvider, deleteZcodeProvider,
-  addZcodeModel, updateZcodeModel, deleteZcodeModel,
+  upsertZcodeProvider, providerIdFor,
+  addZcodeModel, updateZcodeModel, deleteZcodeModel, upsertZcodeModel,
   getZcodeDefaultModel, setZcodeDefaultModel,
   openZcodeDir, openZcodeConfigFile, isZcodeInstalled,
   ZCODE_API_TYPES, ZCODE_ACCESS_TYPES,

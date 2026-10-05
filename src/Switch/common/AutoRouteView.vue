@@ -18,6 +18,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Kimi Code", value: "kimi" },
   { label: "MiniMax Code", value: "minimax" },
   { label: "Qoder", value: "qoder" },
+  { label: "ZCode", value: "zcode" },
 ];
 
 const loading = ref(false);

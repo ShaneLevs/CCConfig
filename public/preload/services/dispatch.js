@@ -9,6 +9,7 @@
 //   kimi     → ~/.kimi-code/config.toml  [providers.<name>] + [models."<name>/<id>"] + default_model（可选默认）
 //   minimax  → ~/.minimax/config.yaml  custom_provider.<key>（API 格式与通用库协议同名）+ models.<id> + defaultModel（可选默认）
 //   qoder    → ~/.qoder/settings.json  providers.<key>（anthropic→anthropic，其余→openai）+ models[] + provider.model（可选默认）
+//   zcode    → ~/.zcode/v2/provider_config.json  providerRules[providerId]（anthropic-messages/openai-chat-completions/openai-responses）+ providerModelRules + providerOrder/modelOrder（可选首选）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -20,6 +21,7 @@ const codex = require('./codex')
 const kimi = require('./kimi')
 const minimax = require('./minimax')
 const qoder = require('./qoder')
+const zcode = require('./zcode')
 const autoroute = require('./autoroute')
 
 // cost 规范化（与 pi/omp 一致：全 0 省略，Pi schema 约定 0 无效）
@@ -385,6 +387,42 @@ const dispatchToQoder = (provider, model, opts) => {
   return `供应商 ${name}${keyNote} 已更新，模型 ${model.id} 已写入${suffix}`
 }
 
+// ZCode：provider_config.json providerRules[providerId] + providerModelRules + 可选首选（providerOrder/modelOrder 置顶）。
+// 协议映射：anthropic-messages / openai-responses 同名，openai-completions → openai-chat-completions，
+// google-generative-ai 不支持需守卫；通用库供应商名可为中文 → providerIdFor 按 ZCode 规则确定性清洗
+const ZCODE_API_TYPE = {
+  'openai-completions': 'openai-chat-completions',
+  'openai-responses': 'openai-responses',
+  'anthropic-messages': 'anthropic-messages',
+}
+
+const dispatchToZcode = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  const apiType = ZCODE_API_TYPE[api]
+  if (!apiType) {
+    throw new Error(`供应商「${provider.name}」协议为 ${api}，ZCode 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+  }
+  const name = opts.providerName || provider.name
+  const id = zcode.providerIdFor(name)
+  zcode.upsertZcodeProvider(id, { name, apiType, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
+  const input = Array.isArray(model.input) ? model.input : []
+  const modelId = zcode.upsertZcodeModel(id, model.id, {
+    contextWindow: model.contextWindow,
+    maxOutputTokens: model.maxTokens,
+    image: input.includes('image'),
+    video: input.includes('video'),
+    audio: input.includes('audio'),
+    pdf: input.includes('pdf'),
+  })
+  let suffix = ''
+  if (opts.setDefault) {
+    zcode.setZcodeDefaultModel(id, modelId)
+    suffix = '，已设为首选模型'
+  }
+  const keyNote = id === name ? '' : `（ID ${id}）`
+  return `供应商 ${name}${keyNote} 已更新，模型 ${modelId} 已写入${suffix}`
+}
+
 // ==================== 自动网关下发 ====================
 
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
@@ -475,14 +513,15 @@ const dispatchAutoRoute = (targets) => {
       continue;
     }
     const isCodex = (t && t.app) === "codex";
-    // kimi openai 类型按 SDK 约定向 base_url 追加 /chat/completions，网关路径需带 /v1（同 Codex）
+    // kimi / zcode 的 openai 类型按 SDK 约定向 baseUrl 追加端点路径，网关路径需带 /v1（同 Codex）
     const isKimi = (t && t.app) === "kimi";
+    const isZcode = (t && t.app) === "zcode";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // codex 走网关的 /v1/responses 入站（Responses 是 Codex 原生 wire_api），base_url 需带 /v1
       api: (t && t.app) === "claude" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
-      baseUrl: isCodex || isKimi ? `${baseUrl}/v1` : baseUrl,
+      baseUrl: isCodex || isKimi || isZcode ? `${baseUrl}/v1` : baseUrl,
       models,
     };
     const targetResults = [];
@@ -513,6 +552,7 @@ const APP_DISPATCHERS = {
   kimi: { run: dispatchToKimi },
   minimax: { run: dispatchToMinimax },
   qoder: { run: dispatchToQoder },
+  zcode: { run: dispatchToZcode },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -546,5 +586,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode,
 }
