@@ -113,6 +113,12 @@ const FEATURE_DEFINITIONS = {
     icon: "icon-qoder.png",
     cmds: ["Qoder配置"],
   },
+  zcodeConfig: {
+    code: "zcodeConfig",
+    explain: "ZCode 模型配置管理工具",
+    icon: "icon-zcode.png",
+    cmds: ["ZCode配置"],
+  },
 };
 
 // 各智能体 → 其启动命令对应的 feature code（同时覆盖「功能指令」与「匹配指令」）。
@@ -127,6 +133,7 @@ const AGENT_FEATURES = {
   kimi: ["kimiConfig"],
   minimax: ["minimaxConfig"],
   qoder: ["qoderConfig"],
+  zcode: ["zcodeConfig"],
 };
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：

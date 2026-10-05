@@ -33,6 +33,7 @@ import CodexConfigView from "./codex/ConfigView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
+import ZcodeConfigView from "./zcode/ConfigView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -47,7 +48,7 @@ const props = defineProps({
   payload: String,
 });
 
-const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isQoder, isCommon } = useAppContext();
+const { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isQoder, isZcode, isCommon } = useAppContext();
 
 // 自动网关开启状态：「网关」tab 按钮右上角绿点标识（AutoRouteView 开关切换时同步）
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
@@ -102,6 +103,7 @@ const appLabel = computed(() => {
   if (isKimi.value) return "Kimi Code";
   if (isMinimax.value) return "MiniMax Code";
   if (isQoder.value) return "Qoder";
+  if (isZcode.value) return "ZCode";
   return "通用";
 });
 
@@ -146,6 +148,9 @@ const pageTitleSuffix = computed(() => {
     qoder: {
       config: "模型配置",
     },
+    zcode: {
+      config: "模型配置",
+    },
     common: {
       config: "配置",
       autoroute: "网关",
@@ -184,7 +189,7 @@ const VISIBLE_AGENTS_DB = (() => {
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
 })();
 const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
-const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder"];
+const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode"];
 const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}icon-claude.png` },
   opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
@@ -195,6 +200,7 @@ const AGENT_META = {
   kimi: { name: "Kimi Code", icon: `${ASSET_BASE}icon-kimi.svg` },
   minimax: { name: "MiniMax Code", icon: `${ASSET_BASE}icon-minimax.svg` },
   qoder: { name: "Qoder", icon: `${ASSET_BASE}icon-qoder.png` },
+  zcode: { name: "ZCode", icon: `${ASSET_BASE}icon-zcode.png` },
 };
 
 // 可见 agent：有记录用记录（缺键默认启用，兼容未来新增 agent），无记录默认全部启用并写库；检测结果只在首次参与，之后不覆盖用户选择
@@ -333,6 +339,7 @@ onMounted(() => {
     kimiConfig: "kimi",
     minimaxConfig: "minimax",
     qoderConfig: "qoder",
+    zcodeConfig: "zcode",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -405,6 +412,7 @@ onMounted(() => {
         <img v-else-if="isKimi" :src="`${ASSET_BASE}icon-kimi.svg`" alt="logo" class="logo" />
         <img v-else-if="isMinimax" :src="`${ASSET_BASE}icon-minimax.svg`" alt="logo" class="logo" />
         <img v-else-if="isQoder" :src="`${ASSET_BASE}icon-qoder.png`" alt="logo" class="logo" />
+        <img v-else-if="isZcode" :src="`${ASSET_BASE}icon-zcode.png`" alt="logo" class="logo" />
         <img v-else-if="isPi" :src="`${ASSET_BASE}icon-pi.png`" alt="logo" class="logo" />
         <img v-else-if="isCommon" :src="`${ASSET_BASE}gen.svg`" alt="logo" class="logo" />
         <Dropdown
@@ -627,6 +635,17 @@ onMounted(() => {
             <template #icon><DashboardIcon /></template> 配置
           </Button>
         </div>
+        <!-- ZCode tabs（仅模型配置） -->
+        <div v-else-if="isZcode" class="tab-buttons">
+          <Button
+            size="small"
+            :theme="activeTab === 'config' ? 'primary' : 'default'"
+            :variant="activeTab === 'config' ? 'base' : 'outline'"
+            @click="activeTab = 'config'"
+          >
+            <template #icon><DashboardIcon /></template> 配置
+          </Button>
+        </div>
         <!-- OpenCode tabs -->
         <div v-else class="tab-buttons">
           <Button
@@ -789,6 +808,11 @@ onMounted(() => {
     <!-- Qoder views（仅模型配置） -->
     <template v-if="isAppReady('qoder')">
       <QoderConfigView v-if="isQoder && activeTab === 'config'" />
+    </template>
+
+    <!-- ZCode views（仅模型配置） -->
+    <template v-if="isAppReady('zcode')">
+      <ZcodeConfigView v-if="isZcode && activeTab === 'config'" />
     </template>
 
     <Dialog

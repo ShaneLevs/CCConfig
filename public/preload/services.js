@@ -13,6 +13,7 @@ const reasonix = require("./services/reasonix");
 const kimi = require("./services/kimi");
 const minimax = require("./services/minimax");
 const qoder = require("./services/qoder");
+const zcode = require("./services/zcode");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -2060,6 +2061,22 @@ window.services = {
   QODER_PROTOCOLS: qoder.PROTOCOL_VALUES,
   QODER_EFFORTS: qoder.EFFORT_VALUES,
 
+  // ==================== ZCode（~/.zcode/v2/provider_config.json，仅自定义模型） ====================
+  getZcodeProviderList: zcode.getZcodeProviderList,
+  addZcodeProvider: zcode.addZcodeProvider,
+  updateZcodeProvider: zcode.updateZcodeProvider,
+  deleteZcodeProvider: zcode.deleteZcodeProvider,
+  addZcodeModel: zcode.addZcodeModel,
+  updateZcodeModel: zcode.updateZcodeModel,
+  deleteZcodeModel: zcode.deleteZcodeModel,
+  getZcodeDefaultModel: zcode.getZcodeDefaultModel,
+  setZcodeDefaultModel: zcode.setZcodeDefaultModel,
+  openZcodeDir: zcode.openZcodeDir,
+  openZcodeConfigFile: zcode.openZcodeConfigFile,
+  isZcodeInstalled: zcode.isZcodeInstalled,
+  ZCODE_API_TYPES: zcode.ZCODE_API_TYPES,
+  ZCODE_ACCESS_TYPES: zcode.ZCODE_ACCESS_TYPES,
+
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
   KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
   KIMI_EFFORTS: kimi.KIMI_EFFORTS,
@@ -2075,6 +2092,7 @@ window.services = {
       codex: false,
       kimi: false,
       qoder: false,
+      zcode: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -2153,6 +2171,12 @@ window.services = {
     // qoder：任一 settings.json 有自定义 providers
     try {
       hasData.qoder = qoder.hasQoderProviders();
+    } catch (e) {
+      /* ignore */
+    }
+    // zcode：provider_config.json 有自定义供应商
+    try {
+      hasData.zcode = zcode.hasZcodeProviders();
     } catch (e) {
       /* ignore */
     }

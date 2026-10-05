@@ -1,0 +1,94 @@
+.zcode-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.zcode-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.zcode-toolbar-left { min-width: 0; flex: 1; }
+.zcode-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.zcode-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.zcode-toolbar-right { display: flex; gap: 4px; }
+
+.zcode-config-warning { margin-bottom: 0; }
+.zcode-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.zcode-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.zcode-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.zcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.zcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.zcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.zcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.zcode-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.zcode-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.zcode-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.zcode-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.zcode-provider-body { padding: 10px 0 4px; }
+.zcode-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.zcode-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.zcode-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.zcode-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* 模型子区（顺序 = ZCode 选择器中的 modelOrder） */
+.zcode-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.zcode-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; }
+.zcode-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.zcode-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.zcode-model-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: var(--td-bg-color-container-hover);
+  border-radius: var(--td-radius-default);
+  border: 1px solid var(--td-border-level-1-color);
+  transition: border-color 0.15s;
+}
+.zcode-model-tag:hover { border-color: var(--td-brand-color); }
+.zcode-model-tag--disabled { opacity: 0.55; }
+.zcode-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
+.zcode-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.zcode-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.zcode-model-tag-star:hover { background: var(--td-warning-color-1); }
+.zcode-model-tag-edit { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.zcode-model-tag-edit:hover { color: var(--td-brand-color); background: var(--td-brand-color-light); }
+.zcode-model-tag-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.zcode-model-tag-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
+
+/* ===== 表单弹窗 ===== */
+.zcode-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.zcode-form-item { display: flex; flex-direction: column; gap: 4px; }
+.zcode-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.zcode-form-item .t-input-number { width: 220px; }
+.zcode-form-item.zcode-form-inline { flex-direction: row; align-items: center; justify-content: space-between; }
+.zcode-form-item.zcode-form-inline label { flex: 1; }
+.zcode-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.zcode-form-required { color: var(--td-error-color); }
+.zcode-fetch-error { color: var(--td-error-color); }
+.zcode-fetch-retry { color: var(--td-brand-color); cursor: pointer; margin-left: 4px; }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* 输入类型 / 模型能力复选框行（勾选态绿色由 main.css 全局规则统一处理） */
+.zcode-chk-row { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 2px 0; }
+
+/* 思考等级编辑器（从低到高的标签 + 输入追加） */
+.zcode-level-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.zcode-level-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--td-text-color-primary);
+  background: var(--td-bg-color-container-hover);
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: var(--td-radius-default);
+}
+.zcode-level-del { cursor: pointer; color: var(--td-text-color-placeholder); font-size: 13px; line-height: 1; }
+.zcode-level-del:hover { color: var(--td-error-color); }
+.zcode-level-input { width: 110px; }

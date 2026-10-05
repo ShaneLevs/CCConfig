@@ -1,10 +1,10 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code** 八个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode** 十个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
 
 ## 功能特性
 
-- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code + 通用配置，各自独立配置，一键切换
+- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode + 通用配置，各自独立配置，一键切换
 - **配置管理** — 读取、保存、切换各应用的 API 配置：
   - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
   - OpenCode：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
@@ -14,6 +14,8 @@
   - Codex：`~/.codex/config.toml` + `~/.codex/models.json` 模型目录（仅管模型字段，其余原样保留）
   - Kimi Code：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
   - MiniMax Code：`~/.minimax/config.yaml`（仅模型配置：custom_provider 第三方供应商/模型 + 顶层 defaultModel，内置 minimax 只读；跟随 MINIMAX_DATA_DIR / MAVIS_DATA_DIR）
+  - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
+  - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动网关（本地模型服务）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
