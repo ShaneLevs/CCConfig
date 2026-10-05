@@ -12,10 +12,10 @@ export function useAutoFetchModels() {
     autoModels.value.map(m => ({ label: m.name || m.id, value: m.id }))
   );
 
-  // prov 需为 { baseUrl, apiKey } 形状的供应商对象
-  const fetchAutoModels = async (prov) => {
+  // prov 需为 { baseUrl, apiKey } 形状的供应商对象；missingMessage 为未配置 Base URL 的提示文案
+  const fetchAutoModels = async (prov, missingMessage = "该供应商未配置 Base URL，无法自动获取") => {
     if (!prov || !prov.baseUrl) {
-      autoModelsError.value = "该供应商未配置 Base URL，无法自动获取";
+      autoModelsError.value = missingMessage;
       return;
     }
     autoModelsLoading.value = true;

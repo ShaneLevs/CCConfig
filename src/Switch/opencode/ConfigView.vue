@@ -3,8 +3,6 @@
 import { ref, onMounted, computed } from "vue";
 import {
   Button,
-  Input,
-  Select,
   Dialog,
   MessagePlugin,
   Tag,
@@ -14,13 +12,7 @@ import {
   Textarea,
   Collapse,
   CollapsePanel,
-  InputNumber,
-  Checkbox,
-  Dropdown,
-  DropdownMenu,
-  DropdownItem,
   Tooltip,
-  AutoComplete,
 } from "tdesign-vue-next";
 import {
   AddIcon,
@@ -30,51 +22,21 @@ import {
   UploadIcon,
   RefreshIcon,
 } from "tdesign-icons-vue-next";
-import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
-import ApiKeyInput from "../../components/ApiKeyInput.vue";
-import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
+import OcModelFormDialog from "./components/OcModelFormDialog.vue";
+import OcProviderDialog from "./components/OcProviderDialog.vue";
 import "./styles/ConfigView.css";
 
 // ==================== Constants ====================
 
-const NPM_OPTIONS = [
-  { label: "@ai-sdk/openai", value: "@ai-sdk/openai" },
-  { label: "@ai-sdk/openai-compatible", value: "@ai-sdk/openai-compatible" },
-  { label: "@ai-sdk/anthropic", value: "@ai-sdk/anthropic" },
-  { label: "@ai-sdk/amazon-bedrock", value: "@ai-sdk/amazon-bedrock" },
-  { label: "@ai-sdk/google", value: "@ai-sdk/google" },
-];
-
 const KNOWN_PROVIDER_OPTION_KEYS = ["baseURL", "apiKey", "headers"];
 const KNOWN_MODEL_KEYS = ["name", "limit", "options", "reasoning", "modalities"];
 
-// 输入/输出模态（opencode modalities 合法值，源自 provider.ts capabilities 解析）
-const MODALITY_OPTIONS = [
-  { label: "文本 (text)", value: "text" },
-  { label: "图像 (image)", value: "image" },
-  { label: "音频 (audio)", value: "audio" },
-  { label: "视频 (video)", value: "video" },
-  { label: "PDF", value: "pdf" },
-];
+// 思考参数摘要中的模态文案
 const MODALITY_LABELS = { text: "文本", image: "图像", audio: "音频", video: "视频", pdf: "PDF" };
-
-// 思考参数（options.effort / options.thinking，与 MiniMax 页同款枚举）
-const EFFORT_OPTIONS = ["minimal", "low", "medium", "high", "xhigh", "max"].map((v) => ({ label: v, value: v }));
-const THINKING_TYPE_OPTIONS = [
-  { label: "enabled（预算式思考）", value: "enabled" },
-  { label: "adaptive（自适应思考）", value: "adaptive" },
-  { label: "disabled（关闭思考）", value: "disabled" },
-];
 
 // ==================== State ====================
 
-const providers = ref({});
-const showDialog = ref(false);
-const dialogMode = ref("create");
-const showImportDialog = ref(false);
-const importString = ref("");
-
-const formData = ref({
+const createEmptyProviderForm = () => ({
   id: "",
   npm: "@ai-sdk/openai-compatible",
   name: "",
@@ -84,9 +46,12 @@ const formData = ref({
   models: [],
 });
 
-// ==================== Computed ====================
-
-const dialogTitle = computed(() => (dialogMode.value === "edit" ? "编辑 Provider" : "新建 Provider"));
+const providers = ref({});
+const showProviderDialog = ref(false);
+const providerDialogMode = ref("create");
+const providerDialogInitial = ref(createEmptyProviderForm());
+const showImportDialog = ref(false);
+const importString = ref("");
 
 // Provider 展开状态（Pi 风格 Collapse）
 const expandedProviders = ref([]);
@@ -118,12 +83,6 @@ const providerList = computed(() => {
 });
 
 // ==================== Helpers ====================
-
-const maskUrl = (url) => {
-  if (!url) return "";
-  if (url.length <= 40) return url;
-  return url.substring(0, 37) + "...";
-};
 
 const optionsToKv = (optionsObj, knownKeys) => {
   if (!optionsObj || typeof optionsObj !== "object") return [];
@@ -192,26 +151,18 @@ const createEmptyModel = () => ({
 });
 
 const openCreateDialog = () => {
-  dialogMode.value = "create";
-  formData.value = {
-    id: "",
-    npm: "@ai-sdk/openai-compatible",
-    name: "",
-    baseUrl: "",
-    apiKey: "",
-    extraOptions: [],
-    models: [],
-  };
-  showDialog.value = true;
+  providerDialogMode.value = "create";
+  providerDialogInitial.value = createEmptyProviderForm();
+  showProviderDialog.value = true;
 };
 
 const openEditDialog = (provider) => {
-  dialogMode.value = "edit";
+  providerDialogMode.value = "edit";
   const options = provider.options || {};
   const extraOptions = optionsToKv(options, KNOWN_PROVIDER_OPTION_KEYS);
 
   // 模型不在本弹窗内编辑（列表卡片内单独管理），保存时原样保留，避免重建覆盖丢字段
-  formData.value = {
+  providerDialogInitial.value = {
     id: provider.id,
     npm: provider.npm || "",
     name: provider.name || "",
@@ -220,66 +171,33 @@ const openEditDialog = (provider) => {
     extraOptions,
     models: [],
   };
-  showDialog.value = true;
+  showProviderDialog.value = true;
 };
 
 // ==================== Model Management（Pi 风格：provider 卡片内管理） ====================
 
-// 添加模型：AutoComplete 弹窗（打开即自动拉取 /models，选中自动填充）
-const showAutoModelDialog = ref(false);
+// 添加/编辑模型共用弹窗（add 模式内部自动拉取 /models）
+const showAddModelDialog = ref(false);
 const addModelProviderId = ref(null);
-const autoModels = ref([]);
-const autoModelsLoading = ref(false);
-const autoModelsError = ref("");
-const autoModelForm = ref(createEmptyModel());
+const addModelProviderRef = ref(null); // { baseUrl, apiKey }，供弹窗自动拉取
+const addModelInitialForm = ref(createEmptyModel());
 
-// AutoComplete 下拉选项（显示名 → 模型 ID）
-const modelOptions = computed(() =>
-  autoModels.value.map(m => ({ label: m.name || m.id, value: m.id }))
-);
+const showEditModelDialog = ref(false);
+const editModelProviderId = ref(null);
+const editModelOrigId = ref(null);
+const editModelInitialForm = ref(createEmptyModel());
 
 const getProviderByList = (providerId) =>
   providerList.value.find(p => p.id === providerId);
 
 const openAddModelDialog = (providerId) => {
   addModelProviderId.value = providerId;
-  autoModelForm.value = createEmptyModel();
-  autoModels.value = [];
-  autoModelsLoading.value = false;
-  autoModelsError.value = "";
-  showAutoModelDialog.value = true;
-  // 打开弹窗即自动拉取模型列表，无需手动点击
-  handleAutoFetchModels();
-};
-
-const handleAutoFetchModels = async () => {
-  const prov = getProviderByList(addModelProviderId.value);
-  if (!prov || !prov.options?.baseURL) {
-    autoModelsError.value = "该 Provider 未配置 Base URL，无法自动获取";
-    return;
-  }
-  autoModelsLoading.value = true;
-  autoModelsError.value = "";
-  try {
-    const list = await window.services.fetchProviderModels(prov.options.baseURL, prov.options.apiKey);
-    autoModels.value = list;
-    if (list.length === 0) autoModelsError.value = "接口返回空列表";
-  } catch (e) {
-    autoModelsError.value = e.message;
-  } finally {
-    autoModelsLoading.value = false;
-  }
-};
-
-// 选中模型：自动带出名称/上下文/输出/推理
-const onAutoModelSelect = (val) => {
-  const m = autoModels.value.find(x => x.id === val);
-  if (!m) return;
-  autoModelForm.value.id = m.id;
-  autoModelForm.value.name = m.name || m.id;
-  if (m.contextWindow) autoModelForm.value.context = m.contextWindow;
-  if (m.maxTokens) autoModelForm.value.output = m.maxTokens;
-  if (m.reasoning) autoModelForm.value.reasoning = true;
+  const prov = getProviderByList(providerId);
+  addModelProviderRef.value = prov
+    ? { baseUrl: prov.options?.baseURL, apiKey: prov.options?.apiKey }
+    : null;
+  addModelInitialForm.value = createEmptyModel();
+  showAddModelDialog.value = true;
 };
 
 // 列表行思考参数摘要
@@ -340,17 +258,17 @@ const mutateProviderModels = (providerId, mutate) => {
 };
 
 // 确认添加（支持手动输入 ID，不依赖下拉）
-const confirmAddAutoModel = () => {
-  const id = autoModelForm.value.id.trim();
+const confirmAddModel = (form) => {
+  const id = form.id.trim();
   if (!id) return MessagePlugin.warning("请输入模型 ID");
   const res = mutateProviderModels(addModelProviderId.value, (models) => {
     if (models[id]) return { error: "模型已存在: " + id };
-    models[id] = buildModelEntry({ ...autoModelForm.value, id });
+    models[id] = buildModelEntry({ ...form, id });
   });
   if (res.error) return MessagePlugin.warning(res.error);
   if (res.ok) {
     MessagePlugin.success(`模型 ${id} 已添加`);
-    showAutoModelDialog.value = false;
+    showAddModelDialog.value = false;
     loadProviders();
   } else {
     MessagePlugin.error("添加失败");
@@ -358,11 +276,6 @@ const confirmAddAutoModel = () => {
 };
 
 // ==================== Model Edit ====================
-
-const showEditModelDialog = ref(false);
-const editModelProviderId = ref(null);
-const editModelOrigId = ref(null);
-const editModelForm = ref(createEmptyModel());
 
 const openEditModelDialog = (providerId, model) => {
   editModelProviderId.value = providerId;
@@ -375,7 +288,7 @@ const openEditModelDialog = (providerId, model) => {
   const thinkingExtra = hasValidThinking
     ? Object.fromEntries(Object.entries(rawThinking).filter(([k]) => k !== "type" && k !== "budgetTokens"))
     : {};
-  editModelForm.value = {
+  editModelInitialForm.value = {
     id: model.id,
     name: raw.name || model.id,
     context: Number(limit.context) || 0,
@@ -397,14 +310,14 @@ const openEditModelDialog = (providerId, model) => {
   showEditModelDialog.value = true;
 };
 
-const handleSaveModel = () => {
-  const id = editModelForm.value.id.trim();
+const handleSaveModel = (form) => {
+  const id = form.id.trim();
   if (!id) return MessagePlugin.warning("请输入模型 ID");
   const origId = editModelOrigId.value;
   const res = mutateProviderModels(editModelProviderId.value, (models) => {
     if (id !== origId && models[id]) return { error: "模型已存在: " + id };
     if (id !== origId) delete models[origId];
-    models[id] = buildModelEntry({ ...editModelForm.value, id });
+    models[id] = buildModelEntry({ ...form, id });
   });
   if (res.error) return MessagePlugin.warning(res.error);
   if (res.ok) {
@@ -430,36 +343,36 @@ const handleDeleteModel = (providerId, modelId) => {
 
 // ==================== Save ====================
 
-const saveProvider = () => {
-  const id = formData.value.id.trim();
+// 弹窗确认 → 合并写盘：编辑时基于磁盘最新配置合并，models 等其他字段原样保留
+const saveProvider = (form) => {
+  const id = form.id.trim();
   if (!id) return MessagePlugin.warning("请输入 Provider ID");
-  if (!formData.value.npm) return MessagePlugin.warning("请选择 NPM Package");
+  if (!form.npm) return MessagePlugin.warning("请选择 NPM Package");
 
-  if (dialogMode.value === "create" && providers.value[id]) {
+  if (providerDialogMode.value === "create" && providers.value[id]) {
     return MessagePlugin.warning("Provider ID 已存在: " + id);
   }
 
   // Build options
   const options = {};
-  if (formData.value.baseUrl) options.baseURL = formData.value.baseUrl;
-  if (formData.value.apiKey) options.apiKey = formData.value.apiKey;
-  const extraOptObj = kvToOptions(formData.value.extraOptions);
+  if (form.baseUrl) options.baseURL = form.baseUrl;
+  if (form.apiKey) options.apiKey = form.apiKey;
+  const extraOptObj = kvToOptions(form.extraOptions);
   Object.assign(options, extraOptObj);
 
-  // 编辑时基于磁盘最新配置合并，models 等其他字段原样保留（切换 npm 等不再重置模型参数）
   const current = window.services.getOpencodeProviders();
   const prev = current[id] || {};
   const providerConfig = {
     ...prev,
-    npm: formData.value.npm,
-    name: formData.value.name || id,
+    npm: form.npm,
+    name: form.name || id,
     options,
-    models: dialogMode.value === "create" ? {} : { ...(prev.models || {}) },
+    models: providerDialogMode.value === "create" ? {} : { ...(prev.models || {}) },
   };
 
   if (window.services.setOpencodeProvider(id, providerConfig)) {
-    MessagePlugin.success(dialogMode.value === "create" ? "Provider 已添加" : "Provider 已更新");
-    showDialog.value = false;
+    MessagePlugin.success(providerDialogMode.value === "create" ? "Provider 已添加" : "Provider 已更新");
+    showProviderDialog.value = false;
     loadProviders();
   } else {
     MessagePlugin.error("保存失败");
@@ -689,198 +602,30 @@ onMounted(() => {
       </Collapse>
     </div>
 
-    <!-- Create/Edit Dialog（Pi 风格） -->
-    <Dialog v-model:visible="showDialog" :header="dialogTitle" width="480px" @confirm="saveProvider">
-      <div class="oc-form">
-        <!-- Provider ID -->
-        <div class="oc-form-item">
-          <label>Provider ID <span class="required">*</span></label>
-          <Input v-model="formData.id" placeholder="例如: deepseek" :disabled="dialogMode === 'edit'" />
-        </div>
+    <!-- Create/Edit Provider Dialog -->
+    <OcProviderDialog
+      v-model:visible="showProviderDialog"
+      :mode="providerDialogMode"
+      :initial="providerDialogInitial"
+      @confirm="saveProvider"
+    />
 
-        <!-- NPM Package -->
-        <div class="oc-form-item">
-          <label>NPM Package <span class="required">*</span></label>
-          <Select v-model="formData.npm" :options="NPM_OPTIONS" placeholder="选择 SDK 包" />
-        </div>
-
-        <!-- Display Name -->
-        <div class="oc-form-item">
-          <label>显示名称</label>
-          <Input v-model="formData.name" placeholder="Provider 显示名称" />
-        </div>
-
-        <!-- Base URL -->
-        <div class="oc-form-item">
-          <label>Base URL</label>
-          <Input v-model="formData.baseUrl" placeholder="https://api.example.com/v1" />
-        </div>
-
-        <!-- API Key -->
-        <div class="oc-form-item">
-          <label>API Key</label>
-          <ApiKeyInput v-model="formData.apiKey" placeholder="sk-..." />
-        </div>
-
-        <!-- Extra Options -->
-        <div class="oc-form-item">
-          <label>额外选项 (options)</label>
-          <DynamicKvEditor
-            v-model="formData.extraOptions"
-            :key-options="[]"
-            key-placeholder="选项名"
-            value-placeholder="选项值 (JSON 或字符串)"
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="oc-dialog-footer">
-          <div class="oc-dialog-footer-right">
-            <Button variant="outline" @click="showDialog = false">取消</Button>
-            <Button theme="primary" @click="saveProvider">保存</Button>
-          </div>
-        </div>
-      </template>
-    </Dialog>
-
-    <!-- 添加模型（Pi 风格 AutoComplete 自动拉取） -->
-    <Dialog
-      v-model:visible="showAutoModelDialog"
-      header="添加模型"
-      width="520px"
-      :confirm-btn="{ content: '添加', theme: 'primary' }"
-      @confirm="confirmAddAutoModel"
-    >
-      <div class="oc-form">
-        <div class="oc-form-item">
-          <label>所属 Provider</label>
-          <div class="oc-provider-name">{{ addModelProviderId }}</div>
-        </div>
-        <div class="oc-form-item">
-          <label>模型 ID <span class="required">*</span></label>
-          <AutoComplete
-            v-model="autoModelForm.id"
-            :options="modelOptions"
-            :loading="autoModelsLoading"
-            filterable
-            clearable
-            placeholder="输入或从下拉选择模型"
-            @select="onAutoModelSelect"
-          />
-          <div v-if="autoModelsLoading" class="oc-form-hint">正在自动拉取模型列表…</div>
-          <div v-else-if="autoModelsError" class="oc-form-hint oc-fetch-error">
-            自动获取失败：{{ autoModelsError }}
-            <span class="oc-fetch-retry" @click="handleAutoFetchModels">重试</span>
-          </div>
-          <div v-else-if="autoModels.length > 0" class="oc-form-hint">
-            已自动获取 {{ autoModels.length }} 个模型，选中后自动填充名称/上下文等
-          </div>
-        </div>
-        <div class="oc-form-item">
-          <label>显示名称</label>
-          <Input v-model="autoModelForm.name" placeholder="留空则使用模型 ID" />
-        </div>
-        <ModelLimitsFields v-model:context="autoModelForm.context" v-model:output="autoModelForm.output" item-class="oc-form-item" />
-        <div class="oc-form-item">
-          <Checkbox v-model="autoModelForm.reasoning">推理模型 (reasoning)</Checkbox>
-        </div>
-        <div class="oc-form-item-row">
-          <div class="oc-form-item oc-form-item--flex">
-            <label>输入模态</label>
-            <Select v-model="autoModelForm.modalitiesInput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
-          </div>
-          <div class="oc-form-item oc-form-item--flex">
-            <label>输出模态</label>
-            <Select v-model="autoModelForm.modalitiesOutput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
-          </div>
-        </div>
-        <div class="oc-form-item-row">
-          <div class="oc-form-item oc-form-item--flex">
-            <label>思考档位</label>
-            <Select v-model="autoModelForm.effort" :options="EFFORT_OPTIONS" clearable placeholder="不设置" />
-          </div>
-          <div class="oc-form-item oc-form-item--flex">
-            <label>思考模式</label>
-            <Select v-model="autoModelForm.thinkingType" :options="THINKING_TYPE_OPTIONS" clearable placeholder="不设置" />
-          </div>
-        </div>
-        <div v-if="autoModelForm.thinkingType === 'enabled'" class="oc-form-item">
-          <label>思考预算（budgetTokens，0 = 不写入）</label>
-          <InputNumber v-model="autoModelForm.thinkingBudget" :min="0" :step="1024" placeholder="0 = 不写入" />
-        </div>
-      </div>
-    </Dialog>
-
-    <!-- 编辑模型（Pi 风格独立弹窗） -->
-    <Dialog
+    <!-- 模型添加 / 编辑弹窗（add 模式带 /models 自动拉取） -->
+    <OcModelFormDialog
+      v-model:visible="showAddModelDialog"
+      mode="add"
+      :provider-name="addModelProviderId || ''"
+      :provider="addModelProviderRef"
+      :initial-form="addModelInitialForm"
+      @confirm="confirmAddModel"
+    />
+    <OcModelFormDialog
       v-model:visible="showEditModelDialog"
-      header="编辑模型"
-      width="520px"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      mode="edit"
+      :provider-name="editModelProviderId || ''"
+      :initial-form="editModelInitialForm"
       @confirm="handleSaveModel"
-    >
-      <div class="oc-form">
-        <div class="oc-form-item">
-          <label>所属 Provider</label>
-          <div class="oc-provider-name">{{ editModelProviderId }}</div>
-        </div>
-        <div class="oc-form-item">
-          <label>模型 ID <span class="required">*</span></label>
-          <Input v-model="editModelForm.id" placeholder="例如: deepseek-chat" />
-        </div>
-        <div class="oc-form-item">
-          <label>显示名称</label>
-          <Input v-model="editModelForm.name" placeholder="留空则使用模型 ID" />
-        </div>
-        <ModelLimitsFields v-model:context="editModelForm.context" v-model:output="editModelForm.output" item-class="oc-form-item" />
-        <div class="oc-form-item">
-          <Checkbox v-model="editModelForm.reasoning">推理模型 (reasoning)</Checkbox>
-        </div>
-        <div class="oc-form-item-row">
-          <div class="oc-form-item oc-form-item--flex">
-            <label>输入模态</label>
-            <Select v-model="editModelForm.modalitiesInput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
-          </div>
-          <div class="oc-form-item oc-form-item--flex">
-            <label>输出模态</label>
-            <Select v-model="editModelForm.modalitiesOutput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
-          </div>
-        </div>
-        <div class="oc-form-item-row">
-          <div class="oc-form-item oc-form-item--flex">
-            <label>思考档位</label>
-            <Select v-model="editModelForm.effort" :options="EFFORT_OPTIONS" clearable placeholder="不设置" />
-          </div>
-          <div class="oc-form-item oc-form-item--flex">
-            <label>思考模式</label>
-            <Select v-model="editModelForm.thinkingType" :options="THINKING_TYPE_OPTIONS" clearable placeholder="不设置" />
-          </div>
-        </div>
-        <div v-if="editModelForm.thinkingType === 'enabled'" class="oc-form-item">
-          <label>思考预算（budgetTokens，0 = 不写入）</label>
-          <InputNumber v-model="editModelForm.thinkingBudget" :min="0" :step="1024" placeholder="0 = 不写入" />
-        </div>
-        <div class="oc-form-subsection">
-          <div class="oc-form-subsection-title">SDK Options</div>
-          <DynamicKvEditor
-            v-model="editModelForm.sdkOptions"
-            :key-options="[]"
-            key-placeholder="选项名"
-            value-placeholder="选项值"
-          />
-        </div>
-        <div class="oc-form-subsection">
-          <div class="oc-form-subsection-title">额外字段 (variants, cost, tool_call 等)</div>
-          <DynamicKvEditor
-            v-model="editModelForm.extraFields"
-            :key-options="[]"
-            key-placeholder="字段名"
-            value-placeholder="字段值 (JSON 或字符串)"
-          />
-        </div>
-      </div>
-    </Dialog>
+    />
 
     <!-- Import Dialog -->
     <Dialog v-model:visible="showImportDialog" header="从字符串导入" width="480px" @confirm="handleImport">
