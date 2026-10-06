@@ -35,14 +35,19 @@ const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
 
 // ==================== 配置（uTools DB，按电脑隔离） ====================
 
-// 清洗模式与映射列表：丢弃 alias 为空/目标不完整的行，截断到上限，alias trim
+// 清洗模式与映射列表：映射行允许不完整（前端空行是草稿，填写过程中实时保存），
+// 仅丢弃非对象行；无效行在路由解析时（resolveOne）自动跳过，不影响网关运行
 const sanitizeConfig = (config) => {
   if (config.mode !== "direct" && config.mode !== "mapping") config.mode = "direct";
   if (!Array.isArray(config.mappings)) config.mappings = [];
   config.mappings = config.mappings
-    .filter((m) => m && typeof m.alias === "string" && m.alias.trim() && m.provider && m.modelId)
+    .filter((m) => m && typeof m === "object")
     .slice(0, MAX_MAPPINGS)
-    .map((m) => ({ alias: m.alias.trim(), provider: m.provider, modelId: m.modelId }));
+    .map((m) => ({
+      alias: typeof m.alias === "string" ? m.alias.trim() : "",
+      provider: typeof m.provider === "string" ? m.provider : "",
+      modelId: typeof m.modelId === "string" ? m.modelId : "",
+    }));
   return config;
 };
 
