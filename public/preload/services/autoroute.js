@@ -5,6 +5,8 @@
 //   POST /v1/responses       → OpenAI Responses 入站
 //   GET  /v1/models          → 启用模型列表
 //   GET  /health             → 健康检查
+// 两种模式：direct（勾选主数据模型，按模型 ID 直连）/ mapping（模型映射：自定义模型名 alias → 主数据模型，
+//   /v1/models 只返回映射名，请求仅接受映射名；换上游模型只需改映射，agent 侧配置不动）
 // 入站协议与目标供应商协议一致时原样透传（仅重写 model），否则经 autoroute-convert 自动转换（含流式 SSE）。
 // 随机 key 校验 Authorization Bearer / x-api-key，防止本机其他进程滥用主数据里的真实供应商密钥。
 // 生命周期：uTools 运行期间存活（preload 装载 + onPluginEnter 幂等自启动），uTools 退出即停止。
@@ -25,12 +27,24 @@ const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorM
 const LEGACY_DOC_ID = "ccswitch_autoroute_config";
 const getDocId = () => `ccswitch_autoroute_config_${window.utools.getNativeId()}`;
 
-const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [] };
+const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] };
+const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
 const SOURCE_OF_API = { "anthropic-messages": "anthropic", "openai-completions": "chat", "openai-responses": "responses" };
 
 const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
 
 // ==================== 配置（uTools DB，按电脑隔离） ====================
+
+// 清洗模式与映射列表：丢弃 alias 为空/目标不完整的行，截断到上限，alias trim
+const sanitizeConfig = (config) => {
+  if (config.mode !== "direct" && config.mode !== "mapping") config.mode = "direct";
+  if (!Array.isArray(config.mappings)) config.mappings = [];
+  config.mappings = config.mappings
+    .filter((m) => m && typeof m.alias === "string" && m.alias.trim() && m.provider && m.modelId)
+    .slice(0, MAX_MAPPINGS)
+    .map((m) => ({ alias: m.alias.trim(), provider: m.provider, modelId: m.modelId }));
+  return config;
+};
 
 const readAutoRouteConfig = () => {
   let data = {};
@@ -40,7 +54,7 @@ const readAutoRouteConfig = () => {
   } catch (e) {
     /* ignore */
   }
-  const config = { ...DEFAULT_CONFIG, ...data };
+  const config = sanitizeConfig({ ...DEFAULT_CONFIG, ...data });
   if (!Array.isArray(config.selection)) config.selection = [];
   if (typeof config.port !== "number" || config.port < 1 || config.port > 65535) config.port = DEFAULT_CONFIG.port;
   if (!config.key) config.key = generateKey();
@@ -48,7 +62,7 @@ const readAutoRouteConfig = () => {
 };
 
 const writeAutoRouteConfig = (patch) => {
-  const config = { ...readAutoRouteConfig(), ...patch, updatedAt: Date.now() };
+  const config = sanitizeConfig({ ...readAutoRouteConfig(), ...patch, updatedAt: Date.now() });
   const docId = getDocId();
   const doc = window.utools.db.get(docId);
   const payload = { _id: docId, data: config };
@@ -110,24 +124,43 @@ const getAutoRouteStatus = () => ({
 
 // ==================== 模型解析 ====================
 
-// selection → [{ provider, model }]（过滤掉已被删除的供应商/模型）
+// selection → [{ provider, model, alias? }]（过滤掉已被删除的供应商/模型）
+// direct 模式：返回勾选的模型；mapping 模式：返回映射目标模型（供下发），alias 为网关暴露的模型名
 const resolveAutoRouteModels = (config) => {
   const providers = readCommonProviders().providers;
   const list = [];
-  for (const sel of config.selection || []) {
-    if (!sel || !sel.provider || !sel.modelId) continue;
+  const resolveOne = (sel) => {
+    if (!sel || !sel.provider || !sel.modelId) return null;
     const provider = providers.find((p) => p.name === sel.provider);
-    if (!provider) continue;
+    if (!provider) return null;
     const model = (provider.models || []).find((m) => m.id === sel.modelId);
-    if (model) list.push({ provider, model });
+    return model ? { provider, model, ...(sel.alias ? { alias: sel.alias } : {}) } : null;
+  };
+  if (config.mode === "mapping") {
+    for (const m of config.mappings || []) {
+      const entry = resolveOne(m);
+      if (entry) list.push(entry);
+    }
+  } else {
+    for (const sel of config.selection || []) {
+      const entry = resolveOne(sel);
+      if (entry) list.push(entry);
+    }
   }
   return list;
 };
 
-// model 字段 → 网关目标：模型 ID 精确匹配（按勾选顺序取第一个），兼容「供应商/模型ID」消歧
-const resolveRoute = (enabled, requested) => {
+// model 字段 → 网关目标。direct 模式：模型 ID 精确匹配（按勾选顺序取第一个），
+// 兼容「供应商/模型ID」消歧；mapping 模式：仅匹配映射名（alias），未映射的模型一律不可用
+const resolveRoute = (enabled, requested, config) => {
   const name = typeof requested === "string" ? requested.trim() : "";
   if (!name) return null;
+  if (config.mode === "mapping") {
+    for (const entry of enabled) {
+      if (entry.alias === name) return entry;
+    }
+    return null;
+  }
   for (const entry of enabled) {
     if (entry.model.id === name) return entry;
   }
@@ -226,13 +259,16 @@ const handleRequest = async (req, res) => {
 
     if (method === "GET" && (path === "/v1/models" || path === "/models")) {
       const enabled = resolveAutoRouteModels(config);
-      // 仅多供应商重名的模型加「provider/」前缀供消歧，其余返回裸模型 ID
+      // direct 模式：仅多供应商重名的模型加「provider/」前缀供消歧，其余返回裸模型 ID
+      // mapping 模式：返回映射名（alias），owned_by 标注实际指向的供应商
       const counts = new Map();
-      for (const { model } of enabled) counts.set(model.id, (counts.get(model.id) || 0) + 1);
+      if (config.mode !== "mapping") {
+        for (const { model } of enabled) counts.set(model.id, (counts.get(model.id) || 0) + 1);
+      }
       const seen = new Set();
       const data = [];
-      for (const { provider, model } of enabled) {
-        const id = counts.get(model.id) > 1 ? `${provider.name}/${model.id}` : model.id;
+      for (const { provider, model, alias } of enabled) {
+        const id = config.mode === "mapping" ? alias : counts.get(model.id) > 1 ? `${provider.name}/${model.id}` : model.id;
         if (seen.has(id)) continue;
         seen.add(id);
         data.push({ id, object: "model", created: Math.floor((serverState.startedAt || Date.now()) / 1000), owned_by: provider.name });
@@ -256,9 +292,12 @@ const handleRequest = async (req, res) => {
     }
 
     const enabled = resolveAutoRouteModels(config);
-    const route = resolveRoute(enabled, body.model);
+    const route = resolveRoute(enabled, body.model, config);
     if (!route) {
-      fail(sourceProtocol, 404, `模型 ${body.model || "(空)"} 未在自动网关中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧`, body.model || "");
+      const hint = config.mode === "mapping"
+        ? `模型 ${body.model || "(空)"} 不在模型映射中，请到 CCConfig 通用配置 · 网关添加映射`
+        : `模型 ${body.model || "(空)"} 未在自动网关中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧`;
+      fail(sourceProtocol, 404, hint, body.model || "");
       return;
     }
     const { provider, model } = route;

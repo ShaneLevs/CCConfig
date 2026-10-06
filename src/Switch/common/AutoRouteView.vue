@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader } from "tdesign-vue-next";
-import { CopyIcon, RefreshIcon, SendIcon } from "tdesign-icons-vue-next";
+import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton, Select } from "tdesign-vue-next";
+import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
 
@@ -22,13 +22,14 @@ const AGENT_DISPATCH_OPTIONS = [
 ];
 
 const loading = ref(false);
-const config = ref({ enabled: false, port: 17877, key: "", selection: [] });
+const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] });
 const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: null });
 const providers = ref([]);
 const selectionKeys = ref([]);
 const portDraft = ref(17877); // 端口输入框草稿值，失焦/回车时校验并保存
 
-const modelCount = computed(() => config.value.selection.length);
+const isMappingMode = computed(() => config.value.mode === "mapping");
+const modelCount = computed(() => (isMappingMode.value ? (config.value.mappings || []).length : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
 
 const routeOptions = computed(() =>
@@ -92,6 +93,63 @@ const saveSelection = () => {
   }
 };
 
+const onModeChange = (val) => {
+  try {
+    config.value = window.services.writeAutoRouteConfig({ mode: val });
+    MessagePlugin.success(val === "mapping" ? "已切换为模型映射模式" : "已切换为模型直连模式");
+  } catch (e) {
+    config.value.mode = val === "mapping" ? "direct" : "mapping";
+    MessagePlugin.error(e.message);
+  }
+};
+
+// ==================== 模型映射（mapping 模式） ====================
+
+const MAX_MAPPINGS = 10;
+
+// 映射目标下拉选项：供应商::模型ID 为值，label 显示供应商 / 模型
+const targetOptions = computed(() =>
+  providers.value.flatMap((p) =>
+    (p.models || []).map((m) => ({
+      label: `${p.name} / ${m.id}`,
+      value: `${p.name}::${m.id}`,
+    }))
+  )
+);
+
+const saveMappings = (mappings) => {
+  try {
+    config.value = window.services.writeAutoRouteConfig({ mappings });
+  } catch (e) {
+    MessagePlugin.error("保存模型映射失败: " + e.message);
+    loadAll();
+  }
+};
+
+const addMapping = () => {
+  const mappings = config.value.mappings || [];
+  if (mappings.length >= MAX_MAPPINGS) {
+    MessagePlugin.warning(`最多可添加 ${MAX_MAPPINGS} 个映射`);
+    return;
+  }
+  saveMappings([...mappings, { alias: "", provider: "", modelId: "" }]);
+};
+
+const removeMapping = (index) => {
+  saveMappings((config.value.mappings || []).filter((_, i) => i !== index));
+};
+
+const onAliasChange = (index, val) => {
+  const mappings = (config.value.mappings || []).map((m, i) => (i === index ? { ...m, alias: String(val || "").trim() } : m));
+  saveMappings(mappings);
+};
+
+const onMappingTargetChange = (index, val) => {
+  const [provider = "", modelId = ""] = String(val || "").split("::");
+  const mappings = (config.value.mappings || []).map((m, i) => (i === index ? { ...m, provider, modelId } : m));
+  saveMappings(mappings);
+};
+
 const onToggleEnabled = async (val) => {
   try {
     status.value = await window.services.setAutoRouteEnabled(!!val);
@@ -149,7 +207,8 @@ const dispatchSubmitting = ref(false);
 const dispatchTargets = ref([]);
 
 const openDispatchDialog = () => {
-  if (modelCount.value === 0) return MessagePlugin.warning("请先勾选要接入网关的模型");
+  if (modelCount.value === 0)
+    return MessagePlugin.warning(isMappingMode.value ? "请先添加模型映射" : "请先勾选要接入网关的模型");
   dispatchTargets.value = [];
   dispatchDialog.value = true;
 };
@@ -274,7 +333,7 @@ onUnmounted(() => {
 <template>
   <div class="autoroute-container">
     <div class="autoroute-header">
-      <span class="autoroute-tip">把勾选的主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，跨协议自动转换</span>
+      <span class="autoroute-tip">把主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，跨协议自动转换</span>
       <div class="autoroute-actions">
         <Tooltip content="作为虚拟供应商写入各 agent" placement="top">
           <Button size="small" variant="outline" :disabled="modelCount === 0" @click="openDispatchDialog">
@@ -316,22 +375,75 @@ onUnmounted(() => {
       </div>
 
       <div class="autoroute-form-row">
-        <span class="autoroute-label">网关模型</span>
-        <Cascader
-          v-model="selectionKeys"
-          :options="routeOptions"
-          multiple
-          filterable
-          clearable
-          :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
-          class="autoroute-cascader"
-          placeholder="选择供应商与模型（勾选供应商 = 全选）"
-          @change="saveSelection"
-        />
+        <span class="autoroute-label">接入模式</span>
+        <RadioGroup v-model="config.mode" variant="default-filled" size="small" @change="onModeChange">
+          <RadioButton value="direct">模型直连</RadioButton>
+          <RadioButton value="mapping">模型映射</RadioButton>
+        </RadioGroup>
+        <span v-if="isMappingMode" class="autoroute-hint autoroute-mode-hint">
+          自定义固定模型名映射到任意主数据模型，/v1/models 只返回映射名；换上游只需改映射，agent 侧配置不用动
+        </span>
       </div>
-      <div class="autoroute-hint">
-        已启用 {{ modelCount }} 个模型。请求 model 填模型 ID；重名模型用「供应商/模型ID」。
-      </div>
+
+      <template v-if="!isMappingMode">
+        <div class="autoroute-form-row">
+          <span class="autoroute-label">网关模型</span>
+          <Cascader
+            v-model="selectionKeys"
+            :options="routeOptions"
+            multiple
+            filterable
+            clearable
+            :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
+            class="autoroute-cascader"
+            placeholder="选择供应商与模型（勾选供应商 = 全选）"
+            @change="saveSelection"
+          />
+        </div>
+        <div class="autoroute-hint">
+          已启用 {{ modelCount }} 个模型。请求 model 填模型 ID；重名模型用「供应商/模型ID」。
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-for="(m, i) in config.mappings" :key="i" class="autoroute-mapping-row">
+          <span class="autoroute-mapping-index">{{ i + 1 }}</span>
+          <Input
+            :value="m.alias"
+            size="small"
+            class="autoroute-mapping-alias"
+            placeholder="映射名，如 my-max"
+            @change="(val) => onAliasChange(i, val)"
+          />
+          <span class="autoroute-mapping-arrow">→</span>
+          <Select
+            :value="m.provider && m.modelId ? `${m.provider}::${m.modelId}` : undefined"
+            :options="targetOptions"
+            size="small"
+            filterable
+            clearable
+            class="autoroute-mapping-target"
+            placeholder="选择目标模型"
+            @change="(val) => onMappingTargetChange(i, val)"
+          />
+          <Tooltip content="删除此映射" placement="top">
+            <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
+              <template #icon><DeleteIcon /></template>
+            </Button>
+          </Tooltip>
+        </div>
+        <div class="autoroute-form-row">
+          <Button
+            size="small"
+            variant="outline"
+            :disabled="modelCount >= MAX_MAPPINGS"
+            @click="addMapping"
+          >
+            <template #icon><AddIcon /></template> 添加映射
+          </Button>
+          <span class="autoroute-hint">{{ modelCount }}/{{ MAX_MAPPINGS }} 个映射。请求 model 填映射名，映射名相同的行后面的会被忽略。</span>
+        </div>
+      </template>
     </div>
 
     <div class="autoroute-card autoroute-endpoints">
@@ -397,7 +509,7 @@ onUnmounted(() => {
           </label>
         </CheckboxGroup>
         <div class="autoroute-hint">
-          写入虚拟供应商「router」（{{ baseUrl }}，全部已启用的 {{ modelCount }} 个模型）；Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。
+          写入虚拟供应商「router」（{{ baseUrl }}，{{ isMappingMode ? `全部 ${modelCount} 个映射` : `全部已启用的 ${modelCount} 个模型` }}）；映射模式写入映射名，Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。
         </div>
       </div>
     </Dialog>

@@ -500,11 +500,15 @@ const cleanupLegacyAutoRoute = (app) => {
 const dispatchAutoRoute = (targets) => {
   const config = autoroute.readAutoRouteConfig();
   const enabled = autoroute.resolveAutoRouteModels(config);
-  if (!enabled.length) throw new Error("请先在通用配置 · 自动网关中勾选要接入网关的模型");
+  if (!enabled.length) throw new Error(config.mode === "mapping" ? "请先在通用配置 · 网关中添加模型映射" : "请先在通用配置 · 自动网关中勾选要接入网关的模型");
   const list = Array.isArray(targets) ? targets : [];
   if (list.length === 0) throw new Error("请选择目标 agent");
-  const models = enabled.map(({ model }) => model);
   const baseUrl = `http://127.0.0.1:${config.port}`;
+  // 映射模式下发给 agent 的模型 ID 用映射名（agent 侧固定的名字）；
+  // 浅拷贝保留 contextWindow / cost 等元数据，仅覆盖 id/name，网关侧把映射名路由到实际模型
+  const models = enabled.map(({ model, alias }) =>
+    config.mode === "mapping" && alias ? { ...model, id: alias, name: alias } : model
+  );
   const results = [];
   for (const t of list) {
     const d = APP_DISPATCHERS[t && t.app];

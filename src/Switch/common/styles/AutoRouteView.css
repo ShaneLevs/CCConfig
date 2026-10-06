@@ -28,6 +28,20 @@
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
 .autoroute-cascader { flex: 1; min-width: 320px; }
+/* 模型映射行：序号 + 映射名 + 箭头 + 目标模型下拉 + 删除 */
+.autoroute-mapping-row { display: flex; align-items: center; gap: 8px; }
+.autoroute-mapping-index {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+.autoroute-mapping-alias { width: 200px; flex-shrink: 0; font-family: var(--td-font-family-code, Menlo, Consolas, monospace); }
+.autoroute-mapping-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
+.autoroute-mapping-target { flex: 1; min-width: 220px; }
+.autoroute-mode-hint { flex: 1; min-width: 200px; }
 /* 级联弹层：TDesign 默认每列写死 148px，改为适应内容宽度 */
 .autoroute-cascader-popup .t-cascader__menu { width: auto; min-width: 200px; max-width: 40vw; }
 /* 网关页复选框绿色已由 main.css 全局规则统一处理（含 teleport 弹层） */
