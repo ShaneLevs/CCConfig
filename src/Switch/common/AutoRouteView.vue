@@ -283,7 +283,7 @@ const formatTime = (ts) => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
-// 日志行每条 usage 展示：prompt→completion + 缓存读标记（c 前缀），悬停 title 看精确值。
+// 日志行每条 usage 展示：↑输入 ↓输出 + 缓存读标记（c 前缀），悬停 title 看精确值。
 // anthropic 的 input 不含缓存，展示用总 prompt 需加回 cache_read/write（与统计口径一致）
 const fmtTokensK = (n) => {
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
@@ -299,7 +299,7 @@ const logUsage = (log) => {
     : u.inputTokens || 0;
   const out = u.outputTokens || 0;
   if (!prompt && !out) return null;
-  let text = `${fmtTokensK(prompt)}→${fmtTokensK(out)}`;
+  let text = `↑${fmtTokensK(prompt)} ↓${fmtTokensK(out)}`;
   const titleParts = [`prompt ${prompt}`, `completion ${out}`];
   if (cached) {
     text += ` c${fmtTokensK(cached)}`;
