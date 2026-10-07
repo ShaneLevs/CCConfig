@@ -39,6 +39,8 @@
   font-variant-numeric: tabular-nums;
 }
 .autoroute-mapping-alias { width: 200px; flex-shrink: 0; font-family: var(--td-font-family-code, Menlo, Consolas, monospace); }
+/* 预设名在带码字体的窄下拉里完整可见：popup 加宽 */
+.autoroute-mapping-alias-popup .t-select__list { min-width: 200px; }
 .autoroute-mapping-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-mapping-target { flex: 1; min-width: 220px; }
 .autoroute-mode-hint { flex: 1; min-width: 200px; }

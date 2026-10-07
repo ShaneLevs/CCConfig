@@ -107,6 +107,13 @@ const onModeChange = (val) => {
 
 const MAX_MAPPINGS = 10;
 
+// 预设映射名：固定模型名写给 agent，换上游只需改映射，agent 侧配置不动
+const PRESET_ALIASES = [
+  { value: "flash", label: "flash" },
+  { value: "plus", label: "plus" },
+  { value: "pro", label: "pro" },
+];
+
 // 映射目标下拉选项：供应商::模型ID 为值，label 显示供应商 / 模型
 const targetOptions = computed(() =>
   providers.value.flatMap((p) =>
@@ -126,18 +133,33 @@ const saveMappings = (mappings) => {
   }
 };
 
+const removeMapping = (index) => {
+  saveMappings((config.value.mappings || []).filter((_, i) => i !== index));
+};
+
+// 添加映射：默认取一个未被占用的预设名（flash / plus / pro），全部占用则留空自填
 const addMapping = () => {
   const mappings = config.value.mappings || [];
   if (mappings.length >= MAX_MAPPINGS) {
     MessagePlugin.warning(`最多可添加 ${MAX_MAPPINGS} 个映射`);
     return;
   }
-  saveMappings([...mappings, { alias: "", provider: "", modelId: "" }]);
+  const used = new Set(mappings.map((m) => m.alias));
+  const preset = PRESET_ALIASES.find((p) => !used.has(p.value));
+  saveMappings([...mappings, { alias: preset ? preset.value : "", provider: "", modelId: "" }]);
 };
 
-const removeMapping = (index) => {
-  saveMappings((config.value.mappings || []).filter((_, i) => i !== index));
-};
+// 预设名下拉选项：全部可选，重复选仅提示（后端路由按顺序取第一个）
+const aliasOptions = computed(() => {
+  const used = new Set((config.value.mappings || []).map((m) => m.alias));
+  return PRESET_ALIASES.map((p) => ({
+    ...p,
+    // 自定义名与预设并列可选；预设被占用时加后缀提示
+    label: used.has(p.value) && (config.value.mappings || []).filter((m) => m.alias === p.value).length > 1
+      ? `${p.label}（重复）`
+      : p.label,
+  }));
+});
 
 const onAliasChange = (index, val) => {
   const mappings = (config.value.mappings || []).map((m, i) => (i === index ? { ...m, alias: String(val || "").trim() } : m));
@@ -408,11 +430,16 @@ onUnmounted(() => {
       <template v-else>
         <div v-for="(m, i) in config.mappings" :key="i" class="autoroute-mapping-row">
           <span class="autoroute-mapping-index">{{ i + 1 }}</span>
-          <Input
-            :value="m.alias"
+          <Select
+            :value="m.alias || undefined"
+            :options="aliasOptions"
             size="small"
+            filterable
+            clearable
+            creatable
+            :popup-props="{ overlayClassName: 'autoroute-mapping-alias-popup' }"
             class="autoroute-mapping-alias"
-            placeholder="映射名，如 my-max"
+            placeholder="映射名（可选预设或自填）"
             @change="(val) => onAliasChange(i, val)"
           />
           <span class="autoroute-mapping-arrow">→</span>
@@ -441,7 +468,7 @@ onUnmounted(() => {
           >
             <template #icon><AddIcon /></template> 添加映射
           </Button>
-          <span class="autoroute-hint">{{ modelCount }}/{{ MAX_MAPPINGS }} 个映射。请求 model 填映射名，映射名相同的行后面的会被忽略。</span>
+          <span class="autoroute-hint">{{ modelCount }}/{{ MAX_MAPPINGS }} 个映射。预设名 flash / plus / pro，也可自填；同名取靠前的映射。</span>
         </div>
       </template>
     </div>
