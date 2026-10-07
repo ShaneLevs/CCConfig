@@ -54,8 +54,9 @@ const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 const settingsTab = ref("agents");
 const showSettings = ref(false);
 
-// 左侧 agent 快速切换栏：窗口宽度超过内容上限后，左空隙 ≥ 侧栏宽 152 + 内容间距 12 +
-// 窗沿留白 8 时显示，并隐藏头部下拉（菜单变成侧栏）。800 须与 .container 的 --content-max 同步。
+// 左侧 agent 快速切换栏：窗口足够宽时显示（沿用「内容两侧各留 ≥ 172px」阈值，约窗口 ≥1144px，
+// 侧栏 + 内容整体居中后两侧各剩 ≥90px），显示时隐藏头部下拉（菜单变成侧栏）。
+// 800 须与 .container 的 --content-max 同步。
 const AGENT_RAIL_MIN_GAP = 172;
 const showAgentRail = ref(false);
 const updateAgentRail = () => {
@@ -179,198 +180,213 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="container">
-    <div class="header">
-      <div class="header-left">
-        <img
-          :src="activeApp === 'common' ? `${ASSET_BASE}gen.svg` : AGENT_META[activeApp]?.icon"
-          alt="logo"
-          class="logo"
+  <div class="page">
+    <!-- 侧栏与内容同级组成 flex 行整体居中；进出场动画见样式 .rail-* -->
+    <Transition name="rail">
+      <AgentSideRail v-if="showAgentRail" @select="switchApp" />
+    </Transition>
+    <div class="container">
+      <div class="header">
+        <div class="header-left">
+          <img
+            :src="activeApp === 'common' ? `${ASSET_BASE}gen.svg` : AGENT_META[activeApp]?.icon"
+            alt="logo"
+            class="logo"
+          />
+          <Transition name="app-select">
+            <Dropdown
+              v-show="!showAgentRail"
+              :options="appDropdownOptions"
+              :min-column-width="160"
+              @click="handleAppSelect"
+            >
+              <span class="app-selector">
+                {{ appLabel }} <ChevronDownIcon size="16px" />
+              </span>
+            </Dropdown>
+          </Transition>
+          <span class="page-title">{{ pageTitleSuffix }}</span>
+          <Button
+            shape="circle"
+            variant="text"
+            theme="default"
+            class="settings-btn"
+            @click="showSettings = true"
+          >
+            <template #icon><SettingIcon /></template>
+          </Button>
+        </div>
+        <div class="header-right">
+          <AppTabBar :app="activeApp" v-model:active-tab="activeTab" />
+        </div>
+      </div>
+
+      <!-- 通用配置 views -->
+      <template v-if="isAppReady('common')">
+        <CommonConfigView v-if="activeApp === 'common' && activeTab === 'config'" />
+        <CommonMcpView
+          v-if="isTabVisited('common', 'mcp')"
+          v-show="activeApp === 'common' && activeTab === 'mcp'"
         />
-        <Dropdown
-          v-show="!showAgentRail"
-          :options="appDropdownOptions"
-          :min-column-width="160"
-          @click="handleAppSelect"
-        >
-          <span class="app-selector">
-            {{ appLabel }} <ChevronDownIcon size="16px" />
-          </span>
-        </Dropdown>
-        <span class="page-title">{{ pageTitleSuffix }}</span>
-        <Button
-          shape="circle"
-          variant="text"
-          theme="default"
-          class="settings-btn"
-          @click="showSettings = true"
-        >
-          <template #icon><SettingIcon /></template>
-        </Button>
-      </div>
-      <div class="header-right">
-        <AppTabBar :app="activeApp" v-model:active-tab="activeTab" />
-      </div>
+        <CommonSkillView
+          v-if="isTabVisited('common', 'skill')"
+          v-show="activeApp === 'common' && activeTab === 'skill'"
+          ref="commonSkillViewRef"
+        />
+        <CommonAutoRouteView
+          v-if="isTabVisited('common', 'autoroute')"
+          v-show="activeApp === 'common' && activeTab === 'autoroute'"
+        />
+        <CommonUsageView
+          v-if="isTabVisited('common', 'usage')"
+          v-show="activeApp === 'common' && activeTab === 'usage'"
+        />
+      </template>
+
+      <!-- Claude Code views：已访问的标签页用 v-show 保持挂载，避免重复加载 -->
+      <template v-if="isAppReady('claude')">
+        <ConfigView v-if="activeApp === 'claude' && activeTab === 'config'" />
+        <UsageView
+          v-if="isTabVisited('claude', 'usage')"
+          v-show="activeApp === 'claude' && activeTab === 'usage'"
+        />
+        <McpView
+          v-if="isTabVisited('claude', 'mcp')"
+          v-show="activeApp === 'claude' && activeTab === 'mcp'"
+        />
+        <SkillView
+          v-if="isTabVisited('claude', 'skill')"
+          v-show="activeApp === 'claude' && activeTab === 'skill'"
+          ref="skillViewRef"
+        />
+        <PluginView
+          v-if="isTabVisited('claude', 'plugin')"
+          v-show="activeApp === 'claude' && activeTab === 'plugin'"
+        />
+      </template>
+
+      <!-- Pi Agent views -->
+      <template v-if="isAppReady('pi')">
+        <PiConfigView v-if="activeApp === 'pi' && activeTab === 'config'" />
+        <PiUsageView
+          v-if="isTabVisited('pi', 'usage')"
+          v-show="activeApp === 'pi' && activeTab === 'usage'"
+        />
+        <PiMcpView
+          v-if="isTabVisited('pi', 'mcp')"
+          v-show="activeApp === 'pi' && activeTab === 'mcp'"
+        />
+        <PiSkillView
+          v-if="isTabVisited('pi', 'skill')"
+          v-show="activeApp === 'pi' && activeTab === 'skill'"
+        />
+        <PiPluginView
+          v-if="isTabVisited('pi', 'plugin')"
+          v-show="activeApp === 'pi' && activeTab === 'plugin'"
+          ref="piPluginViewRef"
+        />
+      </template>
+
+      <!-- OpenCode views -->
+      <template v-if="isAppReady('opencode')">
+        <OpenCodeConfigView v-if="activeApp === 'opencode' && activeTab === 'config'" />
+        <OpenCodeMcpView
+          v-if="isTabVisited('opencode', 'mcp')"
+          v-show="activeApp === 'opencode' && activeTab === 'mcp'"
+        />
+        <OpenCodeSkillView
+          v-if="isTabVisited('opencode', 'skill')"
+          v-show="activeApp === 'opencode' && activeTab === 'skill'"
+          ref="ocSkillViewRef"
+        />
+        <OpenCodePluginView
+          v-if="isTabVisited('opencode', 'plugin')"
+          v-show="activeApp === 'opencode' && activeTab === 'plugin'"
+        />
+        <OpenCodeUsageView
+          v-if="isTabVisited('opencode', 'usage')"
+          v-show="activeApp === 'opencode' && activeTab === 'usage'"
+        />
+      </template>
+
+      <!-- omp views -->
+      <template v-if="isAppReady('omp')">
+        <OmpConfigView v-if="activeApp === 'omp' && activeTab === 'config'" />
+      </template>
+
+      <!-- Reasonix views -->
+      <template v-if="isAppReady('reasonix')">
+        <ReasonixConfigView v-if="activeApp === 'reasonix' && activeTab === 'config'" />
+      </template>
+
+      <!-- Codex views（仅模型配置） -->
+      <template v-if="isAppReady('codex')">
+        <CodexConfigView v-if="activeApp === 'codex' && activeTab === 'config'" />
+      </template>
+
+      <!-- Kimi views（仅模型配置） -->
+      <template v-if="isAppReady('kimi')">
+        <KimiConfigView v-if="activeApp === 'kimi' && activeTab === 'config'" />
+      </template>
+
+      <!-- MiniMax Code views（仅模型配置） -->
+      <template v-if="isAppReady('minimax')">
+        <MinimaxConfigView v-if="activeApp === 'minimax' && activeTab === 'config'" />
+      </template>
+
+      <!-- Qoder views（仅模型配置） -->
+      <template v-if="isAppReady('qoder')">
+        <QoderConfigView v-if="activeApp === 'qoder' && activeTab === 'config'" />
+      </template>
+
+      <!-- ZCode views（仅模型配置） -->
+      <template v-if="isAppReady('zcode')">
+        <ZcodeConfigView v-if="activeApp === 'zcode' && activeTab === 'config'" />
+      </template>
+
+      <!-- Hermes views（仅模型配置） -->
+      <template v-if="isAppReady('hermes')">
+        <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
+      </template>
+
+      <Dialog
+        v-model:visible="showSettings"
+        header="设置"
+        :footer="false"
+        width="540px"
+        placement="center"
+      >
+        <div class="settings-body">
+          <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
+            <RadioButton value="agents">Agent 启停</RadioButton>
+            <RadioButton value="background">背景特效</RadioButton>
+          </RadioGroup>
+
+          <AgentVisibilitySettings v-if="settingsTab === 'agents'" />
+          <BackgroundEffectSettings v-else />
+        </div>
+      </Dialog>
     </div>
-
-    <!-- 通用配置 views -->
-    <template v-if="isAppReady('common')">
-      <CommonConfigView v-if="activeApp === 'common' && activeTab === 'config'" />
-      <CommonMcpView
-        v-if="isTabVisited('common', 'mcp')"
-        v-show="activeApp === 'common' && activeTab === 'mcp'"
-      />
-      <CommonSkillView
-        v-if="isTabVisited('common', 'skill')"
-        v-show="activeApp === 'common' && activeTab === 'skill'"
-        ref="commonSkillViewRef"
-      />
-      <CommonAutoRouteView
-        v-if="isTabVisited('common', 'autoroute')"
-        v-show="activeApp === 'common' && activeTab === 'autoroute'"
-      />
-      <CommonUsageView
-        v-if="isTabVisited('common', 'usage')"
-        v-show="activeApp === 'common' && activeTab === 'usage'"
-      />
-    </template>
-
-    <!-- Claude Code views：已访问的标签页用 v-show 保持挂载，避免重复加载 -->
-    <template v-if="isAppReady('claude')">
-      <ConfigView v-if="activeApp === 'claude' && activeTab === 'config'" />
-      <UsageView
-        v-if="isTabVisited('claude', 'usage')"
-        v-show="activeApp === 'claude' && activeTab === 'usage'"
-      />
-      <McpView
-        v-if="isTabVisited('claude', 'mcp')"
-        v-show="activeApp === 'claude' && activeTab === 'mcp'"
-      />
-      <SkillView
-        v-if="isTabVisited('claude', 'skill')"
-        v-show="activeApp === 'claude' && activeTab === 'skill'"
-        ref="skillViewRef"
-      />
-      <PluginView
-        v-if="isTabVisited('claude', 'plugin')"
-        v-show="activeApp === 'claude' && activeTab === 'plugin'"
-      />
-    </template>
-
-    <!-- Pi Agent views -->
-    <template v-if="isAppReady('pi')">
-      <PiConfigView v-if="activeApp === 'pi' && activeTab === 'config'" />
-      <PiUsageView
-        v-if="isTabVisited('pi', 'usage')"
-        v-show="activeApp === 'pi' && activeTab === 'usage'"
-      />
-      <PiMcpView
-        v-if="isTabVisited('pi', 'mcp')"
-        v-show="activeApp === 'pi' && activeTab === 'mcp'"
-      />
-      <PiSkillView
-        v-if="isTabVisited('pi', 'skill')"
-        v-show="activeApp === 'pi' && activeTab === 'skill'"
-      />
-      <PiPluginView
-        v-if="isTabVisited('pi', 'plugin')"
-        v-show="activeApp === 'pi' && activeTab === 'plugin'"
-        ref="piPluginViewRef"
-      />
-    </template>
-
-    <!-- OpenCode views -->
-    <template v-if="isAppReady('opencode')">
-      <OpenCodeConfigView v-if="activeApp === 'opencode' && activeTab === 'config'" />
-      <OpenCodeMcpView
-        v-if="isTabVisited('opencode', 'mcp')"
-        v-show="activeApp === 'opencode' && activeTab === 'mcp'"
-      />
-      <OpenCodeSkillView
-        v-if="isTabVisited('opencode', 'skill')"
-        v-show="activeApp === 'opencode' && activeTab === 'skill'"
-        ref="ocSkillViewRef"
-      />
-      <OpenCodePluginView
-        v-if="isTabVisited('opencode', 'plugin')"
-        v-show="activeApp === 'opencode' && activeTab === 'plugin'"
-      />
-      <OpenCodeUsageView
-        v-if="isTabVisited('opencode', 'usage')"
-        v-show="activeApp === 'opencode' && activeTab === 'usage'"
-      />
-    </template>
-
-    <!-- omp views -->
-    <template v-if="isAppReady('omp')">
-      <OmpConfigView v-if="activeApp === 'omp' && activeTab === 'config'" />
-    </template>
-
-    <!-- Reasonix views -->
-    <template v-if="isAppReady('reasonix')">
-      <ReasonixConfigView v-if="activeApp === 'reasonix' && activeTab === 'config'" />
-    </template>
-
-    <!-- Codex views（仅模型配置） -->
-    <template v-if="isAppReady('codex')">
-      <CodexConfigView v-if="activeApp === 'codex' && activeTab === 'config'" />
-    </template>
-
-    <!-- Kimi views（仅模型配置） -->
-    <template v-if="isAppReady('kimi')">
-      <KimiConfigView v-if="activeApp === 'kimi' && activeTab === 'config'" />
-    </template>
-
-    <!-- MiniMax Code views（仅模型配置） -->
-    <template v-if="isAppReady('minimax')">
-      <MinimaxConfigView v-if="activeApp === 'minimax' && activeTab === 'config'" />
-    </template>
-
-    <!-- Qoder views（仅模型配置） -->
-    <template v-if="isAppReady('qoder')">
-      <QoderConfigView v-if="activeApp === 'qoder' && activeTab === 'config'" />
-    </template>
-
-    <!-- ZCode views（仅模型配置） -->
-    <template v-if="isAppReady('zcode')">
-      <ZcodeConfigView v-if="activeApp === 'zcode' && activeTab === 'config'" />
-    </template>
-
-    <!-- Hermes views（仅模型配置） -->
-    <template v-if="isAppReady('hermes')">
-      <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
-    </template>
-
-    <!-- 左侧 agent 快速切换栏（宽窗口时出现在限宽内容的左侧空隙内） -->
-    <AgentSideRail v-if="showAgentRail" @select="switchApp" />
-
-    <Dialog
-      v-model:visible="showSettings"
-      header="设置"
-      :footer="false"
-      width="540px"
-      placement="center"
-    >
-      <div class="settings-body">
-        <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
-          <RadioButton value="agents">Agent 启停</RadioButton>
-          <RadioButton value="background">背景特效</RadioButton>
-        </RadioGroup>
-
-        <AgentVisibilitySettings v-if="settingsTab === 'agents'" />
-        <BackgroundEffectSettings v-else />
-      </div>
-    </Dialog>
   </div>
 </template>
 
 <style scoped>
+.page {
+  /* 侧栏出现时与内容组成 flex 行整体居中：侧栏挂载/卸载由 .rail-* 的 margin 过渡驱动，
+     flex 每帧重排自然带动内容让位/复位，无需另行计算位移 */
+  --rail-total: 164px; /* 侧栏宽 152 + 与内容间距 12（gap），rail 动画整块抵消用 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 100vh;
+}
 .container {
-  /* 限宽居中：窗口过宽时页面不再无限拉伸，两侧留空透出玻璃/特效背景；
-     --content-max 供 AgentSideRail 定位计算，与 updateAgentRail 里的 800 同步 */
+  /* 限宽：窗口过宽时页面不再无限拉伸，两侧留空透出玻璃/特效背景；
+     水平居中由 .page 的 flex 承担；--content-max 与 updateAgentRail 里的 800 同步（显示阈值口径） */
   --content-max: 800px;
+  width: 100%;
   max-width: var(--content-max);
-  margin: 0 auto;
   padding: 10px 20px 10px;
   min-height: 100vh;
   box-sizing: border-box;
@@ -444,6 +460,29 @@ onUnmounted(() => {
 }
 .settings-tabs {
   margin-bottom: 12px;
+}
+
+/* 侧栏进出场：margin-left 从 -(侧栏+间距) 过渡到 0，flex 每帧重排带动内容平滑让位/复位，
+   叠加淡入淡出与小位移，消除挂载/卸载瞬间的布局跳变 */
+.rail-enter-active,
+.rail-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease, margin-left 0.22s ease;
+}
+.rail-enter-from,
+.rail-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+  margin-left: calc(-1 * var(--rail-total));
+}
+
+/* 侧栏出现时头部下拉淡出（菜单变成侧栏），窗口变窄时淡回 */
+.app-select-enter-active,
+.app-select-leave-active {
+  transition: opacity 0.18s ease;
+}
+.app-select-enter-from,
+.app-select-leave-to {
+  opacity: 0;
 }
 </style>
 

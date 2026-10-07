@@ -2,7 +2,7 @@
 import { useAppContext } from "../composables/useAppContext";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
 
-// 左侧快速切换栏：窗口较宽、内容限宽居中后左侧空隙足够时由 index.vue 控制挂载，
+// 左侧快速切换栏：窗口较宽时由 index.vue 控制挂载，与内容组成 flex 行整体居中（sticky 随滚动贴住视口顶部），
 // 与顶部下拉共用 useAgentVisibility 的可见 agent 数据与排序，点击向上抛 select。
 const emit = defineEmits(["select"]);
 const { activeApp } = useAppContext();
@@ -32,10 +32,10 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 
 <style scoped>
 .agent-rail {
-  position: fixed;
+  /* 水平位置由父级 .page（flex 行，gap 12px）安排；sticky 保证页面滚动时贴住视口顶部 */
+  position: sticky;
   top: 10px;
-  /* 吸附在限宽内容的左侧空隙内：与内容留 12px 间距，窗沿 8px 兜底 */
-  left: max(8px, calc((100vw - var(--content-max, 800px)) / 2 - 164px));
+  flex-shrink: 0;
   width: 152px;
   max-height: calc(100vh - 20px);
   overflow-y: auto;
