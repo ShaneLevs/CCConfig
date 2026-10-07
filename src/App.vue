@@ -83,5 +83,5 @@ onUnmounted(() => {
     :transparent="false"
     :mouse-interaction="false"
   />
-  <Switch v-if="['claudeConfig', 'opencodeConfig', 'piConfig', 'ompConfig', 'reasonixConfig', 'codexConfig', 'kimiConfig', 'minimaxConfig', 'qoderConfig', 'zcodeConfig', 'commonConfig', 'installClaudeSkill', 'installOpencodeSkill', 'installCommonSkill', 'installPiExtension'].includes(route)" :route="route" :payload="payload" />
+  <Switch v-if="['claudeConfig', 'opencodeConfig', 'piConfig', 'ompConfig', 'reasonixConfig', 'codexConfig', 'kimiConfig', 'minimaxConfig', 'qoderConfig', 'zcodeConfig', 'hermesConfig', 'commonConfig', 'installClaudeSkill', 'installOpencodeSkill', 'installCommonSkill', 'installPiExtension'].includes(route)" :route="route" :payload="payload" />
 </template>

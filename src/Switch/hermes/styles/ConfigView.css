@@ -1,0 +1,73 @@
+.hermes-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.hermes-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.hermes-toolbar-left { min-width: 0; flex: 1; }
+.hermes-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.hermes-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.hermes-toolbar-right { display: flex; gap: 4px; }
+
+.hermes-config-warning { margin-bottom: 0; }
+.hermes-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.hermes-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.hermes-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.hermes-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.hermes-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.hermes-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.hermes-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.hermes-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hermes-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.hermes-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.hermes-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.hermes-provider-body { padding: 10px 0 4px; }
+.hermes-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.hermes-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hermes-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.hermes-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* 模型子区（星标 = 写入顶层 model.provider / model.default） */
+.hermes-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.hermes-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; }
+.hermes-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.hermes-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.hermes-model-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: var(--td-bg-color-container-hover);
+  border-radius: var(--td-radius-default);
+  border: 1px solid var(--td-border-level-1-color);
+  transition: border-color 0.15s;
+}
+.hermes-model-tag:hover { border-color: var(--td-brand-color); }
+.hermes-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
+.hermes-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.hermes-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.hermes-model-tag-star:hover { background: var(--td-warning-color-1); }
+
+/* ===== 表单弹窗 ===== */
+.hermes-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.hermes-form-item { display: flex; flex-direction: column; gap: 4px; }
+.hermes-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.hermes-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.hermes-form-required { color: var(--td-error-color); }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* 模型行编辑器（供应商弹窗内嵌：models 为条目内嵌字典，ID + 上下文长度） */
+.hermes-model-rows { display: flex; flex-direction: column; gap: 6px; }
+.hermes-model-row { display: flex; gap: 6px; align-items: center; }
+.hermes-model-row .t-input-number { width: 140px; }
+.hermes-model-row-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 4px; border-radius: var(--td-radius-small); flex-shrink: 0; }
+.hermes-model-row-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }

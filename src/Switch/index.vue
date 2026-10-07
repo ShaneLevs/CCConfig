@@ -24,6 +24,7 @@ import KimiConfigView from "./kimi/ConfigView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
 import ZcodeConfigView from "./zcode/ConfigView.vue";
+import HermesConfigView from "./hermes/ConfigView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -133,6 +134,7 @@ onMounted(() => {
     minimaxConfig: "minimax",
     qoderConfig: "qoder",
     zcodeConfig: "zcode",
+    hermesConfig: "hermes",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -316,6 +318,11 @@ onMounted(() => {
     <!-- ZCode views（仅模型配置） -->
     <template v-if="isAppReady('zcode')">
       <ZcodeConfigView v-if="activeApp === 'zcode' && activeTab === 'config'" />
+    </template>
+
+    <!-- Hermes views（仅模型配置） -->
+    <template v-if="isAppReady('hermes')">
+      <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
     </template>
 
     <Dialog

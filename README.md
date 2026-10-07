@@ -1,10 +1,10 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode** 十个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode**、**Hermes** 十一个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
 
 ## 功能特性
 
-- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode + 通用配置，各自独立配置，一键切换
+- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes + 通用配置，各自独立配置，一键切换
 - **配置管理** — 读取、保存、切换各应用的 API 配置：
   - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
   - OpenCode：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
@@ -16,6 +16,7 @@
   - MiniMax Code：`~/.minimax/config.yaml`（仅模型配置：custom_provider 第三方供应商/模型 + 顶层 defaultModel，内置 minimax 只读；跟随 MINIMAX_DATA_DIR / MAVIS_DATA_DIR）
   - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
   - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效）
+  - Hermes：`~/.hermes/config.yaml`（仅模型配置：custom_providers 供应商/内嵌模型（模型 ID + 上下文长度）增删改，api_mode 支持 chat_completions / anthropic_messages / codex_responses / bedrock_converse；星标 = 顶层 model.provider / model.default 默认指针；Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示；跟随 HERMES_HOME）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动网关（本地模型服务）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
@@ -183,6 +184,18 @@ MiniMax Code:
   供应商/模型改 ID 时 defaultModel 引用同步；删除默认模型时清理悬挂引用；API 格式三协议：anthropic-messages / openai-completions / openai-responses
   通用库下发：provider 键经 providerKeyFor 确定性 ASCII 清洗（中文/符号名 → 骨架+稳定哈希，同名恒同键，upsert 幂等）；
     下发刷新 limit/名称/输入模态（model.input 过滤非 text 并入 modalities+attachment），未传字段保留既有值；google 协议供应商拒绝下发
+
+Hermes:
+  ~/.hermes/config.yaml（HERMES_HOME 优先，Windows %LOCALAPPDATA%\hermes，macOS/Linux ~/.hermes）→ js-yaml 读写（解析失败抛错阻断写回）
+  只管理两处：custom_providers[]（name / base_url / api_key / api_mode / models 字典 / model / rate_limit_delay）、
+    顶层 model（provider 指供应商名 + default 指模型 ID，其余键如 base_url / context_length 保留）
+  models 磁盘为字典 { "<模型ID>": { context_length, ... } }，UI 为有序数组；条目 model（单数）恒为首个模型 ID
+  受管字段外的未知键（key_env / request_timeout_seconds 等）经 _extra 合并往返；camelCase 别名归一 snake_case，遗留 api 键丢弃
+  Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示：可设默认模型，禁改禁删
+  默认模型语义（即「切换」）：model.provider 必设，model.default 用指定模型或该供应商首个模型
+  删除供应商时若 model.provider 悬空，改指首个剩余供应商（无剩余则移除指针）
+  通用库下发：协议映射 openai-completions→chat_completions / anthropic-messages→anthropic_messages / openai-responses→codex_responses（google 拒绝）；
+    provider 名经 providerKeyFor 确定性清洗（同上）；网关下发走 anthropic_messages + 网关根地址（同 Claude，不带 /v1）
 ```
 
 ## 认证与模型选择细节

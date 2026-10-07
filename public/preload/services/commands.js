@@ -119,6 +119,12 @@ const FEATURE_DEFINITIONS = {
     icon: "icon-zcode.png",
     cmds: ["ZCode配置"],
   },
+  hermesConfig: {
+    code: "hermesConfig",
+    explain: "Hermes 模型配置管理工具",
+    icon: "icon-hermes.png",
+    cmds: ["Hermes配置"],
+  },
 };
 
 // 各智能体 → 其启动命令对应的 feature code（同时覆盖「功能指令」与「匹配指令」）。
@@ -134,6 +140,7 @@ const AGENT_FEATURES = {
   minimax: ["minimaxConfig"],
   qoder: ["qoderConfig"],
   zcode: ["zcodeConfig"],
+  hermes: ["hermesConfig"],
 };
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：

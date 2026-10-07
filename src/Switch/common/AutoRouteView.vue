@@ -19,6 +19,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "MiniMax Code", value: "minimax" },
   { label: "Qoder", value: "qoder" },
   { label: "ZCode", value: "zcode" },
+  { label: "Hermes", value: "hermes" },
 ];
 
 const loading = ref(false);

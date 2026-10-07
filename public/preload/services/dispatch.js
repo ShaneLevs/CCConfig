@@ -1,5 +1,5 @@
 // 通用配置主数据 → 各 Agent 模型配置下发
-// 把通用库（uTools DB）中的 provider + model 写入 9 个 agent 的模型配置：
+// 把通用库（uTools DB）中的 provider + model 写入 11 个 agent 的模型配置：
 //   claude   → ~/.claude/settings.json  env（ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL）
 //   opencode → ~/.config/opencode.json(.jsonc)  provider[id]（options.baseURL/apiKey + models[id]）
 //   pi       → ~/.pi/agent/models.json  providers[name] + settings.json（可选默认）
@@ -10,6 +10,7 @@
 //   minimax  → ~/.minimax/config.yaml  custom_provider.<key>（API 格式与通用库协议同名）+ models.<id> + defaultModel（可选默认）
 //   qoder    → ~/.qoder/settings.json  providers.<key>（anthropic→anthropic，其余→openai）+ models[] + provider.model（可选默认）
 //   zcode    → ~/.zcode/v2/provider_config.json  providerRules[providerId]（anthropic-messages/openai-chat-completions/openai-responses）+ providerModelRules + providerOrder/modelOrder（可选首选）
+//   hermes   → ~/.hermes/config.yaml  custom_providers[name]（api_mode 三协议映射）+ models 字典 + 顶层 model.provider/model.default（可选默认）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -22,6 +23,7 @@ const kimi = require('./kimi')
 const minimax = require('./minimax')
 const qoder = require('./qoder')
 const zcode = require('./zcode')
+const hermes = require('./hermes')
 const autoroute = require('./autoroute')
 
 // cost 规范化（与 pi/omp 一致：全 0 省略，Pi schema 约定 0 无效）
@@ -423,6 +425,35 @@ const dispatchToZcode = (provider, model, opts) => {
   return `供应商 ${name}${keyNote} 已更新，模型 ${modelId} 已写入${suffix}`
 }
 
+// Hermes：config.yaml custom_providers[name] + models 字典 + 可选默认（顶层 model.provider/model.default）。
+// 协议映射：openai-completions → chat_completions、anthropic-messages → anthropic_messages、
+// openai-responses → codex_responses，google-generative-ai 不支持需守卫；
+// 通用库供应商名可为中文 → providerKeyFor 确定性清洗
+const HERMES_API_MODE = {
+  'openai-completions': 'chat_completions',
+  'openai-responses': 'codex_responses',
+  'anthropic-messages': 'anthropic_messages',
+}
+
+const dispatchToHermes = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  const apiMode = HERMES_API_MODE[api]
+  if (!apiMode) {
+    throw new Error(`供应商「${provider.name}」协议为 ${api}，Hermes 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+  }
+  const name = opts.providerName || provider.name
+  const key = hermes.providerKeyFor(name)
+  hermes.upsertHermesProvider(key, { name, apiMode, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
+  const modelId = hermes.upsertHermesModel(key, model.id, { contextLength: model.contextWindow })
+  let suffix = ''
+  if (opts.setDefault) {
+    hermes.setHermesDefaultModel(key, modelId)
+    suffix = '，已设为默认模型'
+  }
+  const keyNote = key === name ? '' : `（名 ${key}）`
+  return `供应商 ${name}${keyNote} 已更新，模型 ${modelId} 已写入${suffix}`
+}
+
 // ==================== 自动网关下发 ====================
 
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
@@ -522,8 +553,8 @@ const dispatchAutoRoute = (targets) => {
     const isZcode = (t && t.app) === "zcode";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
-      // codex 走网关的 /v1/responses 入站（Responses 是 Codex 原生 wire_api），base_url 需带 /v1
-      api: (t && t.app) === "claude" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
+      // hermes 同 claude 走网关的 Anthropic Messages 入站（api_mode: anthropic_messages），base_url 不带 /v1
+      api: (t && t.app) === "claude" || (t && t.app) === "hermes" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
       baseUrl: isCodex || isKimi || isZcode ? `${baseUrl}/v1` : baseUrl,
       models,
@@ -557,6 +588,7 @@ const APP_DISPATCHERS = {
   minimax: { run: dispatchToMinimax },
   qoder: { run: dispatchToQoder },
   zcode: { run: dispatchToZcode },
+  hermes: { run: dispatchToHermes },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]

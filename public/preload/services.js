@@ -14,6 +14,7 @@ const kimi = require("./services/kimi");
 const minimax = require("./services/minimax");
 const qoder = require("./services/qoder");
 const zcode = require("./services/zcode");
+const hermes = require("./services/hermes");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -376,6 +377,19 @@ window.services = {
   ZCODE_API_TYPES: zcode.ZCODE_API_TYPES,
   ZCODE_ACCESS_TYPES: zcode.ZCODE_ACCESS_TYPES,
 
+  // ==================== Hermes（~/.hermes/config.yaml，仅模型配置） ====================
+  getHermesConfigPath: hermes.getHermesConfigPath,
+  getHermesProviderList: hermes.getHermesProviderList,
+  addHermesProvider: hermes.addHermesProvider,
+  updateHermesProvider: hermes.updateHermesProvider,
+  deleteHermesProvider: hermes.removeHermesProvider,
+  getHermesDefaultModel: hermes.getHermesDefaultModel,
+  setHermesDefaultModel: hermes.setHermesDefaultModel,
+  openHermesDir: hermes.openHermesDir,
+  openHermesConfigFile: hermes.openHermesConfigFile,
+  isHermesInstalled: hermes.isHermesInstalled,
+  HERMES_API_MODES: hermes.HERMES_API_MODES,
+
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
   KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
   KIMI_EFFORTS: kimi.KIMI_EFFORTS,
@@ -392,6 +406,7 @@ window.services = {
       kimi: false,
       qoder: false,
       zcode: false,
+      hermes: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -476,6 +491,12 @@ window.services = {
     // zcode：provider_config.json 有自定义供应商
     try {
       hasData.zcode = zcode.hasZcodeProviders();
+    } catch (e) {
+      /* ignore */
+    }
+    // hermes：config.yaml 有自定义供应商（含 Hermes 托管 providers 节）
+    try {
+      hasData.hermes = hermes.hasHermesProviders();
     } catch (e) {
       /* ignore */
     }

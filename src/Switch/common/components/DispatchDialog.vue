@@ -29,6 +29,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "MiniMax Code", value: "minimax" },
   { label: "Qoder", value: "qoder" },
   { label: "ZCode", value: "zcode" },
+  { label: "Hermes", value: "hermes" },
 ];
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
@@ -38,6 +39,7 @@ const AGENT_PROTOCOLS = {
   minimax: ["openai-completions", "openai-responses", "anthropic-messages"],
   qoder: ["openai-completions", "openai-responses", "anthropic-messages"],
   zcode: ["openai-completions", "openai-responses", "anthropic-messages"],
+  hermes: ["openai-completions", "openai-responses", "anthropic-messages"],
 };
 
 const modelKeys = ref([]);
