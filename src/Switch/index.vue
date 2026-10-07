@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from "vue";
-import { Button, Dropdown, Dialog, Switch, Divider } from "tdesign-vue-next";
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
+import { Button, Dropdown, Dialog, RadioGroup, RadioButton } from "tdesign-vue-next";
 import { ChevronDownIcon, SettingIcon } from "tdesign-icons-vue-next";
 import ConfigView from "./claude/ConfigView.vue";
 import UsageView from "./claude/UsageView.vue";
@@ -32,9 +32,10 @@ import CommonAutoRouteView from "./common/AutoRouteView.vue";
 import CommonUsageView from "./common/UsageView.vue";
 import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
+import BackgroundEffectSettings from "../components/BackgroundEffectSettings.vue";
+import AgentSideRail from "../components/AgentSideRail.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
-import { useDarkBackground } from "../composables/useDarkBackground";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
 import { APP_TABS, DEEP_LINK_ROUTES } from "./appTabs";
 
@@ -49,9 +50,17 @@ const { AGENT_META, appDropdownOptions, toggleAgentVisibility, visibleAgents } =
 // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
 const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
-const { darkBackgroundEnabled, setDarkBackground, darkEffect, setDarkEffect } =
-  useDarkBackground();
+// 设置弹窗页签：agents = Agent 启停管理，background = 深色背景特效
+const settingsTab = ref("agents");
 const showSettings = ref(false);
+
+// 左侧 agent 快速切换栏：窗口宽度超过内容上限后，左空隙 ≥ 侧栏宽 152 + 内容间距 12 +
+// 窗沿留白 8 时显示，并隐藏头部下拉（菜单变成侧栏）。800 须与 .container 的 --content-max 同步。
+const AGENT_RAIL_MIN_GAP = 172;
+const showAgentRail = ref(false);
+const updateAgentRail = () => {
+  showAgentRail.value = (window.innerWidth - 800) / 2 >= AGENT_RAIL_MIN_GAP;
+};
 
 // 图标位于 public/ 目录：必须用 BASE_URL 前缀拼接（base: './' 打包后为相对路径）
 const ASSET_BASE = import.meta.env.BASE_URL;
@@ -121,6 +130,8 @@ const handleAppSelect = (data) => {
 
 onMounted(() => {
   refreshAutoRouteEnabled();
+  updateAgentRail();
+  window.addEventListener("resize", updateAgentRail);
 
   // 根据入口命令预选对应应用
   const appMap = {
@@ -161,6 +172,10 @@ onMounted(() => {
     }, 100);
   }
 });
+
+onUnmounted(() => {
+  window.removeEventListener("resize", updateAgentRail);
+});
 </script>
 
 <template>
@@ -173,6 +188,7 @@ onMounted(() => {
           class="logo"
         />
         <Dropdown
+          v-show="!showAgentRail"
           :options="appDropdownOptions"
           :min-column-width="160"
           @click="handleAppSelect"
@@ -325,6 +341,9 @@ onMounted(() => {
       <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
     </template>
 
+    <!-- 左侧 agent 快速切换栏（宽窗口时出现在限宽内容的左侧空隙内） -->
+    <AgentSideRail v-if="showAgentRail" @select="switchApp" />
+
     <Dialog
       v-model:visible="showSettings"
       header="设置"
@@ -333,60 +352,13 @@ onMounted(() => {
       placement="center"
     >
       <div class="settings-body">
-        <!-- Agent 启停管理（最上） -->
-        <AgentVisibilitySettings />
+        <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
+          <RadioButton value="agents">Agent 启停</RadioButton>
+          <RadioButton value="background">背景特效</RadioButton>
+        </RadioGroup>
 
-        <Divider class="settings-divider" />
-
-        <div class="settings-row">
-          <div class="settings-label">
-            <div class="settings-title">黑暗模式背景特效</div>
-            <div class="settings-desc">
-              深色模式下的动态背景特效，开启后会覆盖毛玻璃背景，并可能导致电脑卡顿
-            </div>
-          </div>
-          <Switch
-            :model-value="darkBackgroundEnabled"
-            @change="setDarkBackground"
-          />
-        </div>
-        <div
-          class="effect-cards"
-          :class="{ 'effect-cards--disabled': !darkBackgroundEnabled }"
-        >
-          <div
-            class="effect-card"
-            :class="{ 'effect-card--active': darkEffect === 'prismatic' }"
-            @click="darkBackgroundEnabled && setDarkEffect('prismatic')"
-          >
-            <div class="effect-card__name">Prismatic Burst</div>
-            <div class="effect-card__desc">棱镜光谱爆裂</div>
-          </div>
-          <div
-            class="effect-card"
-            :class="{ 'effect-card--active': darkEffect === 'pixel' }"
-            @click="darkBackgroundEnabled && setDarkEffect('pixel')"
-          >
-            <div class="effect-card__name">FaultyTerminal</div>
-            <div class="effect-card__desc">故障像素终端</div>
-          </div>
-          <div
-            class="effect-card"
-            :class="{ 'effect-card--active': darkEffect === 'aurora' }"
-            @click="darkBackgroundEnabled && setDarkEffect('aurora')"
-          >
-            <div class="effect-card__name">Aurora</div>
-            <div class="effect-card__desc">流动极光</div>
-          </div>
-          <div
-            class="effect-card"
-            :class="{ 'effect-card--active': darkEffect === 'galaxy' }"
-            @click="darkBackgroundEnabled && setDarkEffect('galaxy')"
-          >
-            <div class="effect-card__name">Galaxy</div>
-            <div class="effect-card__desc">星河漫游</div>
-          </div>
-        </div>
+        <AgentVisibilitySettings v-if="settingsTab === 'agents'" />
+        <BackgroundEffectSettings v-else />
       </div>
     </Dialog>
   </div>
@@ -394,6 +366,11 @@ onMounted(() => {
 
 <style scoped>
 .container {
+  /* 限宽居中：窗口过宽时页面不再无限拉伸，两侧留空透出玻璃/特效背景；
+     --content-max 供 AgentSideRail 定位计算，与 updateAgentRail 里的 800 同步 */
+  --content-max: 800px;
+  max-width: var(--content-max);
+  margin: 0 auto;
   padding: 10px 20px 10px;
   min-height: 100vh;
   box-sizing: border-box;
@@ -460,90 +437,13 @@ onMounted(() => {
 .settings-btn:hover {
   color: var(--td-brand-color);
 }
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 0;
-}
-.settings-row + .settings-row {
-  margin-top: 8px;
-}
 .settings-body {
   max-height: 70vh;
   overflow-y: auto;
   padding-right: 4px;
 }
-.settings-divider {
-  margin: 16px 0 12px;
-}
-.settings-label {
-  flex: 1;
-}
-.settings-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--td-text-color-primary);
-}
-.settings-desc {
-  font-size: 12px;
-  color: var(--td-text-color-secondary);
-  margin-top: 2px;
-  line-height: 1.5;
-}
-.effect-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-}
-.effect-card {
-  flex: 1 1 calc(50% - 5px);
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-default);
-  background-color: var(--td-bg-color-container);
-  cursor: pointer;
-  transition:
-    border-color 0.2s,
-    background-color 0.2s,
-    box-shadow 0.2s;
-  user-select: none;
-}
-.effect-card:hover {
-  border-color: var(--td-brand-color);
-}
-.effect-card--active {
-  border-color: var(--td-brand-color);
-  background-color: var(--td-brand-color-light);
-  box-shadow: 0 0 0 1px var(--td-brand-color) inset;
-}
-.effect-card__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--td-text-color-primary);
-}
-.effect-card__desc {
-  font-size: 12px;
-  color: var(--td-text-color-secondary);
-  margin-top: 2px;
-}
-.effect-cards--disabled .effect-card {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.effect-cards--disabled .effect-card:hover {
-  border-color: var(--td-component-border);
-}
-
-/* Switch dark mode fix: darken track when off so handle (white #fff) is visible */
-:root[theme-mode="dark"] :deep(.t-switch) {
-  background-color: var(--td-gray-color-6);
-}
-:root[theme-mode="dark"] :deep(.t-switch:hover) {
-  background-color: var(--td-gray-color-5);
+.settings-tabs {
+  margin-bottom: 12px;
 }
 </style>
 

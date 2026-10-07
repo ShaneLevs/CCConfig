@@ -45,3 +45,13 @@ body {
 .t-tree__label.t-is-checked {
   --td-brand-color: var(--td-success-color);
 }
+
+/* ==================== Switch 暗色开关未选中态修正 ==================== */
+/* 深色模式下未选中轨道色偏浅，白色滑块几乎不可见；仅修正未选中态，
+   选中/禁用态保持 TDesign 默认（勿去掉 :not，否则开启态会被刷成灰）。 */
+:root[theme-mode="dark"] .t-switch:not(.t-is-checked):not(.t-is-disabled) {
+  background-color: var(--td-gray-color-6);
+}
+:root[theme-mode="dark"] .t-switch:not(.t-is-checked):not(.t-is-disabled):hover {
+  background-color: var(--td-gray-color-5);
+}
