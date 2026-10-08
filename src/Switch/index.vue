@@ -54,10 +54,10 @@ const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 const settingsTab = ref("agents");
 const showSettings = ref(false);
 
-// 左侧 agent 快速切换栏：窗口足够宽时显示（沿用「内容两侧各留 ≥ 172px」阈值，约窗口 ≥1144px，
-// 侧栏 + 内容整体居中后两侧各剩 ≥90px），显示时隐藏头部下拉（菜单变成侧栏）。
+// 左侧 agent 快速切换栏：窗口 ≥ 1000px（= 800 + 2×100）时显示；此时侧栏+内容总占位
+// 964px（152+12+800），整体居中后两侧各剩 18px。显示时隐藏头部下拉（菜单变成侧栏）。
 // 800 须与 .container 的 --content-max 同步。
-const AGENT_RAIL_MIN_GAP = 172;
+const AGENT_RAIL_MIN_GAP = 100;
 const showAgentRail = ref(false);
 const updateAgentRail = () => {
   showAgentRail.value = (window.innerWidth - 800) / 2 >= AGENT_RAIL_MIN_GAP;
