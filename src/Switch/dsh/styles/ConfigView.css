@@ -1,0 +1,113 @@
+.dsh-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.dsh-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.dsh-toolbar-left { min-width: 0; flex: 1; }
+.dsh-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.dsh-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.dsh-toolbar-right { display: flex; gap: 4px; align-items: center; }
+
+.dsh-config-warning { margin-bottom: 0; }
+.dsh-config-empty { margin-top: 12px; }
+.dsh-muted { color: var(--td-text-color-placeholder); font-size: 12px; }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* ===== 卡片（DeepSeek 官方） ===== */
+.dsh-card {
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default);
+  padding: 12px 14px;
+  background: var(--td-bg-color-container);
+}
+.dsh-card-title {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 14px; font-weight: 600; color: var(--td-text-color-primary);
+  margin-bottom: 10px;
+}
+.dsh-card-sub { font-size: 11px; font-weight: 400; color: var(--td-text-color-placeholder); }
+.dsh-card-title-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+
+.dsh-official-empty { font-size: 12px; color: var(--td-text-color-placeholder); line-height: 1.6; }
+
+/* ===== 详情栅格 ===== */
+.dsh-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.dsh-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dsh-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.dsh-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* ===== 分区标题 ===== */
+.dsh-section-title {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--td-text-color-primary);
+  margin-top: 2px;
+}
+
+/* ===== 第三方供应商列表（TDesign Collapse 手风琴） ===== */
+.dsh-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.dsh-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.dsh-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.dsh-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.dsh-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.dsh-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.dsh-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.dsh-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.dsh-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.dsh-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+.dsh-provider-body { padding: 10px 0 4px; }
+
+/* ===== 模型标签（星标 = 设为默认模型；编辑 / 删除逐模型操作） ===== */
+.dsh-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.dsh-models-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; flex-wrap: wrap; }
+.dsh-models-title-right { display: flex; align-items: center; gap: 4px; }
+.dsh-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.dsh-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.dsh-model-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: var(--td-bg-color-container-hover);
+  border-radius: var(--td-radius-default);
+  border: 1px solid var(--td-border-level-1-color);
+  transition: border-color 0.15s;
+}
+.dsh-model-tag:hover { border-color: var(--td-brand-color); }
+.dsh-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
+.dsh-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.dsh-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.dsh-model-tag-star:hover { background: var(--td-warning-color-1); }
+.dsh-model-tag-edit { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.dsh-model-tag-edit:hover { color: var(--td-brand-color); background: var(--td-brand-color-light); }
+.dsh-model-tag-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.dsh-model-tag-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
+
+/* ===== 底部说明 ===== */
+.dsh-footer-hint {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 12px; color: var(--td-text-color-placeholder);
+  border-top: 1px solid var(--td-border-level-1-color);
+  padding-top: 10px;
+}
+
+/* ===== 表单弹窗 ===== */
+.dsh-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.dsh-form-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dsh-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.dsh-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dsh-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); line-height: 1.5; }
+.dsh-form-required { color: var(--td-error-color); }
+.dsh-fetch-error { color: var(--td-error-color); }
+
+/* 模型候选拉取工具栏（首个模型 / 模型弹窗共用） */
+.dsh-models-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+
+/* 输入类型复选框行（勾选态绿色由 main.css 全局规则统一处理） */
+.dsh-chk-row { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 2px 0; }

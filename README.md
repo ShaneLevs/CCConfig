@@ -1,10 +1,10 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode**、**Hermes** 十一个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode**、**Hermes**、**DSH（DeepSeek Harness）** 十二个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
 
 ## 功能特性
 
-- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes + 通用配置，各自独立配置，一键切换
+- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH + 通用配置，各自独立配置，一键切换
 - **配置管理** — 读取、保存、切换各应用的 API 配置：
   - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
   - OpenCode：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
@@ -17,6 +17,7 @@
   - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
   - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效）
   - Hermes：`~/.hermes/config.yaml`（仅模型配置：custom_providers 供应商/内嵌模型（模型 ID + 上下文长度）增删改，api_mode 支持 chat_completions / anthropic_messages / codex_responses / bedrock_converse；星标 = 顶层 model.provider / model.default 默认指针；Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示；跟随 HERMES_HOME）
+  - DSH（DeepSeek Harness）：`<DSH_HOME>/profiles/<profile>/cordis.patch.yml`（仅模型配置：DeepSeek 官方路由（llm-deepseek 条目：官方密钥 / 自定义 Messages 兼容地址 / thinking / reasoningEffort / 模型目录）+ 第三方供应商（llm-pi-ai 的 providers 字典：协议 / Base URL / 凭据引用 / 模型目录）+ 默认模型（agent-default-model 条目，星标即「切换」）；供应商与模型分开配置（同 ZCode 页），凭据引用名按路由名自动派生、界面不填；密钥存 `<DSH_HOME>/.credentials.yaml` 的 refs，patch 只写凭据引用名；dsh 监听该文件变更即时生效；跟随 DSH_HOME / DSH_PROFILE）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动网关（本地模型服务）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
@@ -74,6 +75,7 @@ npm run build
 | `Codex配置` | 打开 Codex 配置管理 |
 | `Kimi Code配置` | 打开 Kimi Code 模型配置 |
 | `MiniMax Code配置` | 打开 MiniMax Code 模型配置 |
+| `dsh配置` / `DeepSeek Harness配置` | 打开 DSH（DeepSeek Harness）模型配置 |
 | 粘贴 SkillHub / 魔搭链接 | 自动进入 Skill 安装（通用 / Claude Code / OpenCode） |
 | `pi install <包名>` | 自动进入 Pi Extension 安装 |
 
@@ -97,8 +99,8 @@ public/       # uTools 静态资源（plugin.json、各应用图标）
 docs/         # 设计文档与计划
 ```
 
-- **`src/`** — 渲染层。`main.js`/`App.vue` 入口与主题；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、背景特效等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
-- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / plugins / dispatch / autoroute / commands / usage / crypto），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
+- **`src/`** — 渲染层。`main.js`/`App.vue` 入口与主题；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、背景特效等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
+- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / commands / usage / crypto），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
 
 ## 数据流
 
@@ -196,6 +198,34 @@ Hermes:
   删除供应商时若 model.provider 悬空，改指首个剩余供应商（无剩余则移除指针）
   通用库下发：协议映射 openai-completions→chat_completions / anthropic-messages→anthropic_messages / openai-responses→codex_responses（google 拒绝）；
     provider 名经 providerKeyFor 确定性清洗（同上）；网关下发走 anthropic_messages + 网关根地址（同 Claude，不带 /v1）
+
+DSH（DeepSeek Harness）:
+  <DSH_HOME>/profiles/<profile>/cordis.patch.yml（DSH_HOME 默认 ~/.dsh，DSH_PROFILE 默认 desktop）→ js-yaml 读写（解析失败抛错阻断写回）
+  文件是顶层 YAML 数组，每条 loader patch 条目 { id, name, config }；本插件只管理三条模型路由条目，
+  其余条目（ui-chat / ui-settings / 用户插件）与文件头部注释块原样保留：
+    llm-deepseek        官方 Messages 路由：apiKeyEnv（固定派生 DEEPSEEK_API_KEY，界面不填）/ baseURL（留空 = 官方
+                        https://api.deepseek.com/anthropic，或 $DEEPSEEK_BASE_URL）/ thinking（enabled|disabled）/
+                        reasoningEffort（off|low|high|max）/ maxTokens / defaultContextWindow /
+                        models（id / name / contextWindow / maxTokens / inputModalities / systemPromptUpdate /
+                        toolUpdate 等；缺省 = 内置 deepseek-flash（文+图，1M）与 deepseek-v4-pro（纯文本）；
+                        界面首次新增/编辑模型即转为自定义目录，清空即回退内置目录）
+    llm-pi-ai           第三方供应商：config.providers.<路由名>（displayName / apiKeyEnv / api（四协议与通用库同名）/
+                        baseURL / models（非空，手写路由必需：id / name / contextWindow / maxTokens / input /
+                        reasoningEfforts）/ compat.thinkingFormat / headers / retryPolicy 等，未知键原样往返）
+    agent-default-model 默认模型（即「切换」语义）：config.provider（官方固定 deepseek-official，第三方为 providers 键）+
+                        config.model + 可选 reasoningEffort
+  界面约定：供应商与模型分开配置（同 ZCode 页）——供应商弹窗只管名称（支持中文）/ 路由名（必填，小写英文+数字+中划线）/
+    协议（手工新增仅开放 openai-completions 与 anthropic-messages）/ Base URL / API Key / thinkingFormat；
+    模型在卡片内以标签列出，逐个「添加模型 / 编辑模型」弹窗维护（上下文窗口与最大输出用共享预设档位，同 ZCode）；
+    模型标签上的星标 = 设为默认模型（同供应商内切换保留原推理强度，跨供应商切换清空）
+  凭据引用名自动派生（界面不填）：第三方 = <路由名大写，非字母数字转 _>_API_KEY；官方 = DEEPSEEK_API_KEY（与 dsh 默认一致）
+  密钥：<DSH_HOME>/.credentials.yaml 顶层 refs 字典（{ 引用名: 密钥 }）——patch 不含明文密钥；
+    只增删受管引用，version / records（OAuth 授权记录）等其余内容原样往返；删除路由且无其他引用时清理对应密钥
+  路由名清洗（仅通用库下发）：中文/符号供应商名 → 小写 ASCII 骨架 + 稳定哈希（同名恒同路由，upsert 幂等）
+  默认指针兜底：删除/改名被设为默认的模型时改指该路由目录内首个模型（无可指路由则移除条目），不留悬空指针
+  dsh 监听该文件（profile HMR），写入后即时生效；凭据文件改动如未生效可重启 dsh
+  通用库下发：四类协议与 pi-ai 协议同名（identity 映射，无协议守卫），供应商名经 providerRouteFor 清洗为路由名；
+    密钥写入该路由的 refs[<ROUTE>_API_KEY]；网关下发走 anthropic-messages + 网关根地址（SDK 自行追加 /v1/messages）
 ```
 
 ## 认证与模型选择细节

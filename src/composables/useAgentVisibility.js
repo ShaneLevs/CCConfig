@@ -17,7 +17,7 @@ const VISIBLE_AGENTS_DB = (() => {
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
 })();
 const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
-export const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
+export const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"];
 export const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}icon-claude.png` },
   opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
@@ -30,6 +30,7 @@ export const AGENT_META = {
   qoder: { name: "Qoder", icon: `${ASSET_BASE}icon-qoder.png` },
   zcode: { name: "ZCode", icon: `${ASSET_BASE}icon-zcode.png` },
   hermes: { name: "Hermes", icon: `${ASSET_BASE}icon-hermes.png` },
+  dsh: { name: "DSH", icon: `${ASSET_BASE}icon-dsh.png` },
 };
 
 const { activeApp } = useAppContext();

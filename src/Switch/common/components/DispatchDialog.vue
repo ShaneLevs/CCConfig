@@ -30,6 +30,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Qoder", value: "qoder" },
   { label: "ZCode", value: "zcode" },
   { label: "Hermes", value: "hermes" },
+  { label: "DSH", value: "dsh" },
 ];
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
@@ -177,10 +178,13 @@ watch(() => props.visible, (v) => {
             <Tooltip v-else-if="opt.value === 'zcode'" content="仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 ZCode；供应商名会按 ZCode 规则清洗为小写 ID">
               <Checkbox :value="opt.value" :disabled="isTargetDisabled('zcode')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
             </Tooltip>
+            <Tooltip v-else-if="opt.value === 'dsh'" content="dsh 支持四类协议（手工新增供应商时仅开放 OpenAI Chat / Anthropic Messages）；中文供应商名会自动清洗为路由名，密钥写入 ~/.dsh/.credentials.yaml">
+              <Checkbox :value="opt.value" :disabled="isTargetDisabled('dsh')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
+            </Tooltip>
             <Checkbox v-else :value="opt.value" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
           </label>
         </CheckboxGroup>
-        <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）；ZCode → ~/.zcode/v2/provider_config.json（自定义模型，ID 按 ZCode 规则清洗）</div>
+        <div class="common-form-hint">Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）；ZCode → ~/.zcode/v2/provider_config.json（自定义模型，ID 按 ZCode 规则清洗）；Hermes → ~/.hermes/config.yaml；DSH → ~/.dsh/profiles/&lt;profile&gt;/cordis.patch.yml（llm-pi-ai.providers，路由名自动 ASCII 化，密钥写入 .credentials.yaml）</div>
       </div>
     </div>
   </Dialog>

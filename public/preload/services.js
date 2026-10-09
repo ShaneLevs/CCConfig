@@ -15,6 +15,7 @@ const minimax = require("./services/minimax");
 const qoder = require("./services/qoder");
 const zcode = require("./services/zcode");
 const hermes = require("./services/hermes");
+const dsh = require("./services/dsh");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -390,6 +391,33 @@ window.services = {
   isHermesInstalled: hermes.isHermesInstalled,
   HERMES_API_MODES: hermes.HERMES_API_MODES,
 
+  // ==================== DSH（DeepSeek Harness：~/.dsh/profiles/<profile>/cordis.patch.yml，仅模型配置） ====================
+  getDshProfileName: dsh.getDshProfileName,
+  getDshPatchPath: dsh.getDshPatchPath,
+  getDshCredentialsPath: dsh.getDshCredentialsPath,
+  getDshConfig: dsh.getDshConfig,
+  getDshOfficial: dsh.getDshOfficial,
+  saveDshOfficial: dsh.saveDshOfficial,
+  removeDshOfficial: dsh.removeDshOfficial,
+  getDshProviderList: dsh.getDshProviderList,
+  addDshProvider: dsh.addDshProvider,
+  updateDshProvider: dsh.updateDshProvider,
+  deleteDshProvider: dsh.deleteDshProvider,
+  getDshDefaultModel: dsh.getDshDefaultModel,
+  setDshDefaultModel: dsh.setDshDefaultModel,
+  getDshCredential: dsh.getDshCredential,
+  openDshDir: dsh.openDshDir,
+  openDshConfigFile: dsh.openDshConfigFile,
+  openDshCredentialsFile: dsh.openDshCredentialsFile,
+  isDshInstalled: dsh.isDshInstalled,
+  DSH_PROTOCOLS: dsh.DSH_PROTOCOLS,
+  DSH_THINKING_FORMATS: dsh.DSH_THINKING_FORMATS,
+  DSH_EFFORTS: dsh.DSH_EFFORTS,
+  DSH_PI_EFFORTS: dsh.DSH_PI_EFFORTS,
+  DSH_DEFAULT_MODELS: dsh.DSH_DEFAULT_MODELS,
+  DSH_OFFICIAL_ROUTE: dsh.OFFICIAL_ROUTE,
+  DSH_OFFICIAL_BASE_URL: dsh.OFFICIAL_DEFAULT_BASE_URL,
+
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
   KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
   KIMI_EFFORTS: kimi.KIMI_EFFORTS,
@@ -407,6 +435,7 @@ window.services = {
       qoder: false,
       zcode: false,
       hermes: false,
+      dsh: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -497,6 +526,12 @@ window.services = {
     // hermes：config.yaml 有自定义供应商（含 Hermes 托管 providers 节）
     try {
       hasData.hermes = hermes.hasHermesProviders();
+    } catch (e) {
+      /* ignore */
+    }
+    // dsh：cordis.patch.yml 有受管模型路由条目（官方 / 第三方 / 默认模型）
+    try {
+      hasData.dsh = dsh.hasDshConfig();
     } catch (e) {
       /* ignore */
     }

@@ -46,6 +46,7 @@ export const APP_TABS = {
   qoder: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
   zcode: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
   hermes: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
+  dsh: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
 };
 
 // uTools 入口深链路由 → 目标应用 / 页签 / 子视图 ref 方法

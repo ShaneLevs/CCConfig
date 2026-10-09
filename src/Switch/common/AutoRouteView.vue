@@ -20,6 +20,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Qoder", value: "qoder" },
   { label: "ZCode", value: "zcode" },
   { label: "Hermes", value: "hermes" },
+  { label: "DSH", value: "dsh" },
 ];
 
 const loading = ref(false);

@@ -25,6 +25,7 @@ import MinimaxConfigView from "./minimax/ConfigView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
 import ZcodeConfigView from "./zcode/ConfigView.vue";
 import HermesConfigView from "./hermes/ConfigView.vue";
+import DshConfigView from "./dsh/ConfigView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -147,6 +148,7 @@ onMounted(() => {
     qoderConfig: "qoder",
     zcodeConfig: "zcode",
     hermesConfig: "hermes",
+    dshConfig: "dsh",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -347,6 +349,11 @@ onUnmounted(() => {
       <!-- Hermes views（仅模型配置） -->
       <template v-if="isAppReady('hermes')">
         <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
+      </template>
+
+      <!-- DSH views（DeepSeek Harness，仅模型配置） -->
+      <template v-if="isAppReady('dsh')">
+        <DshConfigView v-if="activeApp === 'dsh' && activeTab === 'config'" />
       </template>
 
       <Dialog
