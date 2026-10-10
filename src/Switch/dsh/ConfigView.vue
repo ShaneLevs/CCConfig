@@ -685,14 +685,14 @@ onMounted(refresh);
       <div class="dsh-edit-form">
         <div class="dsh-form-item">
           <label>供应商名称 <span class="dsh-form-required">*</span></label>
-          <Input v-model="providerForm.displayName" placeholder="公司中转（支持中文，仅作展示）" />
+          <Input v-model="providerForm.displayName" placeholder="例如：我的中转站（支持中文）" />
         </div>
         <div class="dsh-form-item">
           <label>路由名（providers 字典键） <span class="dsh-form-required">*</span></label>
           <Input
             :value="providerForm.route"
             :disabled="!!providerEditing"
-            placeholder="newapi"
+            placeholder="例如：my-relay"
             @change="onRouteInput"
           />
           <div class="dsh-form-hint">
@@ -739,7 +739,7 @@ onMounted(refresh);
               :loading="fetchingModels"
               filterable
               clearable
-              placeholder="glm-5.3-flash"
+              placeholder="例如：deepseek-chat"
               @change="providerForm.firstModel = $event"
             />
             <div v-if="fetchModelError" class="dsh-form-hint dsh-fetch-error">{{ fetchModelError }}</div>
@@ -766,7 +766,7 @@ onMounted(refresh);
             :loading="fetchingModels"
             filterable
             clearable
-            placeholder="glm-5.3-flash"
+            placeholder="例如：deepseek-chat"
             @change="modelForm.modelId = $event"
           />
           <div v-if="fetchingModels" class="dsh-form-hint">正在从该路由的 /models 拉取候选…</div>
@@ -775,7 +775,7 @@ onMounted(refresh);
         </div>
         <div class="dsh-form-item">
           <label>显示名（name，可选）</label>
-          <Input v-model="modelForm.name" placeholder="GLM 5.3 Flash" />
+          <Input v-model="modelForm.name" placeholder="例如：DeepSeek Chat" />
         </div>
         <ModelLimitsFields
           v-model:context="modelForm.contextWindow"
