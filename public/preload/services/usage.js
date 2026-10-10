@@ -69,14 +69,18 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
 // 文档 ID 按机器隔离：ccswitch_agent_usage_<agent>_<nativeId>（同 heatmap/usage_cache 先例，
 // 统计派生自本机文件，跨设备同步互相覆盖无意义）。
 // days 形状与 heatmap 一致：{ 'YYYY-MM-DD': { tokens, inputTokens, outputTokens, models } }
+// 各 agent 统计页打开时在「计算完成」处落库（Claude 另有自己的热力图历史档），
+// DSH 反过来把这份落库数据当历史档用：会话日志被清理后，已消失日期仍能参与统计。
 
-const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi']
+// claude / opencode / pi / dsh：「通用」统计页合并这些 agent；dsh 另用它做历史合并
+const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh']
+
+const agentUsageDocId = (agent) => `ccswitch_agent_usage_${agent}_${getNativeId()}`
 
 // 全零结果跳过写入：OpenCode/Pi 读取失败兜底会返回空统计，避免误清历史数据
 const saveAgentUsage = (agent, contributions) => {
   try {
-    const nativeId = getNativeId()
-    const docId = `ccswitch_agent_usage_${agent}_${nativeId}`
+    const docId = agentUsageDocId(agent)
     const days = {}
     for (const day of contributions) {
       if (day.tokens > 0) {
@@ -89,7 +93,7 @@ const saveAgentUsage = (agent, contributions) => {
       }
     }
     if (Object.keys(days).length === 0) return false
-    const doc = { _id: docId, nativeId, agent, days, updatedAt: Date.now() }
+    const doc = { _id: docId, nativeId: getNativeId(), agent, days, updatedAt: Date.now() }
     const existing = window.utools.db.get(docId)
     if (existing) doc._rev = existing._rev
     window.utools.db.put(doc)
@@ -97,6 +101,17 @@ const saveAgentUsage = (agent, contributions) => {
   } catch (error) {
     console.error('[agent usage] 落库失败:', agent, error)
     return false
+  }
+}
+
+// 读单个 agent 的落库聚合（DSH 统计页把它当历史档，合并进当天统计）
+const readAgentUsage = (agent) => {
+  try {
+    const doc = window.utools.db.get(agentUsageDocId(agent))
+    return doc?.days || {}
+  } catch (error) {
+    console.error('[agent usage] 读库失败:', agent, error)
+    return {}
   }
 }
 
@@ -108,7 +123,7 @@ const readAllAgentUsage = () => {
   const dayMap = new Map()
   for (const agent of AGENT_USAGE_IDS) {
     try {
-      const doc = window.utools.db.get(`ccswitch_agent_usage_${agent}_${getNativeId()}`)
+      const doc = window.utools.db.get(agentUsageDocId(agent))
       if (!doc?.days) continue
       const dayCount = Object.keys(doc.days).length
       if (dayCount === 0) continue
@@ -185,4 +200,4 @@ const readAllAgentUsage = () => {
   }
 }
 
-module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAllAgentUsage }
+module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAllAgentUsage }

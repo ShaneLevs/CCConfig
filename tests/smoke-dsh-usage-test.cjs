@@ -58,14 +58,23 @@ const PLAIN_LINES = [
   JSON.stringify({ type: 'session', version: 4, id: 'session-plain', createdAt: Date.parse('2026-01-07T08:00:00Z'), cwd: '/tmp/proj-plain' }),
   JSON.stringify({ type: 'assistant/message', seq: 2, time: Date.parse('2026-01-07T08:01:00Z'), data: { usage: { inputTokens: 5, outputTokens: 5, totalTokens: 10 }, message: { source: { model: 'deepseek-v4-pro' } } } }),
 ].join('\n') + '\n'
+// 与帧 A 同一天（2026-01-05）但量更小的明文日志：验证历史合并「同一天取较大值」
+const SMALL_SAME_DAY = [
+  JSON.stringify({ type: 'session', version: 4, id: 'session-small', createdAt: Date.parse('2026-01-05T09:00:00Z'), cwd: '/tmp/proj-small' }),
+  JSON.stringify({ type: 'assistant/message', time: Date.parse('2026-01-05T09:01:00Z'), data: { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, message: { source: { model: 'retired-model' } } } }),
+].join('\n') + '\n'
 
 const sessionsRoot = path.join(tmp, 'sessions')
+const HISTORY_DOC = 'ccswitch_agent_usage_dsh_test-native'
 const writeLog = (relDir, name, chunks) => {
   const dir = path.join(sessionsRoot, relDir)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, name), Buffer.concat(chunks))
 }
-const rmSessions = () => fs.rmSync(sessionsRoot, { recursive: true, force: true })
+// 只删会话日志（保留落库历史）
+const rmLogs = () => fs.rmSync(sessionsRoot, { recursive: true, force: true })
+// 会话日志 + DSH 落库历史一起清空：历史会被合并进统计，分区用例需要干净环境
+const rmSessions = () => { rmLogs(); savedDocs.delete(HISTORY_DOC) }
 
 // ==================== 1. 空档 ====================
 console.log('1. 空档')
@@ -138,6 +147,7 @@ rmSessions()
 writeLog(path.join('proj-junk', 'session-junk'), 'session.v4.jsonl.zstd', [Buffer.from('not a zstd frame at all', 'utf8')])
 result = dshUsage.readDshUsage(true)
 eq(result.summary.messageCount, 0, '非法帧头不报错、统计为空')
+ok(!savedDocs.has(HISTORY_DOC), '全零结果不落库（避免误清已有历史）')
 const scan = dshUsage.scanZstdFrames(Buffer.from('0123456789', 'utf8'))
 eq(scan.frames, [], 'scanZstdFrames 对垃圾数据返回空帧表')
 
@@ -163,6 +173,47 @@ fs.rmSync(path.join(sessionsRoot, 'proj-a'), { recursive: true, force: true })
 writeLog(path.join('proj-plain', 'session-plain'), 'session.v4.jsonl', [Buffer.from(PLAIN_LINES, 'utf8')])
 result = dshUsage.readDshUsage(true)
 eq(result.summary.messageCount, 1, '删除部分项目后仍能统计剩余会话')
+
+// ==================== 7. 历史落库 / 合并 / 回放 ====================
+console.log('7. 历史落库与合并')
+rmSessions()
+writeLog(path.join('proj-a', 'session-aaa'), 'session.v4.jsonl.zstd', [FRAME_A])
+dshUsage.readDshUsage(true)
+const histDoc = savedDocs.get(HISTORY_DOC)
+ok(!!histDoc, '每日聚合落库到 ccswitch_agent_usage_dsh_<nativeId>')
+eq(Object.keys(histDoc.days), ['2026-01-05'], '只落库有量的日期')
+eq(histDoc.days['2026-01-05'].tokens, 1070, '落库当天 tokens')
+eq(histDoc.days['2026-01-05'].inputTokens, 1050, '落库当天输入（含缓存）')
+eq(
+  histDoc.days['2026-01-05'].models['deepseek-official/deepseek-flash'],
+  { inputTokens: 100, outputTokens: 20, cacheReadTokens: 900, cacheCreationTokens: 50 },
+  '落库保留模型缓存明细（供「通用」统计页重算）',
+)
+
+// 「通用」统计页（readAllAgentUsage）把 DSH 一起合并
+const commonUsage = require('../public/preload/services/usage').readAllAgentUsage()
+eq(commonUsage.summary.totalTokens, 1070, '通用统计页纳入 DSH 落库数据')
+eq(commonUsage.agents.map((a) => a.agent), ['dsh'], '通用统计页 agent 元信息包含 dsh')
+eq(commonUsage.modelStats[0].inputTokens, 1050, '通用统计页模型输入含缓存（与 DSH 页口径一致）')
+
+// 会话日志被清理：回放落库历史，统计不归零
+rmLogs()
+result = dshUsage.readDshUsage(true)
+eq(result.summary.totalTokens, 1070, '日志被清理后回放历史档，统计不归零')
+eq(result.summary.messageCount, 0, '回放历史时无实时消息数')
+eq(result.modelStats[0].name, 'deepseek-official/deepseek-flash', '回放历史时模型分布仍可显示')
+
+// 同一天日志缩水（旧日志被清理 / 压缩）：取历史较大值，不被覆盖
+rmLogs()
+writeLog(path.join('proj-small', 'session-small'), 'session.v4.jsonl', [Buffer.from(SMALL_SAME_DAY, 'utf8')])
+result = dshUsage.readDshUsage(true)
+eq(result.summary.totalTokens, 1070, '同一天取较大值：日志缩水后历史不被覆盖')
+eq(result.modelStats.length, 1, '模型分布同样取历史档')
+eq(result.modelStats[0].name, 'deepseek-official/deepseek-flash', '历史模型名保留（不退化成本次解析的模型）')
+eq(result.contributions.find((d) => d.date === '2026-01-05').models['deepseek-official/deepseek-flash'].cacheReadTokens, 900, '历史缓存明细保留')
+
+// 落库写回的是合并后的结果：历史档不会被缩水结果清掉
+eq(savedDocs.get(HISTORY_DOC).days['2026-01-05'].tokens, 1070, '落库写回合并结果，历史档不缩水')
 
 console.log(`\n结果: ${passed} 通过, ${failed} 失败`)
 fs.rmSync(tmp, { recursive: true, force: true })

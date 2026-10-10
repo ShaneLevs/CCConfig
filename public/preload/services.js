@@ -206,6 +206,10 @@ window.services = {
       const s = pi.readPiUsage()
       collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
+    try {
+      const s = dshUsage.readDshUsage()
+      collected.dsh = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] DSH 采集失败:', e); collected.dsh = false }
     return collected
   },
   readCommonUsage: usage.readAllAgentUsage,

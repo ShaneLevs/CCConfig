@@ -18,6 +18,8 @@ const usage = require('./usage')
 //   单日 tokens = 输入 + 输出；day.models[name] 存「未缓存输入 / 输出 / 缓存读 / 缓存写」，
 //   day.inputTokens 存含缓存输入（OpenCode 同口径，页面日期筛选直接取该字段）。
 //   summary.inputTokens = 总 tokens - 输出（含缓存），modelStats 同样按含缓存口径重算。
+// 历史落库：每日聚合落 ccswitch_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
+//   读取时按「同一天取较大值」合并历史：会话日志被清理后历史不缩水，日志全没了就直接回放历史。
 // 只统计 assistant/message，因为它同时带用量与模型归属。assistant/attempt（失败重试）只有
 // 输入、没有模型字段，compaction/summary、会话标题、web search 等辅助请求也不属于对话用量，
 // 一律不计入，避免污染模型分布。
@@ -277,11 +279,12 @@ const emptyResult = () => {
 //   day.inputTokens          = 当天输入（含缓存）——日期区间筛选直接取该字段显示
 //   day.models[].inputTokens = 当天该模型的未缓存输入——页面/下面的重算会再叠加
 //                              cacheReadTokens + cacheCreationTokens，存含缓存会重复计数
-const summarize = (stats, messageCount) => {
+// 幂等：day.inputTokens 恒等于 tokens - outputTokens，历史合并后可直接整体重算。
+const aggregate = (contributions, messageCount, sessionCount, avgTokensPerSession) => {
   let totalTokens = 0
   let outputTokens = 0
   const modelMap = new Map()
-  for (const day of stats.contributions) {
+  for (const day of contributions) {
     totalTokens += day.tokens || 0
     outputTokens += day.outputTokens || 0
     // calculateStats 写入的是未缓存输入，这里改写成含缓存输入
@@ -304,20 +307,62 @@ const summarize = (stats, messageCount) => {
       inputTokens: totalTokens - outputTokens,
       outputTokens,
       messageCount,
-      sessionCount: stats.summary?.sessionCount || 0,
+      sessionCount,
     },
     modelStats: Array.from(modelMap.values()).sort((a, b) => b.tokens - a.tokens),
-    contributions: stats.contributions,
-    avgTokensPerSession: stats.avgTokensPerSession || 0,
-    sessionCount: stats.summary?.sessionCount || 0,
+    contributions,
+    avgTokensPerSession: avgTokensPerSession || 0,
+    sessionCount,
     messageCount,
   }
+}
+
+// ==================== 历史合并 ====================
+// DSH 会清理 / 压缩旧会话日志，这里用「通用」统计页共用的落库文档当历史档
+// （ccswitch_agent_usage_dsh_<nativeId>，days = { 'YYYY-MM-DD': { tokens, inputTokens, outputTokens, models } }）：
+// 同一天取较大值——日志被删或被压缩后，历史档里更完整的数字不会被缩水覆盖。
+// 注：readAllAgentUsage 只消费 tokens / outputTokens / models，本页写回的 day.inputTokens（含缓存）
+// 不会被它当成未缓存输入再叠加一次缓存。
+const mergeHistory = (contributions) => {
+  const history = usage.readAgentUsage('dsh')
+  if (Object.keys(history).length === 0) return false
+  let changed = false
+  for (const day of contributions) {
+    const hist = history[day.date]
+    if (!hist || (hist.tokens || 0) <= (day.tokens || 0)) continue
+    day.tokens = hist.tokens || 0
+    day.outputTokens = hist.outputTokens || 0
+    day.models = hist.models || {}
+    changed = true
+  }
+  return changed
+}
+
+// 会话日志全没了（被清理 / 换机）：直接回放历史档，避免历史归零；无历史返回 null
+const statsFromHistory = () => {
+  const history = usage.readAgentUsage('dsh')
+  const dates = Object.keys(history)
+  if (dates.length === 0) return null
+  const contributions = usage.fillEmptyContributions(
+    dates.sort().map((date) => ({ date, ...history[date] })),
+  )
+  return aggregate(contributions, 0, 0, 0)
 }
 
 const buildStats = () => {
   const { messageRecords, sessionMap } = collectRecords()
   const stats = usage.calculateStats(messageRecords, sessionMap)
-  return summarize(stats, messageRecords.length)
+  const contributions = stats.contributions
+  mergeHistory(contributions)
+  const result = aggregate(
+    contributions,
+    messageRecords.length,
+    stats.summary?.sessionCount || 0,
+    stats.avgTokensPerSession,
+  )
+  // 落库（「通用」统计页数据源 + 本页历史档）：全零结果由落库层跳过，不会清空历史
+  usage.saveAgentUsage('dsh', contributions)
+  return result
 }
 
 // ==================== 缓存 ====================
@@ -366,7 +411,8 @@ const calcSignature = (logs) => {
 const readDshUsage = (forceRefresh = false) => {
   try {
     const logs = listSessionLogs()
-    if (logs.length === 0) return emptyResult()
+    // 日志全没了（被清理 / 换机）：回放落库历史，避免历史归零；无历史才返回空档
+    if (logs.length === 0) return statsFromHistory() || emptyResult()
     const signature = calcSignature(logs)
     if (!forceRefresh) {
       const cached = getCache()

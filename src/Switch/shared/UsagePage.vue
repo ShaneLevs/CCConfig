@@ -1,5 +1,5 @@
 <script setup>
-// 通用统计页：Claude Code / OpenCode / Pi Agent 共用同一页面，仅数据源与文案不同。
+// 通用统计页：Claude Code / Pi Agent / OpenCode / DSH 与「通用配置」汇总统计共用同一页面，仅数据源与文案不同。
 // - 热力图：固定展示最近 N 周（铺满整行，GitHub 风格）
 // - 模型使用分布：进度条相对最大值（最多的模型整条满，其余按比例）
 import { ref, computed, onMounted, nextTick } from "vue";
