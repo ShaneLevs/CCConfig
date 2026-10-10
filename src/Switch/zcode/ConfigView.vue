@@ -479,6 +479,7 @@ onMounted(refresh);
       <div class="zcode-edit-form">
         <div class="zcode-form-item">
           <label>模型 ID <span class="zcode-form-required">*</span></label>
+          <!-- 只绑 @change：TDesign 的 @input 未声明为组件事件，$event 是原生 InputEvent（不是输入值） -->
           <AutoComplete
             :value="addModelForm.model"
             :options="modelOptions"
@@ -487,7 +488,6 @@ onMounted(refresh);
             clearable
             placeholder="glm-5.3-flash"
             @change="addModelForm.model = $event"
-            @input="addModelForm.model = $event"
           />
           <div v-if="fetchingModels" class="zcode-form-hint">正在从该供应商拉取模型列表…</div>
           <div v-else-if="fetchModelError" class="zcode-form-hint zcode-fetch-error">

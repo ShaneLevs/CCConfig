@@ -417,6 +417,7 @@ onMounted(refresh);
       <div class="qoder-edit-form">
         <div class="qoder-form-item">
           <label>模型 ID <span class="qoder-form-required">*</span></label>
+          <!-- 只绑 @change：TDesign 的 @input 未声明为组件事件，$event 是原生 InputEvent（不是输入值） -->
           <AutoComplete
             :value="addModelForm.model"
             :options="modelOptions"
@@ -425,7 +426,6 @@ onMounted(refresh);
             clearable
             placeholder="qwen3.8-flash"
             @change="addModelForm.model = $event"
-            @input="addModelForm.model = $event"
           />
           <div v-if="fetchingModels" class="qoder-form-hint">正在从该供应商拉取模型列表…</div>
           <div v-else-if="fetchModelError" class="qoder-form-hint qoder-fetch-error">

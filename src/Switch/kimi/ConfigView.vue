@@ -522,6 +522,7 @@ onMounted(refresh);
       <div class="kimi-edit-form">
         <div class="kimi-form-item">
           <label>模型 ID <span class="kimi-form-required">*</span></label>
+          <!-- 只绑 @change：TDesign 的 @input 未声明为组件事件，$event 是原生 InputEvent（不是输入值） -->
           <AutoComplete
             :value="addModelForm.model"
             :options="modelOptions"
@@ -530,7 +531,6 @@ onMounted(refresh);
             clearable
             placeholder="deepseek-chat"
             @change="onModelIdInput"
-            @input="onModelIdInput"
           />
           <div v-if="fetchingModels" class="kimi-form-hint">正在从该供应商拉取模型列表…</div>
           <div v-else-if="fetchModelError" class="kimi-form-hint kimi-fetch-error">
