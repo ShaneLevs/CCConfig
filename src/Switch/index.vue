@@ -26,6 +26,7 @@ import QoderConfigView from "./qoder/ConfigView.vue";
 import ZcodeConfigView from "./zcode/ConfigView.vue";
 import HermesConfigView from "./hermes/ConfigView.vue";
 import DshConfigView from "./dsh/ConfigView.vue";
+import DshUsageView from "./dsh/UsageView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -351,9 +352,13 @@ onUnmounted(() => {
         <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
       </template>
 
-      <!-- DSH views（DeepSeek Harness，仅模型配置） -->
+      <!-- DSH views（DeepSeek Harness：模型配置 + 使用统计） -->
       <template v-if="isAppReady('dsh')">
         <DshConfigView v-if="activeApp === 'dsh' && activeTab === 'config'" />
+        <DshUsageView
+          v-if="isTabVisited('dsh', 'usage')"
+          v-show="activeApp === 'dsh' && activeTab === 'usage'"
+        />
       </template>
 
       <Dialog

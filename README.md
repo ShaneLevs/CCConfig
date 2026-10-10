@@ -17,7 +17,7 @@
   - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
   - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效）
   - Hermes：`~/.hermes/config.yaml`（仅模型配置：custom_providers 供应商/内嵌模型（模型 ID + 上下文长度）增删改，api_mode 支持 chat_completions / anthropic_messages / codex_responses / bedrock_converse；星标 = 顶层 model.provider / model.default 默认指针；Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示；跟随 HERMES_HOME）
-  - DSH（DeepSeek Harness）：`<DSH_HOME>/profiles/<profile>/cordis.patch.yml`（仅模型配置：DeepSeek 官方路由（llm-deepseek 条目：官方密钥 / 自定义 Messages 兼容地址 / thinking / reasoningEffort / 模型目录）+ 第三方供应商（llm-pi-ai 的 providers 字典：协议 / Base URL / 凭据引用 / 模型目录）+ 默认模型（agent-default-model 条目，星标即「切换」）；供应商与模型分开配置（同 ZCode 页），凭据引用名按路由名自动派生、界面不填；密钥存 `<DSH_HOME>/.credentials.yaml` 的 refs，patch 只写凭据引用名；dsh 监听该文件变更即时生效；跟随 DSH_HOME / DSH_PROFILE）
+  - DSH（DeepSeek Harness）：`<DSH_HOME>/profiles/<profile>/cordis.patch.yml`（模型配置：DeepSeek 官方路由（llm-deepseek 条目：官方密钥 / 自定义 Messages 兼容地址 / thinking / reasoningEffort / 模型目录）+ 第三方供应商（llm-pi-ai 的 providers 字典：协议 / Base URL / 凭据引用 / 模型目录）+ 默认模型（agent-default-model 条目，星标即「切换」）；供应商与模型分开配置（同 ZCode 页），凭据引用名按路由名自动派生、界面不填；密钥存 `<DSH_HOME>/.credentials.yaml` 的 refs，patch 只写凭据引用名；dsh 监听该文件变更即时生效；跟随 DSH_HOME / DSH_PROFILE），另有使用统计页（解析 `<DSH_HOME>/sessions` 会话日志）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / OpenCode / Pi）的使用数据，纯读 uTools DB 秒开
 - **自动网关（本地模型服务）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
 - **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
@@ -28,6 +28,7 @@
   - Claude：DB 缓存加速二次打开（`file_count:max_mtime` 签名校验），热力图历史持久化，JSONL 读取失败时从历史兜底重建
   - OpenCode：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
   - Pi Agent：JSONL sessions 解析聚合
+  - DSH：会话日志为「多帧 zstd 容器 + JSONL 事件」，内嵌纯 JS 解码器 fzstd 逐帧解压（uTools 的 Node 20 无 `node:zlib` zstd）；按 `assistant/message` 事件的 `usage` 与 `message.source` 聚合，模型按「供应商 / 模型」区分，断尾帧跳过，签名 `日志数:总字节:最新 mtime` 缓存加速
   - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问
 - **模型 CRUD** — OpenCode / Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，支持自动从 `/models` API 拉取模型列表；OpenCode / Pi / omp 模型支持上下文窗口与最大输出预设+自定义，OpenCode 另支持 reasoning / modalities（输入输出模态）/ options.effort / options.thinking 思考参数配置，设置默认模型自动切换供应商
 - **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
@@ -226,6 +227,17 @@ DSH（DeepSeek Harness）:
   dsh 监听该文件（profile HMR），写入后即时生效；凭据文件改动如未生效可重启 dsh
   通用库下发：四类协议与 pi-ai 协议同名（identity 映射，无协议守卫），供应商名经 providerRouteFor 清洗为路由名；
     密钥写入该路由的 refs[<ROUTE>_API_KEY]；网关下发走 anthropic-messages + 网关根地址（SDK 自行追加 /v1/messages）
+  使用统计：<DSH_HOME>/sessions/<项目目录>/<会话目录>/session[.vN].jsonl[.zstd]（同目录多世代取版本最高者；明文 .jsonl 与
+    项目目录直放日志的老布局兼容）：
+      日志是多帧拼接的 zstd 容器（每次追加写一个新帧），scanZstdFrames 结构扫描帧边界后用 fzstd 逐帧解压；
+      只取 assistant/message 事件（data.usage 的 inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens +
+      data.message.source.{provider,model} 与事件 time），assistant/attempt（失败重试，只有输入无模型）与
+      compaction/summary、会话标题、web search 等辅助请求不计入；断尾/校验失败的帧跳过
+      口径：输入 = inputTokens + cacheReadTokens + cacheWriteTokens（含缓存），输出 = outputTokens；
+      day.inputTokens 含缓存（页面日期筛选直接取该字段），day.models[].inputTokens 为未缓存输入（页面在模型维度
+      自行叠加 cacheRead/cacheCreation），summary.inputTokens = 总 - 输出
+      缓存：signature = 日志数:总字节:最新 mtime → uTools DB（ccswitch_dsh_usage_cache_<nativeId>），
+      页面保活（isTabVisited + v-show）不重复拉取，点刷新也走签名校验、日志有变化才重新全量解析
 ```
 
 ## 认证与模型选择细节

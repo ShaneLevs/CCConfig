@@ -16,6 +16,7 @@ const qoder = require("./services/qoder");
 const zcode = require("./services/zcode");
 const hermes = require("./services/hermes");
 const dsh = require("./services/dsh");
+const dshUsage = require("./services/dsh-usage");
 const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
@@ -417,6 +418,10 @@ window.services = {
   DSH_DEFAULT_MODELS: dsh.DSH_DEFAULT_MODELS,
   DSH_OFFICIAL_ROUTE: dsh.OFFICIAL_ROUTE,
   DSH_OFFICIAL_BASE_URL: dsh.OFFICIAL_DEFAULT_BASE_URL,
+
+  // DSH 使用统计（解析 ~/.dsh/sessions 下的 zstd JSONL 会话日志）
+  readDshUsage: dshUsage.readDshUsage,
+  getDshSessionsRoot: dshUsage.getDshSessionsRoot,
 
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）
   KIMI_CAPABILITIES: kimi.KIMI_CAPABILITIES,
