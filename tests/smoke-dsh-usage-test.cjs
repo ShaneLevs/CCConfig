@@ -196,6 +196,34 @@ eq(commonUsage.summary.totalTokens, 1070, '通用统计页纳入 DSH 落库数�
 eq(commonUsage.agents.map((a) => a.agent), ['dsh'], '通用统计页 agent 元信息包含 dsh')
 eq(commonUsage.modelStats[0].inputTokens, 1050, '通用统计页模型输入含缓存（与 DSH 页口径一致）')
 
+// 按 agent 分组（热力图 tooltip 数据）：day.agentModels 保留各 agent 归属，与合并后的 day.models 并存
+const groupedDay = commonUsage.contributions.find((d) => d.date === '2026-01-05')
+eq(Object.keys(groupedDay.agentModels), ['dsh'], '每日贡献带 agent 归属')
+eq(groupedDay.agentModels.dsh.tokens, 1070, 'agent 分组保留该 agent 当天 tokens')
+eq(groupedDay.agentModels.dsh.models['deepseek-official/deepseek-flash'].cacheReadTokens, 900, 'agent 分组保留模型缓存明细')
+
+// 再塞一个假 claude 落库文档：多 agent 各自一个分组，模型不串组
+savedDocs.set('ccswitch_agent_usage_claude_test-native', {
+  _id: 'ccswitch_agent_usage_claude_test-native',
+  agent: 'claude',
+  updatedAt: Date.now(),
+  days: {
+    '2026-01-05': {
+      tokens: 500,
+      inputTokens: 450,
+      outputTokens: 50,
+      models: { 'qwen3.8-max': { inputTokens: 400, outputTokens: 50, cacheReadTokens: 50, cacheCreationTokens: 0 } },
+    },
+  },
+})
+const groupedUsage = require('../public/preload/services/usage').readAllAgentUsage()
+const bothDay = groupedUsage.contributions.find((d) => d.date === '2026-01-05')
+eq(Object.keys(bothDay.agentModels).sort(), ['claude', 'dsh'], '多 agent 各自一个分组')
+eq(Object.keys(bothDay.agentModels.claude.models), ['qwen3.8-max'], 'claude 分组只含自己的模型')
+eq(Object.keys(bothDay.agentModels.dsh.models), ['deepseek-official/deepseek-flash'], 'dsh 分组只含自己的模型')
+eq(Object.keys(bothDay.models).sort(), ['deepseek-official/deepseek-flash', 'qwen3.8-max'], '合并后的 day.models 仍是并集（模型分布卡片用）')
+eq(bothDay.tokens, 1570, '当天总量 = 各 agent 之和')
+
 // 会话日志被清理：回放落库历史，统计不归零
 rmLogs()
 result = dshUsage.readDshUsage(true)

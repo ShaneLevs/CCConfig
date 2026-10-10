@@ -1,12 +1,11 @@
 import { ref, computed, watch } from "vue";
 import { useAppContext } from "./useAppContext";
+import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META } from "./agentMeta";
 
 // Agent 启停管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
+// Agent 顺序与展示名（含图标）见 ./agentMeta.js（纯数据，统计页的 Agent 分组标题也用它）。
 
-// 图标位于 public/ 目录：必须用 BASE_URL 前缀拼接（base: './' 打包后为相对路径，
-// 否则 uTools 以 file:// 加载时绝对路径会指向文件系统根目录导致图标丢失）
-const ASSET_BASE = import.meta.env.BASE_URL;
 // 启停状态按设备区分：主档 ccswitch_visible_agents_<nativeId>，旧共享档作首次迁移种子（只读）
 function getNativeId() {
   try { return window.utools.getNativeId() || ""; } catch (e) { return ""; }
@@ -17,25 +16,8 @@ const VISIBLE_AGENTS_DB = (() => {
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
 })();
 const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
-// 默认顺序：已有使用统计的四个应用（Claude Code / Pi Agent / OpenCode / DSH）排在前面，其余按原有顺序跟随。
-// 用户拖拽排序后以 DB 记录里的 order 为准，仅在「仍是旧默认顺序」时升级。
-export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
-// 旧默认顺序：仅用于识别「用户从未拖拽过」的存量记录（用户自定义顺序不覆盖）
-const LEGACY_AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"];
-export const AGENT_META = {
-  claude: { name: "Claude Code", icon: `${ASSET_BASE}icon-claude.png` },
-  opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
-  pi: { name: "Pi Agent", icon: `${ASSET_BASE}icon-pi.png` },
-  omp: { name: "omp", icon: `${ASSET_BASE}icon-omp.svg` },
-  reasonix: { name: "Reasonix", icon: `${ASSET_BASE}icon-reasonix.svg` },
-  codex: { name: "Codex", icon: `${ASSET_BASE}icon-codex.png` },
-  kimi: { name: "Kimi Code", icon: `${ASSET_BASE}icon-kimi.svg` },
-  minimax: { name: "MiniMax Code", icon: `${ASSET_BASE}icon-minimax.svg` },
-  qoder: { name: "Qoder", icon: `${ASSET_BASE}icon-qoder.png` },
-  zcode: { name: "ZCode", icon: `${ASSET_BASE}icon-zcode.png` },
-  hermes: { name: "Hermes", icon: `${ASSET_BASE}icon-hermes.png` },
-  dsh: { name: "DSH", icon: `${ASSET_BASE}icon-dsh.png` },
-};
+// 兼容既有调用方：顺序/元数据从本模块取（实际定义在 ./agentMeta.js）
+export { AGENT_ORDER, AGENT_META };
 
 const { activeApp } = useAppContext();
 

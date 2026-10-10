@@ -118,6 +118,9 @@ const readAgentUsage = (agent) => {
 // 读全部已适配 agent 的落库统计，按日期与模型跨 agent 合并。
 // 返回 { summary, modelStats, contributions, agents }，形状与 UsagePage fetcher 契约一致
 // （agents 为额外元信息：[{ agent, updatedAt }]，供页面展示数据新鲜度）。
+// 每天另带 agentModels = { <agent>: { tokens, inputTokens, outputTokens, models } }：
+// models 为跨 agent 合并后的并集（模型分布卡片用），agentModels 保留各 agent 自己的归属
+// （热力图 tooltip 按 agent 分组展示用），两者口径一致、不重复计数。
 const readAllAgentUsage = () => {
   const agents = []
   const dayMap = new Map()
@@ -131,12 +134,19 @@ const readAllAgentUsage = () => {
       for (const [date, d] of Object.entries(doc.days)) {
         let day = dayMap.get(date)
         if (!day) {
-          day = { date, tokens: 0, inputTokens: 0, outputTokens: 0, models: {} }
+          day = { date, tokens: 0, inputTokens: 0, outputTokens: 0, models: {}, agentModels: {} }
           dayMap.set(date, day)
         }
         day.tokens += d.tokens || 0
         day.inputTokens += d.inputTokens || 0
         day.outputTokens += d.outputTokens || 0
+        // 每个 agent 每天只出现一次，直接赋值（不用累加）
+        day.agentModels[agent] = {
+          tokens: d.tokens || 0,
+          inputTokens: d.inputTokens || 0,
+          outputTokens: d.outputTokens || 0,
+          models: d.models || {},
+        }
         for (const [model, m] of Object.entries(d.models || {})) {
           let mm = day.models[model]
           if (!mm) {

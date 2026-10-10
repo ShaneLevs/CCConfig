@@ -29,7 +29,7 @@
   - OpenCode：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
   - Pi Agent：JSONL sessions 解析聚合
   - DSH：会话日志为「多帧 zstd 容器 + JSONL 事件」，内嵌纯 JS 解码器 fzstd 逐帧解压（uTools 的 Node 20 无 `node:zlib` zstd）；按 `assistant/message` 事件的 `usage` 与 `message.source` 聚合，模型按「供应商 / 模型」区分，断尾帧跳过，签名 `日志数:总字节:最新 mtime` 缓存加速，每日聚合落库并与历史按天合并（日志被清理后历史不丢）
-  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（Claude Code / Pi Agent / OpenCode / DSH，按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问
+  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（Claude Code / Pi Agent / OpenCode / DSH，按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问；热力图悬停按 agent 分组展示当天各 agent 的模型用量
 - **模型 CRUD** — OpenCode / Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，支持自动从 `/models` API 拉取模型列表；OpenCode / Pi / omp 模型支持上下文窗口与最大输出预设+自定义，OpenCode 另支持 reasoning / modalities（输入输出模态）/ options.effort / options.thinking 思考参数配置，设置默认模型自动切换供应商
 - **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
 - **导入导出** — 支持 JSON 文件方式或压缩加密字符串方式
@@ -122,6 +122,7 @@ Claude:
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
   汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh；days 按日期存 tokens/input/output/models，全零跳过防误清）
     通用统计页纯读这四个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
+    每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     DSH 反向把该文档当历史档：日志被清理后回放历史，同一天取较大值
   自动网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models

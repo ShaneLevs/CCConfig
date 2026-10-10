@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Tooltip } from "tdesign-vue-next";
+import { agentLabel } from "../../composables/agentMeta";
 
 const props = defineProps({
   contributions: { type: Array, default: () => [] },
@@ -52,6 +53,36 @@ const fmt = (num) => {
   return num.toString();
 };
 
+// tooltip 里的模型行：按当天该模型用量降序（input/output 展示为格式化文本）
+const modelLinesOf = (models) =>
+  Object.entries(models || {})
+    .map(([name, data]) => ({
+      name,
+      input: fmt(data.inputTokens || 0),
+      output: fmt(data.outputTokens || 0),
+      tokens:
+        (data.inputTokens || 0) + (data.outputTokens || 0) +
+        (data.cacheReadTokens || 0) + (data.cacheCreationTokens || 0),
+    }))
+    .sort((a, b) => b.tokens - a.tokens);
+
+// 按 agent 分组的 tooltip 数据：通用统计页的每日贡献带 agentModels（各 agent 当天的归属与模型明细），
+// 按当天用量降序分组；单 agent 统计页没有该字段 → 返回空数组，tooltip 走未分组的平铺渲染
+const buildAgentGroups = (day) => {
+  const entries = Object.entries(day.agentModels || {});
+  if (!entries.length) return [];
+  return entries
+    .map(([agent, group]) => ({
+      agent,
+      label: agentLabel(agent),
+      tokens: group.tokens || 0,
+      totalText: fmt(group.tokens || 0),
+      lines: modelLinesOf(group.models),
+    }))
+    .filter((g) => g.lines.length > 0)
+    .sort((a, b) => b.tokens - a.tokens);
+};
+
 const allWeeks = computed(() => {
   const contribs = props.contributions || [];
   if (!contribs.length) return [];
@@ -86,13 +117,8 @@ const allWeeks = computed(() => {
       models: d ? d.models : undefined,
       level,
       totalText: d ? fmt(d.tokens) : "0",
-      modelLines: d
-        ? Object.entries(d.models || {}).map(([name, data]) => ({
-            name,
-            input: fmt(data.inputTokens),
-            output: fmt(data.outputTokens),
-          }))
-        : [],
+      modelLines: d ? modelLinesOf(d.models) : [],
+      agentGroups: d ? buildAgentGroups(d) : [],
     });
     if (currentWeek.length === 7) { result.push(currentWeek); currentWeek = []; }
     cursor.setDate(cursor.getDate() + 1);
@@ -163,10 +189,26 @@ const monthLabels = computed(() => {
                     <span class="tip-date">{{ day.date }}</span>
                     <span class="tip-total">{{ day.totalText || '0' }}</span>
                   </div>
-                  <div v-for="m in day.modelLines" :key="m.name" class="tip-line">
-                    <span class="tip-name">{{ m.name }}</span>
-                    <span class="tip-detail">Input: {{ m.input }} Output: {{ m.output }}</span>
-                  </div>
+                  <!-- 通用统计页：按 agent 分组（标题 + 该 agent 的模型明细） -->
+                  <template v-if="day.agentGroups.length">
+                    <div v-for="group in day.agentGroups" :key="group.agent" class="tip-group">
+                      <div class="tip-group-header">
+                        <span class="tip-agent">{{ group.label }}</span>
+                        <span class="tip-group-total">{{ group.totalText }}</span>
+                      </div>
+                      <div v-for="m in group.lines" :key="m.name" class="tip-line tip-line-grouped">
+                        <span class="tip-name">{{ m.name }}</span>
+                        <span class="tip-detail">Input: {{ m.input }} Output: {{ m.output }}</span>
+                      </div>
+                    </div>
+                  </template>
+                  <!-- 单 agent 统计页：不分组，直接平铺 -->
+                  <template v-else>
+                    <div v-for="m in day.modelLines" :key="m.name" class="tip-line">
+                      <span class="tip-name">{{ m.name }}</span>
+                      <span class="tip-detail">Input: {{ m.input }} Output: {{ m.output }}</span>
+                    </div>
+                  </template>
                 </div>
               </template>
               <div :class="['contrib-cell', `level-${day.level}`]"></div>
@@ -329,6 +371,36 @@ const monthLabels = computed(() => {
   gap: 16px;
   font-size: 12px;
   line-height: 1.8;
+}
+
+/* 按 agent 分组：组间细分隔线，组内模型行缩进 */
+.tip-group + .tip-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+.tip-group-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.8;
+}
+
+.tip-agent {
+  opacity: 0.95;
+}
+
+.tip-group-total {
+  opacity: 0.7;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.tip-line-grouped {
+  padding-left: 10px;
 }
 
 .tip-name {
