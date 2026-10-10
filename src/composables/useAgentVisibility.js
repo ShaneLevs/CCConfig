@@ -17,7 +17,11 @@ const VISIBLE_AGENTS_DB = (() => {
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;
 })();
 const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
-export const AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"];
+// 默认顺序：已有使用统计的四个应用（Claude Code / Pi Agent / OpenCode / DSH）排在前面，其余按原有顺序跟随。
+// 用户拖拽排序后以 DB 记录里的 order 为准，仅在「仍是旧默认顺序」时升级。
+export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
+// 旧默认顺序：仅用于识别「用户从未拖拽过」的存量记录（用户自定义顺序不覆盖）
+const LEGACY_AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"];
 export const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}icon-claude.png` },
   opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
@@ -69,19 +73,26 @@ const initVisibleAgents = () => {
   }
   const stored = doc?.visible || null;
   const storedOrder = doc?.order || null;
+  // 存量记录仍是旧默认顺序（说明用户从未拖拽过排序）：升级为新默认顺序
+  let orderUpgraded = false;
   if (Array.isArray(storedOrder) && storedOrder.length) {
     // 存量记录里没有的新增 agent 追加到末尾（否则升级后设置列表/切换器永远看不到新 agent）
     const known = storedOrder.filter(a => AGENT_ORDER.includes(a));
     AGENT_ORDER.forEach((app) => { if (!known.includes(app)) known.push(app); });
-    agentOrder.value = known;
+    if (known.join() === LEGACY_AGENT_ORDER.join()) {
+      agentOrder.value = [...AGENT_ORDER];
+      orderUpgraded = true;
+    } else {
+      agentOrder.value = known; // 用户自定义顺序：原样保留
+    }
   }
   if (stored) {
     // 有记录：用记录，缺键（未来新增 agent）默认显示
     const result = {};
     AGENT_ORDER.forEach((app) => { result[app] = stored[app] ?? true; });
     visibleAgents.value = result;
-    // 刚从旧共享档升级而来：立即写一次本机档，后续不再读旧档
-    if (seededFromLegacy) {
+    // 刚从旧共享档升级而来 / 刚升级默认顺序：立即写一次本机档
+    if (seededFromLegacy || orderUpgraded) {
       try { saveVisibleAgents(); } catch (e) { console.error("保存可见 agent 失败", e); }
     }
   } else {
