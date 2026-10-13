@@ -24,6 +24,7 @@ import KimiConfigView from "./kimi/ConfigView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
 import ZcodeConfigView from "./zcode/ConfigView.vue";
+import ZcodeUsageView from "./zcode/UsageView.vue";
 import HermesConfigView from "./hermes/ConfigView.vue";
 import DshConfigView from "./dsh/ConfigView.vue";
 import DshUsageView from "./dsh/UsageView.vue";
@@ -342,9 +343,13 @@ onUnmounted(() => {
         <QoderConfigView v-if="activeApp === 'qoder' && activeTab === 'config'" />
       </template>
 
-      <!-- ZCode views（仅模型配置） -->
+      <!-- ZCode views（模型配置 + 使用统计） -->
       <template v-if="isAppReady('zcode')">
         <ZcodeConfigView v-if="activeApp === 'zcode' && activeTab === 'config'" />
+        <ZcodeUsageView
+          v-if="isTabVisited('zcode', 'usage')"
+          v-show="activeApp === 'zcode' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- Hermes views（仅模型配置） -->

@@ -22,6 +22,6 @@ const sessionsRoot = (() => {
     :fetcher="fetcher"
     empty-description="暂无使用数据，使用 DSH 对话后会在此处显示"
     :empty-hint="`未找到会话日志：${sessionsRoot}；产生用量后重新进入本页或点刷新即可统计`"
-    model-hint="模型按「供应商 / 模型」区分"
+    model-hint="模型名只取模型 ID，跨路由同名合并"
   />
 </template>

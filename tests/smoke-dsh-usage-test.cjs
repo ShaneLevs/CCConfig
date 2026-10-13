@@ -101,13 +101,13 @@ ok(!!dayA, 'fixture 日期 2026-01-05 落在 365 天窗口内（否则需重新�
 eq(dayA.tokens, 1070, '单日 tokens = 输入(含缓存 1050) + 输出(20)')
 eq(dayA.inputTokens, 1050, '单日 inputTokens 含缓存（日期筛选直接取该值）')
 eq(dayA.outputTokens, 20, '单日 outputTokens')
-eq(dayA.models['deepseek-official/deepseek-flash'], { inputTokens: 100, outputTokens: 20, cacheReadTokens: 900, cacheCreationTokens: 50 }, '模型维度存未缓存输入 + 缓存明细')
+eq(dayA.models['deepseek-flash'], { inputTokens: 100, outputTokens: 20, cacheReadTokens: 900, cacheCreationTokens: 50 }, '模型维度存未缓存输入 + 缓存明细')
 const dayB = result.contributions.find((d) => d.date === '2026-01-06')
 eq(dayB.tokens, 10, '追加帧落到次日')
-eq(dayB.models['newapi/glm-5.3-flash'], { inputTokens: 7, outputTokens: 3, cacheReadTokens: 0, cacheCreationTokens: 0 }, '第三方供应商按 provider/model 区分')
+eq(dayB.models['glm-5.3-flash'], { inputTokens: 7, outputTokens: 3, cacheReadTokens: 0, cacheCreationTokens: 0 }, '模型名只取 model 不带 provider 前缀')
 
 eq(result.modelStats.length, 2, '两个模型')
-eq(result.modelStats[0].name, 'deepseek-official/deepseek-flash', '模型按 tokens 降序')
+eq(result.modelStats[0].name, 'deepseek-flash', '模型按 tokens 降序')
 eq(result.modelStats[0].tokens, 1070, '模型 tokens = 未缓存输入 + 输出 + 缓存读 + 缓存写')
 eq(result.modelStats[0].inputTokens, 1050, '模型输入含缓存')
 eq(dayA.inputTokens + dayA.outputTokens, dayA.tokens, '单日 输入 + 输出 = 总量')
@@ -185,7 +185,7 @@ eq(Object.keys(histDoc.days), ['2026-01-05'], '只落库有量的日期')
 eq(histDoc.days['2026-01-05'].tokens, 1070, '落库当天 tokens')
 eq(histDoc.days['2026-01-05'].inputTokens, 1050, '落库当天输入（含缓存）')
 eq(
-  histDoc.days['2026-01-05'].models['deepseek-official/deepseek-flash'],
+  histDoc.days['2026-01-05'].models['deepseek-flash'],
   { inputTokens: 100, outputTokens: 20, cacheReadTokens: 900, cacheCreationTokens: 50 },
   '落库保留模型缓存明细（供「通用」统计页重算）',
 )
@@ -200,7 +200,7 @@ eq(commonUsage.modelStats[0].inputTokens, 1050, '通用统计页模型输入含�
 const groupedDay = commonUsage.contributions.find((d) => d.date === '2026-01-05')
 eq(Object.keys(groupedDay.agentModels), ['dsh'], '每日贡献带 agent 归属')
 eq(groupedDay.agentModels.dsh.tokens, 1070, 'agent 分组保留该 agent 当天 tokens')
-eq(groupedDay.agentModels.dsh.models['deepseek-official/deepseek-flash'].cacheReadTokens, 900, 'agent 分组保留模型缓存明细')
+eq(groupedDay.agentModels.dsh.models['deepseek-flash'].cacheReadTokens, 900, 'agent 分组保留模型缓存明细')
 
 // 再塞一个假 claude 落库文档：多 agent 各自一个分组，模型不串组
 savedDocs.set('ccswitch_agent_usage_claude_test-native', {
@@ -220,8 +220,8 @@ const groupedUsage = require('../public/preload/services/usage').readAllAgentUsa
 const bothDay = groupedUsage.contributions.find((d) => d.date === '2026-01-05')
 eq(Object.keys(bothDay.agentModels).sort(), ['claude', 'dsh'], '多 agent 各自一个分组')
 eq(Object.keys(bothDay.agentModels.claude.models), ['qwen3.8-max'], 'claude 分组只含自己的模型')
-eq(Object.keys(bothDay.agentModels.dsh.models), ['deepseek-official/deepseek-flash'], 'dsh 分组只含自己的模型')
-eq(Object.keys(bothDay.models).sort(), ['deepseek-official/deepseek-flash', 'qwen3.8-max'], '合并后的 day.models 仍是并集（模型分布卡片用）')
+eq(Object.keys(bothDay.agentModels.dsh.models), ['deepseek-flash'], 'dsh 分组只含自己的模型')
+eq(Object.keys(bothDay.models).sort(), ['deepseek-flash', 'qwen3.8-max'], '合并后的 day.models 仍是并集（模型分布卡片用）')
 eq(bothDay.tokens, 1570, '当天总量 = 各 agent 之和')
 
 // 会话日志被清理：回放落库历史，统计不归零
@@ -229,7 +229,7 @@ rmLogs()
 result = dshUsage.readDshUsage(true)
 eq(result.summary.totalTokens, 1070, '日志被清理后回放历史档，统计不归零')
 eq(result.summary.messageCount, 0, '回放历史时无实时消息数')
-eq(result.modelStats[0].name, 'deepseek-official/deepseek-flash', '回放历史时模型分布仍可显示')
+eq(result.modelStats[0].name, 'deepseek-flash', '回放历史时模型分布仍可显示')
 
 // 同一天日志缩水（旧日志被清理 / 压缩）：取历史较大值，不被覆盖
 rmLogs()
@@ -237,11 +237,35 @@ writeLog(path.join('proj-small', 'session-small'), 'session.v4.jsonl', [Buffer.f
 result = dshUsage.readDshUsage(true)
 eq(result.summary.totalTokens, 1070, '同一天取较大值：日志缩水后历史不被覆盖')
 eq(result.modelStats.length, 1, '模型分布同样取历史档')
-eq(result.modelStats[0].name, 'deepseek-official/deepseek-flash', '历史模型名保留（不退化成本次解析的模型）')
-eq(result.contributions.find((d) => d.date === '2026-01-05').models['deepseek-official/deepseek-flash'].cacheReadTokens, 900, '历史缓存明细保留')
+eq(result.modelStats[0].name, 'deepseek-flash', '历史模型名保留（不退化成本次解析的模型）')
+eq(result.contributions.find((d) => d.date === '2026-01-05').models['deepseek-flash'].cacheReadTokens, 900, '历史缓存明细保留')
 
 // 落库写回的是合并后的结果：历史档不会被缩水结果清掉
 eq(savedDocs.get(HISTORY_DOC).days['2026-01-05'].tokens, 1070, '落库写回合并结果，历史档不缩水')
+
+// ==================== 8. 旧落库带 provider 前缀 → 读历史时剥前缀（同名合并） ====================
+console.log('8. 旧前缀历史迁移')
+rmLogs()
+savedDocs.set(HISTORY_DOC, {
+  _id: HISTORY_DOC,
+  days: {
+    '2026-02-01': {
+      tokens: 2000, inputTokens: 1900, outputTokens: 100,
+      models: {
+        'deepseek-official/deepseek-flash': { inputTokens: 100, outputTokens: 60, cacheReadTokens: 800, cacheCreationTokens: 0 },
+        'newapi/deepseek-flash': { inputTokens: 30, outputTokens: 40, cacheReadTokens: 0, cacheCreationTokens: 0 },
+      },
+    },
+  },
+  updatedAt: Date.now(),
+})
+result = dshUsage.readDshUsage(true)
+const migratedDay = result.contributions.find((d) => d.date === '2026-02-01')
+eq(migratedDay.tokens, 2000, '旧前缀历史回放 tokens')
+eq(Object.keys(migratedDay.models), ['deepseek-flash'], '历史 models 键剥前缀合并为 deepseek-flash')
+eq(migratedDay.models['deepseek-flash'].inputTokens, 130, '同名模型用量合并（input=130）')
+eq(migratedDay.models['deepseek-flash'].outputTokens, 100, '同名模型用量合并（output=100）')
+eq(result.modelStats[0].name, 'deepseek-flash', '回放时模型分布无前缀')
 
 console.log(`\n结果: ${passed} 通过, ${failed} 失败`)
 fs.rmSync(tmp, { recursive: true, force: true })

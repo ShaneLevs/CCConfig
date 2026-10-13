@@ -210,6 +210,10 @@ window.services = {
       const s = dshUsage.readDshUsage()
       collected.dsh = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] DSH 采集失败:', e); collected.dsh = false }
+    try {
+      const s = zcode.readZcodeUsage()
+      collected.zcode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] ZCode 采集失败:', e); collected.zcode = false }
     return collected
   },
   readCommonUsage: usage.readAllAgentUsage,
@@ -380,6 +384,8 @@ window.services = {
   openZcodeDir: zcode.openZcodeDir,
   openZcodeConfigFile: zcode.openZcodeConfigFile,
   isZcodeInstalled: zcode.isZcodeInstalled,
+  readZcodeUsage: zcode.readZcodeUsage,
+  getZcodeUsageDbPath: zcode.getZcodeUsageDbPath,
   ZCODE_API_TYPES: zcode.ZCODE_API_TYPES,
   ZCODE_ACCESS_TYPES: zcode.ZCODE_ACCESS_TYPES,
 

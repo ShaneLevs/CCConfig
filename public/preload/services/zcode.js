@@ -47,6 +47,19 @@ const os = require('node:os')
 const CONFIG_PATH = () => path.join(os.homedir(), '.zcode', 'v2', 'provider_config.json')
 const CONFIG_DIR = () => path.join(os.homedir(), '.zcode')
 
+// 使用统计库（ZCode CLI 会话数据，WAL 模式，只读打开不阻塞其写入）
+const ZCODE_USAGE_DB_PATH = () => path.join(CONFIG_DIR(), 'cli', 'db', 'db.sqlite')
+// 单条模型请求 = 一行；LEFT JOIN session 补项目目录（统计页不展示目录，仅会话 map 兜底）
+const ZCODE_USAGE_SQL = `
+  SELECT mu.session_id, mu.started_at, mu.model_id,
+         mu.input_tokens, mu.output_tokens,
+         mu.cache_read_input_tokens, mu.cache_creation_input_tokens,
+         s.directory, s.title
+  FROM model_usage mu
+  LEFT JOIN session s ON s.id = mu.session_id
+  WHERE mu.status = 'completed'
+  ORDER BY mu.started_at ASC`
+
 // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会用
 // 空对象覆盖整个文件，抹掉全部供应商与模型配置（同 qoder/kimi/minimax 纪律）
 const readDoc = () => {
@@ -553,6 +566,288 @@ const upsertZcodeModel = (providerId, modelId, opts = {}) => {
   return id
 }
 
+// ==================== 使用统计 ====================
+// 数据源：~/.zcode/cli/db/db.sqlite（SQLite，WAL 模式）的 model_usage 表 —— ZCode 设置页
+// 「使用统计」同源。每次模型请求一行（completed / error / cancelled），字段即 token 口径：
+//   input_tokens 已含缓存（>= cache_read + cache_creation），computed_total_tokens = input + output
+// 口径与 Claude / OpenCode / Pi / DSH 统计页一致：输入（含缓存）= input_tokens，输出 = output_tokens，
+// total = input + output（即 computed_total_tokens；reasoning 已含在 output 内）。
+// 未缓存输入 = input - cache_read - cache_creation，写进 day.models[].inputTokens（UsagePage 重算会再叠加缓存）。
+// 模型名只取 model_id（不带 provider 前缀，同 ZCode 设置页口径）。
+// 只读打开（readOnly + WAL 快照），ZCode 持续写入互不阻塞；库不存在 / 表不存在返回空统计。
+// 模型名只取 model_id（不带 provider 前缀，同 ZCode 设置页口径）。
+// 历史落库：每日聚合落 ccswitch_agent_usage_zcode_<nativeId>（usage.js），同一天取较大值合并——
+// db 被清理或换机后历史不缩水，库整个没了就直接回放历史档。
+
+// status='completed' 才计用量（cancelled 行全 0，error 行无完成用量）
+const readZcodeUsageRaw = () => {
+  const usage = require('./usage')
+  const dbPath = ZCODE_USAGE_DB_PATH()
+  if (!fs.existsSync(dbPath)) return usage.calculateStats([], new Map())
+
+  let DatabaseSync
+  try {
+    ;({ DatabaseSync } = require('node:sqlite'))
+  } catch {
+    DatabaseSync = null
+  }
+  if (!DatabaseSync) {
+    // uTools 8（Electron 34 / Node 20）无 node:sqlite，回退子进程（同 opencode.js 先例）
+    try {
+      return readZcodeUsageViaChildProcess(dbPath)
+    } catch (e) {
+      console.warn('[zcode] 子进程读取也失败:', e.message)
+      return usage.calculateStats([], new Map())
+    }
+  }
+
+  try {
+    return readZcodeUsageNative(dbPath, DatabaseSync)
+  } catch (e) {
+    console.warn('[zcode] node:sqlite 读取失败，回退子进程方式:', e.message)
+    try {
+      return readZcodeUsageViaChildProcess(dbPath)
+    } catch (e2) {
+      console.warn('[zcode] 子进程读取也失败:', e2.message)
+      return usage.calculateStats([], new Map())
+    }
+  }
+}
+
+const readZcodeUsageNative = (dbPath, DatabaseSync) => {
+  const usage = require('./usage')
+  const db = new DatabaseSync(dbPath, { readOnly: true })
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name)
+    if (!tables.includes('model_usage')) return usage.calculateStats([], new Map())
+    return buildZcodeStats(db.prepare(ZCODE_USAGE_SQL).all())
+  } finally {
+    db.close()
+  }
+}
+
+// 供子进程回退使用的 node 二进制：uTools 是 GUI 应用，macOS launchd 默认 PATH 只有
+// /usr/bin:/bin:/usr/sbin:/sbin，不含 /usr/local/bin 与 /opt/homebrew/bin ——
+// execFileSync('node') 会 ENOENT（且 preload 的 console.warn 渲染层看不到，静默变空统计）。
+// 逐个探测常见安装位置（macOS + Windows），命中且版本达标即缓存。
+const CHILD_NODE_CANDIDATES = [
+  'node', // PATH 里有（开发终端启动 uTools 的场景；Windows GUI 进程通常能拿到完整 PATH）
+  '/usr/local/bin/node', // macOS 官方 pkg 安装 / Intel Homebrew
+  '/opt/homebrew/bin/node', // Apple Silicon Homebrew
+  '/usr/local/opt/node/bin/node', // Intel Homebrew 别名
+  'C:\\Program Files\\nodejs\\node.exe', // Windows 官方安装包（nvm-windows 符号链接默认也指向这里）
+]
+
+// node:sqlite 需 >= 22.5：低版本即使探测到，--experimental-sqlite 也会 bad option，直接当未找到
+const nodeSupportsSqlite = (version) => {
+  const m = /^v(\d+)\.(\d+)\./.exec(String(version).trim())
+  if (!m) return false
+  const major = Number(m[1])
+  const minor = Number(m[2])
+  return major > 22 || (major === 22 && minor >= 5)
+}
+
+let childNodeBin
+const findChildNode = () => {
+  if (childNodeBin !== undefined) return childNodeBin
+  const { execFileSync } = require('node:child_process')
+  for (const bin of CHILD_NODE_CANDIDATES) {
+    try {
+      const v = execFileSync(bin, ['--version'], { encoding: 'utf-8', timeout: 5_000 }).trim()
+      if (nodeSupportsSqlite(v)) {
+        childNodeBin = bin
+        console.log(`[zcode] 子进程回退使用 node: ${bin} (${v})`)
+        return childNodeBin
+      }
+      console.warn(`[zcode] 跳过 ${bin}: ${v} 无 node:sqlite（需 >= 22.5）`)
+    } catch {
+      /* 试下一个 */
+    }
+  }
+  childNodeBin = null
+  return childNodeBin
+}
+
+const readZcodeUsageViaChildProcess = (dbPath) => {
+  const usage = require('./usage')
+  const nodeBin = findChildNode()
+  if (!nodeBin) {
+    throw new Error('未找到可用的 node（>= 22.5）子进程：常见安装位置与 PATH 均探测失败（无 node 或版本过低）')
+  }
+  const { execFileSync } = require('node:child_process')
+  const tmpScript = path.join(os.tmpdir(), 'zcode_usage_reader.js')
+  fs.writeFileSync(tmpScript, `
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(${JSON.stringify(dbPath)}, { readOnly: true });
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+    if (!tables.includes('model_usage')) { process.stdout.write('[]'); process.exit(0); }
+    const rows = db.prepare(${JSON.stringify(ZCODE_USAGE_SQL)}).all();
+    db.close();
+    process.stdout.write(JSON.stringify(rows));
+  `)
+  // 必须用系统 node 子进程：uTools preload 里 process.execPath 是 uTools 的 Electron 二进制，
+  // Electron 拒绝 --experimental-sqlite（bad option）且其 Node 20 无 node:sqlite
+  try {
+    const stdout = execFileSync(nodeBin, ['--experimental-sqlite', tmpScript], {
+      encoding: 'utf-8',
+      timeout: 15_000,
+    })
+    let rows = []
+    try { rows = JSON.parse(stdout) } catch { rows = [] }
+    return buildZcodeStats(rows)
+  } finally {
+    try { fs.unlinkSync(tmpScript) } catch { /* ignore */ }
+  }
+}
+
+const buildZcodeStats = (rows) => {
+  const usage = require('./usage')
+  const sessionMap = new Map()
+  const messageRecords = []
+  for (const r of rows) {
+    if (!r.started_at || r.started_at <= 0) continue
+    const ts = new Date(r.started_at).toISOString()
+    const input = r.input_tokens || 0
+    const output = r.output_tokens || 0
+    const total = input + output
+    if (total === 0) continue
+    // 模型只保留模型名（同 ZCode 设置页口径）；provider_id 形如 provider-xxx / account:yyy，
+    // 同名模型跨供应商的用量会合并展示
+    const model = String(r.model_id || 'unknown').trim() || 'unknown'
+    if (!sessionMap.has(r.session_id)) {
+      sessionMap.set(r.session_id, {
+        sessionId: r.session_id,
+        timestamp: ts,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
+        project: r.directory || 'unknown',
+        projectPath: r.directory || 'unknown',
+        title: r.title || '',
+        model,
+      })
+    }
+    messageRecords.push({
+      sessionId: r.session_id,
+      model,
+      project: r.directory || 'unknown',
+      projectPath: r.directory || 'unknown',
+      timestamp: ts,
+      date: ts.split('T')[0],
+      // calculateStats 的 modelStats/inputTokens 走未缓存输入，含缓存口径在 aggregate 阶段重算（同 dsh-usage）
+      inputTokens: input - (r.cache_read_input_tokens || 0) - (r.cache_creation_input_tokens || 0),
+      outputTokens: output,
+      cacheReadTokens: r.cache_read_input_tokens || 0,
+      cacheCreationTokens: r.cache_creation_input_tokens || 0,
+      totalTokens: total,
+    })
+    const sess = sessionMap.get(r.session_id)
+    sess.inputTokens += input
+    sess.outputTokens += output
+    sess.cacheReadTokens += r.cache_read_input_tokens || 0
+    sess.cacheCreationTokens += r.cache_creation_input_tokens || 0
+    if (ts > sess.timestamp) sess.timestamp = ts
+  }
+  return usage.calculateStats(messageRecords, sessionMap)
+}
+
+// calculateStats 写入的 day.inputTokens 是未缓存输入，这里改写成含缓存输入
+// （day.inputTokens = tokens - outputTokens，UsagePage 日期筛选直接取该字段；同 dsh-usage.aggregate）。
+// summary/modelStats 的含缓存口径也随之重算。messageCount 用于「请求次数」，会话数取 sessionMap。
+const aggregateZcode = (stats) => {
+  const usage = require('./usage')
+  const contributions = stats.contributions || []
+  let totalTokens = 0
+  let outputTokens = 0
+  const modelMap = new Map()
+  for (const day of contributions) {
+    totalTokens += day.tokens || 0
+    outputTokens += day.outputTokens || 0
+    day.inputTokens = (day.tokens || 0) - (day.outputTokens || 0)
+    for (const [name, m] of Object.entries(day.models || {})) {
+      if (!modelMap.has(name)) modelMap.set(name, { name, tokens: 0, inputTokens: 0, outputTokens: 0 })
+      const mm = modelMap.get(name)
+      const cacheRead = m.cacheReadTokens || 0
+      const cacheWrite = m.cacheCreationTokens || 0
+      const input = m.inputTokens || 0
+      const output = m.outputTokens || 0
+      mm.tokens += input + output + cacheRead + cacheWrite
+      mm.inputTokens += input + cacheRead + cacheWrite
+      mm.outputTokens += output
+    }
+  }
+  const modelStats = Array.from(modelMap.values()).sort((a, b) => b.tokens - a.tokens)
+  return {
+    summary: {
+      ...stats.summary,
+      totalTokens,
+      inputTokens: totalTokens - outputTokens,
+      outputTokens,
+    },
+    modelStats,
+    contributions,
+    avgTokensPerSession: stats.avgTokensPerSession,
+    recentSessions: stats.recentSessions,
+    messageRecords: stats.messageRecords,
+  }
+}
+
+// 从落库历史重建统计（db 被清理 / 换机后避免历史归零）；无历史返回 null
+const statsFromHistory = () => {
+  const usage = require('./usage')
+  const history = usage.readAgentUsage('zcode')
+  const dates = Object.keys(history)
+  if (dates.length === 0) return null
+  const contributions = usage.fillEmptyContributions(
+    dates.sort().map((date) => ({ date, ...history[date], models: stripProviderPrefix(history[date].models) })),
+  )
+  // messageCount=0：会话明细已不可考，仅回放每日聚合
+  return aggregateZcode({ ...usage.calculateStats([], new Map()), contributions })
+}
+
+// 旧版落库的 models 键带 provider 前缀（provider-x/model），改成只存模型名后
+// 历史合并会把旧名整天带回来且永不清理 —— 读历史时统一剥前缀（幂等，无 / 的键原样）
+const stripProviderPrefix = (models) => {
+  if (!models || typeof models !== 'object') return models
+  const next = {}
+  for (const [name, m] of Object.entries(models)) {
+    const bare = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name
+    const merged = next[bare] || { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }
+    for (const k of Object.keys(merged)) merged[k] += (m && m[k]) || 0
+    next[bare] = merged
+  }
+  return next
+}
+
+// 同一天取较大值合并历史：db 被清理后，历史档里更完整的数字不被缩水覆盖（同 dsh-usage）
+const mergeHistory = (contributions) => {
+  const history = require('./usage').readAgentUsage('zcode')
+  if (Object.keys(history).length === 0) return
+  for (const day of contributions) {
+    const hist = history[day.date]
+    if (!hist || (hist.tokens || 0) <= (day.tokens || 0)) continue
+    day.tokens = hist.tokens || 0
+    day.outputTokens = hist.outputTokens || 0
+    day.models = stripProviderPrefix(hist.models)
+  }
+}
+
+const readZcodeUsage = () => {
+  try {
+    const stats = aggregateZcode(readZcodeUsageRaw())
+    const contributions = stats.contributions || []
+    mergeHistory(contributions)
+    // 落库（「通用」统计页数据源 + 本页历史档）：全零结果由落库层跳过，不会清空历史
+    try {
+      require('./usage').saveAgentUsage('zcode', contributions)
+    } catch (e) {
+      console.error('[zcode] usage 落库失败:', e)
+    }
+    return { ...stats, contributions }
+  } catch (e) {
+    console.error('[zcode] 使用统计失败:', e)
+    return require('./usage').calculateStats([], new Map())
+  }
+}
+
 // ==================== 目录 / 安装检测 ====================
 
 const openZcodeDir = () => {
@@ -588,5 +883,6 @@ module.exports = {
   addZcodeModel, updateZcodeModel, deleteZcodeModel, upsertZcodeModel,
   getZcodeDefaultModel, setZcodeDefaultModel,
   openZcodeDir, openZcodeConfigFile, isZcodeInstalled,
+  readZcodeUsage, getZcodeUsageDbPath: ZCODE_USAGE_DB_PATH,
   ZCODE_API_TYPES, ZCODE_ACCESS_TYPES,
 }

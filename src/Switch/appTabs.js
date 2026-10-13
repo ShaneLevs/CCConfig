@@ -44,7 +44,10 @@ export const APP_TABS = {
   kimi: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
   minimax: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
   qoder: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
-  zcode: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
+  zcode: [
+    { key: "config", label: "配置", title: "模型配置", icon: DashboardIcon },
+    { key: "usage", label: "统计", title: "使用统计", icon: ChartIcon },
+  ],
   hermes: [{ key: "config", label: "配置", title: "模型配置", icon: DashboardIcon }],
   dsh: [
     { key: "config", label: "配置", title: "模型配置", icon: DashboardIcon },

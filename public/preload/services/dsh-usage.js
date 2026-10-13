@@ -210,8 +210,8 @@ const collectRecords = () => {
         const u = data.usage && typeof data.usage === 'object' ? data.usage : null
         if (!u) return
         const source = (data.message && data.message.source) || {}
+        // 模型名只取 model（不带 provider 前缀，同 ZCode 统计口径）；同名模型跨路由用量合并展示
         const model = String(source.model || 'unknown').trim() || 'unknown'
-        const provider = String(source.provider || '').trim()
         const input = toNumber(u.inputTokens)
         const output = toNumber(u.outputTokens)
         const cacheRead = toNumber(u.cacheReadTokens)
@@ -222,8 +222,7 @@ const collectRecords = () => {
 
         messageRecords.push({
           sessionId,
-          // 同一模型名可能来自不同路由（官方 / 第三方中转），带 provider 前缀区分
-          model: provider ? `${provider}/${model}` : model,
+          model,
           date,
           timestamp: timeMs,
           inputTokens: input,
@@ -323,6 +322,20 @@ const aggregate = (contributions, messageCount, sessionCount, avgTokensPerSessio
 // 同一天取较大值——日志被删或被压缩后，历史档里更完整的数字不会被缩水覆盖。
 // 注：readAllAgentUsage 只消费 tokens / outputTokens / models，本页写回的 day.inputTokens（含缓存）
 // 不会被它当成未缓存输入再叠加一次缓存。
+// 旧版落库的 models 键带 provider 前缀（路由/model），改成只存模型名后读历史时统一剥前缀
+// （幂等，无 / 的键原样；同名合并，同 zcode.js 的 stripProviderPrefix）。
+const stripProviderPrefix = (models) => {
+  if (!models || typeof models !== 'object') return models
+  const next = {}
+  for (const [name, m] of Object.entries(models)) {
+    const bare = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name
+    const merged = next[bare] || { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 }
+    for (const k of Object.keys(merged)) merged[k] += (m && m[k]) || 0
+    next[bare] = merged
+  }
+  return next
+}
+
 const mergeHistory = (contributions) => {
   const history = usage.readAgentUsage('dsh')
   if (Object.keys(history).length === 0) return false
@@ -332,7 +345,7 @@ const mergeHistory = (contributions) => {
     if (!hist || (hist.tokens || 0) <= (day.tokens || 0)) continue
     day.tokens = hist.tokens || 0
     day.outputTokens = hist.outputTokens || 0
-    day.models = hist.models || {}
+    day.models = stripProviderPrefix(hist.models)
     changed = true
   }
   return changed
@@ -344,7 +357,7 @@ const statsFromHistory = () => {
   const dates = Object.keys(history)
   if (dates.length === 0) return null
   const contributions = usage.fillEmptyContributions(
-    dates.sort().map((date) => ({ date, ...history[date] })),
+    dates.sort().map((date) => ({ date, ...history[date], models: stripProviderPrefix(history[date].models) })),
   )
   return aggregate(contributions, 0, 0, 0)
 }

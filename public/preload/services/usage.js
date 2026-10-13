@@ -72,8 +72,9 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
 // 各 agent 统计页打开时在「计算完成」处落库（Claude 另有自己的热力图历史档），
 // DSH 反过来把这份落库数据当历史档用：会话日志被清理后，已消失日期仍能参与统计。
 
-// claude / opencode / pi / dsh：「通用」统计页合并这些 agent；dsh 另用它做历史合并
-const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh']
+// claude / opencode / pi / dsh / zcode：「通用」统计页合并这些 agent；
+// dsh / zcode 另用它做历史合并（源数据被清理后回放历史，不归零）
+const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh', 'zcode']
 
 const agentUsageDocId = (agent) => `ccswitch_agent_usage_${agent}_${getNativeId()}`
 

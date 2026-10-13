@@ -15,7 +15,7 @@
   - Kimi Code：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
   - MiniMax Code：`~/.minimax/config.yaml`（仅模型配置：custom_provider 第三方供应商/模型 + 顶层 defaultModel，内置 minimax 只读；跟随 MINIMAX_DATA_DIR / MAVIS_DATA_DIR）
   - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
-  - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效）
+  - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效），另有使用统计页（只读解析 `~/.zcode/cli/db/db.sqlite` 的 model_usage 表，与 ZCode 设置页「使用统计」同源）
   - Hermes：`~/.hermes/config.yaml`（仅模型配置：custom_providers 供应商/内嵌模型（模型 ID + 上下文长度）增删改，api_mode 支持 chat_completions / anthropic_messages / codex_responses / bedrock_converse；星标 = 顶层 model.provider / model.default 默认指针；Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示；跟随 HERMES_HOME）
   - DSH（DeepSeek Harness）：`<DSH_HOME>/profiles/<profile>/cordis.patch.yml`（模型配置：DeepSeek 官方路由（llm-deepseek 条目：官方密钥 / 自定义 Messages 兼容地址 / thinking / reasoningEffort / 模型目录）+ 第三方供应商（llm-pi-ai 的 providers 字典：协议 / Base URL / 凭据引用 / 模型目录）+ 默认模型（agent-default-model 条目，星标即「切换」）；供应商与模型分开配置（同 ZCode 页），凭据引用名按路由名自动派生、界面不填；密钥存 `<DSH_HOME>/.credentials.yaml` 的 refs，patch 只写凭据引用名；dsh 监听该文件变更即时生效；跟随 DSH_HOME / DSH_PROFILE），另有使用统计页（解析 `<DSH_HOME>/sessions` 会话日志）
 - **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / Pi Agent / OpenCode / DSH）的使用数据，纯读 uTools DB 秒开
@@ -28,8 +28,8 @@
   - Claude：DB 缓存加速二次打开（`file_count:max_mtime` 签名校验），热力图历史持久化，JSONL 读取失败时从历史兜底重建
   - OpenCode：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
   - Pi Agent：JSONL sessions 解析聚合
-  - DSH：会话日志为「多帧 zstd 容器 + JSONL 事件」，内嵌纯 JS 解码器 fzstd 逐帧解压（uTools 的 Node 20 无 `node:zlib` zstd）；按 `assistant/message` 事件的 `usage` 与 `message.source` 聚合，模型按「供应商 / 模型」区分，断尾帧跳过，签名 `日志数:总字节:最新 mtime` 缓存加速，每日聚合落库并与历史按天合并（日志被清理后历史不丢）
-  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（Claude Code / Pi Agent / OpenCode / DSH，按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问；热力图悬停按 agent 分组展示当天各 agent 的模型用量
+  - DSH：会话日志为「多帧 zstd 容器 + JSONL 事件」，内嵌纯 JS 解码器 fzstd 逐帧解压（uTools 的 Node 20 无 `node:zlib` zstd）；按 `assistant/message` 事件的 `usage` 与 `message.source` 聚合，模型名只取 model（不带路由前缀，跨路由同名合并；旧落库的带前缀键读历史时自动剥前缀合并），断尾帧跳过，签名 `日志数:总字节:最新 mtime` 缓存加速，每日聚合落库并与历史按天合并（日志被清理后历史不丢）
+  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（Claude Code / Pi Agent / OpenCode / DSH / ZCode，按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问；热力图悬停按 agent 分组展示当天各 agent 的模型用量
 - **模型 CRUD** — OpenCode / Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，支持自动从 `/models` API 拉取模型列表；OpenCode / Pi / omp 模型支持上下文窗口与最大输出预设+自定义，OpenCode 另支持 reasoning / modalities（输入输出模态）/ options.effort / options.thinking 思考参数配置，设置默认模型自动切换供应商
 - **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
 - **导入导出** — 支持 JSON 文件方式或压缩加密字符串方式
@@ -120,10 +120,10 @@ Claude:
   通用 MCP → 云端 uTools DB（ccswitch_common_mcp）为唯一主档存全量服务器；本机启停名单存 ccswitch_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccswitch_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
-  汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh；days 按日期存 tokens/input/output/models，全零跳过防误清）
-    通用统计页纯读这四个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
+  汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
+    通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
-    DSH 反向把该文档当历史档：日志被清理后回放历史，同一天取较大值
+    DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
   自动网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
@@ -201,6 +201,23 @@ Hermes:
   删除供应商时若 model.provider 悬空，改指首个剩余供应商（无剩余则移除指针）
   通用库下发：协议映射 openai-completions→chat_completions / anthropic-messages→anthropic_messages / openai-responses→codex_responses（google 拒绝）；
     provider 名经 providerKeyFor 确定性清洗（同上）；网关下发走 anthropic_messages + 网关根地址（同 Claude，不带 /v1）
+
+ZCode:
+  ~/.zcode/v2/provider_config.json（ZCode 监听变更即时生效）：
+    受管字段外的未知键（group / logo 等与 properties/optionSpecs 下的部分键）经 _extra 按层级合并往返（zod strict partial，绝不新增未知键）
+    providerId 生成沿用 ZCode 规则（名称 trim → 小写 → 非 [a-z0-9] 转 - → 去首尾 -，冲突加 -2/-3）
+    首选模型 = providerOrder 首个供应商 + 其 modelOrder 首个模型（ZCode 选择器排序基准）
+    通用库下发 upsert：中文供应商名经 providerIdFor 确定性清洗（ASCII 骨架 + 稳定哈希，同名恒同 ID，upsert 幂等）
+  使用统计：~/.zcode/cli/db/db.sqlite（WAL 模式，ZCode 设置页「使用统计」同源）：
+    model_usage 表一次模型请求一行，只取 status='completed'（cancelled 行全 0，error 无完成用量）；
+    LEFT JOIN session 补项目目录；原生 node:sqlite 只读打开（WAL 快照不阻塞 ZCode 写入）→ Electron 沙箱子进程回退（同 OpenCode）。
+      回退子进程按平台探测常见安装位置（macOS /usr/local/bin、/opt/homebrew/bin 等；Windows Program Files\nodejs），
+      并校验版本 ≥ 22.5（低版本无 node:sqlite，--experimental-sqlite 会 bad option，探测不通过即当未找到）
+    口径：input_tokens 已含缓存（>= cache_read + cache_creation），输入 = input_tokens（含缓存）、输出 = output_tokens、
+      total = input + output（= computed_total_tokens，reasoning 含在 output 内）；模型名只取 model_id（不带 provider 前缀，
+      同名模型跨供应商用量合并；旧落库的带前缀键读历史时自动剥前缀合并）
+      day.inputTokens 含缓存（= tokens - output），day.models[].inputTokens 为未缓存输入（同 DSH 双口径）
+    历史落库：ccswitch_agent_usage_zcode_<nativeId>，同一天取较大值合并，db 被清理/换机后回放历史不归零
 
 DSH（DeepSeek Harness）:
   <DSH_HOME>/profiles/<profile>/cordis.patch.yml（DSH_HOME 默认 ~/.dsh，DSH_PROFILE 默认 desktop）→ js-yaml 读写（解析失败抛错阻断写回）
