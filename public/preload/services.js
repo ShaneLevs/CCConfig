@@ -7,6 +7,7 @@ const usage = require("./services/usage");
 const skills = require("./services/skills");
 const skillsInstall = require("./services/skills-install");
 const claudeUsage = require("./services/claude-usage");
+const usageAsync = require("./services/usage-async");
 const pi = require("./services/pi");
 const omp = require("./services/omp");
 const reasonix = require("./services/reasonix");
@@ -120,6 +121,9 @@ window.services = {
   // ==================== Claude Usage（JSONL 统计 / 热力图 / MCP 调用） ====================
   ...claudeUsage,
 
+  // ==================== Usage Async（后台线程统计，避免阻塞渲染层） ====================
+  ...usageAsync,
+
   // ==================== OpenCode ====================
   getOpencodeConfigPath,
   readOpencodeConfig,
@@ -214,6 +218,28 @@ window.services = {
       const s = zcode.readZcodeUsage()
       collected.zcode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] ZCode 采集失败:', e); collected.zcode = false }
+    return collected
+  },
+  // 「通用」统计页异步版：采集在后台线程串行执行，完成后纯读 DB 合并；
+  // 任一 agent 采集失败不中断整体，只警告
+  async collectCommonUsageAsync() {
+    const collected = {}
+    const tryCollect = async (key, fn) => {
+      try {
+        const s = await fn()
+        collected[key] = (s?.contributions || []).some((d) => (d.tokens || 0) > 0)
+      } catch (e) {
+        console.warn(`[common usage] ${key} 采集失败:`, e)
+        collected[key] = false
+      }
+    }
+    await Promise.all([
+      tryCollect('claude', () => usageAsync.readClaudeUsageAsync(true)),
+      tryCollect('opencode', () => usageAsync.readOpencodeUsageAsync()),
+      tryCollect('pi', () => usageAsync.readPiUsageAsync()),
+      tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
+      tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
+    ])
     return collected
   },
   readCommonUsage: usage.readAllAgentUsage,

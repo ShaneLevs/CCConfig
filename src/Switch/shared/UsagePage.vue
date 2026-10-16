@@ -16,6 +16,9 @@ const props = defineProps({
   tip: { type: String, default: "统计仅供参考" },
   // 数据加载函数：(force) => { summary, modelStats, contributions }（同步或 Promise 均可）
   fetcher: { type: Function, required: true },
+  // 快速加载函数（可选）：进页面时同步返回落库/缓存历史（不解析源文件），
+  // 返回 null 表示无快速数据。重统计（异步后台线程）完成后覆盖展示。
+  quickFetcher: { type: Function, default: null },
   // 模型分布卡片右上角补充说明（如 Claude 的会话数口径说明）
   modelHint: { type: String, default: "" },
   // 完全无数据时的描述
@@ -122,20 +125,46 @@ const hasAnyData = computed(() =>
   usageData.value.contributions.length > 0 || usageData.value.modelStats.length > 0
 );
 
+const applyResult = (r) => {
+  usageData.value = {
+    summary: r?.summary || { totalTokens: 0, inputTokens: 0, outputTokens: 0 },
+    modelStats: r?.modelStats || [],
+    contributions: r?.contributions || [],
+  };
+};
+
+// 后台重统计完成后覆盖展示（仅当期间用户没有再次触发刷新时才应用，避免旧结果覆盖新数据）
+let loadSeq = 0;
+
 const loadData = async (forceRefresh = false) => {
   loading.value = true;
+  const seq = ++loadSeq;
   await nextTick();
+  // 快速路径：先展示落库/缓存的历史数据，页面立即可交互；重统计在后台线程继续
+  if (props.quickFetcher) {
+    try {
+      const quick = props.quickFetcher();
+      if (quick && seq === loadSeq) {
+        applyResult(quick);
+        loading.value = false;
+      }
+    } catch (e) {
+      console.warn("快速加载统计失败:", e);
+    }
+  }
   setTimeout(() => {
     try {
-      const result = props.fetcher(forceRefresh);
-      Promise.resolve(result).then((r) => {
-        usageData.value = {
-          summary: r?.summary || { totalTokens: 0, inputTokens: 0, outputTokens: 0 },
-          modelStats: r?.modelStats || [],
-          contributions: r?.contributions || [],
-        };
-        loading.value = false;
-      });
+      const result = Promise.resolve(props.fetcher(forceRefresh));
+      result
+        .then((r) => {
+          if (seq !== loadSeq) return; // 已有更新一次的加载，丢弃旧结果
+          applyResult(r);
+          loading.value = false;
+        })
+        .catch((e) => {
+          console.error("加载用量统计失败:", e);
+          if (seq === loadSeq) loading.value = false;
+        });
     } catch (e) {
       console.error("加载用量统计失败:", e);
       loading.value = false;

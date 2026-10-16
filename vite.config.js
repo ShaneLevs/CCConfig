@@ -21,6 +21,18 @@ function bundlePreloadPlugin() {
       allowOverwrite: true,
       logLevel: 'info',
     })
+    // 统计后台线程（worker_threads）独立打包：worker 必须以真实文件路径被 new Worker 加载，
+    // 不能混进 services.js（bundle 后的模块系统里拿不到独立入口）
+    await esbuildBuild({
+      entryPoints: [path.resolve(__dirname, 'public/preload/services/usage-worker.js')],
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      outfile: path.join(outDir, 'usage-worker.js'),
+      format: 'cjs',
+      allowOverwrite: true,
+      logLevel: 'info',
+    })
     // Vite 会把 public/preload 整个复制到 dist（含 node_modules），但依赖已被 esbuild
     // bundle 进 services.js，运行时不需要；且 js-yaml 自带 .map 调试文件，uTools 打包会
     // 拒绝，因此构建后清理复制的 node_modules

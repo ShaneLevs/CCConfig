@@ -803,6 +803,16 @@ const statsFromHistory = () => {
   return aggregateZcode({ ...usage.calculateStats([], new Map()), contributions })
 }
 
+// 快速路径（统计页进页面先用）：纯读落库历史重建统计，不读 SQLite；无历史返回 null
+const readZcodeUsageFromHistory = () => {
+  try {
+    return statsFromHistory()
+  } catch (e) {
+    console.error('[zcode] 读历史统计失败:', e)
+    return null
+  }
+}
+
 // 旧版落库的 models 键带 provider 前缀（provider-x/model），改成只存模型名后
 // 历史合并会把旧名整天带回来且永不清理 —— 读历史时统一剥前缀（幂等，无 / 的键原样）
 const stripProviderPrefix = (models) => {
@@ -883,6 +893,6 @@ module.exports = {
   addZcodeModel, updateZcodeModel, deleteZcodeModel, upsertZcodeModel,
   getZcodeDefaultModel, setZcodeDefaultModel,
   openZcodeDir, openZcodeConfigFile, isZcodeInstalled,
-  readZcodeUsage, getZcodeUsageDbPath: ZCODE_USAGE_DB_PATH,
+  readZcodeUsage, readZcodeUsageFromHistory, getZcodeUsageDbPath: ZCODE_USAGE_DB_PATH,
   ZCODE_API_TYPES, ZCODE_ACCESS_TYPES,
 }

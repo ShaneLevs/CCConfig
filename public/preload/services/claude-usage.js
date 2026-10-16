@@ -315,7 +315,8 @@ function readClaudeUsage(forceRefresh = false) {
     merged.sort((a, b) => a.date.localeCompare(b.date));
 
     const contributions = _fillEmptyContributions(merged);
-    setTimeout(() => saveHeatmapHistory(contributions), 0);
+    // 同步写：后台 worker 路径依赖写队列即时入列（setTimeout 会在 worker 空闲退出时丢写）
+    saveHeatmapHistory(contributions);
     // 「通用」统计统一落库（与热力图同源数据）：同步写，保证紧随其后的读库能看到最新数据
     usage.saveAgentUsage("claude", contributions);
 

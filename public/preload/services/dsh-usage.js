@@ -362,6 +362,16 @@ const statsFromHistory = () => {
   return aggregate(contributions, 0, 0, 0)
 }
 
+// 快速路径（统计页进页面先用）：纯读落库历史重建统计，不解析会话日志；无历史返回 null
+const readDshUsageFromHistory = () => {
+  try {
+    return statsFromHistory()
+  } catch (e) {
+    console.error('[DSH Usage] 读历史统计失败:', e)
+    return null
+  }
+}
+
 const buildStats = () => {
   const { messageRecords, sessionMap } = collectRecords()
   const stats = usage.calculateStats(messageRecords, sessionMap)
@@ -442,6 +452,7 @@ const readDshUsage = (forceRefresh = false) => {
 
 module.exports = {
   readDshUsage,
+  readDshUsageFromHistory,
   getDshSessionsRoot,
   // 诊断 / 单测用
   scanZstdFrames,
