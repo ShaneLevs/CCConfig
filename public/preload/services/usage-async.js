@@ -175,6 +175,10 @@ const readOpencodeUsageAsync = () =>
 const readPiUsageAsync = () =>
   withFallback("pi", false, () => require("./pi").readPiUsage());
 
+// 快速路径：纯读落库历史重建统计（不解析源文件），供统计页进页面先展示；无历史返回 null
+const readAgentUsageFromHistory = (agent) =>
+  require("./usage").readAgentUsageFromHistory(agent);
+
 const readZcodeUsageAsync = () =>
   withFallback("zcode", false, () => require("./zcode").readZcodeUsage());
 
@@ -187,4 +191,5 @@ module.exports = {
   readPiUsageAsync,
   readZcodeUsageAsync,
   readDshUsageAsync,
+  readAgentUsageFromHistory,
 };

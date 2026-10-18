@@ -411,6 +411,7 @@ window.services = {
   openZcodeConfigFile: zcode.openZcodeConfigFile,
   isZcodeInstalled: zcode.isZcodeInstalled,
   readZcodeUsage: zcode.readZcodeUsage,
+  readZcodeUsageFromHistory: zcode.readZcodeUsageFromHistory,
   getZcodeUsageDbPath: zcode.getZcodeUsageDbPath,
   ZCODE_API_TYPES: zcode.ZCODE_API_TYPES,
   ZCODE_ACCESS_TYPES: zcode.ZCODE_ACCESS_TYPES,
@@ -457,6 +458,7 @@ window.services = {
 
   // DSH 使用统计（解析 ~/.dsh/sessions 下的 zstd JSONL 会话日志）
   readDshUsage: dshUsage.readDshUsage,
+  readDshUsageFromHistory: dshUsage.readDshUsageFromHistory,
   getDshSessionsRoot: dshUsage.getDshSessionsRoot,
 
   // 扩展字段枚举与键表（渲染层下拉选项/表单遍历用）

@@ -2,7 +2,7 @@
 // 通用统计页：Claude Code / Pi Agent / OpenCode / DSH 与「通用配置」汇总统计共用同一页面，仅数据源与文案不同。
 // - 热力图：固定展示最近 N 周（铺满整行，GitHub 风格）
 // - 模型使用分布：进度条相对最大值（最多的模型整条满，其余按比例）
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { Card, Statistic, Empty, Button, DateRangePicker, Space, Tooltip } from "tdesign-vue-next";
 import {
   RefreshIcon, ArrowDownIcon, ArrowUpIcon, SumIcon,
@@ -133,43 +133,35 @@ const applyResult = (r) => {
   };
 };
 
-// 后台重统计完成后覆盖展示（仅当期间用户没有再次触发刷新时才应用，避免旧结果覆盖新数据）
+// 进页面时同步读 DB 历史立即展示（quickFetcher），随后 fetcher 在后台线程重统计，
+// 完成后自动覆盖展示；重统计期间只有右上角刷新按钮处于加载态，页面本身始终可交互。
 let loadSeq = 0;
 
-const loadData = async (forceRefresh = false) => {
-  loading.value = true;
+const loadData = (forceRefresh = false) => {
   const seq = ++loadSeq;
-  await nextTick();
-  // 快速路径：先展示落库/缓存的历史数据，页面立即可交互；重统计在后台线程继续
+  // 快速路径：先展示落库/缓存的历史数据，页面立即可交互
   if (props.quickFetcher) {
     try {
       const quick = props.quickFetcher();
-      if (quick && seq === loadSeq) {
-        applyResult(quick);
-        loading.value = false;
-      }
+      if (quick && seq === loadSeq) applyResult(quick);
     } catch (e) {
       console.warn("快速加载统计失败:", e);
     }
   }
-  setTimeout(() => {
-    try {
-      const result = Promise.resolve(props.fetcher(forceRefresh));
-      result
-        .then((r) => {
-          if (seq !== loadSeq) return; // 已有更新一次的加载，丢弃旧结果
-          applyResult(r);
-          loading.value = false;
-        })
-        .catch((e) => {
-          console.error("加载用量统计失败:", e);
-          if (seq === loadSeq) loading.value = false;
-        });
-    } catch (e) {
+  // 后台重统计：完成后自动刷新展示（仅当期间用户没有再次触发刷新时才应用，避免旧结果覆盖新数据）。
+  // 按钮转为加载态；页面上仅在没有任何可用数据时才显示「加载中」，有数据则保持展示。
+  loading.value = true;
+  Promise.resolve(props.fetcher(forceRefresh))
+    .then((r) => {
+      if (seq !== loadSeq) return; // 已有更新一次的加载，丢弃旧结果
+      applyResult(r);
+    })
+    .catch((e) => {
       console.error("加载用量统计失败:", e);
-      loading.value = false;
-    }
-  }, 50);
+    })
+    .finally(() => {
+      if (seq === loadSeq) loading.value = false;
+    });
 };
 
 const handleRefresh = () => {
@@ -229,7 +221,7 @@ defineExpose({ loadData });
 
     <!-- 贡献墙（铺满最近 N 周） -->
     <Card title="热力图">
-      <div v-if="loading" class="empty-small">
+      <div v-if="loading && !hasAnyData" class="empty-small">
         <Empty description="加载中..." size="small" />
       </div>
       <div v-else-if="filteredData.contributions.length === 0" class="empty-small">
@@ -249,7 +241,7 @@ defineExpose({ loadData });
           {{ showAllModels ? '收起' : `查看更多 (${filteredData.modelStats.length - displayLimit})` }}
         </Button>
       </template>
-      <div v-if="loading" class="empty-small">
+      <div v-if="loading && !hasAnyData" class="empty-small">
         <Empty description="加载中..." size="small" />
       </div>
       <div v-else-if="filteredData.modelStats.length === 0" class="empty-small">

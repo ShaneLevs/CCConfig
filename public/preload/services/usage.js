@@ -211,4 +211,46 @@ const readAllAgentUsage = () => {
   }
 }
 
-module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAllAgentUsage }
+// 快速路径（统计页进页面先用）：纯读落库历史重建统计，不解析源文件（JSONL/SQLite/日志）；
+// 无历史返回 null。返回形状与 UsagePage fetcher 契约一致。
+const readAgentUsageFromHistory = (agent) => {
+  try {
+    const doc = window.utools.db.get(agentUsageDocId(agent))
+    const days = doc?.days || {}
+    const dates = Object.keys(days)
+    if (dates.length === 0) return null
+    const contributions = fillEmptyContributions(
+      dates.sort().map((date) => ({ date, ...days[date], models: days[date]?.models || {} })),
+    )
+    // 口径与 readAllAgentUsage 一致：summary.inputTokens = total - output；
+    // 模型 tokens = input + output + cacheRead + cacheCreation
+    let totalTokens = 0
+    let outputTokens = 0
+    const modelMap = new Map()
+    for (const day of contributions) {
+      totalTokens += day.tokens || 0
+      outputTokens += day.outputTokens || 0
+      for (const [name, m] of Object.entries(day.models || {})) {
+        if (!modelMap.has(name)) modelMap.set(name, { name, tokens: 0, inputTokens: 0, outputTokens: 0 })
+        const mm = modelMap.get(name)
+        const inp = m.inputTokens || 0
+        const out = m.outputTokens || 0
+        const cacheR = m.cacheReadTokens || 0
+        const cacheC = m.cacheCreationTokens || 0
+        mm.tokens += inp + out + cacheR + cacheC
+        mm.inputTokens += inp + cacheR + cacheC
+        mm.outputTokens += out
+      }
+    }
+    return {
+      summary: { totalTokens, inputTokens: totalTokens - outputTokens, outputTokens },
+      modelStats: Array.from(modelMap.values()).sort((a, b) => b.tokens - a.tokens),
+      contributions,
+    }
+  } catch (error) {
+    console.error('[agent usage] 读历史统计失败:', agent, error)
+    return null
+  }
+}
+
+module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAgentUsageFromHistory, readAllAgentUsage }
