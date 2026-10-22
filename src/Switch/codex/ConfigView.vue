@@ -486,6 +486,10 @@ onMounted(refresh);
                     <span class="codex-info-label">接口协议</span>
                     <span class="codex-info-value">{{ wireApiLabel(p.wireApi) }}</span>
                   </div>
+                  <div v-if="p._extra && p._extra.model_catalog_url" class="codex-info-row">
+                    <span class="codex-info-label">模型目录</span>
+                    <span class="codex-info-value mono">{{ p._extra.model_catalog_url }}</span>
+                  </div>
                 </div>
 
                 <!-- 模型子区 -->

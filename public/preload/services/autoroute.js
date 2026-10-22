@@ -4,6 +4,7 @@
 //   POST /v1/chat/completions → OpenAI Chat Completions 入站
 //   POST /v1/responses       → OpenAI Responses 入站
 //   GET  /v1/models          → 启用模型列表
+//   GET  /v1/codex/models    → 同一批模型，Codex 自己的 models.json 形状（供 model_catalog_url）
 //   GET  /health             → 健康检查
 // 两种模式：direct（勾选主数据模型，按模型 ID 直连）/ mapping（模型映射：自定义模型名 alias → 主数据模型，
 //   /v1/models 只返回映射名，请求仅接受映射名；换上游模型只需改映射，agent 侧配置不动）
@@ -15,6 +16,7 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const { readCommonProviders } = require("./common");
+const codexCatalog = require("./codex");
 const { getSource } = require("./autoroute-convert/source");
 const { getTarget } = require("./autoroute-convert/target");
 const { pipeStream, collectBody } = require("./autoroute-convert/stream");
@@ -210,6 +212,29 @@ const resolveRoute = (enabled, requested, config) => {
   return null;
 };
 
+// 已启用模型 → 对外的模型 ID 列表（/v1/models 与 /v1/codex/models 共用，保证两边 ID 一致）：
+// direct 模式仅多供应商重名的模型加「供应商/」前缀供消歧，其余返回裸模型 ID；
+// mapping 模式返回映射名（alias），owned_by / description 标注实际指向的供应商
+const listGatewayModels = (enabled, config) => {
+  const counts = new Map();
+  if (config.mode !== "mapping") {
+    for (const { model } of enabled) counts.set(model.id, (counts.get(model.id) || 0) + 1);
+  }
+  const seen = new Set();
+  const out = [];
+  for (const { provider, model, alias } of enabled) {
+    const id = config.mode === "mapping" ? alias : counts.get(model.id) > 1 ? `${provider.name}/${model.id}` : model.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, provider, model });
+  }
+  return out;
+};
+
+// Codex 读模型目录（model_catalog_url / model_catalog_json）最多 1 MiB，超了整份目录加载失败。
+// 条目自带 Codex 提示词（十几 KB），所以只留装得下的那些，其余在响应头里报数量
+const CODEX_CATALOG_MAX_BYTES = 1024 * 1024;
+
 // ==================== HTTP 细节 ====================
 
 const sendJson = (res, status, body) => {
@@ -399,22 +424,39 @@ const handleRequest = async (req, res) => {
     }
 
     if (method === "GET" && (path === "/v1/models" || path === "/models")) {
-      const enabled = resolveAutoRouteModels(config);
-      // direct 模式：仅多供应商重名的模型加「provider/」前缀供消歧，其余返回裸模型 ID
-      // mapping 模式：返回映射名（alias），owned_by 标注实际指向的供应商
-      const counts = new Map();
-      if (config.mode !== "mapping") {
-        for (const { model } of enabled) counts.set(model.id, (counts.get(model.id) || 0) + 1);
-      }
-      const seen = new Set();
-      const data = [];
-      for (const { provider, model, alias } of enabled) {
-        const id = config.mode === "mapping" ? alias : counts.get(model.id) > 1 ? `${provider.name}/${model.id}` : model.id;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        data.push({ id, object: "model", created: Math.floor((serverState.startedAt || Date.now()) / 1000), owned_by: provider.name });
-      }
+      const data = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider }) => ({
+        id,
+        object: "model",
+        created: Math.floor((serverState.startedAt || Date.now()) / 1000),
+        owned_by: provider.name,
+      }));
       sendJson(res, 200, { object: "list", data });
+      finish({ protocol: "models", model: "", status: 200 });
+      return;
+    }
+
+    // Codex 的模型目录（Codex 自己的 models.json 结构）：配在 [model_providers.<id>] 的
+    // model_catalog_url 上，Codex ≥ 0.161 直接拉取——用 API key 的 Codex 不会自己去 GET /v1/models，
+    // 没有目录它选不到网关里的模型。与 /v1/models 共用 ID 解析，两边名字一致。
+    if (method === "GET" && (path === "/v1/codex/models" || path === "/codex/models")) {
+      const entries = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider }, i) => codexCatalog.buildCatalogEntry(provider.name, id, i + 1));
+      const models = [];
+      let bytes = 2; // {"models":[]}
+      let leftOut = 0;
+      for (const entry of entries) {
+        // 同一份系统提示词不必写两遍（model_messages 优先于 base_instructions），省一半体积
+        const { base_instructions: _omit, ...entryWithoutBase } = entry;
+        const raw = JSON.stringify(entryWithoutBase);
+        const size = Buffer.byteLength(raw, "utf8") + 1;
+        if (bytes + size > CODEX_CATALOG_MAX_BYTES) {
+          leftOut++;
+          continue;
+        }
+        bytes += size;
+        models.push(entryWithoutBase);
+      }
+      if (leftOut) res.setHeader("x-ccswitch-left-out", String(leftOut));
+      sendJson(res, 200, { models });
       finish({ protocol: "models", model: "", status: 200 });
       return;
     }

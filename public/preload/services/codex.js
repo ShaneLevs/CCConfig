@@ -50,6 +50,20 @@ const KNOWN_PROVIDER_FIELDS = ['name', 'base_url', 'wire_api', 'experimental_bea
 // TOML 裸键安全的供应商标识（model_provider 与子表键同名）
 const ID_RE = /^[\w-]+$/
 
+// Codex 在 base_url 后自行追加 /responses（或 /chat/completions），所以 base_url 必须停在版本段。
+// 主数据库里常见写法有 …/v1、…/v1/、…/v1/chat/completions、以及省掉 /v1 的根地址，统一下来：
+// 去掉尾部斜杠与客户端会自己追加的端点后缀，没有版本段就补 /v1（已带的不重复补，
+// 网关下发的 …/v1 也幂等）
+const CODEX_VERSION_SEGMENT_RE = /\/v\d+(?:beta\d*|alpha\d*)?$/i
+const CODEX_ENDPOINT_SUFFIX_RE = /\/(?:chat\/completions|responses|messages|completions)$/i
+const normalizeCodexBaseUrl = (baseUrl) => {
+  let url = String(baseUrl || '').trim().replace(/\/+$/, '')
+  if (!url) return ''
+  while (CODEX_ENDPOINT_SUFFIX_RE.test(url)) url = url.replace(CODEX_ENDPOINT_SUFFIX_RE, '').replace(/\/+$/, '')
+  if (!CODEX_VERSION_SEGMENT_RE.test(url)) url += '/v1'
+  return url
+}
+
 // 归一化一个 provider 条目供 UI 消费；env_key（老版本 Codex 用环境变量名取 key）只读展示，
 // 本体保留在 _extra 里原样写回
 const normalizeProvider = (id, p) => {
@@ -132,16 +146,24 @@ const updateCodexProvider = (id, updates) => {
 }
 
 // 下发用：存在则合并更新（保留既有扩展字段与已存 key，空值不覆盖），不存在则创建
+// modelCatalogUrl：Codex ≥ 0.161 可直接从网关拉模型目录（GET /v1/codex/models），
+// 比本地 models.json 更稳（不会出现引用陈旧/被删文件导致目录加载失败）
 const upsertCodexProvider = (id, cfg) => {
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
   const prev = tables[id]
     ? normalizeProvider(id, tables[id])
     : { id, name: id, baseUrl: '', wireApi: '', apiKey: '', envKey: '', _extra: {} }
-  const merged = { ...prev }
+  const merged = { ...prev, _extra: { ...(prev._extra || {}) } }
   for (const [k, v] of Object.entries(cfg)) {
+    if (k === 'modelCatalogUrl') {
+      if (v) merged._extra.model_catalog_url = v
+      else delete merged._extra.model_catalog_url
+      continue
+    }
     if (v !== undefined && v !== '') merged[k] = v
   }
+  if (merged.baseUrl) merged.baseUrl = normalizeCodexBaseUrl(merged.baseUrl)
   tables[id] = buildProviderToml(merged)
   writeCodexConfig(doc)
   return true
@@ -167,6 +189,13 @@ const deleteCodexProvider = (id) => {
 // ==================== 当前模型 / 全局字段 ====================
 
 const getCodexCurrent = () => {
+  // 打开 Codex 页时顺手自愈模型目录（文件丢失 / 条目缺新版必填字段），
+  // 这里是 Codex 侧「配置突然失效」最常见的两个原因
+  try {
+    ensureCodexCatalogFresh()
+  } catch (e) {
+    /* 自愈失败不影响读取，用户可手动同步 */
+  }
   const doc = readCodexConfig()
   return {
     provider: doc.model_provider || '',
@@ -320,17 +349,22 @@ const CODEX_INSTRUCTIONS_TEMPLATE = "You are Codex, an agent based on GPT-5. You
 const CODEX_INSTRUCTIONS_VARIABLES = {"personality_default": "", "personality_friendly": "", "personality_pragmatic": ""}
 
 // 生成目录条目。字段结构对照 openai/codex 的 ModelInfo（codex-rs/protocol/src/openai_models.rs）
-// 并照抄 DeepSeek 官方接入脚本（codex-deepseek-setup.sh）的条目形态：
+// 并照抄 DeepSeek 官方接入脚本（codex-deepseek-setup.sh）的条目形态；下列字段是客户端
+// 逐版新增的「没有就整份目录加载失败」的必填项，少一个 Codex 就用不了自家模型：
 // - slug / display_name / supported_reasoning_levels / shell_type / visibility / supported_in_api /
-//   priority / support_verbosity / truncation_policy / experimental_supported_tools 为客户端
-//   必填字段，缺一即解析失败（历史上曾把档位字段写成 reasoning_level，客户端报
-//   "missing field effort" 导致无法发消息）；档位键名必须是 effort。
-// - model_messages.instructions_template 携带 Codex 系统提示词：第三方模型不写它就拿不到指令，
-//   客户端会以空指令运行；official 条目即内嵌该模板，这里照抄。
+//   priority / support_verbosity / truncation_policy / experimental_supported_tools 一向必填
+//   （历史上曾把档位字段写成 reasoning_level，客户端报 "missing field effort"）；档位键名必须是 effort。
+// - supports_reasoning_summaries：Codex < 0.145 必填（否则 "missing field supports_reasoning_summaries"），
+//   且旧版只为它为 true 的模型发送 reasoning 参数（不写等于关闭思考强度）。
+// - supports_parallel_tool_calls：Codex ≥ 0.147 必填（缺失则整份目录加载失败）。
+// - supports_search_tool / service_tiers / base_instructions：新版读取，写了少走内置默认值。
+// model_messages.instructions_template 与 base_instructions 同时写：前者是新版模板机制，
+// 后者是旧版直取字段，第三方模型不写就拿不到 Codex 系统提示词（客户端以空指令运行）。
 const buildCatalogEntry = (providerId, modelId, priority = 1) => ({
   slug: modelId,
   display_name: modelId,
   description: `${providerId} 提供的模型（由 CCSwitch 生成）`,
+  base_instructions: CODEX_INSTRUCTIONS_TEMPLATE,
   supported_reasoning_levels: [
     { effort: 'low', description: '快速响应' },
     { effort: 'medium', description: '均衡' },
@@ -347,11 +381,24 @@ const buildCatalogEntry = (providerId, modelId, priority = 1) => ({
   truncation_policy: { mode: 'tokens', limit: 10000 },
   experimental_supported_tools: [],
   input_modalities: ['text'],
+  supports_reasoning_summaries: true,
+  supports_parallel_tool_calls: true,
+  supports_search_tool: true,
+  service_tiers: [],
   model_messages: {
     instructions_template: CODEX_INSTRUCTIONS_TEMPLATE,
     instructions_variables: CODEX_INSTRUCTIONS_VARIABLES,
   },
 })
+
+// 目录条目必须存在的键：Codex 升级后会新增「缺了整份目录加载失败」的字段，
+// 自家条目缺任一个即视为陈旧（升级插件后首次打开 Codex 页自动重建）
+const REQUIRED_ENTRY_KEYS = [
+  'slug', 'display_name', 'supported_reasoning_levels', 'default_reasoning_level',
+  'shell_type', 'visibility', 'supported_in_api', 'priority', 'support_verbosity',
+  'truncation_policy', 'experimental_supported_tools', 'input_modalities',
+  'supports_reasoning_summaries', 'supports_parallel_tool_calls', 'supports_search_tool', 'service_tiers',
+]
 
 // CCSwitch 生成的条目带固定 description 标记：升级时只动自家条目，
 // 用户/其他工具手工维护的条目（如内置 GPT 条目）不碰
@@ -414,6 +461,33 @@ const disableCodexCatalog = () => {
   return true
 }
 
+// 自家条目是否陈旧：缺任一必填键（Codex 升级新增的字段）、缺系统提示词、或档位里没 effort。
+// 只有带固定 description 标记的条目会被判定（用户/其他工具维护的条目不动）
+const entryNeedsUpgrade = (m) => {
+  if (!isGeneratedEntry(m)) return false
+  if (REQUIRED_ENTRY_KEYS.some((k) => m[k] === undefined)) return true
+  if (!m.model_messages || !m.model_messages.instructions_template) return true
+  const levels = Array.isArray(m.supported_reasoning_levels) ? m.supported_reasoning_levels : []
+  return levels.some((l) => !l || typeof l.effort !== 'string')
+}
+
+// 目录自愈：config.toml 引用了 models.json 但文件丢了（被删/换机器/恢复默认后残留引用）时，
+// Codex 读不到目录；条目缺新版必填字段时，新版 Codex 会整份目录加载失败——两种都原地重建。
+// 只在已启用目录（有 model_catalog_json）时跑，未启用不主动创建文件；文件损坏时抛错不覆盖
+// （里面可能含用户手写条目），交由手动「同步模型目录」处理
+const ensureCodexCatalogFresh = () => {
+  const doc = readCodexConfig()
+  if (!doc.model_catalog_json) return null
+  if (!fs.existsSync(CODEX_MODELS_JSON_PATH())) return syncCodexModelCatalog()
+  let stale = false
+  try {
+    stale = readCodexModelCatalog().models.some(entryNeedsUpgrade)
+  } catch (e) {
+    return null // models.json 解析失败：不覆盖，留给用户修复后手动同步
+  }
+  return stale ? syncCodexModelCatalog() : null
+}
+
 // ==================== 恢复默认（撤销全部模型定制） ====================
 
 // 移除本插件管理的全部模型相关配置，config.toml 其余配置节（mcp_servers / profiles 等）
@@ -449,11 +523,12 @@ const isCodexInstalled = () => fs.existsSync(CODEX_DIR())
 
 module.exports = {
   getCodexDir, getCodexConfigPath, getCodexModelsJsonPath,
+  normalizeCodexBaseUrl,
   readCodexConfig, writeCodexConfig,
   getCodexProviderList, addCodexProvider, updateCodexProvider, upsertCodexProvider, deleteCodexProvider,
   getCodexCurrent, setCodexDefaultModel, setCodexReasoningEffort, setCodexApiAuth,
   getCodexProviderModels, getCodexProviderModelsMap, addCodexModel, deleteCodexModel, upsertCodexModel,
-  syncCodexModelCatalog, disableCodexCatalog, readCodexModelCatalog,
+  syncCodexModelCatalog, disableCodexCatalog, readCodexModelCatalog, ensureCodexCatalogFresh,
   resetCodexConfig,
   openCodexDir, isCodexInstalled,
   // 内部结构函数导出，供测试/复用

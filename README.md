@@ -125,7 +125,7 @@ Claude:
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
   自动网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
-    入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models
+    入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
@@ -173,9 +173,16 @@ Reasonix:
 
 Codex:
   ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）
+  base_url 必须停在版本段：Codex 自己追加 /responses 或 /chat/completions，下发时经 normalizeCodexBaseUrl 归一
+  （补 /v1、去 …/chat/completions 等端点后缀，幂等）
   「模型目录」= 合并各供应商模型写 ~/.codex/models.json + model_catalog_json 绝对路径（正斜杠）
-  条目必须符合 Codex ModelInfo schema（reasoning level 键名必须是 effort，含 instructions_template）
-  带「由 CCSwitch 生成」标记的旧条目同步时原地升级
+  条目必须符合 Codex ModelInfo schema（档位键名必须是 effort）；Codex 逐版新增「缺了整份目录加载失败」的
+    必填字段：supports_reasoning_summaries(<0.145)、supports_parallel_tool_calls(≥0.147)、shell_type/
+    truncation_policy 等；系统提示词双写 base_instructions（旧版）+ model_messages.instructions_template（新版）
+  带「由 CCSwitch 生成」标记的旧条目同步时原地重建；打开 Codex 页（getCodexCurrent）时自愈：
+    条目缺必填字段 → 重建；models.json 丢了但 config.toml 仍引用 → 按 DB 模型列表补回；文件损坏不动
+  网关下发额外写 [model_providers.router].model_catalog_url = <网关>/v1/codex/models：
+    Codex ≥0.161 直接拉目录（用 API key 的 Codex 不会自己 GET /v1/models），不再依赖本地文件
 
 Kimi Code:
   ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）

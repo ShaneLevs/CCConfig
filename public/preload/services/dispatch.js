@@ -303,11 +303,16 @@ const dispatchToCodex = (provider, model, opts) => {
   if (!wireApi) {
     throw new Error(`供应商「${provider.name}」协议为 ${provider.api}，Codex 仅支持 OpenAI Chat / Responses 协议供应商`)
   }
+  // base_url 必须停在版本段（Codex 自己追加 /responses 或 /chat/completions），
+  // 主数据库里 …/v1、…/v1/、…/v1/chat/completions、无版本段的根地址都归一到这里
   codex.upsertCodexProvider(id, {
     name: id,
-    baseUrl: provider.baseUrl || '',
+    baseUrl: codex.normalizeCodexBaseUrl(provider.baseUrl),
     wireApi,
     apiKey: provider.apiKey || '',
+    // 网关下发：顺手写上模型目录 URL（Codex ≥ 0.161 直接从网关拉 /v1/codex/models），
+    // 本地 models.json 仍由「模型目录」开关管，两者不冲突
+    ...(opts.codexModelCatalogUrl ? { modelCatalogUrl: opts.codexModelCatalogUrl } : {}),
   })
   codex.upsertCodexModel(id, model.id)
   let suffix = ''
@@ -598,7 +603,11 @@ const dispatchAutoRoute = (targets) => {
     const targetResults = [];
     for (const model of models) {
       try {
-        const message = d.run(provider, model, { providerName: AUTOROUTE_PROVIDER_NAME });
+        const message = d.run(provider, model, {
+          providerName: AUTOROUTE_PROVIDER_NAME,
+          // 只有 Codex 认模型目录 URL：指向网关的 /v1/codex/models（与 /v1/models 同一套模型 ID）
+          codexModelCatalogUrl: isCodex ? `${baseUrl}/v1/codex/models` : undefined,
+        });
         targetResults.push({ app: t.app, ok: true, message });
       } catch (e) {
         targetResults.push({ app: t.app, ok: false, message: e.message || String(e) });

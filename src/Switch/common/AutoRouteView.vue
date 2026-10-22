@@ -260,6 +260,7 @@ const endpoints = [
   { method: "POST", path: "/v1/messages", desc: "Anthropic Messages" },
   { method: "POST", path: "/v1/responses", desc: "OpenAI Responses" },
   { method: "GET", path: "/v1/models", desc: "已启用模型列表" },
+  { method: "GET", path: "/v1/codex/models", desc: "Codex 模型目录（model_catalog_url）" },
 ];
 
 // 日志协议显示名：源为适配器标识（anthropic/chat/responses），目标为供应商 api 标识（anthropic-messages 等）
