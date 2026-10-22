@@ -18,7 +18,7 @@ const { readCommonProviders } = require("./common");
 const { getSource } = require("./autoroute-convert/source");
 const { getTarget } = require("./autoroute-convert/target");
 const { pipeStream, collectBody } = require("./autoroute-convert/stream");
-const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText } = require("./autoroute-convert/canonical");
+const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText, retryAfterMs, isRetryableStatus, refusedOptionalFields, refusedBetaHeader } = require("./autoroute-convert/canonical");
 
 // 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
 // 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccswitch_overridden_env_<nativeId> 先例）。
@@ -218,7 +218,13 @@ const sendJson = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
-const sendError = (res, sourceProtocol, status, message) => sendJson(res, status, errorBody(sourceProtocol, status, message));
+// 错误响应：错误体按入站协议归一（type 跟着状态码走，agent SDK 据此决定是否重试），
+// 上游给了 Retry-After 就带下去
+const sendError = (res, sourceProtocol, status, message, headers) => {
+  if (res.headersSent) return;
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...(headers || {}) });
+  res.end(JSON.stringify(errorBody(sourceProtocol, status, message)));
+};
 
 const extractKey = (req) => {
   const auth = req.headers["authorization"] || "";
@@ -261,6 +267,94 @@ const forwardUpstream = (url, headers, bodyObj) =>
     req.end();
   });
 
+// 上游拒收过的可选字段（「这家不收 stream_options」等）：进程内记住，后续请求直接去掉，
+// 不必每次都先撞一次 400。仅内存，网关重启即清空。
+const refusedFieldsByProvider = new Map();
+const refusedKey = (provider) => `${provider.name}\u0000${provider.api}`;
+const knownRefusedFields = (provider) => refusedFieldsByProvider.get(refusedKey(provider)) || null;
+const rememberRefusedFields = (provider, fields) => {
+  if (!fields || !fields.length) return;
+  const key = refusedKey(provider);
+  const set = refusedFieldsByProvider.get(key) || new Set();
+  for (const f of fields) set.add(f);
+  refusedFieldsByProvider.set(key, set);
+};
+const stripFields = (bodyObj, fields) => {
+  if (!fields || !fields.size) return bodyObj;
+  let out = null;
+  for (const f of fields) {
+    if (!(f in bodyObj)) continue;
+    if (!out) out = { ...bodyObj };
+    delete out[f];
+  }
+  return out || bodyObj;
+};
+
+// anthropic-beta / openai-beta 这类头也可能被上游拒收：同样记忆并去掉
+const HEADER_FIELDS = ["anthropic-beta", "openai-beta"];
+const stripHeaderFields = (headers, fields) => {
+  if (!fields || !fields.size) return headers;
+  let out = null;
+  for (const f of HEADER_FIELDS) {
+    if (!fields.has(f) || !(f in headers)) continue;
+    if (!out) out = { ...headers };
+    delete out[f];
+  }
+  return out || headers;
+};
+
+const REQUEST_ATTEMPTS = 3; // 首次 + 2 次重试
+const RETRY_BASE_MS = 800;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 向上游发请求（带容错）：
+//  1) 429 / 5xx / 过载 / 网络抖动 → 按上游 Retry-After（上限 15s）或指数退避重试，共 2 次
+//  2) 400/422 且错误信息点名某个可选字段（stream_options / reasoning_effort / response_format …）
+//     或点名 beta 头 → 去掉它（并记住这家不收）立即重试，而不是让整轮对话失败
+// 成功：{ ok: true, upstreamRes, body }（响应体尚未读取，交给调用方消费）
+// 失败：{ ok: false, status, text, error, headers }（错误体已读完，text 为空表示连接层失败）
+const sendUpstream = async ({ url, headers, body, provider }) => {
+  const known = knownRefusedFields(provider);
+  let payload = stripFields(body, known);
+  let sendHeaders = stripHeaderFields(headers, known);
+  let last = null;
+  for (let attempt = 0; attempt < REQUEST_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      const wait = last && last.immediate ? 0 : (last && last.wait) || RETRY_BASE_MS * 2 ** (attempt - 1);
+      if (wait) await sleep(wait);
+    }
+    let upstreamRes;
+    try {
+      upstreamRes = await forwardUpstream(url, sendHeaders, payload);
+    } catch (e) {
+      last = { error: (e && e.message) || String(e), wait: 0 };
+      continue;
+    }
+    const status = upstreamRes.statusCode || 502;
+    if (status < 400) return { ok: true, upstreamRes, body: payload };
+    const text = await collectBody(upstreamRes);
+    const message = extractUpstreamErrorMessage(text, status);
+    const dropped = [...refusedOptionalFields(status, message), ...refusedBetaHeader(status, message)];
+    if (dropped.length) {
+      const nextBody = stripFields(payload, new Set(dropped));
+      const nextHeaders = stripHeaderFields(sendHeaders, new Set(dropped));
+      if (nextBody !== payload || nextHeaders !== sendHeaders) {
+        payload = nextBody;
+        sendHeaders = nextHeaders;
+        rememberRefusedFields(provider, dropped);
+        last = { error: message, wait: 0, immediate: true };
+        continue;
+      }
+    }
+    if (isRetryableStatus(status) && attempt < REQUEST_ATTEMPTS - 1) {
+      last = { error: message, wait: retryAfterMs(upstreamRes.headers) };
+      continue;
+    }
+    return { ok: false, status, text, error: message, headers: upstreamRes.headers };
+  }
+  return { ok: false, status: 502, text: "", error: (last && last.error) || "上游请求失败", headers: null };
+};
+
 // ==================== 请求处理 ====================
 
 const handleRequest = async (req, res) => {
@@ -281,8 +375,8 @@ const handleRequest = async (req, res) => {
   };
 
   // 错误统一走这里：错误响应发给客户端，原因同时记入请求日志（error 字段供「最近请求」展示）
-  const fail = (protocol, status, message, model = "") => {
-    sendError(res, protocol, status, message);
+  const fail = (protocol, status, message, model = "", retryAfter) => {
+    sendError(res, protocol, status, message, retryAfter ? { "retry-after": retryAfter } : undefined);
     finish({ protocol, model, status, error: message });
   };
 
@@ -363,35 +457,60 @@ const handleRequest = async (req, res) => {
 
     const wantsStream = body.stream === true;
     const isPassthrough = SOURCE_OF_API[provider.api] === sourceProtocol;
-    const headers = buildUpstreamHeaders(provider);
+    // 客户端协议头（anthropic-beta / openai-beta / anthropic-version / 可选 UA）透传给上游：
+    // 1M 上下文、interleaved thinking 等 beta 特性都靠 anthropic-beta 点名，漏发等于特性失效
+    const headers = buildUpstreamHeaders(provider, req.headers);
     targetApi = provider.api;
 
     if (isPassthrough) {
       // 同协议直通：仅重写 model，原样转发（保留图片、cache_control 等全部字段）
-      const upstreamRes = await forwardUpstream(url, headers, { ...body, model: model.id });
-      if (wantsStream) {
-        // 流式直通时上游非 200，错误体不是事件流，转成源协议错误响应（此前会误按 200 原样转发）
-        if (upstreamRes.statusCode !== 200) {
-          const text = await collectBody(upstreamRes);
-          fail(sourceProtocol, upstreamRes.statusCode || 502, extractUpstreamErrorMessage(text, upstreamRes.statusCode), model.id);
-          return;
+      const up = await sendUpstream({ url, headers, body: { ...body, model: model.id }, provider });
+      if (!up.ok) {
+        const retryAfter = up.headers && up.headers["retry-after"];
+        if (up.text) {
+          // 原样转发上游错误体（agent SDK 认得上游自己的错误格式），同时把可读原因记入日志
+          if (!res.headersSent) {
+            const h = { "content-type": (up.headers && up.headers["content-type"]) || "application/json; charset=utf-8" };
+            if (retryAfter) h["retry-after"] = retryAfter;
+            res.writeHead(up.status, h);
+            res.end(up.text);
+          }
+          finish({ protocol: sourceProtocol, model: model.id, status: up.status, passthrough: true, error: up.error });
+        } else {
+          fail(sourceProtocol, up.status, up.error, model.id, retryAfter);
         }
+        return;
+      }
+      const upstreamRes = up.upstreamRes;
+      if (wantsStream) {
         res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
         // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
         // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
         const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
         if (liveLog) liveLog.usage = usage; // 与旁路扫描共用同一对象 → 流式期间 token 数可见地累加
         let pending = "";
+        let clientGone = false;
         const settle = (error) => {
           finish({
             protocol: sourceProtocol,
             model: model.id,
-            status: error ? 502 : 200,
+            status: clientGone ? 499 : error ? 502 : 200,
             passthrough: true,
             usage,
-            ...(error ? { error } : {}),
+            ...(clientGone ? { error: "客户端提前断开（上游已中止）" } : error ? { error } : {}),
           });
         };
+        // 客户端断开（Codex/Claude Code 取消）→ 立即中止上游，避免白烧 token
+        res.once("close", () => {
+          if (res.writableFinished) return;
+          clientGone = true;
+          try {
+            upstreamRes.destroy();
+          } catch (e) {
+            /* ignore */
+          }
+          settle();
+        });
         upstreamRes.on("data", (chunk) => {
           try {
             pending += chunk.toString("utf8");
@@ -428,25 +547,31 @@ const handleRequest = async (req, res) => {
     const source = getSource(sourceProtocol);
     const target = getTarget(provider.api);
     const canonical = source.parseRequest(body, model.id);
+    // 入站没给输出上限时，用主数据模型自己配的 maxTokens（Anthropic 必须带 max_tokens）
+    canonical.fallbackMaxTokens = Number(model.maxTokens) || 0;
     const upstreamBody = target.buildRequest(canonical);
-    const upstreamRes = await forwardUpstream(url, headers, upstreamBody);
+    const up = await sendUpstream({ url, headers, body: upstreamBody, provider });
+    if (!up.ok) {
+      fail(sourceProtocol, up.status, up.error, model.id, up.headers && up.headers["retry-after"]);
+      return;
+    }
+    const upstreamRes = up.upstreamRes;
 
     if (wantsStream) {
-      if (upstreamRes.statusCode !== 200) {
-        const text = await collectBody(upstreamRes);
-        fail(sourceProtocol, upstreamRes.statusCode || 502, extractUpstreamErrorMessage(text, upstreamRes.statusCode), model.id);
-        return;
-      }
-      const usage = await pipeStream({ upstreamRes, target, source, res });
-      finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage });
+      let clientGone = false;
+      const usage = await pipeStream({ upstreamRes, target, source, res, onClientGone: () => (clientGone = true) });
+      finish({
+        protocol: sourceProtocol,
+        model: model.id,
+        status: clientGone ? 499 : 200,
+        converted: true,
+        usage,
+        ...(clientGone ? { error: "客户端提前断开（上游已中止）" } : {}),
+      });
       return;
     }
 
     const text = await collectBody(upstreamRes);
-    if (upstreamRes.statusCode !== 200) {
-      fail(sourceProtocol, upstreamRes.statusCode || 502, extractUpstreamErrorMessage(text, upstreamRes.statusCode), model.id);
-      return;
-    }
     let upstreamJson;
     try {
       upstreamJson = JSON.parse(text);

@@ -23,11 +23,20 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
 // 流式转发：消费上游响应并把重写后的 SSE 帧写到客户端响应。
 // 返回规范 end 事件里的 usage（供网关统计），无则 null。
 // upstreamRes: 上游 IncomingMessage（已 200）；target: 出站适配器；source: 入站适配器；res: 客户端 ServerResponse
-const pipeStream = async ({ upstreamRes, target, source, res }) => {
+// onClientGone: 客户端提前断开时回调（上游随之被中止，统计侧据此记 499）
+const pipeStream = async ({ upstreamRes, target, source, res, onClientGone }) => {
   res.writeHead(200, sseHeaders());
   let closed = false;
   res.on("close", () => {
+    if (closed || res.writableFinished) return;
     closed = true;
+    // 客户端断了就把上游也断开，别让它继续跑完白烧 token
+    try {
+      if (upstreamRes && typeof upstreamRes.destroy === "function") upstreamRes.destroy();
+    } catch (e) {
+      /* ignore */
+    }
+    if (typeof onClientGone === "function") onClientGone();
   });
   const writer = source.createFrameWriter();
   let endUsage = null;

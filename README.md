@@ -131,6 +131,15 @@ Claude:
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus
+    跨协议转换规则（autoroute-convert/canonical.js 为中间层，source/target 各三协议）：
+      推理强度：Anthropic thinking.budget_tokens ↔ OpenAI reasoning_effort / reasoning.effort 互折（低 4096 / 中 10000 / 高 24000 / 最高 32000；anthropic 侧 budget 被限制在 max_tokens-1024 以内，且不开 thinking 时不回放 thinking 块）
+      媒体：图片/文档进 canonical（anthropic image·document / chat image_url / responses input_image·input_file），目标载不了时降级为 [attachment …] 文本占位（含 tool_result 里的图片）；tool_reference 转「Tool X is loaded」文本（Claude Code ToolSearch）
+      结构化输出：response_format / text.format / output_config.format 归一后按目标协议重写，Anthropic 等无此能力的写进 system 提示
+      工具 schema：补 enum/const 缺的 type、oneOf→anyOf；入站 tool 形状（Chat 嵌套 / Responses 扁平 / Anthropic input_schema / MCP inputSchema）统一识别
+      max_tokens：入站未给时用主数据模型 maxTokens，anthropic 出站兜底 16384
+      错误体：按状态码归一为协议原生 type（429 rate_limit_error / 5xx·529 overloaded·api_error），上游 Retry-After 透传
+    上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发；客户端断开（流式）立即中止上游并记 499
+    客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
     配置存 uTools DB（ccswitch_autoroute_config），onPluginReady/onPluginEnter 幂等自启动，uTools 退出即停
 
 OpenCode:

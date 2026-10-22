@@ -6,11 +6,16 @@
 const {
   newId,
   textFromContent,
+  mediaBlock,
+  parseDataUrl,
+  normalizeTool,
+  normalizeFormat,
+  resolveReasoning,
   stopFromFinishReason,
   stopFromAnthropicReason,
 } = require("./canonical");
 
-// ==================== 工具映射 ====================
+// ==================== 工具选择 ====================
 
 const mapToolChoiceToCanonical = (tc) => {
   if (!tc) return "auto";
@@ -23,10 +28,38 @@ const mapToolChoiceToCanonical = (tc) => {
   if (tc.type === "function" && tc.name) return { name: tc.name }; // responses 扁平形态 {type,name}
   if (tc.type === "function" && tc.function && tc.function.name) return { name: tc.function.name }; // chat 嵌套形态
   if (tc.type === "any") return "any";
+  if (tc.type === "auto") return "auto";
+  if (tc.type === "none") return "none";
   return "auto";
 };
 
 // ==================== Anthropic Messages 入站 ====================
+
+// anthropic 的 image / document 块（base64 或 url 两种 source）
+const anthropicMedia = (b) => {
+  const src = b && b.source;
+  if (!src) return null;
+  const kind = b.type === "document" ? "file" : "image";
+  if (src.type === "base64") return mediaBlock(kind, src.media_type, { data: src.data });
+  if (src.type === "url") return mediaBlock(kind, src.media_type || (kind === "file" ? "application/pdf" : "image/png"), { url: src.url });
+  if (src.type === "text" && typeof src.data === "string") {
+    // document 的 text source：内容本身就是文本，交给调用方当文本用
+    return { type: "text", text: src.data };
+  }
+  return null;
+};
+
+// tool_result 的 content 既可能是字符串也可能是块数组（数组里能带图片）
+const anthropicToolResult = (b) => {
+  const images = [];
+  if (Array.isArray(b.content)) {
+    for (const c of b.content) {
+      const media = anthropicMedia(c);
+      if (media && media.type === "media") images.push(media);
+    }
+  }
+  return { content: textFromContent(b.content), images };
+};
 
 const anthropicSource = {
   key: "anthropic",
@@ -34,6 +67,7 @@ const anthropicSource = {
 
   // body: Anthropic Messages 请求 → canonical
   parseRequest(body, model) {
+    const thinking = body.thinking && typeof body.thinking === "object" ? body.thinking : null;
     const canonical = {
       model,
       instructions: textFromContent(body.system),
@@ -45,14 +79,18 @@ const anthropicSource = {
       topP: body.top_p,
       stop: Array.isArray(body.stop_sequences) ? body.stop_sequences : undefined,
       stream: !!body.stream,
-      reasoning: body.thinking && body.thinking.budget_tokens ? { maxTokens: body.thinking.budget_tokens } : null,
+      // thinking.enabled + budget_tokens → 档位；disabled / 缺省 = 没开推理
+      reasoning: thinking && thinking.type !== "disabled" && (thinking.budget_tokens || thinking.type === "enabled")
+        ? resolveReasoning({ maxTokens: thinking.budget_tokens || 0 })
+        : null,
+      // 新版 Anthropic 的结构化输出（output_config.format）
+      format: normalizeFormat(body.output_config && body.output_config.format),
     };
     if (Array.isArray(body.tools)) {
-      canonical.tools = body.tools
-        .filter((t) => t && t.name)
-        .map((t) => ({ name: t.name, description: t.description || "", inputSchema: t.input_schema || { type: "object" } }));
+      canonical.tools = body.tools.map(normalizeTool).filter(Boolean);
     }
     for (const msg of body.messages || []) {
+      if (!msg) continue;
       const role = msg.role === "assistant" ? "assistant" : "user";
       const blocks = [];
       if (typeof msg.content === "string") {
@@ -62,10 +100,17 @@ const anthropicSource = {
           if (!b || !b.type) continue;
           if (b.type === "text") blocks.push({ type: "text", text: b.text || "" });
           else if (b.type === "tool_use") blocks.push({ type: "tool_use", id: b.id, name: b.name, arguments: JSON.stringify(b.input ?? {}) });
-          else if (b.type === "tool_result") blocks.push({ type: "tool_result", callId: b.tool_use_id, content: textFromContent(b.content), isError: !!b.is_error });
-          else if (b.type === "thinking") blocks.push({ type: "reasoning", text: b.thinking || "", signature: b.signature || undefined });
+          else if (b.type === "tool_result") {
+            const tr = anthropicToolResult(b);
+            blocks.push({ type: "tool_result", callId: b.tool_use_id, content: tr.content, isError: !!b.is_error, ...(tr.images.length ? { images: tr.images } : {}) });
+          } else if (b.type === "thinking") blocks.push({ type: "reasoning", text: b.thinking || "", signature: b.signature || undefined });
           else if (b.type === "redacted_thinking") blocks.push({ type: "reasoning", encrypted: b.data || "" });
-          // image / document 等块丢弃（canonical 不含多模态，见 canonical.js 头注释）
+          else if (b.type === "image" || b.type === "document") {
+            const media = anthropicMedia(b);
+            if (media && media.type === "media") blocks.push(media);
+            else if (media && media.type === "text" && media.text) blocks.push({ type: "text", text: media.text });
+          }
+          // 其余块（server_tool_use / web_search_tool_result 等）v1 忽略
         }
       }
       if (blocks.length) canonical.input.push({ role, content: blocks });
@@ -178,6 +223,38 @@ class AnthropicFrameWriter {
 
 // ==================== OpenAI Chat Completions 入站 ====================
 
+// chat 的 content 数组块：文本 / 图片（image_url 既可能是字符串也可能是 {url}）
+const chatContentBlocks = (content) => {
+  const blocks = [];
+  if (typeof content === "string") {
+    if (content) blocks.push({ type: "text", text: content });
+    return blocks;
+  }
+  if (!Array.isArray(content)) return blocks;
+  for (const c of content) {
+    if (typeof c === "string") {
+      if (c) blocks.push({ type: "text", text: c });
+      continue;
+    }
+    if (!c || typeof c !== "object") continue;
+    if (c.type === "image_url" || c.type === "input_image") {
+      const raw = c.image_url !== undefined ? c.image_url : c.image;
+      const url = typeof raw === "string" ? raw : raw && raw.url;
+      if (!url) continue;
+      const parsed = parseDataUrl(url);
+      const media = parsed ? mediaBlock("image", parsed.mediaType, { data: parsed.data }) : mediaBlock("image", "image/*", { url });
+      if (media) blocks.push(media);
+    } else if (c.type === "file" || c.type === "input_file") {
+      const f = c.file || {};
+      const media = mediaBlock("file", f.mime_type || "application/octet-stream", { data: f.file_data, url: f.file_url, name: f.filename || c.filename });
+      if (media) blocks.push(media);
+    } else if (typeof c.text === "string" && c.text) {
+      blocks.push({ type: "text", text: c.text });
+    }
+  }
+  return blocks;
+};
+
 const chatSource = {
   key: "chat",
   contentType: "application/json",
@@ -194,7 +271,8 @@ const chatSource = {
       topP: body.top_p,
       stop: body.stop,
       stream: !!body.stream,
-      reasoning: body.reasoning_effort ? { effort: body.reasoning_effort } : null,
+      reasoning: body.reasoning_effort || body.reasoning ? resolveReasoning({ effort: body.reasoning_effort || (body.reasoning && body.reasoning.effort) }) : null,
+      format: normalizeFormat(body.response_format),
     };
     const systemParts = [];
     for (const msg of body.messages || []) {
@@ -209,9 +287,7 @@ const chatSource = {
         continue;
       }
       const role = msg.role === "assistant" ? "assistant" : "user";
-      const blocks = [];
-      const text = textFromContent(msg.content);
-      if (text) blocks.push({ type: "text", text });
+      const blocks = chatContentBlocks(msg.content);
       if (Array.isArray(msg.tool_calls)) {
         for (const tc of msg.tool_calls) {
           if (tc && tc.function && tc.function.name) {
@@ -223,9 +299,7 @@ const chatSource = {
     }
     if (systemParts.length) canonical.instructions = systemParts.join("\n\n");
     if (Array.isArray(body.tools)) {
-      canonical.tools = body.tools
-        .filter((t) => t && t.type === "function" && t.function && t.function.name)
-        .map((t) => ({ name: t.function.name, description: t.function.description || "", inputSchema: t.function.parameters || { type: "object" } }));
+      canonical.tools = body.tools.map(normalizeTool).filter(Boolean);
     }
     return canonical;
   },
@@ -309,6 +383,37 @@ class ChatFrameWriter {
 
 // ==================== OpenAI Responses 入站 ====================
 
+// responses 的 content 块：input_text / output_text / input_image / input_file
+const responsesContentBlocks = (content) => {
+  const blocks = [];
+  if (typeof content === "string") {
+    if (content) blocks.push({ type: "text", text: content });
+    return blocks;
+  }
+  if (!Array.isArray(content)) return blocks;
+  for (const c of content) {
+    if (typeof c === "string") {
+      if (c) blocks.push({ type: "text", text: c });
+      continue;
+    }
+    if (!c || typeof c !== "object") continue;
+    if (c.type === "input_image" || c.type === "image_url") {
+      const raw = c.image_url !== undefined ? c.image_url : c.image;
+      const url = typeof raw === "string" ? raw : raw && raw.url;
+      if (!url) continue;
+      const parsed = parseDataUrl(url);
+      const media = parsed ? mediaBlock("image", parsed.mediaType, { data: parsed.data }) : mediaBlock("image", c.media_type || "image/*", { url });
+      if (media) blocks.push(media);
+    } else if (c.type === "input_file") {
+      const media = mediaBlock("file", c.mime_type || "application/octet-stream", { data: c.file_data, url: c.file_url, name: c.filename });
+      if (media) blocks.push(media);
+    } else if (typeof c.text === "string" && c.text) {
+      blocks.push({ type: "text", text: c.text }); // input_text / output_text / text 等一切文本块
+    }
+  }
+  return blocks;
+};
+
 const responsesSource = {
   key: "responses",
   contentType: "application/json",
@@ -325,7 +430,10 @@ const responsesSource = {
       topP: body.top_p,
       stop: undefined,
       stream: !!body.stream,
-      reasoning: body.reasoning && body.reasoning.effort ? { effort: body.reasoning.effort } : null,
+      reasoning: body.reasoning && (body.reasoning.effort || body.reasoning.max_tokens)
+        ? resolveReasoning({ effort: body.reasoning.effort, maxTokens: body.reasoning.max_tokens })
+        : null,
+      format: normalizeFormat(body.text && body.text.format),
     };
     const systemParts = [];
     // input 三种合法形态：字符串、item 数组（easy input message / 上一轮 output 项）、单个对象
@@ -344,24 +452,20 @@ const responsesSource = {
         canonical.input.push({ role: "assistant", content: [{ type: "tool_use", id: item.call_id || item.id || newId("call"), name: item.name, arguments: item.arguments || "{}" }] });
       } else if (item.type === "function_call_output") {
         if (!item.call_id) continue;
-        canonical.input.push({ role: "user", content: [{ type: "tool_result", callId: item.call_id, content: textFromContent(item.output) }] });
+        const outputBlocks = responsesContentBlocks(item.output);
+        const content = outputBlocks.filter((b) => b.type === "text").map((b) => b.text).join("");
+        const images = outputBlocks.filter((b) => b.type === "media");
+        canonical.input.push({
+          role: "user",
+          content: [{ type: "tool_result", callId: item.call_id, content: typeof item.output === "string" ? item.output : content, ...(images.length ? { images } : {}) }],
+        });
       } else if (item.type === "message" || item.role !== undefined || item.content !== undefined) {
         // 标准 message 项或 easy input message（无 type，仅 role+content，Codex 等客户端的标准发法）
         const role = item.role === "assistant" ? "assistant" : item.role === "system" || item.role === "developer" ? "system" : "user";
-        const blocks = [];
-        if (typeof item.content === "string") {
-          if (item.content) blocks.push({ type: "text", text: item.content });
-        } else if (Array.isArray(item.content)) {
-          for (const c of item.content) {
-            if (typeof c === "string") {
-              if (c) blocks.push({ type: "text", text: c });
-            } else if (c && typeof c.text === "string" && c.text) {
-              blocks.push({ type: "text", text: c.text }); // input_text / output_text / text 等一切文本块
-            }
-          }
-        }
+        const blocks = responsesContentBlocks(item.content);
         if (role === "system") {
-          if (blocks.length) systemParts.push(blocks.map((b) => b.text).join(""));
+          const t = blocks.filter((b) => b.type === "text").map((b) => b.text).join("");
+          if (t) systemParts.push(t);
         } else if (blocks.length) {
           canonical.input.push({ role, content: blocks });
         }
@@ -373,9 +477,7 @@ const responsesSource = {
     }
     if (systemParts.length) canonical.instructions = [canonical.instructions, ...systemParts].filter(Boolean).join("\n\n");
     if (Array.isArray(body.tools)) {
-      canonical.tools = body.tools
-        .filter((t) => t && t.type === "function" && t.name)
-        .map((t) => ({ name: t.name, description: t.description || "", inputSchema: t.parameters || { type: "object" } }));
+      canonical.tools = body.tools.map(normalizeTool).filter(Boolean);
     }
     return canonical;
   },
@@ -499,7 +601,7 @@ class ResponsesFrameWriter {
     this.finished = true;
     const frames = [];
     this.closeOpenItems(frames);
-    const output = this.items.map((item, index) => {
+    const output = this.items.map((item) => {
       if (item.type === "message") {
         return { type: "message", id: item.id, status: "completed", role: "assistant", content: [{ type: "output_text", text: item.text, annotations: [] }] };
       }
