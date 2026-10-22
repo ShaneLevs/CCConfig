@@ -129,6 +129,8 @@ Claude:
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
+    模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
+    最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus
     配置存 uTools DB（ccswitch_autoroute_config），onPluginReady/onPluginEnter 幂等自启动，uTools 退出即停
 
 OpenCode:

@@ -29,9 +29,13 @@ const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: 
 const providers = ref([]);
 const selectionKeys = ref([]);
 const portDraft = ref(17877); // 端口输入框草稿值，失焦/回车时校验并保存
+const now = ref(Date.now()); // 轮询时间戳，用于「进行中」行的实时耗时
 
 const isMappingMode = computed(() => config.value.mode === "mapping");
-const modelCount = computed(() => (isMappingMode.value ? (config.value.mappings || []).length : config.value.selection.length));
+const mappingRows = computed(() => config.value.mappings || []);
+// 只有映射名 + 目标都填好的行才算可用（预置行未选目标时不计入模型数）
+const readyMappings = computed(() => mappingRows.value.filter((m) => m.alias && m.provider && m.modelId).length);
+const modelCount = computed(() => (isMappingMode.value ? readyMappings.value : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
 
 const routeOptions = computed(() =>
@@ -60,6 +64,7 @@ const loadAll = () => {
 
 const refreshStatus = () => {
   status.value = window.services.getAutoRouteStatus();
+  now.value = Date.now();
 };
 
 // 级联选中（含父级=供应商）→ 扁平 selection；父级展开为该供应商当前全部模型
@@ -109,12 +114,9 @@ const onModeChange = (val) => {
 
 const MAX_MAPPINGS = 10;
 
-// 预设映射名：固定模型名写给 agent，换上游只需改映射，agent 侧配置不动
-const PRESET_ALIASES = [
-  { value: "flash", label: "flash" },
-  { value: "plus", label: "plus" },
-  { value: "pro", label: "pro" },
-];
+// 映射名默认由 preload 预置好 flash / plus / pro 三行（见 autoroute.js readAutoRouteConfig），
+// 这里不再做成下拉选预设：映射名是可编辑的普通输入框，目标模型默认为空，用户自己选或删行
+const PRESET_ALIASES = ["flash", "plus", "pro"];
 
 // 映射目标下拉选项：供应商::模型ID 为值，label 显示供应商 / 模型
 const targetOptions = computed(() =>
@@ -136,41 +138,29 @@ const saveMappings = (mappings) => {
 };
 
 const removeMapping = (index) => {
-  saveMappings((config.value.mappings || []).filter((_, i) => i !== index));
+  saveMappings(mappingRows.value.filter((_, i) => i !== index));
 };
 
-// 添加映射：默认取一个未被占用的预设名（flash / plus / pro），全部占用则留空自填
+// 新增映射行：默认取一个尚未使用的预设名（flash / plus / pro），全被占用则留空自填
 const addMapping = () => {
-  const mappings = config.value.mappings || [];
+  const mappings = mappingRows.value;
   if (mappings.length >= MAX_MAPPINGS) {
     MessagePlugin.warning(`最多可添加 ${MAX_MAPPINGS} 个映射`);
     return;
   }
   const used = new Set(mappings.map((m) => m.alias));
-  const preset = PRESET_ALIASES.find((p) => !used.has(p.value));
-  saveMappings([...mappings, { alias: preset ? preset.value : "", provider: "", modelId: "" }]);
+  const preset = PRESET_ALIASES.find((alias) => !used.has(alias));
+  saveMappings([...mappings, { alias: preset || "", provider: "", modelId: "" }]);
 };
 
-// 预设名下拉选项：全部可选，重复选仅提示（后端路由按顺序取第一个）
-const aliasOptions = computed(() => {
-  const used = new Set((config.value.mappings || []).map((m) => m.alias));
-  return PRESET_ALIASES.map((p) => ({
-    ...p,
-    // 自定义名与预设并列可选；预设被占用时加后缀提示
-    label: used.has(p.value) && (config.value.mappings || []).filter((m) => m.alias === p.value).length > 1
-      ? `${p.label}（重复）`
-      : p.label,
-  }));
-});
-
 const onAliasChange = (index, val) => {
-  const mappings = (config.value.mappings || []).map((m, i) => (i === index ? { ...m, alias: String(val || "").trim() } : m));
+  const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, alias: String(val || "").trim() } : m));
   saveMappings(mappings);
 };
 
 const onMappingTargetChange = (index, val) => {
   const [provider = "", modelId = ""] = String(val || "").split("::");
-  const mappings = (config.value.mappings || []).map((m, i) => (i === index ? { ...m, provider, modelId } : m));
+  const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, provider, modelId } : m));
   saveMappings(mappings);
 };
 
@@ -285,6 +275,10 @@ const formatTime = (ts) => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
+// 进行中的请求行（preload 在解析出目标模型时就插行，finish 时补 status/ms）
+const isPending = (log) => log.status === null || log.status === undefined;
+const logMs = (log) => (isPending(log) ? now.value - log.time : log.ms) + "ms";
+
 // 日志行每条 usage 展示：↑输入 ↓输出 + 缓存读标记（c 前缀），悬停 title 看精确值。
 // anthropic 的 input 不含缓存，展示用总 prompt 需加回 cache_read/write（与统计口径一致）
 const fmtTokensK = (n) => {
@@ -347,7 +341,8 @@ onMounted(() => {
   loading.value = true;
   loadAll();
   loading.value = false;
-  logTimer = setInterval(refreshStatus, 3000);
+  // 1s 轮询：getAutoRouteStatus 是 preload 内存读取，开销可忽略；配合「进行中」行做到准实时
+  logTimer = setInterval(refreshStatus, 1000);
 });
 onUnmounted(() => {
   if (logTimer) clearInterval(logTimer);
@@ -430,18 +425,13 @@ onUnmounted(() => {
       </template>
 
       <template v-else>
-        <div v-for="(m, i) in config.mappings" :key="i" class="autoroute-mapping-row">
+        <div v-for="(m, i) in mappingRows" :key="i" class="autoroute-mapping-row">
           <span class="autoroute-mapping-index">{{ i + 1 }}</span>
-          <Select
-            :value="m.alias || undefined"
-            :options="aliasOptions"
+          <Input
+            :value="m.alias"
             size="small"
-            filterable
-            clearable
-            creatable
-            :popup-props="{ overlayClassName: 'autoroute-mapping-alias-popup' }"
             class="autoroute-mapping-alias"
-            placeholder="映射名（可选预设或自填）"
+            placeholder="映射名"
             @change="(val) => onAliasChange(i, val)"
           />
           <span class="autoroute-mapping-arrow">→</span>
@@ -465,12 +455,14 @@ onUnmounted(() => {
           <Button
             size="small"
             variant="outline"
-            :disabled="modelCount >= MAX_MAPPINGS"
+            :disabled="mappingRows.length >= MAX_MAPPINGS"
             @click="addMapping"
           >
             <template #icon><AddIcon /></template> 添加映射
           </Button>
-          <span class="autoroute-hint">{{ modelCount }}/{{ MAX_MAPPINGS }} 个映射。预设名 flash / plus / pro，也可自填；同名取靠前的映射。</span>
+          <span class="autoroute-hint">
+            {{ readyMappings }}/{{ mappingRows.length }} 行已选目标（上限 {{ MAX_MAPPINGS }}）。默认预置 flash / plus / pro；名字可改，同名取靠前的映射。
+          </span>
         </div>
       </template>
     </div>
@@ -506,7 +498,7 @@ onUnmounted(() => {
     <div class="autoroute-logs">
       <div class="autoroute-logs-title">最近请求（最多 10 条）</div>
       <div v-if="!status.logs.length" class="autoroute-logs-empty">暂无请求</div>
-      <div v-for="(log, i) in status.logs" :key="i" class="autoroute-log-row">
+      <div v-for="log in status.logs" :key="log.seq" class="autoroute-log-row">
         <span class="autoroute-log-time">{{ formatTime(log.time) }}</span>
         <Tag size="small" variant="outline">{{ protoLabel(log.protocol) }}</Tag>
         <template v-if="log.converted && log.target">
@@ -515,10 +507,11 @@ onUnmounted(() => {
         </template>
         <span class="autoroute-log-model">{{ log.model || "-" }}</span>
         <span v-if="log.passthrough" class="autoroute-log-flag">直通</span>
-        <Tag size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>
+        <Tag v-if="isPending(log)" size="small" theme="primary" variant="light">进行中</Tag>
+        <Tag v-else size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>
         <span v-if="logUsage(log)" class="autoroute-log-usage" :title="logUsage(log).title">{{ logUsage(log).text }}</span>
         <span v-if="log.error" class="autoroute-log-error" :title="log.error">{{ log.error }}</span>
-        <span class="autoroute-log-ms">{{ log.ms }}ms</span>
+        <span class="autoroute-log-ms">{{ logMs(log) }}</span>
       </div>
     </div>
 

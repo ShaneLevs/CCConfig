@@ -27,8 +27,10 @@ const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorM
 const LEGACY_DOC_ID = "ccswitch_autoroute_config";
 const getDocId = () => `ccswitch_autoroute_config_${window.utools.getNativeId()}`;
 
-const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] };
+const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], mappingSeeded: false };
 const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
+// 模型映射预置映射名：首次使用映射模式自动建好这三行（目标留空，由用户在页面上选或删除）
+const PRESET_ALIASES = ["flash", "plus", "pro"];
 const SOURCE_OF_API = { "anthropic-messages": "anthropic", "openai-completions": "chat", "openai-responses": "responses" };
 
 const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
@@ -48,6 +50,22 @@ const sanitizeConfig = (config) => {
       provider: typeof m.provider === "string" ? m.provider : "",
       modelId: typeof m.modelId === "string" ? m.modelId : "",
     }));
+  config.mappingSeeded = config.mappingSeeded === true;
+  return config;
+};
+
+const persistConfig = (config) => {
+  const docId = getDocId();
+  const doc = window.utools.db.get(docId);
+  const payload = { _id: docId, data: config };
+  if (doc && doc._rev) payload._rev = doc._rev;
+  let res;
+  try {
+    res = window.utools.db.put(payload);
+  } catch (e) {
+    throw new Error("保存自动网关配置失败: " + (e.message || e));
+  }
+  if (!res || !res.ok) throw new Error("保存自动网关配置失败" + (res && res.message ? `：${res.message}` : ""));
   return config;
 };
 
@@ -63,30 +81,31 @@ const readAutoRouteConfig = () => {
   if (!Array.isArray(config.selection)) config.selection = [];
   if (typeof config.port !== "number" || config.port < 1 || config.port > 65535) config.port = DEFAULT_CONFIG.port;
   if (!config.key) config.key = generateKey();
+  // 模型映射首次初始化：用户从未碰过映射（mappingSeeded 未置位）且当前没有任何映射时，
+  // 预置 flash / plus / pro 三行（目标留空，由用户在页面选或删），并立刻落库，
+  // 保证用户把三行删空后不会被反复回填。
+  if (!config.mappingSeeded) {
+    config.mappingSeeded = true;
+    if (config.mappings.length === 0) {
+      config.mappings = PRESET_ALIASES.map((alias) => ({ alias, provider: "", modelId: "" }));
+    }
+    try {
+      persistConfig(config);
+    } catch (e) {
+      /* 读取路径的补种失败不阻塞：本次返回的 config 已带好映射，下次读取会再试 */
+    }
+  }
   return config;
 };
 
-const writeAutoRouteConfig = (patch) => {
-  const config = sanitizeConfig({ ...readAutoRouteConfig(), ...patch, updatedAt: Date.now() });
-  const docId = getDocId();
-  const doc = window.utools.db.get(docId);
-  const payload = { _id: docId, data: config };
-  if (doc && doc._rev) payload._rev = doc._rev;
-  let res;
-  try {
-    res = window.utools.db.put(payload);
-  } catch (e) {
-    throw new Error("保存自动网关配置失败: " + (e.message || e));
-  }
-  if (!res || !res.ok) throw new Error("保存自动网关配置失败" + (res && res.message ? `：${res.message}` : ""));
-  return config;
-};
+const writeAutoRouteConfig = (patch) =>
+  persistConfig(sanitizeConfig({ ...readAutoRouteConfig(), ...patch, updatedAt: Date.now() }));
 
 const regenerateAutoRouteKey = () => writeAutoRouteConfig({ key: generateKey() }).key;
 
 // ==================== 运行状态 ====================
 
-const serverState = { server: null, port: 0, startedAt: 0, logs: [], stats: newSessionStats() };
+const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, stats: newSessionStats() };
 
 // 本次运行统计（随网关重启清零）：仅统计已路由转发的模型调用（entry.target 非空），
 // 401 鉴权失败 / 模型未启用 / /v1/models 等控制面请求不计入。
@@ -111,12 +130,28 @@ const recordStats = (entry) => {
   s.outputTokens += u.outputTokens || 0;
 };
 
-// 请求日志存内存，仅保留最近 10 条（新条目插头部；多了渲染/轮询拷贝会卡）
+// 请求日志存内存，仅保留最近 10 条（新条目插头部；多了渲染/轮询拷贝会卡）。
+// 解析出目标模型就插入一条 status=null 的「进行中」行，完成时原地补全状态/耗时/usage，
+// 渲染端轮询即可看到「实时出现 → 流式期间 token 边涨 → 收尾」，不用等响应结束才有行。
+const MAX_LOGS = 10;
+
+const trimLogs = () => {
+  if (serverState.logs.length > MAX_LOGS) serverState.logs.length = MAX_LOGS;
+};
+
 const pushLog = (entry) => {
-  const log = { time: Date.now(), ...entry };
+  const log = { seq: ++serverState.logSeq, time: Date.now(), ...entry };
   serverState.logs.unshift(log);
-  if (serverState.logs.length > 10) serverState.logs.length = 10;
+  trimLogs();
   recordStats(log);
+  return log;
+};
+
+const beginLog = (entry) => {
+  const log = { seq: ++serverState.logSeq, time: Date.now(), status: null, ms: 0, ...entry };
+  serverState.logs.unshift(log);
+  trimLogs();
+  return log;
 };
 
 const getAutoRouteStatus = () => ({
@@ -232,10 +267,17 @@ const handleRequest = async (req, res) => {
   const started = Date.now();
   let logged = false;
   let targetApi = ""; // 出站协议，进入转发阶段才记录（供日志展示转换链路）
+  let liveLog = null; // 进行中的日志行：解析出目标模型时创建，finish 原地补全
   const finish = (entry) => {
     if (logged) return;
     logged = true;
-    pushLog({ status: entry.status, ms: Date.now() - started, target: targetApi, ...entry });
+    const done = { status: entry.status, ms: Date.now() - started, target: targetApi, ...entry };
+    if (liveLog) {
+      Object.assign(liveLog, done);
+      recordStats(liveLog);
+    } else {
+      pushLog(done);
+    }
   };
 
   // 错误统一走这里：错误响应发给客户端，原因同时记入请求日志（error 字段供「最近请求」展示）
@@ -306,6 +348,8 @@ const handleRequest = async (req, res) => {
       return;
     }
     const { provider, model } = route;
+    // 已确定目标模型：先落一条进行中日志行，页面轮询立刻能看到这次调用
+    liveLog = beginLog({ protocol: sourceProtocol, model: model.id });
 
     if (!getTarget(provider.api)) {
       fail(sourceProtocol, 400, `供应商「${provider.name}」的协议 ${provider.api} 暂不支持自动网关`, model.id);
@@ -336,6 +380,7 @@ const handleRequest = async (req, res) => {
         // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
         // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
         const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        if (liveLog) liveLog.usage = usage; // 与旁路扫描共用同一对象 → 流式期间 token 数可见地累加
         let pending = "";
         const settle = (error) => {
           finish({
