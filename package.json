@@ -1,8 +1,51 @@
 {
+  "name": "ccconfig",
+  "version": "1.0.0",
+  "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes and DSH. Ships as a uTools plugin and a standalone macOS app.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShaneLevs/CCConfig.git"
+  },
+  "keywords": [
+    "claude-code",
+    "opencode",
+    "pi-agent",
+    "omp",
+    "reasonix",
+    "codex",
+    "kimi-code",
+    "minimax-code",
+    "qoder",
+    "zcode",
+    "hermes",
+    "deepseek-harness",
+    "ai-cli",
+    "llm-config",
+    "api-key-switcher",
+    "provider-manager",
+    "anthropic",
+    "openai",
+    "mcp",
+    "model-context-protocol",
+    "skill-manager",
+    "token-usage",
+    "usage-analytics",
+    "utools",
+    "utools-plugin",
+    "tauri",
+    "tauri-app",
+    "macos",
+    "vue3",
+    "tdesign"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "build:app": "CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
+    "tauri:dev": "npm run build:app && cargo tauri dev",
+    "tauri:build": "npm run build:app && cargo tauri build"
   },
   "dependencies": {
     "@lucide/vue": "^1.47.0",

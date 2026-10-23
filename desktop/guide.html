@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>CCConfig · 需要 Node.js</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #666666;
+    --card: #f5f6f7;
+    --border: #e3e5e8;
+    --accent: #0052d9;
+    --code-bg: #eceef0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #181818;
+      --fg: #e8e8e8;
+      --muted: #9a9a9a;
+      --card: #232323;
+      --border: #333333;
+      --accent: #4582e6;
+      --code-bg: #2b2b2b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 36px 40px 32px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.65 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+  h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  code {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 5px;
+  }
+  pre {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    padding: 10px 12px;
+    border-radius: 7px;
+    margin: 8px 0 0;
+    overflow-x: auto;
+  }
+  ol, ul { margin: 6px 0 0; padding-left: 20px; }
+  li { margin: 4px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .foot { color: var(--muted); font-size: 12.5px; margin-top: 22px; }
+</style>
+</head>
+<body>
+  <h1>需要 Node.js 才能启动</h1>
+  <p class="sub">CCConfig 桌面版直接复用你已安装的 Node.js 运行本地服务，不内置运行时。</p>
+
+  <div class="card">
+    <h2>安装方式</h2>
+    <ol>
+      <li>用 Homebrew：<code>brew install node</code></li>
+      <li>或从官网下载安装包：<a href="https://nodejs.org/zh-cn/download" target="_blank" rel="noreferrer">nodejs.org/download</a></li>
+    </ol>
+    <p style="margin:10px 0 0;color:var(--muted)">版本要求 <code>&gt;= 18</code>。装好后请<b>完全退出并重新打开</b> CCConfig。</p>
+  </div>
+
+  <div class="card">
+    <h2>如果已经装了 Node，但仍然看到这个页面</h2>
+    <p style="margin:0">从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：</p>
+    <pre># 1. 在终端确认 node 位置
+which node
+
+# 2. 用环境变量指定后重启应用
+CCCONFIG_NODE=$(which node) open -a CCConfig</pre>
+    <p style="margin:10px 0 0;color:var(--muted)">也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：</p>
+    <pre>launchctl setenv CCCONFIG_NODE $(which node)</pre>
+  </div>
+
+  <div class="card">
+    <h2>排查</h2>
+    <p style="margin:0">启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。也可以用托盘菜单「打开日志目录」。</p>
+  </div>
+
+  <p class="foot">CCConfig · 跨 agent 配置管理</p>
+</body>
+</html>

@@ -42,3 +42,49 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 - `@modelcontextprotocol/sdk` 在 `mcp.js` try/catch 懒加载，缺失时工具发现自动降级。
 - Base path `./`（uTools file:// 加载）。
 - 普通 CSS 文件（非 SFC scoped）中 `:deep()` 不会被 Vue 转换，是无效选择器，不要使用。
+
+## 双发行：uTools 插件 + macOS 桌面版
+
+同一个仓库产出两个发行目标，**业务代码只有一份**。
+
+| 发行版 | 壳 | 构建命令 | 产物 |
+|---|---|---|---|
+| uTools 插件 | uTools 宿主 | `npm run build` | `dist/`（加载 `plugin.json`） |
+| macOS 桌面版 | Tauri v2 | `npm run tauri:build` | `.dmg` |
+| 桌面版开发 | Tauri v2 | `npm run tauri:dev` | 自动串起 `build:app` + `cargo tauri dev` |
+
+`npm run build:app` = `CCCONFIG_TARGET=app vite build`（产出 `dist-app/`）+ `scripts/prepare-sidecar.mjs`（组装 `src-tauri/resources/sidecar/`）。
+
+### 目录职责
+
+| 目录 | 归属 |
+|---|---|
+| `src/**` | **共享**（两个发行版同一份源码） |
+| `public/preload/services/**`、`services.js` | **共享**（esbuild 打成 `services.js`，uTools 当 preload、桌面版当 sidecar 主体） |
+| `public/plugin.json` | 仅 uTools |
+| `src-tauri/**` | 仅桌面版（Rust 壳、Node 探测、托盘、窗口） |
+| `desktop/sidecar/**` | 仅桌面版（`server.js` HTTP 服务 + `utools-shim.js`） |
+| `desktop/bridge/window-shim.js` | 仅桌面版（构建时注入前端，提供 `window.utools` / `window.services`） |
+| `desktop/guide.html` | 仅桌面版（未装 Node 时的引导页） |
+
+唯一的构建期分叉点是 `vite.config.js` 的 `IS_APP`（切 outDir + 注入 bridge）。
+
+### 改动的三条硬约束
+
+1. **新增任何 `utools.xxx` 调用，必须在 `desktop/bridge/window-shim.js` 同步实现。**
+   bridge 目前只覆盖：`db.*`、`getPath`、`getNativeId`、`shellOpenPath`、`shellOpenExternal`、`copyText`、`showOpenDialog`、`onPluginEnter/Out`、`setFeature/removeFeature/getFeatures`、`isWindows/isMacOS/isLinux`。
+   用了这之外（如 `showNotification`、`getUser`、`db.promises`、`getAppVersion`）→ uTools 版正常，桌面版 `undefined` 直接抛错。
+2. **services 方法的返回值必须能 JSON 往返。** 桌面版走 HTTP JSON，uTools 版是共享内存对象。`Buffer` 会变成 `{type:'Buffer',data:[…]}`、`Date` 变字符串、`undefined` 变 `null`、函数/循环引用直接抛错。
+3. **慢操作必须 `async`。** 桌面版 bridge 用**同步 XHR**（Phase 0 实测 WKWebView 支持，含跨域 preflight），同步调用会阻塞 WebView 主线程。
+
+### 桌面版特有约定
+
+- 数据目录 `~/.ccconfig/`（`db.json` / `runtime.json` / `logs/sidecar.log`），权限 600；旧位置 `~/Library/Application Support/CCSwitch` 在启动时一次性迁移。
+- **db 文档 ID 前缀 `ccswitch_*`、导出文件的 `app: "ccswitch"`、网关提示头 `x-ccswitch-left-out` 都不改**：属于数据 schema，改了会破坏与 uTools 版的导入兼容。
+- `setFeature` / `removeFeature` / `getFeatures` 在桌面版是 no-op（不迁移 uTools 搜索框指令）。
+- `onPluginEnter` 在桌面版只在首帧触发一次，`action.code` 固定 `commonConfig`（桌面版没有「重新进入」的概念，重复触发会重置用户当前视图）。
+- 桌面版 bridge 带诊断通道：前端 `console.error` / `window.onerror` / `unhandledrejection` 会转发到 `~/.ccconfig/logs/sidecar.log`（`[webview:*]` 前缀）。排查桌面版问题先看这个日志。
+- sidecar 的资源目录里（`src-tauri/resources/sidecar/`） `server.js`、`services.js`、`usage-worker.js`、`utools-shim.js`、`package.json` **必须同级**（`usage-async.js` 用 `__dirname` 拼 worker 路径；`package.json` 声明 `type: commonjs` 抵消根目录的 `type: module`）。
+- 各应用配置文件位置、字段语义与读写规则、网关转换细节统一维护在 `docs/architecture.md`（README 只保留概览，新增/修改数据流规则时改这里）。
+
+- 首次 `cargo build` 若卡在 crates.io，可在 `src-tauri/.cargo/config.toml` 加稀疏镜像（该文件已 gitignore，各人自备）：`[source.crates-io] replace-with = "rsproxy"` + `[source.rsproxy] registry = "sparse+https://rsproxy.cn/index/"`。

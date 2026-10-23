@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// 双 target：默认产出 uTools 插件（dist/），CCCONFIG_TARGET=app 产出桌面版（dist-app/）
+const IS_APP = process.env.CCCONFIG_TARGET === 'app'
+const OUT_DIR = IS_APP ? 'dist-app' : 'dist'
+
 function bundlePreloadPlugin() {
   const buildPreload = async () => {
     const outDir = path.resolve(__dirname, 'dist/preload')
@@ -71,10 +75,39 @@ function bundlePreloadPlugin() {
   }
 }
 
+// 桌面版需要在 Vue 挂载前同步装上 window.utools / window.services 垫片。
+// 内联注入而不是外部 <script src>：避免 Vite 把该文件当 asset 解析，也少一个请求。
+function injectAppShimPlugin() {
+  return {
+    name: 'inject-app-shim',
+    enforce: 'post',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        if (!IS_APP) return html
+        const shim = fs.readFileSync(path.resolve(__dirname, 'desktop/bridge/window-shim.js'), 'utf8')
+        return {
+          html,
+          tags: [{ tag: 'script', children: shim, injectTo: 'head-prepend' }],
+        }
+      },
+    },
+    closeBundle() {
+      if (!IS_APP) return
+      // Node 探测失败的引导页：作为静态资源放进 dist-app，由 Rust 用 WebviewUrl::App 打开
+      fs.copyFileSync(
+        path.resolve(__dirname, 'desktop/guide.html'),
+        path.resolve(__dirname, OUT_DIR, 'guide.html')
+      )
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     vue(),
     bundlePreloadPlugin(),
+    injectAppShimPlugin(),
     {
       name: 'remove-crossorigin',
       enforce: 'post',
@@ -88,6 +121,7 @@ export default defineConfig({
   ],
   base: './',
   build: {
+    outDir: OUT_DIR,
     // uTools 以 file:// 加载单页插件，拆 chunk 会引入 ES module 跨文件加载风险；
     // 主包体积主要来自 TDesign 全量组件 + 图标库，本地加载无性能瓶颈，故仅调高阈值
     chunkSizeWarningLimit: 2200,

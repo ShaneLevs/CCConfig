@@ -1,305 +1,91 @@
 # CCConfig
 
-多应用 AI 配置管理工具 — 一款 [uTools](https://u.tools/) 插件，支持 **Claude Code**、**OpenCode**、**Pi Agent**、**omp**、**Reasonix**、**Codex**、**Kimi Code**、**MiniMax Code**、**Qoder**、**ZCode**、**Hermes**、**DSH（DeepSeek Harness）** 十二个 AI 工具的 API 配置切换、MCP/Skill/Plugin 管理以及使用统计分析，另含「**通用配置**」应用（跨 agent 供应商/模型主数据 + 通用 MCP + 通用 Skill）。
+[简体中文](README.zh-CN.md) | **English**
 
-## 功能特性
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20uTools-blue)](#installation)
+[![uTools](https://img.shields.io/badge/uTools-plugin-1a73e8)](https://u.tools/)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8)](https://tauri.app/)
+[![Vue](https://img.shields.io/badge/Vue-3-42b883)](https://vuejs.org/)
+[![GitHub stars](https://img.shields.io/github/stars/ShaneLevs/CCConfig?style=social)](https://github.com/ShaneLevs/CCConfig/stargazers)
 
-- **应用切换** — Claude Code / OpenCode / Pi Agent / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH + 通用配置，各自独立配置，一键切换
-- **配置管理** — 读取、保存、切换各应用的 API 配置：
-  - Claude：`~/.claude/settings.json`（7 个托管 env 字段 + 可变额外字段）
-  - OpenCode：`~/.config/opencode.json` / `opencode.jsonc`（json5/jsonc 解析，优先 `.json`，不存在自动检测 `.jsonc`）
-  - Pi Agent：`~/.pi/agent/settings.json` + `models.json`
-  - omp：`~/.omp/agent/models.yml` 供应商/模型 + `config.yml` modelRoles
-  - Reasonix：`~/.reasonix/config.toml`（smol-toml 读写，保留未知扩展字段）+ `~/.reasonix/.env` 密钥管理
-  - Codex：`~/.codex/config.toml` + `~/.codex/models.json` 模型目录（仅管模型字段，其余原样保留）
-  - Kimi Code：`~/.kimi-code/config.toml`（仅模型配置：providers / models 别名 / default_model）
-  - MiniMax Code：`~/.minimax/config.yaml`（仅模型配置：custom_provider 第三方供应商/模型 + 顶层 defaultModel，内置 minimax 只读；跟随 MINIMAX_DATA_DIR / MAVIS_DATA_DIR）
-  - Qoder：`~/.qoder/settings.json` 与 `~/.qoder-cn/settings.json`（仅模型配置：providers 第三方供应商/模型，双发行版按最新编辑时间整体同步）
-  - ZCode：`~/.zcode/v2/provider_config.json`（仅自定义模型：供应商/模型增删改，上下文窗口、最大输出 Token、输入类型（图片/视频/音频/PDF）、模型能力（结构化输出 / 原生联网搜索 / 对话中系统消息）、思考等级（从低到高）；星标 = providerOrder / modelOrder 置顶即首选模型，ZCode 监听该文件变更即时生效），另有使用统计页（只读解析 `~/.zcode/cli/db/db.sqlite` 的 model_usage 表，与 ZCode 设置页「使用统计」同源）
-  - Hermes：`~/.hermes/config.yaml`（仅模型配置：custom_providers 供应商/内嵌模型（模型 ID + 上下文长度）增删改，api_mode 支持 chat_completions / anthropic_messages / codex_responses / bedrock_converse；星标 = 顶层 model.provider / model.default 默认指针；Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示；跟随 HERMES_HOME）
-  - DSH（DeepSeek Harness）：`<DSH_HOME>/profiles/<profile>/cordis.patch.yml`（模型配置：DeepSeek 官方路由（llm-deepseek 条目：官方密钥 / 自定义 Messages 兼容地址 / thinking / reasoningEffort / 模型目录）+ 第三方供应商（llm-pi-ai 的 providers 字典：协议 / Base URL / 凭据引用 / 模型目录）+ 默认模型（agent-default-model 条目，星标即「切换」）；供应商与模型分开配置（同 ZCode 页），凭据引用名按路由名自动派生、界面不填；密钥存 `<DSH_HOME>/.credentials.yaml` 的 refs，patch 只写凭据引用名；dsh 监听该文件变更即时生效；跟随 DSH_HOME / DSH_PROFILE），另有使用统计页（解析 `<DSH_HOME>/sessions` 会话日志）
-- **通用配置（跨 agent 主数据）** — 供应商/模型主数据库（uTools DB 加密存储），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议；MCP 以云端（uTools DB）为唯一主档存全量，每台机器一个启用开关：开启写入全部本地镜像文件（存放位置可设置：预置 `~/.mcp.json` / `~/.config/mcp/mcp.json` / `~/.agents/mcp.json` / `~/.agents/mcp/mcp.json` 多选 + 自定义，未配置默认 `~/.mcp.json`），关闭从本地移除；Skill 存放于 `~/.agents/skills`（跨 agent 共享），支持链接安装与 `.disabled` 启停；汇总统计合并展示已适配 agent（Claude Code / Pi Agent / OpenCode / DSH）的使用数据，纯读 uTools DB 秒开
-- **自动网关（本地模型服务）** — 通用配置内勾选供应商+模型，经本地端点 `http://127.0.0.1:<port>` 暴露给本机任意 agent：支持 Anthropic Messages / OpenAI Chat Completions / OpenAI Responses 三种协议请求，跨协议自动转换（含流式）；随机 key 鉴权，一键下发虚拟供应商到各 agent
-- **MCP 配置** — 管理各应用的 MCP Server，支持实时工具发现画布
-  - Claude MCP 读写 `~/.claude.json` 顶层 `mcpServers`（Claude Code 官方位置，单一来源，全局生效）
-- **Skill 管理** — 从 SkillHub / 魔搭社区一键安装 Skill（通用 / Claude Code / OpenCode），支持全局与项目级 Skill 启用/禁用（`.disabled` 目录机制）
-- **Plugin / Extension 管理** — Claude Marketplace 仓库 + 插件生命周期、OpenCode plugin 数组、Pi Extension (npm/git + pi.dev 包市场浏览)
-- **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图：
-  - Claude：DB 缓存加速二次打开（`file_count:max_mtime` 签名校验），热力图历史持久化，JSONL 读取失败时从历史兜底重建
-  - OpenCode：SQLite（opencode.db）原生 `node:sqlite` 读取，Electron 沙箱下子进程回退
-  - Pi Agent：JSONL sessions 解析聚合
-  - DSH：会话日志为「多帧 zstd 容器 + JSONL 事件」，内嵌纯 JS 解码器 fzstd 逐帧解压（uTools 的 Node 20 无 `node:zlib` zstd）；按 `assistant/message` 事件的 `usage` 与 `message.source` 聚合，模型名只取 model（不带路由前缀，跨路由同名合并；旧落库的带前缀键读历史时自动剥前缀合并），断尾帧跳过，签名 `日志数:总字节:最新 mtime` 缓存加速，每日聚合落库并与历史按天合并（日志被清理后历史不丢）
-  - 通用汇总：读取各 agent 统计页落库的 `ccswitch_agent_usage_<agent>_<nativeId>`（Claude Code / Pi Agent / OpenCode / DSH / ZCode，按日期与模型跨 agent 合并），不重新解析源文件；数据新鲜度 = 各 agent 统计页最近一次访问；热力图悬停按 agent 分组展示当天各 agent 的模型用量
-- **模型 CRUD** — OpenCode / Pi / omp / Reasonix / 通用 供应商与模型增删改，模型 ID 可编辑，支持自动从 `/models` API 拉取模型列表；OpenCode / Pi / omp 模型支持上下文窗口与最大输出预设+自定义，OpenCode 另支持 reasoning / modalities（输入输出模态）/ options.effort / options.thinking 思考参数配置，设置默认模型自动切换供应商
-- **批量编辑** — 配置聚合组头部 hover 显示批量编辑按钮，一键批量修改聚合组 URL + Key
-- **导入导出** — 支持 JSON 文件方式或压缩加密字符串方式
-- **密钥加密** — API Key 使用 AES-256-CBC 加密存储到 uTools 数据库
-- **深色模式** — 自动跟随系统主题切换，支持可配置的动态背景特效（棱镜光谱爆裂 / 故障像素终端 / 流动极光 / 星河漫游）
+A multi-app AI configuration manager, shipped as both a [uTools](https://u.tools/) plugin and a standalone macOS app.
 
-## 安装
+It gives twelve AI coding CLIs a single place to manage API providers, models, MCP servers, skills, plugins and token usage — and lets you switch between providers in one click instead of hand-editing TOML/YAML/JSON.
 
-### 方式一：uTools 插件商店
+## Features
 
-在 uTools 插件商店搜索 **CCConfig** 即可安装。
+- **Unified app switcher** — twelve AI CLIs plus a cross-agent "Common Config", each with independent, switchable API configurations
+- **API config management** — read, save and switch provider configs per app, preserving every field the tool does not manage (unknown keys round-trip untouched)
+- **Provider/model master data** — a shared provider and model database (AES-256-CBC encrypted keys) supporting OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative AI; dispatch it into any supported agent with one click
+- **Local gateway** — expose selected providers/models at `http://127.0.0.1:<port>` and speak Anthropic, OpenAI Chat or OpenAI Responses to any local agent, with automatic cross-protocol conversion including streaming
+- **MCP management** — per-app MCP server config plus a live tool-discovery canvas; shared MCP servers in Common Config mirror into local JSON files with a per-machine enable switch
+- **Skill & plugin management** — install skills from SkillHub / ModelScope, toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
+- **Usage analytics** — token usage, model distribution and GitHub-style contribution heatmaps, aggregated across agents in one view
+- **Batch edit, import/export, dark mode** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and system-following dark theme with optional animated backgrounds
 
-### 方式二：本地开发
+## Supported apps
+
+| App | Config location |
+|---|---|
+| Claude Code | `~/.claude/settings.json` (+ `~/.claude.json` for MCP) |
+| OpenCode | `~/.config/opencode.json` / `opencode.jsonc` |
+| Pi Agent | `~/.pi/agent/settings.json` + `models.json` |
+| omp | `~/.omp/agent/models.yml` + `config.yml` |
+| Reasonix | `~/.reasonix/config.toml` |
+| Codex | `~/.codex/config.toml` + `models.json` |
+| Kimi Code | `~/.kimi-code/config.toml` |
+| MiniMax Code | `~/.minimax/config.yaml` |
+| Qoder | `~/.qoder/settings.json` / `~/.qoder-cn/settings.json` |
+| ZCode | `~/.zcode/v2/provider_config.json` |
+| Hermes | `~/.hermes/config.yaml` |
+| DSH (DeepSeek Harness) | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
+
+Field-level rules for every app are documented in [docs/architecture.md](docs/architecture.md) (Chinese).
+
+## Installation
+
+**uTools plugin** — search for **CCConfig** in the uTools plugin store.
+
+**macOS app** — requires Node.js ≥ 18 on your machine (the app deliberately does not bundle a runtime).
 
 ```bash
-# 克隆仓库
-git clone https://github.com/<your-username>/CCSwitch.git
-cd CCSwitch
-
-# 安装依赖
 npm install
-
-# 开发模式（localhost:5173）
-npm run dev
-
-# 构建生产版本
-npm run build
+npm run tauri:build
+# → src-tauri/target/release/bundle/dmg/CCConfig_*.dmg
 ```
 
-构建产物在 `dist/` 目录，可通过 uTools 开发者工具加载。
+App data lives in `~/.ccconfig/`. Closing the window keeps the app in the menu bar so the local gateway keeps serving: left-click the tray icon for the menu, right-click to reopen.
 
-## 使用方式
-
-在 uTools 中输入以下关键词唤起插件（点击运行时默认执行第一个关键词）：
-
-| 关键词 | 功能 |
-|--------|------|
-| `通用配置` | 打开通用配置（跨 agent 供应商/模型主数据、MCP、Skill） |
-| `Claude Code配置` | 打开 Claude Code 配置管理 |
-| `OpenCode配置` | 打开 OpenCode 配置管理 |
-| `Pi Agents配置` | 打开 Pi Agent 配置管理 |
-| `omp配置` | 打开 omp 配置管理 |
-| `Reasonix配置` | 打开 Reasonix 配置管理 |
-| `Codex配置` | 打开 Codex 配置管理 |
-| `Kimi Code配置` | 打开 Kimi Code 模型配置 |
-| `MiniMax Code配置` | 打开 MiniMax Code 模型配置 |
-| `dsh配置` / `DeepSeek Harness配置` | 打开 DSH（DeepSeek Harness）模型配置 |
-| 粘贴 SkillHub / 魔搭链接 | 自动进入 Skill 安装（通用 / Claude Code / OpenCode） |
-| `pi install <包名>` | 自动进入 Pi Extension 安装 |
-
-## 技术栈
-
-- [Vue 3](https://vuejs.org/) (Composition API + `<script setup>`)
-- [Vite](https://vitejs.dev/) + esbuild（preload 打包）
-- [TDesign Vue Next](https://tdesign.tencent.com/vue-next)
-- [uTools API](https://u.tools/docs/developer/api.html)
-- [json5](https://github.com/json5/json5)（OpenCode json/jsonc 配置解析）
-- [js-yaml](https://github.com/nodeca/js-yaml)（omp models.yml / config.yml 读写）
-- [smol-toml](https://github.com/squirrelchat/smol-toml)（Reasonix / Codex / Kimi Code config.toml 读写）
-- [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)（MCP 工具发现）
-- [ogl](https://github.com/oframe/ogl)（深色背景特效 WebGL 渲染）
-
-## 项目结构
-
-```
-src/          # Vue 3 渲染层
-public/       # uTools 静态资源（plugin.json、各应用图标）
-docs/         # 设计文档与计划
-```
-
-- **`src/`** — 渲染层。`main.js`/`App.vue` 入口与主题；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、背景特效等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
-- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / commands / usage / crypto），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
-
-## 数据流
-
-```
-Claude:
-  ~/.claude/settings.json  ←→  uTools DB（AES-256-CBC 加密）
-  ~/.claude.json 顶层 mcpServers（MCP，官方位置，单一来源，全局生效）←→ uTools DB（禁用状态）
-  ~/.claude/skills/（全局）+ 项目级 .claude/skills/ + .disabled 目录
-  ~/.claude/projects/**/*.jsonl  →  使用统计：
-      signature = file_count:max_mtime 校验 → DB 缓存命中秒开
-      热力图历史持久化（ccswitch_heatmap_*），全量解析后与历史按日期合并
-      JSONL 读取失败时 readPersistedUsage 从历史兜底重建统计
-
-通用配置（跨 agent 主数据）:
-  供应商/模型主数据 → uTools DB（ccswitch_common_providers，API Key 加密）
-  通用 MCP → 云端 uTools DB（ccswitch_common_mcp）为唯一主档存全量服务器；本机启停名单存 ccswitch_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccswitch_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
-  通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
-  协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
-  汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
-    通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
-    每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
-    DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
-  自动网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
-    入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
-    出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
-    同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
-    model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
-    模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
-    最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
-    usage 采集（日志行 / 会话统计口径）：
-      同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
-      跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
-        input_tokens / output_tokens 与缓存字段（chat: prompt_tokens_details.cached_tokens，responses: input_tokens_details.cached_tokens），
-        否则客户端 anthropic/openai SDK 回写整条 usage 时会把输入 token / 缓存抹成 0
-      Anthropic 出站流式：message_start 的 usage 通常全 0，input_tokens 与缓存字段要到 message_delta 才有，两边都要取（非 0 才覆盖）
-    跨协议转换规则（autoroute-convert/canonical.js 为中间层，source/target 各三协议）：
-      推理强度：Anthropic thinking.budget_tokens ↔ OpenAI reasoning_effort / reasoning.effort 互折（低 4096 / 中 10000 / 高 24000 / 最高 32000；anthropic 侧 budget 被限制在 max_tokens-1024 以内，且不开 thinking 时不回放 thinking 块）
-      媒体：图片/文档进 canonical（anthropic image·document / chat image_url / responses input_image·input_file），目标载不了时降级为 [attachment …] 文本占位（含 tool_result 里的图片）；tool_reference 转「Tool X is loaded」文本（Claude Code ToolSearch）
-      结构化输出：response_format / text.format / output_config.format 归一后按目标协议重写，Anthropic 等无此能力的写进 system 提示
-      工具 schema：补 enum/const 缺的 type、oneOf→anyOf；入站 tool 形状（Chat 嵌套 / Responses 扁平 / Anthropic input_schema / MCP inputSchema）统一识别
-      max_tokens：入站未给时用主数据模型 maxTokens，anthropic 出站兜底 16384
-      错误体：按状态码归一为协议原生 type（429 rate_limit_error / 5xx·529 overloaded·api_error），上游 Retry-After 透传
-    上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发；客户端断开（流式）立即中止上游并记 499
-    客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
-    配置存 uTools DB（ccswitch_autoroute_config），onPluginReady/onPluginEnter 幂等自启动，uTools 退出即停
-
-OpenCode:
-  ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  uTools DB
-  模型配置：provider[id].models[id]（name / limit.context / limit.output / reasoning /
-    modalities.input、output（text|image|audio|video|pdf）/ options.effort / options.thinking，
-    其余未识别字段原样往返；协议→npm 映射见 dispatch.js OPENCODE_NPM_BY_API）
-  使用统计：
-    数据目录（全平台）：~/.local/share/opencode/opencode.db
-    回退候选：%LOCALAPPDATA%\opencode\ → ~/AppData/Local/opencode\ → storage/*.json
-    读取路径：原生 node:sqlite → 子进程 --experimental-sqlite（Electron 沙箱回退）
-    模型名：session.model 列存 JSON {"id":"...","providerID":"..."}，需取 .id 字段
-    usage.calculateStats 汇总 tokens_* 五列（input/output/reasoning/cache_read/cache_write）
-
-Pi Agent:
-  ~/.pi/agent/settings.json + models.json + extensions  ←→  uTools DB
-  ~/.pi/agent/sessions/**/*.jsonl  →  解析 & 聚合  →  使用统计
-  特殊 schema：cost 必须含 {input, output, cacheRead, cacheWrite} 四项；contextWindow 为 0 则省略
-
-omp:
-  ~/.omp/agent/config.yml modelRoles  →  js-yaml 直接读写（load → 改 modelRoles → dump 写回）
-  ~/.omp/agent/models.yml providers    →  js-yaml 直接读写
-  模型引用格式：provider/model[:thinkingLevel]，无前缀引用编辑时自动补全带前缀
-  删除供应商/模型前检查 modelRoles 引用，被引用时拒绝删除
-  纯文件读写，不依赖 omp 二进制 / bun 运行时
-
-Reasonix:
-  ~/.reasonix/config.toml（Windows: %APPDATA%\reasonix\config.toml）→ smol-toml 读写
-  ~/.reasonix/.env → API Key / 环境变量管理（掩码编辑，支持按 Reasonix 官方规则自动生成变量名）
-  供应商支持多种协议（openai 兼容等），未知扩展字段写回时原样保留
-
-Codex:
-  ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）
-  base_url 必须停在版本段：Codex 自己追加 /responses 或 /chat/completions，下发时经 normalizeCodexBaseUrl 归一
-  （补 /v1、去 …/chat/completions 等端点后缀，幂等）
-  「模型目录」= 合并各供应商模型写 ~/.codex/models.json + model_catalog_json 绝对路径（正斜杠）
-  条目必须符合 Codex ModelInfo schema（档位键名必须是 effort）；Codex 逐版新增「缺了整份目录加载失败」的
-    必填字段：supports_reasoning_summaries(<0.145)、supports_parallel_tool_calls(≥0.147)、shell_type/
-    truncation_policy 等；系统提示词双写 base_instructions（旧版）+ model_messages.instructions_template（新版）
-  带「由 CCSwitch 生成」标记的旧条目同步时原地重建；打开 Codex 页（getCodexCurrent）时自愈：
-    条目缺必填字段 → 重建；models.json 丢了但 config.toml 仍引用 → 按 DB 模型列表补回；文件损坏不动
-  网关下发额外写 [model_providers.router].model_catalog_url = <网关>/v1/codex/models：
-    Codex ≥0.161 直接拉目录（用 API key 的 Codex 不会自己 GET /v1/models），不再依赖本地文件
-
-Kimi Code:
-  ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）
-  只管理三处：顶层 default_model、[providers.<name>]（type/base_url/api_key）、[models."<alias>"]（provider/model/max_context_size 必填）
-  api_key 明文写入文件：CLI 不从 shell 环境取凭证（文档要求）
-  官方可选扩展字段 display_name / max_input_size / max_output_size / capabilities / support_efforts /
-    default_effort / off_effort / reasoning_key / adaptive_thinking 经 MODEL_*_FIELDS 表管理
-  协议守卫：max_output_size + adaptive_thinking 仅 anthropic；reasoning_key 仅 openai/openai_responses
-  overrides / base_url / protocol 等 CLI 自动写入字段走 _extra 原样往返，UI 不暴露编辑入口
-  含 oauth 字段的 /login 托管供应商只读禁改禁删；下发别名 = 供应商/模型ID
-  通用库四种协议全支持（openai / openai_responses / anthropic / google-genai 映射）
-
-MiniMax Code:
-  ~/.minimax/config.yaml（MINIMAX_DATA_DIR 优先，MAVIS_DATA_DIR 兼容回退）→ js-yaml 读写（解析失败抛错阻断写回）
-  只管理两处：顶层 defaultModel、custom_provider.<id>（name / kind:custom / enabled / api / options{baseURL,authMode,apiKey} / models.<id>）
-  defaultModel 引用：内置 "minimax/<模型ID>"，第三方 "custom_provider:<id>/<模型ID>"（可带 #variant 后缀，CLI 0.4.12 实测）
-  provider.minimax（mcode login / Token Plan 托管）只读展示，可设默认模型、禁改禁删；
-    apiKey 明文写入 options.apiKey（与桌面版自身写法一致）
-  models 的 limit{context,output}、name、enabled 外，另显式管理 thinking.effortOptions（推理等级）
-    与 modalities.input+attachment（支持附件 图片/PDF/视频/音频 → image/pdf/video/audio，text 隐含）；
-    thinking 其他子键 / variants / reasoning 等官方字段 _raw 合并保留原样往返
-  供应商/模型改 ID 时 defaultModel 引用同步；删除默认模型时清理悬挂引用；API 格式三协议：anthropic-messages / openai-completions / openai-responses
-  通用库下发：provider 键经 providerKeyFor 确定性 ASCII 清洗（中文/符号名 → 骨架+稳定哈希，同名恒同键，upsert 幂等）；
-    下发刷新 limit/名称/输入模态（model.input 过滤非 text 并入 modalities+attachment），未传字段保留既有值；google 协议供应商拒绝下发
-
-Hermes:
-  ~/.hermes/config.yaml（HERMES_HOME 优先，Windows %LOCALAPPDATA%\hermes，macOS/Linux ~/.hermes）→ js-yaml 读写（解析失败抛错阻断写回）
-  只管理两处：custom_providers[]（name / base_url / api_key / api_mode / models 字典 / model / rate_limit_delay）、
-    顶层 model（provider 指供应商名 + default 指模型 ID，其余键如 base_url / context_length 保留）
-  models 磁盘为字典 { "<模型ID>": { context_length, ... } }，UI 为有序数组；条目 model（单数）恒为首个模型 ID
-  受管字段外的未知键（key_env / request_timeout_seconds 等）经 _extra 合并往返；camelCase 别名归一 snake_case，遗留 api 键丢弃
-  Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示：可设默认模型，禁改禁删
-  默认模型语义（即「切换」）：model.provider 必设，model.default 用指定模型或该供应商首个模型
-  删除供应商时若 model.provider 悬空，改指首个剩余供应商（无剩余则移除指针）
-  通用库下发：协议映射 openai-completions→chat_completions / anthropic-messages→anthropic_messages / openai-responses→codex_responses（google 拒绝）；
-    provider 名经 providerKeyFor 确定性清洗（同上）；网关下发走 anthropic_messages + 网关根地址（同 Claude，不带 /v1）
-
-ZCode:
-  ~/.zcode/v2/provider_config.json（ZCode 监听变更即时生效）：
-    受管字段外的未知键（group / logo 等与 properties/optionSpecs 下的部分键）经 _extra 按层级合并往返（zod strict partial，绝不新增未知键）
-    providerId 生成沿用 ZCode 规则（名称 trim → 小写 → 非 [a-z0-9] 转 - → 去首尾 -，冲突加 -2/-3）
-    首选模型 = providerOrder 首个供应商 + 其 modelOrder 首个模型（ZCode 选择器排序基准）
-    通用库下发 upsert：中文供应商名经 providerIdFor 确定性清洗（ASCII 骨架 + 稳定哈希，同名恒同 ID，upsert 幂等）
-  使用统计：~/.zcode/cli/db/db.sqlite（WAL 模式，ZCode 设置页「使用统计」同源）：
-    model_usage 表一次模型请求一行，只取 status='completed'（cancelled 行全 0，error 无完成用量）；
-    LEFT JOIN session 补项目目录；原生 node:sqlite 只读打开（WAL 快照不阻塞 ZCode 写入）→ Electron 沙箱子进程回退（同 OpenCode）。
-      回退子进程按平台探测常见安装位置（macOS /usr/local/bin、/opt/homebrew/bin 等；Windows Program Files\nodejs），
-      并校验版本 ≥ 22.5（低版本无 node:sqlite，--experimental-sqlite 会 bad option，探测不通过即当未找到）
-    口径：input_tokens 已含缓存（>= cache_read + cache_creation），输入 = input_tokens（含缓存）、输出 = output_tokens、
-      total = input + output（= computed_total_tokens，reasoning 含在 output 内）；模型名只取 model_id（不带 provider 前缀，
-      同名模型跨供应商用量合并；旧落库的带前缀键读历史时自动剥前缀合并）
-      day.inputTokens 含缓存（= tokens - output），day.models[].inputTokens 为未缓存输入（同 DSH 双口径）
-    历史落库：ccswitch_agent_usage_zcode_<nativeId>，同一天取较大值合并，db 被清理/换机后回放历史不归零
-
-DSH（DeepSeek Harness）:
-  <DSH_HOME>/profiles/<profile>/cordis.patch.yml（DSH_HOME 默认 ~/.dsh，DSH_PROFILE 默认 desktop）→ js-yaml 读写（解析失败抛错阻断写回）
-  文件是顶层 YAML 数组，每条 loader patch 条目 { id, name, config }；本插件只管理三条模型路由条目，
-  其余条目（ui-chat / ui-settings / 用户插件）与文件头部注释块原样保留：
-    llm-deepseek        官方 Messages 路由：apiKeyEnv（固定派生 DEEPSEEK_API_KEY，界面不填）/ baseURL（留空 = 官方
-                        https://api.deepseek.com/anthropic，或 $DEEPSEEK_BASE_URL）/ thinking（enabled|disabled）/
-                        reasoningEffort（off|low|high|max）/ maxTokens / defaultContextWindow /
-                        models（id / name / contextWindow / maxTokens / inputModalities / systemPromptUpdate /
-                        toolUpdate 等；缺省 = 内置 deepseek-flash（文+图，1M）与 deepseek-v4-pro（纯文本）；
-                        界面首次新增/编辑模型即转为自定义目录，清空即回退内置目录）
-    llm-pi-ai           第三方供应商：config.providers.<路由名>（displayName / apiKeyEnv / api（四协议与通用库同名）/
-                        baseURL / models（非空，手写路由必需：id / name / contextWindow / maxTokens / input /
-                        reasoningEfforts）/ compat.thinkingFormat / headers / retryPolicy 等，未知键原样往返）
-    agent-default-model 默认模型（即「切换」语义）：config.provider（官方固定 deepseek-official，第三方为 providers 键）+
-                        config.model + 可选 reasoningEffort
-  界面约定：供应商与模型分开配置（同 ZCode 页）——供应商弹窗只管名称（支持中文）/ 路由名（必填，小写英文+数字+中划线）/
-    协议（手工新增仅开放 openai-completions 与 anthropic-messages）/ Base URL / API Key / thinkingFormat；
-    模型在卡片内以标签列出，逐个「添加模型 / 编辑模型」弹窗维护（上下文窗口与最大输出用共享预设档位，同 ZCode）；
-    模型标签上的星标 = 设为默认模型（同供应商内切换保留原推理强度，跨供应商切换清空）
-  凭据引用名自动派生（界面不填）：第三方 = <路由名大写，非字母数字转 _>_API_KEY；官方 = DEEPSEEK_API_KEY（与 dsh 默认一致）
-  密钥：<DSH_HOME>/.credentials.yaml 顶层 refs 字典（{ 引用名: 密钥 }）——patch 不含明文密钥；
-    只增删受管引用，version / records（OAuth 授权记录）等其余内容原样往返；删除路由且无其他引用时清理对应密钥
-  路由名清洗（仅通用库下发）：中文/符号供应商名 → 小写 ASCII 骨架 + 稳定哈希（同名恒同路由，upsert 幂等）
-  默认指针兜底：删除/改名被设为默认的模型时改指该路由目录内首个模型（无可指路由则移除条目），不留悬空指针
-  dsh 监听该文件（profile HMR），写入后即时生效；凭据文件改动如未生效可重启 dsh
-  通用库下发：四类协议与 pi-ai 协议同名（identity 映射，无协议守卫），供应商名经 providerRouteFor 清洗为路由名；
-    密钥写入该路由的 refs[<ROUTE>_API_KEY]；网关下发走 anthropic-messages + 网关根地址（SDK 自行追加 /v1/messages）
-  使用统计：<DSH_HOME>/sessions/<项目目录>/<会话目录>/session[.vN].jsonl[.zstd]（同目录多世代取版本最高者；明文 .jsonl 与
-    项目目录直放日志的老布局兼容）：
-      日志是多帧拼接的 zstd 容器（每次追加写一个新帧），scanZstdFrames 结构扫描帧边界后用 fzstd 逐帧解压；
-      只取 assistant/message 事件（data.usage 的 inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens +
-      data.message.source.{provider,model} 与事件 time），assistant/attempt（失败重试，只有输入无模型）与
-      compaction/summary、会话标题、web search 等辅助请求不计入；断尾/校验失败的帧跳过
-      口径：输入 = inputTokens + cacheReadTokens + cacheWriteTokens（含缓存），输出 = outputTokens；
-      day.inputTokens 含缓存（页面日期筛选直接取该字段），day.models[].inputTokens 为未缓存输入（页面在模型维度
-      自行叠加 cacheRead/cacheCreation），summary.inputTokens = 总 - 输出
-      缓存：signature = 日志数:总字节:最新 mtime → uTools DB（ccswitch_dsh_usage_cache_<nativeId>），
-      页面保活（isTabVisited + v-show）不重复拉取，点刷新也走签名校验、日志有变化才重新全量解析
-      历史落库：每日聚合落 ccswitch_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
-      读取时按「同一天取较大值」合并历史（日志被清理/压缩后历史不缩水），日志全没了则直接回放历史档
-```
-
-## 认证与模型选择细节
-
-### Claude 认证方式
-
-- 每配置可选 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`（互斥，切换时写一清一）。
-- 模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。
-- OpenCode Go：URL 精确等于 `https://opencode.ai/zen/go`（不带 /v1）时自动切 API_KEY 认证。
-
-## 开发
+If Node was installed via nvm/fnm/volta and the app cannot find it when launched from the Dock, point it explicitly:
 
 ```bash
-npm run dev     # 启动开发服务器 http://localhost:5173
-npm run build   # 构建生产版本到 dist/
+CCCONFIG_NODE=$(which node) open -a CCConfig
 ```
+
+## Usage
+
+In uTools, type a keyword to open the matching app — `通用配置` (Common Config), `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link opens Skill install; `pi install <package>` opens Pi extension install.
+
+The macOS app has no search box: it opens on Common Config and you switch apps from the left rail.
+
+## Development
+
+```bash
+npm install
+npm run dev          # uTools plugin dev server (localhost:5173)
+npm run build        # uTools plugin → dist/
+npm run build:app    # desktop renderer → dist-app/ + sidecar resources
+npm run tauri:dev    # desktop app in dev mode
+npm run tauri:build  # desktop app → .dmg
+```
+
+Both builds share `src/` and `public/preload/`; only the shell differs. Architecture notes and the constraints that keep this true are in [AGENTS.md](AGENTS.md) and [docs/architecture.md](docs/architecture.md).
+
+## Tech Stack
+
+Vue 3 + Vite + TDesign Vue Next on the renderer; a bundled esbuild preload for all filesystem/network work, served through the uTools API or a Tauri v2 Node sidecar. Config parsing via json5, js-yaml and smol-toml; MCP tool discovery via `@modelcontextprotocol/sdk`; background effects via ogl.
 
 ## License
 
-MIT
+[MIT](LICENSE)
