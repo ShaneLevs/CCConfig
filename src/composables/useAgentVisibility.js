@@ -146,11 +146,14 @@ const dropdownOptionContent = (meta) => (createElement) =>
 
 // 切换器下拉：通用恒显示 + 勾选的 agent，按拖拽排序后的顺序
 const appDropdownOptions = computed(() => {
-  const opts = [{ content: dropdownOptionContent(COMMON_APP_META), value: "common" }];
+  // content 是渲染函数（TDesign Dropdown 用）；label 是纯文本名称（侧栏 AgentSideRail 用，勿取 content）
+  const opts = [
+    { content: dropdownOptionContent(COMMON_APP_META), label: COMMON_APP_META.name, value: "common" },
+  ];
   agentOrder.value.forEach((app) => {
     if (visibleAgents.value && visibleAgents.value[app]) {
       const meta = AGENT_META[app] || { name: app, icon: "" };
-      opts.push({ content: dropdownOptionContent(meta), value: app });
+      opts.push({ content: dropdownOptionContent(meta), label: meta.name, value: app });
     }
   });
   return opts;

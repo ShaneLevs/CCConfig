@@ -131,6 +131,12 @@ Claude:
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus
+    usage 采集（日志行 / 会话统计口径）：
+      同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
+      跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
+        input_tokens / output_tokens 与缓存字段（chat: prompt_tokens_details.cached_tokens，responses: input_tokens_details.cached_tokens），
+        否则客户端 anthropic/openai SDK 回写整条 usage 时会把输入 token / 缓存抹成 0
+      Anthropic 出站流式：message_start 的 usage 通常全 0，input_tokens 与缓存字段要到 message_delta 才有，两边都要取（非 0 才覆盖）
     跨协议转换规则（autoroute-convert/canonical.js 为中间层，source/target 各三协议）：
       推理强度：Anthropic thinking.budget_tokens ↔ OpenAI reasoning_effort / reasoning.effort 互折（低 4096 / 中 10000 / 高 24000 / 最高 32000；anthropic 侧 budget 被限制在 max_tokens-1024 以内，且不开 thinking 时不回放 thinking 块）
       媒体：图片/文档进 canonical（anthropic image·document / chat image_url / responses input_image·input_file），目标载不了时降级为 [attachment …] 文本占位（含 tool_result 里的图片）；tool_reference 转「Tool X is loaded」文本（Claude Code ToolSearch）

@@ -392,7 +392,15 @@ const anthropicTarget = {
         else if (d.type === "input_json_delta") yield { type: "tool_delta", index: ordinalByBlock.get(evt.index) || 0, delta: d.partial_json || "" };
       } else if (evt.type === "message_delta") {
         if (evt.delta && evt.delta.stop_reason) finish = stopFromAnthropicReason(evt.delta.stop_reason);
-        if (evt.usage && evt.usage.output_tokens) usage.outputTokens = evt.usage.output_tokens;
+        // Anthropic 流式：message_start 的 usage 通常全 0（input_tokens 要到 message_delta 才有真实值），
+        // 且部分上游（Bedrock 类 / 中转）只在 message_delta 报 input_tokens 与缓存字段。
+        // 因此这里所有字段都取「非 0 才覆盖」——只取 output 会让这类上游的输入 token 恒为 0。
+        if (evt.usage) {
+          if (evt.usage.output_tokens) usage.outputTokens = evt.usage.output_tokens;
+          if (evt.usage.input_tokens) usage.inputTokens = evt.usage.input_tokens;
+          if (evt.usage.cache_read_input_tokens) usage.cacheReadTokens = evt.usage.cache_read_input_tokens;
+          if (evt.usage.cache_creation_input_tokens) usage.cacheWriteTokens = evt.usage.cache_creation_input_tokens;
+        }
       } else if (evt.type === "message_stop") {
         yield { type: "end", stopReason: finish || (sawTool ? "tool" : "stop"), usage: normalizeUsage(usage) };
         return;

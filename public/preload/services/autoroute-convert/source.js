@@ -202,9 +202,17 @@ class AnthropicFrameWriter {
     if (event.type === "end") {
       this.finished = true;
       const frames = [this.closeBlock()];
-      this.outputTokens = (event.usage && event.usage.outputTokens) || 0;
+      // 入站 usage 必须转发上游的真实值：Claude Code 等客户端的 anthropic SDK 会把 message_delta
+      // 里的 input_tokens / cache_* 覆盖回整条消息的 usage（见 SDK MessageStream），
+      // 这里只写 output_tokens 会让转换路径下客户端看到的输入 token 恒为 0，自身统计也跟着错。
+      const u = event.usage || {};
+      this.outputTokens = u.outputTokens || 0;
       const stopReason = event.stopReason === "tool" ? "tool_use" : event.stopReason === "length" ? "max_tokens" : "end_turn";
-      frames.push(this.frame("message_delta", { delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: this.outputTokens } }));
+      const usage = { output_tokens: this.outputTokens };
+      if (u.inputTokens) usage.input_tokens = u.inputTokens;
+      if (u.cacheReadTokens) usage.cache_read_input_tokens = u.cacheReadTokens;
+      if (u.cacheWriteTokens) usage.cache_creation_input_tokens = u.cacheWriteTokens;
+      frames.push(this.frame("message_delta", { delta: { stop_reason: stopReason, stop_sequence: null }, usage }));
       frames.push(this.frame("message_stop", {}));
       return frames;
     }
@@ -313,17 +321,20 @@ const chatSource = {
       message.tool_calls = canonical.toolCalls.map((tc) => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: tc.arguments } }));
     }
     const finishReason = canonical.stopReason === "tool" ? "tool_calls" : canonical.stopReason === "length" ? "length" : "stop";
+    const usage = {
+      prompt_tokens: canonical.usage.inputTokens,
+      completion_tokens: canonical.usage.outputTokens,
+      total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
+    };
+    // 缓存命中回填（OpenAI 形状）：客户端/统计页靠它算缓存命中率，丢了就永远是 0
+    if (canonical.usage.cacheReadTokens) usage.prompt_tokens_details = { cached_tokens: canonical.usage.cacheReadTokens };
     return {
       id: canonical.id || newId("chatcmpl"),
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
       model: canonical.model,
       choices: [{ index: 0, message, finish_reason: finishReason }],
-      usage: {
-        prompt_tokens: canonical.usage.inputTokens,
-        completion_tokens: canonical.usage.outputTokens,
-        total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
-      },
+      usage,
     };
   },
 
@@ -362,7 +373,9 @@ class ChatFrameWriter {
       const frames = [this.chunk({}, event.stopReason === "tool" ? "tool_calls" : event.stopReason === "length" ? "length" : "stop")];
       const usage = event.usage;
       if (usage) {
-        frames.push(`data: ${JSON.stringify({ id: this.id, object: "chat.completion.chunk", created: this.created, model: this.model || "", choices: [], usage: { prompt_tokens: usage.inputTokens, completion_tokens: usage.outputTokens, total_tokens: usage.inputTokens + usage.outputTokens } })}\n\n`);
+        const u = { prompt_tokens: usage.inputTokens, completion_tokens: usage.outputTokens, total_tokens: usage.inputTokens + usage.outputTokens };
+        if (usage.cacheReadTokens) u.prompt_tokens_details = { cached_tokens: usage.cacheReadTokens };
+        frames.push(`data: ${JSON.stringify({ id: this.id, object: "chat.completion.chunk", created: this.created, model: this.model || "", choices: [], usage: u })}\n\n`);
       }
       frames.push("data: [DONE]\n\n");
       return frames;
@@ -493,6 +506,15 @@ const responsesSource = {
     for (const tc of canonical.toolCalls || []) {
       output.push({ type: "function_call", id: newId("fc"), call_id: tc.id, name: tc.name, arguments: tc.arguments, status: "completed" });
     }
+    const usage = {
+      input_tokens: canonical.usage.inputTokens,
+      output_tokens: canonical.usage.outputTokens,
+      total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
+    };
+    // 缓存命中回填（Responses 形状：input_tokens_details.cached_tokens）
+    if (canonical.usage.cacheReadTokens) {
+      usage.input_tokens_details = { cached_tokens: canonical.usage.cacheReadTokens };
+    }
     return {
       id: canonical.id || newId("resp"),
       object: "response",
@@ -502,11 +524,7 @@ const responsesSource = {
       model: canonical.model,
       output,
       output_text: canonical.text || "",
-      usage: {
-        input_tokens: canonical.usage.inputTokens,
-        output_tokens: canonical.usage.outputTokens,
-        total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
-      },
+      usage,
     };
   },
 
@@ -596,7 +614,7 @@ class ResponsesFrameWriter {
       else frames.push(...this.closeFunctionItem(item, outputIndex));
     }
   }
-  complete(status, usage) {
+  complete(status, eventUsage) {
     if (this.finished) return [];
     this.finished = true;
     const frames = [];
@@ -607,7 +625,11 @@ class ResponsesFrameWriter {
       }
       return { type: "function_call", id: item.id, call_id: item.callId, name: item.name, arguments: item.args, status: "completed" };
     });
-    frames.push(this.ev("response.completed", { response: { ...this.responseBase(status, output), usage: { input_tokens: (usage && usage.inputTokens) || 0, output_tokens: (usage && usage.outputTokens) || 0, total_tokens: ((usage && usage.inputTokens) || 0) + ((usage && usage.outputTokens) || 0) } } }));
+    const input = (eventUsage && eventUsage.inputTokens) || 0;
+    const out = (eventUsage && eventUsage.outputTokens) || 0;
+    const usage = { input_tokens: input, output_tokens: out, total_tokens: input + out };
+    if (eventUsage && eventUsage.cacheReadTokens) usage.input_tokens_details = { cached_tokens: eventUsage.cacheReadTokens };
+    frames.push(this.ev("response.completed", { response: { ...this.responseBase(status, output), usage } }));
     return frames;
   }
   finish() {

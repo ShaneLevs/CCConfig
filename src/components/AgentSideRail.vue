@@ -25,7 +25,7 @@ const ASSET_BASE = import.meta.env.BASE_URL;
         class="agent-rail-icon"
         alt=""
       />
-      <span class="agent-rail-name">{{ opt.content }}</span>
+      <span class="agent-rail-name">{{ opt.label }}</span>
     </div>
   </nav>
 </template>

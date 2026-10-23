@@ -20,6 +20,10 @@
 //   { type: "media", kind: "image" | "file", mediaType, data? | url?, name? }
 // canonical 响应：
 //   { id, model, text, reasoning: [...], toolCalls: [{ id, name, arguments }], stopReason, usage }
+// usage：{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }（normalizeUsage 归一名协议字段），
+// 三个方向的 usage 必须完整：上游→canonical（target.readStream/parseResponse）、
+// canonical→入站响应（source.formatResponse / 各 FrameWriter，含 cache 字段）、网关统计（recordStats）
+// 都依赖它；任何一段丢掉 inputTokens / cache* 都会让日志行、「最近请求」与会话统计里的 token 归零。
 // stopReason ∈ "stop" | "length" | "tool"
 // 流式以 canonical 事件流为中心：
 //   start / text_delta / reasoning_delta / reasoning_signature / tool_start / tool_delta / end / error
