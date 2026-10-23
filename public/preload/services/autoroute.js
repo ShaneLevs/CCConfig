@@ -484,8 +484,10 @@ const handleRequest = async (req, res) => {
       return;
     }
     const { provider, model } = route;
+    // 映射模式下不同映射名可能指向同一底层模型，日志里一并记映射名（alias）才能区分是哪个映射
+    const alias = config.mode === "mapping" ? route.alias || "" : "";
     // 已确定目标模型：先落一条进行中日志行，页面轮询立刻能看到这次调用
-    liveLog = beginLog({ protocol: sourceProtocol, model: model.id });
+    liveLog = beginLog({ protocol: sourceProtocol, model: model.id, ...(alias ? { alias } : {}) });
 
     if (!getTarget(provider.api)) {
       fail(sourceProtocol, 400, `供应商「${provider.name}」的协议 ${provider.api} 暂不支持自动网关`, model.id);

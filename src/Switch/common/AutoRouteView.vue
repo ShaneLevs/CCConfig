@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
-import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
+import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
 
@@ -29,6 +29,7 @@ const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: 
 const providers = ref([]);
 const selectionKeys = ref([]);
 const portDraft = ref(17877); // 端口输入框草稿值，失焦/回车时校验并保存
+const endpointsExpanded = ref(false); // 「支持的接口」默认收起，点标题展开
 const now = ref(Date.now()); // 轮询时间戳，用于「进行中」行的实时耗时
 
 const isMappingMode = computed(() => config.value.mode === "mapping");
@@ -464,12 +465,18 @@ onUnmounted(() => {
     </div>
 
     <div class="autoroute-card autoroute-endpoints">
-      <div class="autoroute-endpoints-title">支持的接口</div>
-      <div v-for="ep in endpoints" :key="ep.path" class="autoroute-endpoint-row">
-        <Tag size="small" variant="outline" :theme="ep.method === 'POST' ? 'primary' : 'default'" class="autoroute-endpoint-method">{{ ep.method }}</Tag>
-        <code class="autoroute-endpoint-path">{{ ep.path }}</code>
-        <span class="autoroute-endpoint-desc">{{ ep.desc }}</span>
+      <div class="autoroute-endpoints-header" @click="endpointsExpanded = !endpointsExpanded">
+        <ChevronDownIcon class="autoroute-endpoints-chevron" :class="{ 'is-expanded': endpointsExpanded }" />
+        <span class="autoroute-endpoints-title">支持的接口</span>
+        <span class="autoroute-endpoints-count">{{ endpoints.length }}</span>
       </div>
+      <template v-if="endpointsExpanded">
+        <div v-for="ep in endpoints" :key="ep.path" class="autoroute-endpoint-row">
+          <Tag size="small" variant="outline" :theme="ep.method === 'POST' ? 'primary' : 'default'" class="autoroute-endpoint-method">{{ ep.method }}</Tag>
+          <code class="autoroute-endpoint-path">{{ ep.path }}</code>
+          <span class="autoroute-endpoint-desc">{{ ep.desc }}</span>
+        </div>
+      </template>
     </div>
 
     <div v-if="sessionStats.requests" class="autoroute-stats">
@@ -501,7 +508,9 @@ onUnmounted(() => {
           <span class="autoroute-log-arrow">→</span>
           <Tag size="small" variant="outline" theme="warning">{{ protoLabel(log.target) }}</Tag>
         </template>
-        <span class="autoroute-log-model">{{ log.model || "-" }}</span>
+        <span v-if="log.alias" class="autoroute-log-alias" :title="`映射名 ${log.alias} → 实际模型 ${log.model || '-'}`">{{ log.alias }}</span>
+        <span v-if="log.alias" class="autoroute-log-arrow">→</span>
+        <span class="autoroute-log-model" :title="log.model || '-'" :class="{ 'is-mapped-target': log.alias }">{{ log.model || "-" }}</span>
         <span v-if="log.passthrough" class="autoroute-log-flag">直通</span>
         <Tag v-if="isPending(log)" size="small" theme="primary" variant="light">进行中</Tag>
         <Tag v-else size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>

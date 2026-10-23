@@ -48,7 +48,24 @@
 /* 网关页复选框绿色已由 main.css 全局规则统一处理（含 teleport 弹层） */
 .autoroute-hint { font-size: 12px; color: var(--td-text-color-placeholder); line-height: 1.6; }
 .autoroute-endpoints { gap: 6px; }
-.autoroute-endpoints-title { font-size: 12px; font-weight: 500; color: var(--td-text-color-secondary); }
+/* 标题行可点击展开/收起接口列表（默认收起，避免占位过长） */
+.autoroute-endpoints-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--td-text-color-secondary);
+}
+.autoroute-endpoints-header:hover { color: var(--td-text-color-primary); }
+.autoroute-endpoints-chevron { font-size: 14px; transition: transform 0.2s ease; flex-shrink: 0; transform: rotate(-90deg); }
+.autoroute-endpoints-chevron.is-expanded { transform: rotate(0deg); }
+.autoroute-endpoints-count {
+  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+.autoroute-endpoints-title { font-size: 12px; font-weight: 500; }
 .autoroute-endpoint-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .autoroute-endpoint-method { flex-shrink: 0; font-variant-numeric: tabular-nums; min-width: 44px; justify-content: center; }
 .autoroute-endpoint-path { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); color: var(--td-text-color-primary); }
@@ -73,6 +90,9 @@
 .autoroute-log-row:hover { background: var(--td-bg-color-container-hover); }
 .autoroute-log-time { color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; }
 .autoroute-log-model { color: var(--td-text-color-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 映射模式：映射名（客户端请求的名字）+ 实际底层模型，两者同色会分不清主次 */
+.autoroute-log-alias { color: var(--td-brand-color); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.autoroute-log-model.is-mapped-target { color: var(--td-text-color-secondary); max-width: 180px; }
 .autoroute-log-flag { font-size: 11px; color: var(--td-brand-color); }
 /* 每条 usage：紧凑小字，悬停看精确值 */
 .autoroute-log-usage { font-size: 11px; color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; flex-shrink: 0; }
