@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton, Select } from "tdesign-vue-next";
+import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
 import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
@@ -38,15 +38,19 @@ const readyMappings = computed(() => mappingRows.value.filter((m) => m.alias && 
 const modelCount = computed(() => (isMappingMode.value ? readyMappings.value : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
 
+// 供应商 → 模型 两级级联选项，直连多选与映射目标单选共用；
+// 没有模型的供应商不出现（否则会渲染成一个可选却无模型 ID 的父节点）
 const routeOptions = computed(() =>
-  providers.value.map((p) => ({
-    label: p.name,
-    value: p.name,
-    children: (p.models || []).map((m) => ({
-      label: `${m.name || m.id}${m.contextWindow ? `（${formatNumber(m.contextWindow)} ctx）` : ""}`,
-      value: `${p.name}::${m.id}`,
-    })),
-  }))
+  providers.value
+    .filter((p) => (p.models || []).length > 0)
+    .map((p) => ({
+      label: p.name,
+      value: p.name,
+      children: (p.models || []).map((m) => ({
+        label: `${m.name || m.id}${m.contextWindow ? `（${formatNumber(m.contextWindow)} ctx）` : ""}`,
+        value: `${p.name}::${m.id}`,
+      })),
+    }))
 );
 
 const loadAll = () => {
@@ -117,16 +121,6 @@ const MAX_MAPPINGS = 10;
 // 映射名默认由 preload 预置好 flash / plus / pro 三行（见 autoroute.js readAutoRouteConfig），
 // 这里不再做成下拉选预设：映射名是可编辑的普通输入框，目标模型默认为空，用户自己选或删行
 const PRESET_ALIASES = ["flash", "plus", "pro"];
-
-// 映射目标下拉选项：供应商::模型ID 为值，label 显示供应商 / 模型
-const targetOptions = computed(() =>
-  providers.value.flatMap((p) =>
-    (p.models || []).map((m) => ({
-      label: `${p.name} / ${m.id}`,
-      value: `${p.name}::${m.id}`,
-    }))
-  )
-);
 
 const saveMappings = (mappings) => {
   try {
@@ -436,12 +430,13 @@ onUnmounted(() => {
             @change="(val) => onAliasChange(i, val)"
           />
           <span class="autoroute-mapping-arrow">→</span>
-          <Select
+          <Cascader
             :value="m.provider && m.modelId ? `${m.provider}::${m.modelId}` : undefined"
-            :options="targetOptions"
+            :options="routeOptions"
             size="small"
             filterable
             clearable
+            :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
             class="autoroute-mapping-target"
             placeholder="选择目标模型"
             @change="(val) => onMappingTargetChange(i, val)"
