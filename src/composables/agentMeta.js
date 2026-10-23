@@ -11,6 +11,8 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
 // 旧默认顺序：仅用于识别「用户从未拖拽过」的存量记录（用户自定义顺序不覆盖）
 export const LEGACY_AGENT_ORDER = ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"];
+// 「通用配置」不是 agent，但会出现在切换器下拉里，展示元数据与 agent 放一起便于复用
+export const COMMON_APP_META = { name: "通用", icon: `${ASSET_BASE}gen.svg` };
 export const AGENT_META = {
   claude: { name: "Claude Code", icon: `${ASSET_BASE}icon-claude.png` },
   opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },

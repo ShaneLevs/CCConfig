@@ -505,6 +505,19 @@ onUnmounted(() => {
 
 <!-- 全局样式：Dropdown 弹窗（teleport 到 body，scoped 无法覆盖） -->
 <style>
+/* 切换器下拉：图标 + 名称 */
+.app-dropdown-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-dropdown-option__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  object-fit: contain;
+  border-radius: 4px;
+}
 :root[theme-mode="dark"] .t-dropdown {
   background-color: var(--td-bg-color-container);
   border-color: var(--td-component-border);

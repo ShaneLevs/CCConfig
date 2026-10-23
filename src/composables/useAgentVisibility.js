@@ -1,6 +1,6 @@
-import { ref, computed, watch } from "vue";
+import { h, ref, computed, watch } from "vue";
 import { useAppContext } from "./useAppContext";
-import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META } from "./agentMeta";
+import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META, COMMON_APP_META } from "./agentMeta";
 
 // Agent 启停管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
@@ -135,12 +135,22 @@ const onAgentDrop = (idx) => {
 };
 const onAgentDragEnd = () => { dragAgentIndex = null; };
 
+// 切换器下拉项内容：图标 + 名称（TDesign Dropdown 的 content 支持 (h) => VNode）
+const dropdownOptionContent = (meta) => (createElement) =>
+  createElement("span", { class: "app-dropdown-option" }, [
+    meta.icon
+      ? createElement("img", { class: "app-dropdown-option__icon", src: meta.icon, alt: "" })
+      : null,
+    createElement("span", null, meta.name),
+  ]);
+
 // 切换器下拉：通用恒显示 + 勾选的 agent，按拖拽排序后的顺序
 const appDropdownOptions = computed(() => {
-  const opts = [{ content: "通用", value: "common" }];
+  const opts = [{ content: dropdownOptionContent(COMMON_APP_META), value: "common" }];
   agentOrder.value.forEach((app) => {
     if (visibleAgents.value && visibleAgents.value[app]) {
-      opts.push({ content: AGENT_META[app].name, value: app });
+      const meta = AGENT_META[app] || { name: app, icon: "" };
+      opts.push({ content: dropdownOptionContent(meta), value: app });
     }
   });
   return opts;
