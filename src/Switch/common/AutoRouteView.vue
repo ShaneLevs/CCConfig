@@ -313,7 +313,7 @@ const formatNumber = (n) => {
   return String(n);
 };
 
-// 本次运行统计（随网关重启清零，数据来自 preload getAutoRouteStatus.stats，随 3s 轮询刷新）
+// 本次运行累计统计（随网关重启清零，数据来自 preload getAutoRouteStatus.stats，随轮询刷新）
 const sessionStats = computed(() => {
   const s = status.value.stats || {};
   const requests = s.requests || 0;
@@ -491,7 +491,7 @@ onUnmounted(() => {
         <span class="autoroute-stat-value">{{ sessionStats.tokens }}</span>
       </div>
       <div class="autoroute-stat">
-        <span class="autoroute-stat-label">缓存命中率</span>
+        <span class="autoroute-stat-label">累计缓存命中率</span>
         <span class="autoroute-stat-value">{{ sessionStats.cacheHit }}</span>
       </div>
     </div>
