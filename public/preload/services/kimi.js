@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
+const { t } = require("./i18n")
 
 // Kimi Code：模型配置在 ~/.kimi-code/config.toml（官方文档 configuration/config-files.html）。
 // 主目录可用 KIMI_CODE_HOME 环境变量重定向（同 Codex 的 CODEX_HOME：客户端读写哪边、插件就改哪边）。
@@ -41,12 +42,13 @@ const EFFORT_RE = /^(low|medium|high|xhigh|max|none)$/
 // capabilities / support_efforts 的合法枚举（文档 models 节字段表）
 const KIMI_CAPABILITIES = ['thinking', 'always_thinking', 'image_in', 'video_in', 'audio_in', 'tool_use']
 const KIMI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
-// 扩展字段中文名（报错提示用）
-const MODEL_FIELD_NAMES = {
-  displayName: '显示名', maxInputSize: '最大输入', maxOutputSize: '最大输出',
-  capabilities: '能力标签', supportEfforts: 'Thinking 档位', defaultEffort: '默认档位',
-  offEffort: '关闭时档位', reasoningKey: '推理字段名', adaptiveThinking: 'Adaptive Thinking',
-}
+// 扩展字段展示名（报错提示用；文案见 serviceAgent.kimi.fields）
+const MODEL_FIELD_KEYS = [
+  'displayName', 'maxInputSize', 'maxOutputSize', 'capabilities',
+  'supportEfforts', 'defaultEffort', 'offEffort', 'reasoningKey', 'adaptiveThinking',
+]
+const fieldName = (key) =>
+  t(`serviceAgent.kimi.fields.${MODEL_FIELD_KEYS.includes(key) ? key : 'displayName'}`)
 
 // BigInt → Number（smol-toml 部分环境整数解析为 BigInt，UI 层不消费 BigInt）
 const toNumber = (v) => (typeof v === 'bigint' ? Number(v) : v == null ? 0 : Number(v))
@@ -66,7 +68,7 @@ const readKimiConfig = () => {
   } catch (e) {
     // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会覆盖整个
     // config.toml，抹掉 thinking / loop_control / permission / hooks 等节（同 reasonix/codex）
-    throw new Error(`config.toml 解析失败，已阻止修改（请先修复 TOML 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.common.tomlParseFailed', { message: e.message }))
   }
 }
 
@@ -126,14 +128,14 @@ const getKimiProviderList = () => {
 
 const addKimiProvider = (cfg) => {
   const name = String(cfg?.name || '').trim()
-  if (!name) throw new Error('供应商名不能为空')
-  if (!KEY_RE.test(name)) throw new Error('供应商名只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
+  if (!name) throw new Error(t('serviceAgent.common.providerNameRequired'))
+  if (!KEY_RE.test(name)) throw new Error(t('serviceAgent.common.providerNameInvalidChars'))
   if (cfg.type && !KIMI_PROVIDER_TYPES.includes(cfg.type)) {
-    throw new Error(`不支持的供应商类型 ${cfg.type}`)
+    throw new Error(t('serviceAgent.kimi.unsupportedProviderType', { type: cfg.type }))
   }
   const doc = readKimiConfig()
   const tables = getProviderTables(doc)
-  if (tables[name]) throw new Error(`供应商 ${name} 已存在`)
+  if (tables[name]) throw new Error(t('serviceAgent.common.providerExists', { name }))
   tables[name] = buildProviderToml({ ...cfg, name, type: cfg.type || 'openai' })
   writeKimiConfig(doc)
   return true
@@ -142,17 +144,17 @@ const addKimiProvider = (cfg) => {
 const updateKimiProvider = (name, updates) => {
   const doc = readKimiConfig()
   const tables = getProviderTables(doc)
-  if (!tables[name]) throw new Error(`供应商 ${name} 不存在`)
+  if (!tables[name]) throw new Error(t('serviceAgent.common.providerNotFound', { name }))
   if (normalizeProvider(name, tables[name]).managed) {
-    throw new Error(`供应商 ${name} 由 /login 托管（含 OAuth 凭据），不可编辑`)
+    throw new Error(t('serviceAgent.kimi.managedByLoginEdit', { name }))
   }
   // 支持重命名：name 是子表键，改名需校验冲突并同步 models 表的 provider 引用
   const newName = updates.name === undefined || updates.name === name ? name : String(updates.name).trim()
-  if (!newName) throw new Error('供应商名不能为空')
-  if (!KEY_RE.test(newName)) throw new Error('供应商名只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
-  if (newName !== name && tables[newName]) throw new Error(`供应商 ${newName} 已存在`)
+  if (!newName) throw new Error(t('serviceAgent.common.providerNameRequired'))
+  if (!KEY_RE.test(newName)) throw new Error(t('serviceAgent.common.providerNameInvalidChars'))
+  if (newName !== name && tables[newName]) throw new Error(t('serviceAgent.common.providerExists', { name: newName }))
   if (updates.type && !KIMI_PROVIDER_TYPES.includes(updates.type)) {
-    throw new Error(`不支持的供应商类型 ${updates.type}`)
+    throw new Error(t('serviceAgent.kimi.unsupportedProviderType', { type: updates.type }))
   }
   const merged = { ...normalizeProvider(name, tables[name]), ...updates, name: newName }
   // clearApiKey → 删除已保存的 key；否则 key 有值才覆盖
@@ -174,13 +176,15 @@ const updateKimiProvider = (name, updates) => {
 const deleteKimiProvider = (name) => {
   const doc = readKimiConfig()
   const tables = getProviderTables(doc)
-  if (!tables[name]) throw new Error(`供应商 ${name} 不存在`)
+  if (!tables[name]) throw new Error(t('serviceAgent.common.providerNotFound', { name }))
   if (normalizeProvider(name, tables[name]).managed) {
-    throw new Error(`供应商 ${name} 由 /login 托管（含 OAuth 凭据），请使用 kimi /logout 管理`)
+    throw new Error(t('serviceAgent.kimi.managedByLoginLogout', { name }))
   }
   const usedBy = Object.keys(getModelTables(doc)).filter(a => (doc.models[a] || {}).provider === name)
   if (usedBy.length) {
-    throw new Error(`供应商 ${name} 被模型别名引用（${usedBy.slice(0, 3).join('、')}${usedBy.length > 3 ? ' 等' : ''}），请先删除相关模型`)
+    const aliases = usedBy.slice(0, 3).join(t('serviceAgent.common.listSeparator'))
+      + (usedBy.length > 3 ? t('serviceAgent.common.etcSuffix') : '')
+    throw new Error(t('serviceAgent.kimi.providerInUseByAliases', { name, aliases }))
   }
   delete tables[name]
   writeKimiConfig(doc)
@@ -244,10 +248,10 @@ const assertModelFieldProtocol = (cfg, providerType) => {
   for (const f of ANTHROPIC_ONLY) {
     const v = cfg[f]
     const set = typeof v === 'boolean' ? v !== null : !!v
-    if (set && !isAnthropic) throw new Error(`${MODEL_FIELD_NAMES[f]} 仅 anthropic 供应商支持（当前 ${providerType}）`)
+    if (set && !isAnthropic) throw new Error(t('serviceAgent.kimi.fieldOnlyAnthropic', { field: fieldName(f), providerType }))
   }
   const rk = cfg.reasoningKey
-  if (rk && !isOpenaiFamily) throw new Error(`${MODEL_FIELD_NAMES.reasoningKey} 仅 openai 协议供应商支持（当前 ${providerType}）`)
+  if (rk && !isOpenaiFamily) throw new Error(t('serviceAgent.kimi.fieldOnlyOpenai', { field: fieldName('reasoningKey'), providerType }))
 }
 
 const buildModelToml = (cfg) => {
@@ -295,24 +299,24 @@ const validateModelExtras = (cfg, providerType) => {
   for (const [camel, list] of Object.entries({ capabilities: KIMI_CAPABILITIES, supportEfforts: KIMI_EFFORTS })) {
     const v = cfg[camel]
     if (v === undefined) continue
-    if (!Array.isArray(v)) throw new Error(`${MODEL_FIELD_NAMES[camel]} 需为数组`)
+    if (!Array.isArray(v)) throw new Error(t('serviceAgent.kimi.fieldArrayRequired', { field: fieldName(camel) }))
     for (const item of v) {
-      if (!list.includes(item)) throw new Error(`${MODEL_FIELD_NAMES[camel]} 含不支持的值 ${item}（可选：${list.join('/')}）`)
+      if (!list.includes(item)) throw new Error(t('serviceAgent.kimi.fieldUnsupportedValue', { field: fieldName(camel), value: item, options: list.join('/') }))
     }
   }
   for (const camel of ['defaultEffort', 'offEffort']) {
     const v = cfg[camel]
     if (v === undefined || v === '' || v === null) continue
-    if (!EFFORT_RE.test(String(v))) throw new Error(`${MODEL_FIELD_NAMES[camel]} 需为 low/medium/high/xhigh/max/none`)
+    if (!EFFORT_RE.test(String(v))) throw new Error(t('serviceAgent.kimi.fieldEffortInvalid', { field: fieldName(camel) }))
   }
   for (const camel of ['maxInputSize', 'maxOutputSize']) {
     const v = cfg[camel]
     if (v === undefined || isEmptyVal(v)) continue
-    if (!Number.isInteger(Number(v)) || Number(v) < 1) throw new Error(`${MODEL_FIELD_NAMES[camel]} 需为 ≥1 的整数`)
+    if (!Number.isInteger(Number(v)) || Number(v) < 1) throw new Error(t('serviceAgent.kimi.fieldPositiveInt', { field: fieldName(camel) }))
   }
   // displayName 无协议限制，但非 ASCII（中文）在部分终端 UI 显示异常，拦截提示
   if (cfg.displayName && !/^[\x20-\x7E]+$/.test(String(cfg.displayName))) {
-    throw new Error('显示名仅允许 ASCII 字符')
+    throw new Error(t('serviceAgent.kimi.displayNameAscii'))
   }
 }
 
@@ -325,17 +329,17 @@ const addKimiModel = (cfg) => {
   const alias = String(cfg?.alias || '').trim()
   const model = String(cfg?.model || '').trim()
   const provider = String(cfg?.provider || '').trim()
-  if (!alias) throw new Error('模型别名不能为空')
-  if (!KEY_RE.test(alias)) throw new Error('模型别名只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
-  if (!provider) throw new Error('请选择供应商')
-  if (!model) throw new Error('模型 ID 不能为空')
+  if (!alias) throw new Error(t('serviceAgent.common.modelAliasRequired'))
+  if (!KEY_RE.test(alias)) throw new Error(t('serviceAgent.common.modelAliasInvalidChars'))
+  if (!provider) throw new Error(t('serviceAgent.common.selectProvider'))
+  if (!model) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readKimiConfig()
   const provTable = getProviderTables(doc)
   const prov = provTable[provider]
-  if (!prov) throw new Error(`供应商 ${provider} 不存在`)
+  if (!prov) throw new Error(t('serviceAgent.common.providerNotFound', { name: provider }))
   validateModelExtras(cfg, prov.type || '')
   const models = getModelTables(doc)
-  if (models[alias]) throw new Error(`模型别名 ${alias} 已存在`)
+  if (models[alias]) throw new Error(t('serviceAgent.kimi.aliasExists', { alias }))
   models[alias] = buildModelToml({ alias, provider, model, maxContextSize: cfg.maxContextSize, ...pickModelExtras(cfg) })
   writeKimiConfig(doc)
   return true
@@ -344,14 +348,14 @@ const addKimiModel = (cfg) => {
 const updateKimiModel = (alias, updates) => {
   const doc = readKimiConfig()
   const models = getModelTables(doc)
-  if (!models[alias]) throw new Error(`模型别名 ${alias} 不存在`)
+  if (!models[alias]) throw new Error(t('serviceAgent.kimi.aliasNotFound', { alias }))
   // 支持改别名：别名是子表键，改名需校验冲突并同步 default_model 引用
   const newAlias = updates.alias === undefined || updates.alias === alias ? alias : String(updates.alias).trim()
-  if (!newAlias) throw new Error('模型别名不能为空')
-  if (!KEY_RE.test(newAlias)) throw new Error('模型别名只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
-  if (newAlias !== alias && models[newAlias]) throw new Error(`模型别名 ${newAlias} 已存在`)
+  if (!newAlias) throw new Error(t('serviceAgent.common.modelAliasRequired'))
+  if (!KEY_RE.test(newAlias)) throw new Error(t('serviceAgent.common.modelAliasInvalidChars'))
+  if (newAlias !== alias && models[newAlias]) throw new Error(t('serviceAgent.kimi.aliasExists', { alias: newAlias }))
   const provider = String(updates.provider === undefined ? models[alias].provider : updates.provider).trim()
-  if (!provider || !getProviderTables(doc)[provider]) throw new Error(`供应商 ${provider || '(空)'} 不存在`)
+  if (!provider || !getProviderTables(doc)[provider]) throw new Error(t('serviceAgent.common.providerNotFound', { name: provider || t('serviceAgent.common.emptyValue') }))
   validateModelExtras(updates, (getProviderTables(doc)[provider] || {}).type || '')
   const merged = { ...normalizeModel(alias, models[alias]), ...updates }
   // updates 里显式传空值（''/null/0/[]）表示清除该扩展字段；未传的字段保持 normalize 读出的旧值
@@ -360,7 +364,7 @@ const updateKimiModel = (alias, updates) => {
   }
   merged.alias = newAlias
   merged.provider = provider
-  if (!merged.model) throw new Error('模型 ID 不能为空')
+  if (!merged.model) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const next = buildModelToml(merged)
   delete models[alias]
   models[newAlias] = next
@@ -413,7 +417,7 @@ const setKimiDefaultModel = (alias) => {
     writeKimiConfig(doc)
     return true
   }
-  if (!getModelTables(doc)[ref]) throw new Error(`模型别名 ${ref} 不存在`)
+  if (!getModelTables(doc)[ref]) throw new Error(t('serviceAgent.kimi.aliasNotFound', { alias: ref }))
   doc.default_model = ref
   writeKimiConfig(doc)
   return true

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { Card, Empty, Button, Dialog, Input, MessagePlugin, Space, Tag, Popconfirm, Tooltip } from "tdesign-vue-next";
 import { AddIcon, DeleteIcon, RefreshIcon } from "tdesign-icons-vue-next";
 import { formatSource } from "./pluginMeta";
@@ -7,6 +8,8 @@ import { formatSource } from "./pluginMeta";
 // claude 插件页 Marketplace 仓库管理（含添加仓库弹窗）：列表展示 + 添加/更新/移除。
 // 组件自持仓库数据（挂载时加载）；仓库元数据变化后经 changed 通知父级刷新插件列表。
 const emit = defineEmits(["changed", "loaded"]);
+
+const { t } = useI18n();
 
 const marketplaces = ref([]);
 const newMarketplaceSource = ref("");
@@ -30,16 +33,16 @@ const handleAddMarketplace = async () => {
   try {
     const result = window.services.addMarketplace(source);
     if (result.success) {
-      MessagePlugin.success("仓库添加成功");
+      MessagePlugin.success(t("claude.marketplace.added"));
       newMarketplaceSource.value = "";
       showAddDialog.value = false;
       loadMarketplaces();
       emit("changed");
     } else {
-      MessagePlugin.error(result.message || "添加失败");
+      MessagePlugin.error(result.message || t("common.addFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("添加仓库失败: " + e.message);
+    MessagePlugin.error(t("claude.marketplace.addError", { message: e.message }));
   } finally {
     mpLoading.value = null;
   }
@@ -50,14 +53,14 @@ const handleRemoveMarketplace = (name) => {
   try {
     const result = window.services.removeMarketplace(name);
     if (result.success) {
-      MessagePlugin.success(`已移除仓库 "${name}"`);
+      MessagePlugin.success(t("claude.marketplace.removed", { name }));
       loadMarketplaces();
       emit("changed");
     } else {
-      MessagePlugin.error(result.message || "移除失败");
+      MessagePlugin.error(result.message || t("claude.marketplace.removeFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("移除仓库失败: " + e.message);
+    MessagePlugin.error(t("claude.marketplace.removeError", { message: e.message }));
   } finally {
     mpLoading.value = null;
   }
@@ -68,14 +71,14 @@ const handleUpdateMarketplace = (name) => {
   try {
     const result = window.services.updateMarketplace(name);
     if (result.success) {
-      MessagePlugin.success(`仓库 "${name}" 更新成功`);
+      MessagePlugin.success(t("claude.marketplace.updated", { name }));
       loadMarketplaces();
       emit("changed");
     } else {
-      MessagePlugin.error(result.message || "更新失败");
+      MessagePlugin.error(result.message || t("common.updateFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("更新仓库失败: " + e.message);
+    MessagePlugin.error(t("claude.marketplace.updateError", { message: e.message }));
   } finally {
     mpLoading.value = null;
   }
@@ -87,15 +90,15 @@ onMounted(loadMarketplaces);
 
 <template>
   <div class="section-header">
-    <Tooltip content="添加新的 Marketplace 仓库" placement="top">
+    <Tooltip :content="t('claude.marketplace.addTooltip')" placement="top">
       <Button size="small" theme="primary" @click="showAddDialog = true">
-        <template #icon><AddIcon /></template> 添加仓库
+        <template #icon><AddIcon /></template> {{ t('claude.marketplace.add') }}
       </Button>
     </Tooltip>
   </div>
 
   <div v-if="marketplaces.length === 0" class="empty-state">
-    <Empty description="暂无已注册的 Marketplace 仓库" />
+    <Empty :description="t('claude.marketplace.empty')" />
   </div>
 
   <div v-else class="marketplace-list">
@@ -110,49 +113,49 @@ onMounted(loadMarketplaces);
         <div class="mp-header">
           <span class="mp-name">{{ mp.name }}</span>
           <Space size="small">
-            <Tag size="small" variant="light">{{ mp.pluginCount }} 个插件</Tag>
+            <Tag size="small" variant="light">{{ t('claude.marketplace.pluginCount', { count: mp.pluginCount }) }}</Tag>
           </Space>
         </div>
       </template>
       <div class="mp-body">
         <div class="mp-info">
-          <span class="mp-label">来源</span>
+          <span class="mp-label">{{ t('claude.marketplace.source') }}</span>
           <span class="mp-value">{{ formatSource(mp.source) }}</span>
         </div>
         <div class="mp-info">
-          <span class="mp-label">本地路径</span>
+          <span class="mp-label">{{ t('claude.marketplace.localPath') }}</span>
           <span class="mp-value mono">{{ mp.installLocation }}</span>
         </div>
         <div v-if="mp.lastUpdated" class="mp-info">
-          <span class="mp-label">最后更新</span>
+          <span class="mp-label">{{ t('claude.marketplace.lastUpdated') }}</span>
           <span class="mp-value">{{ new Date(mp.lastUpdated).toLocaleString() }}</span>
         </div>
       </div>
       <template #actions>
         <Space size="small">
-          <Tooltip content="更新仓库元数据" placement="top">
+          <Tooltip :content="t('claude.marketplace.updateTooltip')" placement="top">
             <Button
               size="small"
               variant="outline"
               :loading="mpLoading === `__mp_update_${mp.name}`"
               @click="handleUpdateMarketplace(mp.name)"
             >
-              <template #icon><RefreshIcon /></template> 更新
+              <template #icon><RefreshIcon /></template> {{ t('claude.marketplace.update') }}
             </Button>
           </Tooltip>
           <Popconfirm
             theme="danger"
-            :content="'确认移除仓库 ' + mp.name + '？已安装的插件不受影响。'"
+            :content="t('claude.marketplace.removeConfirm', { name: mp.name })"
             @confirm="handleRemoveMarketplace(mp.name)"
           >
-            <Tooltip content="移除此仓库（已安装插件不受影响）" placement="top">
+            <Tooltip :content="t('claude.marketplace.removeTooltip')" placement="top">
               <Button
                 size="small"
                 theme="danger"
                 variant="outline"
                 :loading="mpLoading === `__mp_${mp.name}`"
               >
-                <template #icon><DeleteIcon /></template> 移除
+                <template #icon><DeleteIcon /></template> {{ t('claude.marketplace.remove') }}
               </Button>
             </Tooltip>
           </Popconfirm>
@@ -164,10 +167,10 @@ onMounted(loadMarketplaces);
   <!-- 添加仓库弹窗 -->
   <Dialog
     v-model:visible="showAddDialog"
-    header="添加 Marketplace 仓库"
+    :header="t('claude.marketplace.addTitle')"
     width="480px"
     :confirm-btn="{
-      content: '添加',
+      content: t('common.add'),
       loading: mpLoading === '__marketplace_add',
       theme: 'primary',
       disabled: !newMarketplaceSource.trim(),
@@ -176,17 +179,17 @@ onMounted(loadMarketplaces);
   >
     <div class="plugin-add-form">
       <div class="plugin-form-item">
-        <label>仓库来源</label>
+        <label>{{ t('claude.marketplace.sourceLabel') }}</label>
         <Input
           v-model="newMarketplaceSource"
-          placeholder="GitHub URL 或 owner/repo 或 本地路径"
+          :placeholder="t('claude.marketplace.sourcePlaceholder')"
         />
       </div>
       <div class="plugin-form-hint">
-        支持格式：<br />
+        {{ t('claude.marketplace.supportedFormats') }}<br />
         • <code>https://github.com/user/repo.git</code><br />
-        • <code>owner/repo</code>（GitHub 简写）<br />
-        • <code>/path/to/local/marketplace</code>（本地路径）
+        • <code>owner/repo</code>{{ t('claude.marketplace.githubShort') }}<br />
+        • <code>/path/to/local/marketplace</code>{{ t('claude.marketplace.localPathHint') }}
       </div>
     </div>
   </Dialog>

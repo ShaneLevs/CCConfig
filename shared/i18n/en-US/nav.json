@@ -1,0 +1,24 @@
+{
+  "nav": {
+    "tab": {
+      "config": "Config",
+      "mcp": "MCP",
+      "skill": "Skill",
+      "plugin": "Plugin",
+      "usage": "Usage",
+      "gateway": "Gateway"
+    },
+    "title": {
+      "configSwitch": "Config Switcher",
+      "configManage": "Configs",
+      "modelConfig": "Model Config",
+      "mcpConfig": "MCP Config",
+      "skillConfig": "Skill Config",
+      "skillManage": "Skills",
+      "pluginManage": "Plugins",
+      "extensionManage": "Extensions",
+      "usage": "Usage",
+      "gateway": "Gateway"
+    }
+  }
+}

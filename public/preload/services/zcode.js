@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
+const { t } = require("./i18n")
 
 // ZCode（Z.ai 桌面客户端）自定义模型配置：~/.zcode/v2/provider_config.json
 // {
@@ -70,10 +71,10 @@ const readDoc = () => {
   try {
     doc = JSON.parse(raw)
   } catch (e) {
-    throw new Error(`${p} 解析失败，已阻止修改（请先在 ZCode 中修复 JSON 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.zcode.readFailed', { path: p, message: e.message }))
   }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    throw new Error(`${p} 顶层不是 JSON 对象，已阻止修改`)
+    throw new Error(t('serviceAgent.zcode.notJsonObject', { path: p }))
   }
   return doc
 }
@@ -118,9 +119,9 @@ const configOf = (doc) => {
 const ZCODE_API_TYPES = ['anthropic-messages', 'openai-chat-completions', 'openai-responses']
 const ZCODE_ACCESS_TYPES = ['api-key', 'zhipu-coding-plan-api-key']
 
-const assertApiType = (t) => {
-  if (t && !ZCODE_API_TYPES.includes(t)) {
-    throw new Error(`不支持的 API 协议 ${t}（可选：${ZCODE_API_TYPES.join(' / ')}）`)
+const assertApiType = (apiType) => {
+  if (apiType && !ZCODE_API_TYPES.includes(apiType)) {
+    throw new Error(t('serviceAgent.zcode.unsupportedApiType', { apiType, options: ZCODE_API_TYPES.join(' / ') }))
   }
 }
 
@@ -296,7 +297,7 @@ const generateProviderId = (name, existingIds) => {
 
 const addZcodeProvider = (p) => {
   const name = String(p?.name || '').trim()
-  if (!name) throw new Error('供应商名称不能为空')
+  if (!name) throw new Error(t('serviceAgent.common.providerDisplayNameRequired'))
   assertApiType(p.apiType)
   const doc = readOrCreate()
   const cfg = configOf(doc)
@@ -321,9 +322,9 @@ const updateZcodeProvider = (id, updates) => {
   const doc = readOrCreate()
   const cfg = configOf(doc)
   const rule = findProviderRule(cfg, id)
-  if (!rule) throw new Error(`Provider ${id} 不存在`)
+  if (!rule) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: id }))
   assertApiType(updates.apiType)
-  if (updates.name !== undefined && !String(updates.name).trim()) throw new Error('供应商名称不能为空')
+  if (updates.name !== undefined && !String(updates.name).trim()) throw new Error(t('serviceAgent.common.providerDisplayNameRequired'))
   const norm = normalizeProvider(rule, cfg.modelConfigRules.providerModelRules, 0)
   const merged = {
     ...norm,
@@ -366,14 +367,14 @@ const orderArraysOf = (rule) => {
 
 const addZcodeModel = (providerId, m) => {
   const modelId = String(m?.modelId || '').trim()
-  if (!modelId) throw new Error('模型 ID 不能为空')
+  if (!modelId) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readOrCreate()
   const cfg = configOf(doc)
   const rule = findProviderRule(cfg, providerId)
-  if (!rule) throw new Error(`Provider ${providerId} 不存在`)
+  if (!rule) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   const { personalIds, order } = orderArraysOf(rule)
   if (personalIds.includes(modelId) || order.includes(modelId)) {
-    throw new Error(`模型 ${modelId} 已存在`)
+    throw new Error(t('serviceAgent.common.modelExists', { id: modelId }))
   }
   personalIds.push(modelId)
   order.push(modelId)
@@ -390,17 +391,17 @@ const updateZcodeModel = (providerId, modelId, updates) => {
   const doc = readOrCreate()
   const cfg = configOf(doc)
   const rule = findProviderRule(cfg, providerId)
-  if (!rule) throw new Error(`Provider ${providerId} 不存在`)
+  if (!rule) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   const { personalIds, order } = orderArraysOf(rule)
   if (!personalIds.includes(modelId) && !order.includes(modelId)) {
-    throw new Error(`模型 ${modelId} 不存在`)
+    throw new Error(t('serviceAgent.common.modelNotFound', { id: modelId }))
   }
   const newId = updates.modelId === undefined || updates.modelId === modelId
     ? modelId
     : String(updates.modelId).trim()
-  if (!newId) throw new Error('模型 ID 不能为空')
+  if (!newId) throw new Error(t('serviceAgent.common.modelIdRequired'))
   if (newId !== modelId && (personalIds.includes(newId) || order.includes(newId))) {
-    throw new Error(`模型 ${newId} 已存在`)
+    throw new Error(t('serviceAgent.common.modelExists', { id: newId }))
   }
   const modelRule = findModelRule(cfg.modelConfigRules.providerModelRules, providerId, modelId)
   const norm = normalizeModel(cfg.modelConfigRules.providerModelRules, providerId, modelId)
@@ -459,10 +460,10 @@ const setZcodeDefaultModel = (providerId, modelId) => {
   const doc = readOrCreate()
   const cfg = configOf(doc)
   const rule = findProviderRule(cfg, providerId)
-  if (!rule) throw new Error(`Provider ${providerId} 不存在`)
+  if (!rule) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   const { personalIds, order } = orderArraysOf(rule)
   if (modelId && !personalIds.includes(modelId) && !order.includes(modelId)) {
-    throw new Error(`模型 ${modelId} 不存在，无法设为首选`)
+    throw new Error(t('serviceAgent.zcode.modelNotFoundForDefault', { model: modelId }))
   }
   // 供应商提到 providerOrder 最前，模型提到该供应商 modelOrder 最前（选择器排序基准）
   cfg.providerOrder = [providerId, ...cfg.providerOrder.filter((x) => x !== providerId)]
@@ -497,7 +498,7 @@ const providerIdFor = (name) => {
 //（group 与 ZCode 原生个人供应商一致 standard-personal，并追加进 providerOrder 尾部）
 const upsertZcodeProvider = (id, cfg) => {
   const pid = String(id || '').trim()
-  if (!pid) throw new Error('Provider ID 不能为空')
+  if (!pid) throw new Error(t('serviceAgent.common.providerIdRequired'))
   assertApiType(cfg.apiType)
   const doc = readOrCreate()
   const cfgNode = configOf(doc)
@@ -536,11 +537,11 @@ const upsertZcodeProvider = (id, cfg) => {
 // 追加进 personalModelIds 与 modelOrder 尾部（不打乱既有顺序）；返回模型 ID
 const upsertZcodeModel = (providerId, modelId, opts = {}) => {
   const id = String(modelId || '').trim()
-  if (!id) throw new Error('模型 ID 不能为空')
+  if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readOrCreate()
   const cfg = configOf(doc)
   const rule = findProviderRule(cfg, providerId)
-  if (!rule) throw new Error(`Provider ${providerId} 不存在`)
+  if (!rule) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   const { personalIds, order } = orderArraysOf(rule)
   const modelRule = findModelRule(cfg.modelConfigRules.providerModelRules, providerId, id)
   const merged = modelRule
@@ -672,7 +673,7 @@ const readZcodeUsageViaChildProcess = (dbPath) => {
   const usage = require('./usage')
   const nodeBin = findChildNode()
   if (!nodeBin) {
-    throw new Error('未找到可用的 node（>= 22.5）子进程：常见安装位置与 PATH 均探测失败（无 node 或版本过低）')
+    throw new Error(t('serviceAgent.zcode.noUsableNode'))
   }
   const { execFileSync } = require('node:child_process')
   const tmpScript = path.join(os.tmpdir(), 'zcode_usage_reader.js')

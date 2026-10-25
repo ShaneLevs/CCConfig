@@ -14,7 +14,7 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
   const chunks = [];
   for await (const chunk of res) {
     size += chunk.length;
-    if (size > limit) throw new Error("上游响应体过大");
+    if (size > limit) throw new Error("Upstream response body too large");
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString("utf8");
@@ -53,7 +53,7 @@ const pipeStream = async ({ upstreamRes, target, source, res, onClientGone }) =>
     }
   } catch (e) {
     // 上游中途异常：尽力补一帧错误后收尾，避免客户端悬挂
-    for (const frame of writer.push({ type: "error", message: (e && e.message) || "上游流中断" })) {
+    for (const frame of writer.push({ type: "error", message: (e && e.message) || "Upstream stream interrupted" })) {
       if (!closed) res.write(frame);
     }
     for (const frame of writer.finish()) {

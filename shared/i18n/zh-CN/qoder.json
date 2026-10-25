@@ -1,0 +1,68 @@
+{
+  "qoder": {
+    "config": {
+      "toolbarSubtitle": "settings.json（providers）",
+      "addProvider": "添加供应商",
+      "editTitle": "编辑供应商配置",
+      "emptyProviders": "未检测到 Qoder 自定义供应商；可在 Qoder 内添加，或在此手动添加",
+      "noBaseUrl": "未配置 Base URL",
+      "defaultModelTag": "默认 {model}",
+      "modelCount": "{count} 个模型",
+      "deleteProviderTooltip": "删除供应商（其模型一并删除）",
+      "deleteProviderConfirm": "删除该 Provider？其模型与 apiKey 将一并从 settings.json 移除",
+      "configured": "已配置",
+      "unconfigured": "未配置",
+      "modelsTitle": "模型（providers.<id>.models）",
+      "modelsEmpty": "暂无模型，默认模型（provider.model）需引用此处定义的模型 ID",
+      "vision": "视觉",
+      "thinking": "思考",
+      "setDefaultTooltip": "设为默认模型（provider.model）",
+      "editModelTooltip": "编辑模型配置",
+      "deleteModelConfirm": "删除该模型？",
+      "addModelTitle": "添加模型",
+      "editModelTitle": "编辑模型",
+      "protocolLabel": "协议（protocol）",
+      "apiKeyPlaceholder": "明文写入 settings.json apiKey",
+      "providerIdAutoHint": "Provider ID 将按官方规范自动生成（qoder-custom-<uuid>）",
+      "apiKeySavedPlaceholder": "已保存，清空并保存将删除；修改则覆盖",
+      "apiKeyEmptyPlaceholder": "留空不写入",
+      "modelIdLabel": "模型 ID",
+      "noModels": "未获取到模型",
+      "fetchingModels": "正在从该供应商拉取模型列表…",
+      "fetchHint": "从供应商 Base URL 的 /models 接口获取，也可手动输入",
+      "displayNameLabel": "显示名（displayName）",
+      "displayNamePlaceholder": "留空与模型 ID 相同",
+      "visionLabel": "视觉能力（capabilities.vision）",
+      "thinkingLabel": "思考能力（capabilities.thinking）",
+      "supportsEffortLabel": "支持推理档位（supportsEffort）",
+      "effortLevelsLabel": "支持的档位（supportedEffortLevels）",
+      "effortPlaceholder": "不选 = 不声明档位",
+      "effortEditPlaceholder": "清空 = 不声明档位",
+      "editIdSyncHint": "改 ID 后默认模型若指向它会自动同步",
+      "displayNameEditPlaceholder": "留空 = 清除并回退到模型 ID",
+      "providerLabel": "供应商：{name}",
+      "protocol": {
+        "anthropic": "anthropic（Anthropic Messages）",
+        "openai": "openai（OpenAI Chat）"
+      }
+    },
+    "provider": {
+      "added": "Provider 已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "Provider 配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "Provider {id} 已删除",
+      "deleteFailed": "删除失败: {message}"
+    },
+    "model": {
+      "idRequired": "请输入模型 ID",
+      "added": "模型 {id} 已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "模型配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "模型 {id} 已删除",
+      "deleteFailed": "删除失败: {message}",
+      "defaultSet": "默认模型已设为 {id}"
+    }
+  }
+}

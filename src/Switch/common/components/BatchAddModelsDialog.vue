@@ -1,11 +1,14 @@
 <script setup>
 import { ref, computed, watch, h } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Button, Input, Select, Checkbox, Table, Dialog, MessagePlugin,
 } from "tdesign-vue-next";
 import { RefreshIcon } from "tdesign-icons-vue-next";
 import { CTX_OPTIONS, TOKENS_OPTIONS } from "../../../constants";
 import { formatNumber } from "../../../utils/format";
+
+const { t } = useI18n();
 
 // 批量添加模型弹窗：拉取供应商全部模型 → 勾选 → 行内统一配置 → 一次性写入（重复 ID 自动跳过）。
 // 样式沿用 common/styles/ConfigView.css 的 common-batch-* 全局类（本组件仅在通用配置页使用）。
@@ -32,7 +35,7 @@ const batchFilter = ref('');          // 列表过滤关键字（模型 ID / 拉
 const fetchBatchModels = async () => {
   const prov = props.provider;
   if (!prov || !prov.baseUrl) {
-    batchError.value = '该供应商未配置 Base URL，无法自动获取';
+    batchError.value = t('common.noBaseUrl');
     return;
   }
   batchLoading.value = true;
@@ -41,7 +44,7 @@ const fetchBatchModels = async () => {
     const list = await window.services.fetchProviderModels(prov.baseUrl, prov.apiKey);
     batchModels.value = list;
     list.forEach(ensureBatchEdit);   // 预填充行内编辑值（优先拉取到的元信息）
-    if (list.length === 0) batchError.value = '接口返回空列表';
+    if (list.length === 0) batchError.value = t('common.emptyModelList');
   } catch (e) {
     batchError.value = e.message;
     batchModels.value = [];
@@ -65,12 +68,12 @@ const batchFilteredModels = computed(() => {
 
 const batchColumns = computed(() => [
   { colKey: 'row-select', type: 'multiple', width: 46 },
-  { colKey: 'id', title: '模型 ID', ellipsis: true },
-  { colKey: 'text', title: () => renderBatchColHeader('text', '文本'), width: 64 },
-  { colKey: 'image', title: () => renderBatchColHeader('image', '图像'), width: 64 },
-  { colKey: 'reasoning', title: () => renderBatchColHeader('reasoning', '思考'), width: 64 },
-  { colKey: 'contextWindow', title: () => renderBatchHeaderSelect('contextWindow', batchCtxOptions.value, '上下文窗口'), width: 130 },
-  { colKey: 'maxTokens', title: () => renderBatchHeaderSelect('maxTokens', batchTokensOptions.value, '最大输出'), width: 130 },
+  { colKey: 'id', title: t('model.id'), ellipsis: true },
+  { colKey: 'text', title: () => renderBatchColHeader('text', t('commonApp.batchAdd.textCol')), width: 64 },
+  { colKey: 'image', title: () => renderBatchColHeader('image', t('commonApp.batchAdd.imageCol')), width: 64 },
+  { colKey: 'reasoning', title: () => renderBatchColHeader('reasoning', t('commonApp.batchAdd.reasoningCol')), width: 64 },
+  { colKey: 'contextWindow', title: () => renderBatchHeaderSelect('contextWindow', batchCtxOptions.value, t('common.contextWindow')), width: 130 },
+  { colKey: 'maxTokens', title: () => renderBatchHeaderSelect('maxTokens', batchTokensOptions.value, t('common.maxOutput')), width: 130 },
 ]);
 
 const onBatchSelectChange = (keys) => {
@@ -126,7 +129,7 @@ const renderBatchColHeader = (flag, label) => {
       modelValue: all,
       indeterminate: checkedCount > 0 && !all,
       class: 'common-batch-checkbox',
-      title: `全选/取消全选「${label}」`,
+      title: t('commonApp.batchAdd.selectAllFlag', { label }),
       onChange: (checked) => toggleBatchColAll(flag, checked),
     }),
     h('span', { class: 'common-batch-flag-label' }, label),
@@ -141,7 +144,7 @@ const applyBatchColumn = (key, value) => {
     : visible;
   if (targets.length === 0) return;
   targets.forEach(m => setBatchEdit(m, key, value));
-  MessagePlugin.success(`已应用到 ${targets.length} 个模型`);
+  MessagePlugin.success(t('commonApp.batchAdd.applied', { count: targets.length }));
 };
 
 const renderBatchHeaderSelect = (key, options, placeholder) => h(Select, {
@@ -161,7 +164,7 @@ const mergePresetOptions = (presets, values) => {
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .sort((a, b) => a - b)
     .map(v => ({ label: formatNumber(v), value: v }));
-  return [...presets, ...extra];
+  return [...presets.map((o) => (o.labelKey ? { ...o, label: t(o.labelKey) } : o)), ...extra];
 };
 
 // 上下文窗口 / 最大输出下拉选项：标准预设 + 接口返回的非标准值自动补进选项不丢数据
@@ -173,7 +176,7 @@ const batchTokensOptions = computed(() =>
 );
 
 const handleBatchAdd = async () => {
-  if (batchSelected.value.length === 0) { MessagePlugin.warning('请先勾选要添加的模型'); return; }
+  if (batchSelected.value.length === 0) { MessagePlugin.warning(t('commonApp.batchAdd.selectFirst')); return; }
   const models = batchSelected.value.map(id => {
     const fetched = batchModels.value.find(m => m.id === id) || {};
     const e = batchEdits.value[id] || {};
@@ -191,14 +194,19 @@ const handleBatchAdd = async () => {
   batchSubmitting.value = true;
   try {
     const { added, skipped } = window.services.addCommonModels(props.provider.name, models);
-    if (added.length > 0) MessagePlugin.success(`已批量添加 ${added.length} 个模型`);
-    if (skipped.length > 0) MessagePlugin.warning(`已自动跳过 ${skipped.length} 个重复模型：${skipped.slice(0, 3).join('、')}${skipped.length > 3 ? ' 等' : ''}`);
+    if (added.length > 0) MessagePlugin.success(t('commonApp.batchAdd.added', { count: added.length }));
+    if (skipped.length > 0) MessagePlugin.warning(
+      t('commonApp.batchAdd.skipped', {
+        count: skipped.length,
+        ids: skipped.slice(0, 3).join(t('common.listSeparator')),
+      }) + (skipped.length > 3 ? t('commonApp.batchAdd.skippedMore') : ''),
+    );
     if (added.length > 0) {
       dialogVisible.value = false;
       emit("added");
     }
   } catch (e) {
-    MessagePlugin.error('批量添加失败: ' + e.message);
+    MessagePlugin.error(t('commonApp.batchAdd.failed', { message: e.message }));
   } finally {
     batchSubmitting.value = false;
   }
@@ -219,10 +227,10 @@ watch(() => props.visible, (v) => {
 <template>
   <Dialog
     v-model:visible="dialogVisible"
-    :header="`批量添加模型${provider ? ' — ' + provider.name : ''}`"
+    :header="t('commonApp.batchAdd.title') + (provider ? ' — ' + provider.name : '')"
     width="780px"
     dialog-class-name="common-batch-dialog"
-    :confirm-btn="{ content: `添加 ${batchSelected.length} 个`, theme: 'primary', loading: batchSubmitting, disabled: batchSelected.length === 0 }"
+    :confirm-btn="{ content: t('commonApp.batchAdd.confirm', { count: batchSelected.length }), theme: 'primary', loading: batchSubmitting, disabled: batchSelected.length === 0 }"
     @confirm="handleBatchAdd"
   >
     <div class="common-edit-form common-batch-form">
@@ -231,21 +239,21 @@ watch(() => props.visible, (v) => {
           v-model="batchFilter"
           size="small"
           clearable
-          placeholder="过滤模型 ID / 名称"
+          :placeholder="t('commonApp.batchAdd.filterPlaceholder')"
           class="common-batch-filter"
         />
         <Button size="small" variant="outline" :loading="batchLoading" @click="fetchBatchModels">
-          <template #icon><RefreshIcon /></template> 刷新
+          <template #icon><RefreshIcon /></template> {{ t('common.refresh') }}
         </Button>
         <span class="common-batch-count">
-          已选 {{ batchSelected.length }} / {{ batchModels.length }} 个
+          {{ t('commonApp.batchAdd.selectedCount', { selected: batchSelected.length, total: batchModels.length }) }}
         </span>
       </div>
 
-      <div v-if="batchLoading" class="common-form-hint">正在自动拉取模型列表…</div>
+      <div v-if="batchLoading" class="common-form-hint">{{ t('model.fetching') }}</div>
       <div v-else-if="batchError" class="common-form-hint common-fetch-error">
-        自动获取失败：{{ batchError }}
-        <span class="common-fetch-retry" @click="fetchBatchModels">重试</span>
+        {{ t('model.fetchFailed', { message: batchError }) }}
+        <span class="common-fetch-retry" @click="fetchBatchModels">{{ t('model.retry') }}</span>
       </div>
       <Table
         v-else-if="batchModels.length > 0"
@@ -260,7 +268,7 @@ watch(() => props.visible, (v) => {
       >
         <template #id="{ row }">
           <div class="common-batch-id-cell">
-            <span v-if="batchExistingIds.has(row.id)" class="common-batch-exist-dot" title="已存在，将自动跳过"></span>
+            <span v-if="batchExistingIds.has(row.id)" class="common-batch-exist-dot" :title="t('commonApp.batchAdd.existingHint')"></span>
             <span class="common-batch-item-id">{{ row.id }}</span>
           </div>
         </template>
@@ -304,9 +312,9 @@ watch(() => props.visible, (v) => {
           />
         </template>
       </Table>
-      <div v-else class="common-form-hint">暂无模型</div>
+      <div v-else class="common-form-hint">{{ t('commonApp.batchAdd.noModels') }}</div>
 
-      <div class="common-form-hint">表头复选框可全选该列；上下文窗口 / 最大输出的表头下拉可批量应用到勾选行（未勾选则应用到可见行）；模型 ID 重复的会自动过滤不添加。</div>
+      <div class="common-form-hint">{{ t('commonApp.batchAdd.hint') }}</div>
     </div>
   </Dialog>
 </template>

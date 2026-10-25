@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
+const { t } = require("./i18n")
 
 // Codex Desktop（ChatGPT 桌面端）/ Codex CLI / VS Code 插件共用 ~/.codex 下的同一套配置。
 // 模型配置参照 DeepSeek 官方接入方式（api-docs.deepseek.com agent_integrations/codex）：
@@ -31,7 +32,7 @@ const readCodexConfig = () => {
   } catch (e) {
     // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会抹掉
     // mcp_servers / profiles 等既有配置节（同 reasonix 的处理）
-    throw new Error(`config.toml 解析失败，已阻止修改（请先修复 TOML 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.common.tomlParseFailed', { message: e.message }))
   }
 }
 
@@ -107,11 +108,11 @@ const getCodexProviderList = () => {
 
 const addCodexProvider = (cfg) => {
   const id = String(cfg.id || '').trim()
-  if (!id) throw new Error('供应商 ID 不能为空')
-  if (!ID_RE.test(id)) throw new Error('供应商 ID 只能包含字母、数字、下划线、中划线')
+  if (!id) throw new Error(t('serviceAgent.codex.providerIdRequired'))
+  if (!ID_RE.test(id)) throw new Error(t('serviceAgent.codex.providerIdInvalidChars'))
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
-  if (tables[id]) throw new Error(`供应商 ${id} 已存在`)
+  if (tables[id]) throw new Error(t('serviceAgent.common.providerExists', { name: id }))
   tables[id] = buildProviderToml({ ...cfg, id })
   writeCodexConfig(doc)
   return true
@@ -120,12 +121,12 @@ const addCodexProvider = (cfg) => {
 const updateCodexProvider = (id, updates) => {
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
-  if (!tables[id]) throw new Error(`供应商 ${id} 不存在`)
+  if (!tables[id]) throw new Error(t('serviceAgent.common.providerNotFound', { name: id }))
   // 支持重命名：id 是子表键，改名需校验冲突并同步 model_provider 引用与 DB 模型列表
   const newId = updates.id === undefined || updates.id === id ? id : String(updates.id).trim()
-  if (!newId) throw new Error('供应商 ID 不能为空')
-  if (!ID_RE.test(newId)) throw new Error('供应商 ID 只能包含字母、数字、下划线、中划线')
-  if (newId !== id && tables[newId]) throw new Error(`供应商 ${newId} 已存在`)
+  if (!newId) throw new Error(t('serviceAgent.codex.providerIdRequired'))
+  if (!ID_RE.test(newId)) throw new Error(t('serviceAgent.codex.providerIdInvalidChars'))
+  if (newId !== id && tables[newId]) throw new Error(t('serviceAgent.common.providerExists', { name: newId }))
   // clearApiKey → 删除已保存的 key（experimental_bearer_token）；否则 key 有值才覆盖
   const merged = { ...normalizeProvider(id, tables[id]), ...updates, id: newId }
   if (updates.clearApiKey) merged.apiKey = ''
@@ -172,9 +173,9 @@ const upsertCodexProvider = (id, cfg) => {
 const deleteCodexProvider = (id) => {
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
-  if (!tables[id]) throw new Error(`供应商 ${id} 不存在`)
+  if (!tables[id]) throw new Error(t('serviceAgent.common.providerNotFound', { name: id }))
   if (doc.model_provider === id) {
-    throw new Error(`供应商 ${id} 是当前使用的供应商，请先切换到其他模型`)
+    throw new Error(t('serviceAgent.codex.providerInUse', { id }))
   }
   delete tables[id]
   const modelsMap = readProviderModelsDoc()
@@ -214,11 +215,11 @@ const ensureApiAuthFields = (doc) => {
 
 // 切换默认模型：写 model_provider + model（Codex 的模型与供应商是顶层配对字段），并补 API 认证开关
 const setCodexDefaultModel = (providerId, modelId) => {
-  if (!providerId) throw new Error('请先选择供应商')
-  if (!modelId) throw new Error('模型 ID 不能为空')
+  if (!providerId) throw new Error(t('serviceAgent.common.selectProviderFirst'))
+  if (!modelId) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
-  if (!tables[providerId]) throw new Error(`供应商 ${providerId} 不存在`)
+  if (!tables[providerId]) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerId }))
   doc.model_provider = providerId
   doc.model = modelId
   ensureApiAuthFields(doc)
@@ -271,7 +272,9 @@ const writeProviderModelsDoc = (map) => {
   if (existing) doc._rev = existing._rev
   const res = window.utools.db.put(doc)
   if (!res || !res.ok) {
-    throw new Error('保存模型列表失败' + (res && res.message ? `：${res.message}` : ''))
+    throw new Error(res && res.message
+      ? t('serviceAgent.codex.saveModelListFailedReason', { message: res.message })
+      : t('serviceAgent.codex.saveModelListFailed'))
   }
   autoSyncCatalog()
   return true
@@ -308,13 +311,13 @@ const deleteCodexModel = (providerId, modelId) => {
 
 // 已存在时不报错（下发路径用）；exists 为 true 时重复添加报错（UI 路径用）
 const upsertCodexModel = (providerId, modelId, exists = true) => {
-  if (!providerId) throw new Error('供应商不能为空')
+  if (!providerId) throw new Error(t('serviceAgent.common.providerRequired'))
   const id = String(modelId || '').trim()
-  if (!id) throw new Error('模型 ID 不能为空')
+  if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const map = readProviderModelsDoc()
   const list = map[providerId] || []
   if (list.includes(id)) {
-    if (exists) throw new Error(`模型 ${id} 已存在`)
+    if (exists) throw new Error(t('serviceAgent.common.modelExists', { id }))
     return true
   }
   map[providerId] = [...list, id]
@@ -333,7 +336,7 @@ const readCodexModelCatalog = () => {
     if (parsed && Array.isArray(parsed.models)) return parsed
     return { models: [] }
   } catch (e) {
-    throw new Error(`models.json 解析失败，已阻止修改（请先修复 JSON 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.codex.modelsParseFailed', { message: e.message }))
   }
 }
 
@@ -363,12 +366,13 @@ const CODEX_INSTRUCTIONS_VARIABLES = {"personality_default": "", "personality_fr
 const buildCatalogEntry = (providerId, modelId, priority = 1) => ({
   slug: modelId,
   display_name: modelId,
-  description: `${providerId} 提供的模型（由 CCSwitch 生成）`,
+  // 这些是写入 ~/.codex/models.json 的数据/标记，不随界面语言变化
+  description: `${providerId} models (Generated by CCConfig)`,
   base_instructions: CODEX_INSTRUCTIONS_TEMPLATE,
   supported_reasoning_levels: [
-    { effort: 'low', description: '快速响应' },
-    { effort: 'medium', description: '均衡' },
-    { effort: 'high', description: '深度推理' },
+    { effort: 'low', description: 'Fast' },
+    { effort: 'medium', description: 'Balanced' },
+    { effort: 'high', description: 'Deep reasoning' },
   ],
   default_reasoning_level: 'medium',
   shell_type: 'shell_command',
@@ -403,7 +407,8 @@ const REQUIRED_ENTRY_KEYS = [
 // CCSwitch 生成的条目带固定 description 标记：升级时只动自家条目，
 // 用户/其他工具手工维护的条目（如内置 GPT 条目）不碰
 const isGeneratedEntry = (m) =>
-  typeof m?.description === 'string' && m.description.includes('由 CCSwitch 生成')
+  typeof m?.description === 'string' &&
+  (m.description.includes('由 CCSwitch 生成') || m.description.includes('Generated by CCConfig'))
 
 // 把各供应商的模型列表合并写入 ~/.codex/models.json，并在 config.toml 设置 model_catalog_json
 // 指向它；已有条目原样保留，只补缺失的 slug；唯一例外是旧版 CCSwitch 生成的条目——

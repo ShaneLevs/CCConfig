@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
+const { t } = require("./i18n")
 
 // Qoder（AI IDE）的两个发行版配置文件结构完全一致、只有家目录不同：
 //   ~/.qoder/settings.json 与 ~/.qoder-cn/settings.json
@@ -34,10 +35,10 @@ const readEditionDoc = (ed) => {
   try {
     doc = JSON.parse(raw)
   } catch (e) {
-    throw new Error(`${p} 解析失败，已阻止修改与同步（请先修复 JSON 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.qoder.readFailed', { path: p, message: e.message }))
   }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    throw new Error(`${p} 顶层不是 JSON 对象，已阻止修改与同步`)
+    throw new Error(t('serviceAgent.qoder.notJsonObject', { path: p }))
   }
   return doc
 }
@@ -62,7 +63,7 @@ const PROVIDER_KEY_RE = PROVIDER_ID_RE
 
 const assertProtocol = (protocol) => {
   if (protocol && !PROTOCOL_VALUES.includes(protocol)) {
-    throw new Error(`不支持的协议 ${protocol}（可选：${PROTOCOL_VALUES.join(' / ')}）`)
+    throw new Error(t('serviceAgent.qoder.unsupportedProtocol', { protocol, options: PROTOCOL_VALUES.join(' / ') }))
   }
 }
 
@@ -230,10 +231,10 @@ const getQoderProviderList = () => {
 // 新建 provider：沿用 Qoder 官方命名 qoder-custom-<uuid>（实测 settings.json 键形态）
 const addQoderProvider = (cfg) => {
   const id = String(cfg?.id || '').trim() || `qoder-custom-${crypto.randomUUID()}`
-  if (!PROVIDER_ID_RE.test(id)) throw new Error(`Provider ID ${id} 不合法`)
+  if (!PROVIDER_ID_RE.test(id)) throw new Error(t('serviceAgent.qoder.providerIdInvalid', { id }))
   assertProtocol(cfg.protocol)
   const table = loadMergedTable()
-  if (table[id]) throw new Error(`Provider ${id} 已存在`)
+  if (table[id]) throw new Error(t('serviceAgent.common.providerExistsLabel', { name: id }))
   table[id] = buildProviderJson({
     baseUrl: String(cfg.baseUrl || '').trim(),
     apiKey: cfg.apiKey || '',
@@ -249,12 +250,12 @@ const addQoderProvider = (cfg) => {
 
 const updateQoderProvider = (id, updates) => {
   const table = loadMergedTable()
-  if (!table[id]) throw new Error(`Provider ${id} 不存在`)
+  if (!table[id]) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: id }))
   assertProtocol(updates.protocol)
   // 支持改 ID（表键）：改名需校验冲突
   const newId = updates.id === undefined || updates.id === id ? id : String(updates.id).trim()
-  if (!PROVIDER_ID_RE.test(newId)) throw new Error(`Provider ID ${newId} 不合法`)
-  if (newId !== id && table[newId]) throw new Error(`Provider ${newId} 已存在`)
+  if (!PROVIDER_ID_RE.test(newId)) throw new Error(t('serviceAgent.qoder.providerIdInvalid', { id: newId }))
+  if (newId !== id && table[newId]) throw new Error(t('serviceAgent.common.providerExistsLabel', { name: newId }))
   const prev = normalizeProvider(id, table[id])
   const merged = { ...prev, ...updates, id: newId }
   if (updates.clearApiKey) merged.apiKey = ''
@@ -278,13 +279,13 @@ const deleteQoderProvider = (id) => {
 
 const addQoderModel = (providerId, cfg) => {
   const modelId = String(cfg?.model || '').trim()
-  if (!modelId) throw new Error('模型 ID 不能为空')
-  if (!MODEL_ID_RE.test(modelId)) throw new Error('模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
+  if (!modelId) throw new Error(t('serviceAgent.common.modelIdRequired'))
+  if (!MODEL_ID_RE.test(modelId)) throw new Error(t('serviceAgent.common.modelIdInvalidChars'))
   const table = loadMergedTable()
   const provider = table[providerId]
-  if (!provider) throw new Error(`Provider ${providerId} 不存在`)
+  if (!provider) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   if (!Array.isArray(provider.models)) provider.models = []
-  if (provider.models.some((m) => modelIdOf(m) === modelId)) throw new Error(`模型 ${modelId} 已存在`)
+  if (provider.models.some((m) => modelIdOf(m) === modelId)) throw new Error(t('serviceAgent.common.modelExists', { id: modelId }))
   provider.models.push(buildModelJson({
     model: modelId,
     displayName: String(cfg.displayName || '').trim(),
@@ -305,15 +306,15 @@ const addQoderModel = (providerId, cfg) => {
 const updateQoderModel = (providerId, modelId, updates) => {
   const table = loadMergedTable()
   const provider = table[providerId]
-  if (!provider) throw new Error(`Provider ${providerId} 不存在`)
+  if (!provider) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   if (!Array.isArray(provider.models)) provider.models = []
   const idx = provider.models.findIndex((m) => modelIdOf(m) === modelId)
-  if (idx === -1) throw new Error(`模型 ${modelId} 不存在`)
+  if (idx === -1) throw new Error(t('serviceAgent.common.modelNotFound', { id: modelId }))
   const newId = updates.model === undefined || updates.model === modelId ? modelId : String(updates.model).trim()
-  if (!newId) throw new Error('模型 ID 不能为空')
-  if (!MODEL_ID_RE.test(newId)) throw new Error('模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
+  if (!newId) throw new Error(t('serviceAgent.common.modelIdRequired'))
+  if (!MODEL_ID_RE.test(newId)) throw new Error(t('serviceAgent.common.modelIdInvalidChars'))
   if (newId !== modelId && provider.models.some((m) => modelIdOf(m) === newId)) {
-    throw new Error(`模型 ${newId} 已存在`)
+    throw new Error(t('serviceAgent.common.modelExists', { id: newId }))
   }
   const prev = normalizeModel(provider.models[idx])
   provider.models[idx] = buildModelJson({ ...prev, ...updates, model: newId })
@@ -350,10 +351,10 @@ const tableProvider = (providerId) => {
 const setQoderDefaultModel = (providerId, modelId) => {
   const table = loadMergedTable()
   const provider = table[providerId]
-  if (!provider) throw new Error(`Provider ${providerId} 不存在`)
+  if (!provider) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   const models = Array.isArray(provider.models) ? provider.models : []
   if (modelId && !models.some((m) => modelIdOf(m) === modelId)) {
-    throw new Error(`模型 ${modelId} 不存在，无法设为默认`)
+    throw new Error(t('serviceAgent.qoder.modelNotFoundForDefault', { model: modelId }))
   }
   if (modelId) provider.model = modelId
   else delete provider.model
@@ -380,7 +381,7 @@ const providerKeyFor = (name) => {
 // 存在则合并更新（空值不覆盖既有 baseUrl/apiKey），否则创建
 const upsertQoderProvider = (id, cfg) => {
   const pid = String(id || '').trim()
-  if (!PROVIDER_ID_RE.test(pid)) throw new Error(`Provider ID ${pid} 不合法`)
+  if (!PROVIDER_ID_RE.test(pid)) throw new Error(t('serviceAgent.qoder.providerIdInvalid', { id: pid }))
   assertProtocol(cfg.protocol)
   const table = loadMergedTable()
   const prev = table[pid] ? normalizeProvider(pid, table[pid]) : null
@@ -401,10 +402,10 @@ const upsertQoderProvider = (id, cfg) => {
 // 返回默认模型可引用的模型 ID
 const upsertQoderModel = (providerId, modelId, opts = {}) => {
   const id = String(modelId || '').trim()
-  if (!MODEL_ID_RE.test(id)) throw new Error(`模型 ID ${id} 含非法字符，无法下发到 Qoder`)
+  if (!MODEL_ID_RE.test(id)) throw new Error(t('serviceAgent.qoder.modelIdInvalidForDispatch', { id }))
   const table = loadMergedTable()
   const provider = table[providerId]
-  if (!provider) throw new Error(`Provider ${providerId} 不存在`)
+  if (!provider) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
   if (!Array.isArray(provider.models)) provider.models = []
   const prevEntry = provider.models.find((m) => modelIdOf(m) === id)
   const merged = prevEntry ? normalizeModel(prevEntry) : { model: id, _raw: {} }

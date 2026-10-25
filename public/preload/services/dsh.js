@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const yaml = require('js-yaml')
+const { t } = require("./i18n")
 
 // ==================== DSH（DeepSeek Harness）模型配置 ====================
 // 配置文件：<DSH_HOME>/profiles/<profile>/cordis.patch.yml（profile 默认 desktop）
@@ -118,10 +119,11 @@ const DSH_EFFORTS = ['off', 'low', 'high', 'max']
 const DSH_PI_EFFORTS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 const DSH_THINKING = ['enabled', 'disabled']
 
+// 写入用户配置文件的稳定头注释：不随界面语言变化
 const PATCH_HEADER = [
-  '# 由 CCConfig（CCSwitch）维护的 dsh profile 补丁层，应用在每个 bundle 层之后：',
-  '# 顶层 YAML 数组，元素为 loader patch 条目（id 定向的配置覆盖 / 禁用 / 插入）。',
-  '# 未在此文件中出现的 plugin 保持 bundle 默认配置；CCConfig 管理其中的模型路由条目见 README。',
+  '# dsh profile patch layer maintained by CCConfig (CCSwitch); applied after each bundle layer:',
+  '# Top-level YAML array of loader patch entries (id-targeted overrides / disables / inserts).',
+  '# Plugins not listed here keep their bundle defaults; CCConfig manages the model routes below.',
 ].join('\n')
 
 // ==================== patch 文件读写 ====================
@@ -138,7 +140,7 @@ const splitLeadingHeader = (raw) => {
 }
 
 const parseFail = (p, e) =>
-  new Error(`cordis.patch.yml 解析失败，已阻止修改（请先在 dsh 中修复 YAML 语法）: ${e.message} [${p}]`)
+  new Error(t('serviceAgent.dsh.patchParseFailed', { message: e.message, path: p }))
 
 const loadPatch = () => {
   const p = getDshPatchPath()
@@ -152,7 +154,7 @@ const loadPatch = () => {
   }
   // 顶层必须是数组（空文件 / null 视为空数组，保留原文件不动由写入时补齐）
   if (doc === null || doc === undefined) return { entries: [], header: splitLeadingHeader(raw), exists: true, path: p }
-  if (!Array.isArray(doc)) throw new Error(`cordis.patch.yml 顶层不是 YAML 数组，已阻止修改 [${p}]`)
+  if (!Array.isArray(doc)) throw new Error(t('serviceAgent.dsh.patchNotArray', { path: p }))
   return { entries: doc, header: splitLeadingHeader(raw), exists: true, path: p }
 }
 
@@ -206,11 +208,11 @@ const readDshCredentials = () => {
     const doc = yaml.load(raw, { schema: yaml.DEFAULT_SCHEMA })
     if (doc === null || doc === undefined) return {}
     if (typeof doc !== 'object' || Array.isArray(doc)) {
-      throw new Error('顶层不是 YAML 映射')
+      throw new Error(t('serviceAgent.dsh.credentialsNotMapping'))
     }
     return doc
   } catch (e) {
-    throw new Error(`.credentials.yaml 解析失败，已阻止修改（请先在 dsh 中修复）: ${e.message} [${p}]`)
+    throw new Error(t('serviceAgent.dsh.credentialsParseFailed', { message: e.message, path: p }))
   }
 }
 
@@ -241,7 +243,7 @@ const getDshCredential = (name) => {
 
 const setDshCredential = (name, value) => {
   const key = String(name || '').trim()
-  if (!key) throw new Error('凭据引用名不能为空')
+  if (!key) throw new Error(t('serviceAgent.dsh.credentialNameRequired'))
   const doc = readDshCredentials()
   const refs = refsOf(doc)
   const next = String(value === undefined || value === null ? '' : value)
@@ -361,9 +363,9 @@ const saveDshOfficial = (input = {}) => {
   const prevEntry = readManagedEntry(OFFICIAL_ENTRY)
   const prev = prevEntry ? normalizeOfficial(prevEntry.config) : null
   const apiKeyEnv = String(input.apiKeyEnv || (prev && prev.apiKeyEnv) || DEFAULT_OFFICIAL_API_KEY_ENV).trim()
-  if (!apiKeyEnv) throw new Error('凭据引用名（apiKeyEnv）不能为空')
+  if (!apiKeyEnv) throw new Error(t('serviceAgent.dsh.credentialEnvRequired'))
   const baseURL = String(input.baseURL === undefined ? (prev ? prev.baseURL : '') : input.baseURL).trim()
-  if (baseURL && !/^https?:\/\//i.test(baseURL)) throw new Error('Base URL 必须以 http:// 或 https:// 开头')
+  if (baseURL && !/^https?:\/\//i.test(baseURL)) throw new Error(t('serviceAgent.common.baseUrlInvalid'))
   const thinking = DSH_THINKING.includes(input.thinking) ? input.thinking : (prev ? prev.thinking : 'enabled')
   const reasoningEffort = DSH_EFFORTS.includes(input.reasoningEffort)
     ? input.reasoningEffort
@@ -507,12 +509,12 @@ const buildProviderProfile = (ui) => {
   out.apiKeyEnv = String(ui.apiKeyEnv || '').trim()
   const api = String(ui.api || '').trim()
   if (!DSH_PROTOCOLS.includes(api)) {
-    throw new Error(`不支持的协议 ${api || '(空)'}（可选：${DSH_PROTOCOLS.join(' / ')}）`)
+    throw new Error(t('serviceAgent.dsh.unsupportedProtocol', { api: api || t('serviceAgent.common.emptyValue'), options: DSH_PROTOCOLS.join(' / ') }))
   }
   out.api = api
   const baseURL = String(ui.baseURL || '').trim()
-  if (!baseURL) throw new Error(`供应商「${out.displayName}」必须配置 Base URL`)
-  if (!/^https?:\/\//i.test(baseURL)) throw new Error('Base URL 必须以 http:// 或 https:// 开头')
+  if (!baseURL) throw new Error(t('serviceAgent.dsh.providerBaseUrlRequired', { name: out.displayName }))
+  if (!/^https?:\/\//i.test(baseURL)) throw new Error(t('serviceAgent.common.baseUrlInvalid'))
   out.baseURL = baseURL
   // compat：thinkingFormat 受管，其余子键原样保留；全部为空则移除 compat
   const compatExtra = (ui._compatExtra && typeof ui._compatExtra === 'object') ? { ...ui._compatExtra } : {}
@@ -550,10 +552,10 @@ const commitProviders = (mutate) => {
 
 const addDshProvider = (input = {}) => {
   const displayName = String(input.displayName || input.name || '').trim()
-  if (!displayName) throw new Error('供应商名称不能为空')
+  if (!displayName) throw new Error(t('serviceAgent.common.providerDisplayNameRequired'))
   const route = providerRouteFor(input.route || displayName)
   const existing = getDshProviderList()
-  if (existing.some((p) => p.route === route)) throw new Error(`供应商路由 ${route} 已存在`)
+  if (existing.some((p) => p.route === route)) throw new Error(t('serviceAgent.dsh.routeExists', { route }))
   const apiKeyEnv = String(input.apiKeyEnv || apiKeyEnvFor(route)).trim()
   const apiKey = String(input.apiKey || '').trim()
   const profile = buildProviderProfile({
@@ -566,7 +568,7 @@ const addDshProvider = (input = {}) => {
     _compatExtra: {},
   })
   // 手写路由必须带非空模型列表（pi-ai 校验），无模型时至少写入一个占位模型由用户随后补全
-  if (!profile.models) throw new Error('第三方供应商至少需要一个模型（pi-ai 手写路由要求非空 models）')
+  if (!profile.models) throw new Error(t('serviceAgent.dsh.modelsRequired'))
   if (apiKey) setDshCredential(apiKeyEnv, apiKey)
   commitProviders((providers) => { providers[route] = profile })
   return route
@@ -574,10 +576,10 @@ const addDshProvider = (input = {}) => {
 
 const updateDshProvider = (route, updates = {}) => {
   const key = String(route || '').trim()
-  if (!key) throw new Error('供应商路由不能为空')
+  if (!key) throw new Error(t('serviceAgent.dsh.routeRequired'))
   const list = getDshProviderList()
   const prev = list.find((p) => p.route === key)
-  if (!prev) throw new Error(`供应商 ${key} 不存在`)
+  if (!prev) throw new Error(t('serviceAgent.common.providerNotFound', { name: key }))
   const nextApiKeyEnv = String(updates.apiKeyEnv === undefined ? prev.apiKeyEnv : updates.apiKeyEnv).trim() || apiKeyEnvFor(key)
   const merged = {
     ...prev,
@@ -588,7 +590,7 @@ const updateDshProvider = (route, updates = {}) => {
     thinkingFormat: updates.thinkingFormat !== undefined ? String(updates.thinkingFormat).trim() : prev.thinkingFormat,
     models: Array.isArray(updates.models) ? updates.models : prev.models,
   }
-  if (!merged.displayName) throw new Error('供应商名称不能为空')
+  if (!merged.displayName) throw new Error(t('serviceAgent.common.providerDisplayNameRequired'))
   if (updates.clearApiKey) deleteDshCredential(nextApiKeyEnv)
   else if (String(updates.apiKey || '').trim()) setDshCredential(nextApiKeyEnv, String(updates.apiKey).trim())
   else if (prev.apiKeyEnv && prev.apiKeyEnv !== nextApiKeyEnv) {
@@ -597,7 +599,7 @@ const updateDshProvider = (route, updates = {}) => {
   }
   const profile = buildProviderProfile(merged)
   // 手写路由（pi-ai 不在已装目录内）必须保留非空 models，否则该路由无法服务
-  if (!profile.models) throw new Error(`供应商「${merged.displayName}」至少需要一个模型`)
+  if (!profile.models) throw new Error(t('serviceAgent.dsh.providerModelsRequired', { name: merged.displayName }))
   commitProviders((providers) => { providers[key] = profile })
   // 模型目录变动可能让默认指针悬空（删除/改名被设为默认的模型）：改指目录内首个模型
   syncDefaultPointerFor(key)
@@ -673,16 +675,16 @@ const syncDefaultPointerFor = (route) => {
 const setDshDefaultModel = (providerRoute, modelId, reasoningEffort) => {
   const provider = String(providerRoute || '').trim()
   const model = String(modelId || '').trim()
-  if (!provider) throw new Error('请选择供应商路由')
-  if (!model) throw new Error('请选择模型')
+  if (!provider) throw new Error(t('serviceAgent.dsh.selectRoute'))
+  if (!model) throw new Error(t('serviceAgent.common.selectModel'))
   // 存在性校验：官方路由需条目已配置；第三方路由需在 providers 字典中；模型在显式列表内才校验
   if (provider === OFFICIAL_ROUTE) {
-    if (!readManagedEntry(OFFICIAL_ENTRY)) throw new Error('DeepSeek 官方路由尚未配置，无法设为默认')
+    if (!readManagedEntry(OFFICIAL_ENTRY)) throw new Error(t('serviceAgent.dsh.officialNotConfigured'))
   } else if (!getDshProviderList().some((p) => p.route === provider)) {
-    throw new Error(`供应商路由 ${provider} 不存在，无法设为默认`)
+    throw new Error(t('serviceAgent.dsh.routeNotFoundForDefault', { route: provider }))
   }
   const ids = modelIdsOf(provider)
-  if (ids.length && !ids.includes(model)) throw new Error(`模型 ${model} 不在供应商 ${provider} 的目录内`)
+  if (ids.length && !ids.includes(model)) throw new Error(t('serviceAgent.dsh.modelNotInCatalog', { model, provider }))
   const entry = readManagedEntry(DEFAULT_MODEL_ENTRY)
   const prevConfig = entry && entry.config && typeof entry.config === 'object' ? entry.config : {}
   const config = { ...splitExtra(prevConfig, ['provider', 'model', 'reasoningEffort']), provider, model }
@@ -702,17 +704,17 @@ const setDshDefaultModel = (providerRoute, modelId, reasoningEffort) => {
 // 密钥写入该路由的凭据引用（apiKeyEnv 缺省 = 路由名大写 + _API_KEY）
 const upsertDshProvider = (route, cfg = {}) => {
   const key = providerRouteFor(route)
-  if (!key) throw new Error('供应商路由不能为空')
+  if (!key) throw new Error(t('serviceAgent.dsh.routeRequired'))
   const api = String(cfg.api || '').trim()
   if (api && !DSH_PROTOCOLS.includes(api)) {
-    throw new Error(`供应商「${cfg.name || key}」协议为 ${api}，dsh 仅支持 ${DSH_PROTOCOLS.join(' / ')}`)
+    throw new Error(t('serviceAgent.dsh.upsertProtocolUnsupported', { name: cfg.name || key, api, protocols: DSH_PROTOCOLS.join(' / ') }))
   }
   const baseURL = String(cfg.baseURL || cfg.baseUrl || '').trim()
   const apiKey = String(cfg.apiKey || '').trim()
   const existing = getDshProviderList().find((p) => p.route === key)
   if (!existing) {
-    if (!baseURL) throw new Error(`供应商 ${cfg.name || key} 缺少 Base URL`)
-    if (!api) throw new Error(`供应商 ${cfg.name || key} 缺少协议（api）`)
+    if (!baseURL) throw new Error(t('serviceAgent.dsh.upsertMissingBaseUrl', { name: cfg.name || key }))
+    if (!api) throw new Error(t('serviceAgent.dsh.upsertMissingApi', { name: cfg.name || key }))
   }
   const apiKeyEnv = String((existing && existing.apiKeyEnv) || apiKeyEnvFor(key)).trim() || apiKeyEnvFor(key)
   const merged = {
@@ -738,10 +740,10 @@ const upsertDshProvider = (route, cfg = {}) => {
 const upsertDshModel = (route, modelId, opts = {}) => {
   const key = providerRouteFor(route)
   const id = String(modelId || '').trim()
-  if (!id) throw new Error('模型 ID 不能为空')
+  if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const list = getDshProviderList()
   const prev = list.find((p) => p.route === key)
-  if (!prev) throw new Error(`供应商 ${key} 不存在`)
+  if (!prev) throw new Error(t('serviceAgent.common.providerNotFound', { name: key }))
   const models = [...prev.models]
   const idx = models.findIndex((m) => m.modelId === id)
   const base = idx === -1

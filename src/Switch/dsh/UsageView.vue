@@ -4,7 +4,10 @@
 // 页面由 index.vue 的 isTabVisited + v-show 保活（首次进入后不再重复拉取），
 // 点「刷新」时走同一条签名校验路径（UsagePage 传入的 force 不透传），日志有变化才重新解析。
 // 重统计走后台线程（readDshUsageAsync），不阻塞渲染层。
+import { useI18n } from "vue-i18n";
 import UsagePage from "../shared/UsagePage.vue";
+
+const { t } = useI18n();
 
 const fetcher = () => window.services.readDshUsageAsync();
 
@@ -22,11 +25,11 @@ const sessionsRoot = (() => {
 
 <template>
   <UsagePage
-    tip="DSH 使用统计（从会话日志解析，输入含缓存）"
+    :tip="t('dsh.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"
-    empty-description="暂无使用数据，使用 DSH 对话后会在此处显示"
-    :empty-hint="`未找到会话日志：${sessionsRoot}；产生用量后重新进入本页或点刷新即可统计`"
-    model-hint="模型名只取模型 ID，跨路由同名合并"
+    :empty-description="t('dsh.usage.empty')"
+    :empty-hint="t('dsh.usage.emptyHint', { path: sessionsRoot })"
+    :model-hint="t('dsh.usage.modelHint')"
   />
 </template>

@@ -28,6 +28,7 @@ global.window = {
   },
 }
 
+process.env.CCCONFIG_LOCALE = process.env.CCCONFIG_LOCALE || 'zh-CN'
 const zcode = require('../public/preload/services/zcode')
 
 let passed = 0

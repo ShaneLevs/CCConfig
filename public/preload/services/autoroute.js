@@ -15,6 +15,7 @@
 const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
+const { t } = require("./i18n");
 const { readCommonProviders } = require("./common");
 const codexCatalog = require("./codex");
 const { getSource } = require("./autoroute-convert/source");
@@ -65,9 +66,13 @@ const persistConfig = (config) => {
   try {
     res = window.utools.db.put(payload);
   } catch (e) {
-    throw new Error("保存自动网关配置失败: " + (e.message || e));
+    throw new Error(t("serviceAgent.autoroute.saveConfigFailedWithMessage", { message: e.message || e }));
   }
-  if (!res || !res.ok) throw new Error("保存自动网关配置失败" + (res && res.message ? `：${res.message}` : ""));
+  if (!res || !res.ok) {
+    throw new Error(res && res.message
+      ? t("serviceAgent.autoroute.saveConfigFailedReason", { message: res.message })
+      : t("serviceAgent.autoroute.saveConfigFailed"));
+  }
   return config;
 };
 
@@ -272,7 +277,7 @@ const forwardUpstream = (url, headers, bodyObj) =>
     try {
       u = new URL(url);
     } catch (e) {
-      reject(new Error(`无效的上游地址: ${url}`));
+      reject(new Error(t("serviceAgent.autoroute.invalidUpstreamUrl", { url })));
       return;
     }
     const mod = u.protocol === "https:" ? https : http;
@@ -377,7 +382,7 @@ const sendUpstream = async ({ url, headers, body, provider }) => {
     }
     return { ok: false, status, text, error: message, headers: upstreamRes.headers };
   }
-  return { ok: false, status: 502, text: "", error: (last && last.error) || "上游请求失败", headers: null };
+  return { ok: false, status: 502, text: "", error: (last && last.error) || t("serviceAgent.autoroute.upstreamRequestFailed"), headers: null };
 };
 
 // ==================== 请求处理 ====================
@@ -419,7 +424,7 @@ const handleRequest = async (req, res) => {
 
     const key = extractKey(req);
     if (!config.key || key !== config.key) {
-      fail(sourceProtocol, 401, "无效的 API Key（请在 CCConfig 自动网关页复制正确的 key）");
+      fail(sourceProtocol, 401, t("serviceAgent.autoroute.invalidApiKey"));
       return;
     }
 
@@ -462,7 +467,7 @@ const handleRequest = async (req, res) => {
     }
 
     if (method !== "POST" || !sourceProtocol) {
-      fail(sourceProtocol, 404, `未知端点: ${method} ${path}`);
+      fail(sourceProtocol, 404, t("serviceAgent.autoroute.unknownEndpoint", { method, path }));
       return;
     }
 
@@ -470,7 +475,7 @@ const handleRequest = async (req, res) => {
     try {
       body = JSON.parse(await collectBody(req));
     } catch (e) {
-      fail(sourceProtocol, 400, "请求体不是有效的 JSON");
+      fail(sourceProtocol, 400, t("serviceAgent.autoroute.invalidJsonBody"));
       return;
     }
 
@@ -478,8 +483,8 @@ const handleRequest = async (req, res) => {
     const route = resolveRoute(enabled, body.model, config);
     if (!route) {
       const hint = config.mode === "mapping"
-        ? `模型 ${body.model || "(空)"} 不在模型映射中，请到 CCConfig 通用配置 · 网关添加映射`
-        : `模型 ${body.model || "(空)"} 未在自动网关中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧`;
+        ? t("serviceAgent.autoroute.modelNotMapped", { model: body.model || t("serviceAgent.common.emptyValue") })
+        : t("serviceAgent.autoroute.modelNotEnabled", { model: body.model || t("serviceAgent.common.emptyValue") });
       fail(sourceProtocol, 404, hint, body.model || "");
       return;
     }
@@ -490,12 +495,12 @@ const handleRequest = async (req, res) => {
     liveLog = beginLog({ protocol: sourceProtocol, model: model.id, ...(alias ? { alias } : {}) });
 
     if (!getTarget(provider.api)) {
-      fail(sourceProtocol, 400, `供应商「${provider.name}」的协议 ${provider.api} 暂不支持自动网关`, model.id);
+      fail(sourceProtocol, 400, t("serviceAgent.autoroute.providerProtocolUnsupported", { name: provider.name, api: provider.api }), model.id);
       return;
     }
     const url = buildUpstreamUrl(provider.baseUrl, provider.api);
     if (!url) {
-      fail(sourceProtocol, 400, `供应商「${provider.name}」的 baseUrl 无效`, model.id);
+      fail(sourceProtocol, 400, t("serviceAgent.autoroute.providerBaseUrlInvalid", { name: provider.name }), model.id);
       return;
     }
 
@@ -541,7 +546,7 @@ const handleRequest = async (req, res) => {
             status: clientGone ? 499 : error ? 502 : 200,
             passthrough: true,
             usage,
-            ...(clientGone ? { error: "客户端提前断开（上游已中止）" } : error ? { error } : {}),
+            ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : error ? { error } : {}),
           });
         };
         // 客户端断开（Codex/Claude Code 取消）→ 立即中止上游，避免白烧 token
@@ -567,7 +572,7 @@ const handleRequest = async (req, res) => {
         });
         upstreamRes.once("end", () => settle());
         upstreamRes.once("close", () => settle());
-        upstreamRes.once("error", (e) => settle((e && e.message) || "上游流中断"));
+        upstreamRes.once("error", (e) => settle((e && e.message) || t("serviceAgent.autoroute.upstreamStreamInterrupted")));
         upstreamRes.pipe(res);
         return;
       }
@@ -610,7 +615,7 @@ const handleRequest = async (req, res) => {
         status: clientGone ? 499 : 200,
         converted: true,
         usage,
-        ...(clientGone ? { error: "客户端提前断开（上游已中止）" } : {}),
+        ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : {}),
       });
       return;
     }
@@ -620,7 +625,7 @@ const handleRequest = async (req, res) => {
     try {
       upstreamJson = JSON.parse(text);
     } catch (e) {
-      fail(sourceProtocol, 502, "上游返回了无法解析的响应", model.id);
+      fail(sourceProtocol, 502, t("serviceAgent.autoroute.invalidUpstreamResponse"), model.id);
       return;
     }
     const canonicalRes = target.parseResponse(upstreamJson);
@@ -630,7 +635,7 @@ const handleRequest = async (req, res) => {
   } catch (e) {
     const message = (e && e.message) || String(e);
     try {
-      sendError(res, detectProtocol(path), 500, `网关内部错误: ${message}`);
+      sendError(res, detectProtocol(path), 500, t("serviceAgent.autoroute.internalError", { message }));
     } catch (e2) {
       /* ignore */
     }
@@ -648,7 +653,7 @@ const startAutoRoute = () => {
       handleRequest(req, res).catch(() => {
         /* handleRequest 内部已兜底，此处防御未预期异常 */
         try {
-          if (!res.headersSent) sendError(res, "anthropic", 500, "网关内部错误");
+          if (!res.headersSent) sendError(res, "anthropic", 500, t("serviceAgent.autoroute.internalErrorShort"));
         } catch (e) {
           /* ignore */
         }
@@ -656,7 +661,9 @@ const startAutoRoute = () => {
     });
     server.once("error", (e) => {
       serverState.server = null;
-      reject(new Error(e && e.code === "EADDRINUSE" ? `端口 ${config.port} 已被占用，请更换端口` : (e && e.message) || String(e)));
+      reject(new Error(e && e.code === "EADDRINUSE"
+        ? t("serviceAgent.autoroute.portInUse", { port: config.port })
+        : (e && e.message) || String(e)));
     });
     server.listen(config.port, "127.0.0.1", () => {
       serverState.server = server;

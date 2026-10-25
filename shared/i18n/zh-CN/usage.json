@@ -1,0 +1,20 @@
+{
+  "usage": {
+    "defaultTip": "统计仅供参考",
+    "emptyDescription": "暂无使用数据",
+    "commonTip": "Claude Code / Pi Agent / OpenCode / DSH / ZCode 合并统计",
+    "commonEmptyHint": "未检测到 Claude Code / Pi Agent / OpenCode / DSH / ZCode 的使用记录，产生用量后重新进入本页或点刷新即可汇总",
+    "statTotal": "总 Tokens",
+    "statInput": "输入 Tokens（含缓存）",
+    "statOutput": "输出 Tokens",
+    "heatmap": "热力图",
+    "modelDistribution": "模型使用分布",
+    "viewMore": "查看更多 ({count})",
+    "collapse": "收起",
+    "sessions": "{count} 次会话",
+    "last7Days": "近 7 天",
+    "last30Days": "近 30 天",
+    "datePlaceholder": "选择日期区间",
+    "tooltipLine": "输入: {input} 输出: {output}"
+  }
+}

@@ -6,6 +6,7 @@ const path = require("node:path");
 const config = require("./config");
 const opencode = require("./opencode");
 const common = require("./common");
+const { t } = require("./i18n");
 
 // ==================== SkillHub API 辅助 ====================
 const SKILLHUB_API_BASE = "https://api.skillhub.cn";
@@ -35,14 +36,14 @@ function _skillhubGetJson(pathname, params) {
       .get(_skillhubApiUrl(pathname, params), { headers: SKILLHUB_HEADERS }, (res) => {
         if (res.statusCode === 404) return reject(new Error("Skill not found"));
         if (res.statusCode !== 200)
-          return reject(new Error(`请求失败: HTTP ${res.statusCode}`));
+          return reject(new Error(t("service.skill.requestFailed", { status: res.statusCode })));
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           try {
             resolve(JSON.parse(data));
           } catch (e) {
-            reject(new Error("解析响应失败"));
+            reject(new Error(t("service.skill.parseResponseFailed")));
           }
         });
       })
@@ -55,12 +56,12 @@ function _downloadToFile(url, filePath, onProgress, headers = SKILLHUB_HEADERS) 
   const https = require("node:https");
   return new Promise((resolve, reject) => {
     const doGet = (targetUrl, redirectCount = 0) => {
-      if (redirectCount > 10) return reject(new Error("重定向次数过多"));
+      if (redirectCount > 10) return reject(new Error(t("service.skill.tooManyRedirects")));
       https
         .get(targetUrl, { headers }, (res) => {
           if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
             if (!res.headers.location)
-              return reject(new Error("重定向缺少 location"));
+              return reject(new Error(t("service.skill.redirectMissingLocation")));
             res.resume();
             doGet(
               new URL(res.headers.location, targetUrl).toString(),
@@ -69,7 +70,7 @@ function _downloadToFile(url, filePath, onProgress, headers = SKILLHUB_HEADERS) 
             return;
           }
           if (res.statusCode !== 200)
-            return reject(new Error(`下载失败: HTTP ${res.statusCode}`));
+            return reject(new Error(t("service.skill.downloadFailed", { status: res.statusCode })));
           const totalSize = parseInt(res.headers["content-length"], 10) || 0;
           let downloaded = 0;
           const file = fs.createWriteStream(filePath);
@@ -141,7 +142,7 @@ function _extractZip(zipPath, extractDir) {
 function _pickShallowestSkill(extractDir) {
   const allSkillMds = _findSkillMd(extractDir);
   if (allSkillMds.length === 0)
-    throw new Error("压缩包中未找到 SKILL.md 文件");
+    throw new Error(t("service.skill.archiveSkillMdMissing"));
 
   allSkillMds.sort((a, b) => a.depth - b.depth);
   const skillInfo = allSkillMds[0];
@@ -169,7 +170,7 @@ async function installFromSkillhub(targetBase, slug, version, namespace, onProgr
 
   await _downloadSkillhubZip({ slug, version, namespace }, zipPath, onProgress);
   if (!fs.existsSync(zipPath) || fs.statSync(zipPath).size === 0)
-    throw new Error("下载文件不存在或为空");
+    throw new Error(t("service.skill.downloadEmpty"));
 
   _extractZip(zipPath, extractDir);
 
@@ -208,9 +209,9 @@ async function installFromModelScope(targetBase, skillPath, onProgress) {
     },
   );
 
-  if (!fs.existsSync(zipPath)) throw new Error("下载文件不存在");
+  if (!fs.existsSync(zipPath)) throw new Error(t("service.skill.downloadMissing"));
   if (fs.statSync(zipPath).size < 1000)
-    throw new Error("下载文件过小，可能下载失败");
+    throw new Error(t("service.skill.downloadTooSmall"));
 
   _extractZip(zipPath, extractDir);
 
@@ -289,10 +290,10 @@ function fetchModelScopeSkillInfo(skillPath) {
           try {
             const json = JSON.parse(data);
             if (json.Code !== 200 || !json.Data)
-              reject(new Error(json.Message || "获取失败"));
+              reject(new Error(json.Message || t("service.skill.fetchFailed")));
             else resolve({ source: "modelscope", data: json.Data });
           } catch (e) {
-            reject(new Error("解析响应失败"));
+            reject(new Error(t("service.skill.parseResponseFailed")));
           }
         });
       })

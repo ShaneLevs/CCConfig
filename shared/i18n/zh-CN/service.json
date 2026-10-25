@@ -1,0 +1,129 @@
+{
+  "service": {
+    "common": {
+      "unknownError": "未知错误",
+      "operationFailed": "操作失败",
+      "invalidPath": "无效的项目路径",
+      "writeDbFailed": "写入 uTools DB 失败: {message}",
+      "mcpKeepOneLocation": "请至少保留一个本地存放位置（否则本地端将无文件可写）",
+      "mcpOnlyJson": "仅支持 .json 文件，以下路径非法：{paths}",
+      "mcpServerNotFound": "服务器 {name} 不存在",
+      "selectMcpConfigTitle": "选择 MCP 配置文件",
+      "mcpConfigFilterName": "MCP 配置 (*.json)",
+      "listSeparator": "、"
+    },
+    "skill": {
+      "notFound": "Skill 不存在",
+      "sourceNotFound": "源 Skill 不存在",
+      "alreadyExists": "用户目录下已存在同名 Skill",
+      "skillMdMissing": "SKILL.md 不存在",
+      "folderMissing": "Skill 文件夹不存在",
+      "nameRequired": "Skill 名不能为空",
+      "dirMissing": "Skill 目录不存在",
+      "requestFailed": "请求失败: HTTP {status}",
+      "parseResponseFailed": "解析响应失败",
+      "tooManyRedirects": "重定向次数过多",
+      "redirectMissingLocation": "重定向缺少 location",
+      "downloadFailed": "下载失败: HTTP {status}",
+      "archiveSkillMdMissing": "压缩包中未找到 SKILL.md 文件",
+      "downloadEmpty": "下载文件不存在或为空",
+      "downloadMissing": "下载文件不存在",
+      "downloadTooSmall": "下载文件过小，可能下载失败",
+      "fetchFailed": "获取失败"
+    },
+    "mcp": {
+      "notFound": "MCP 配置不存在",
+      "dbNotFound": "DB 中未找到该 MCP 配置",
+      "configNotFound": "配置不存在",
+      "saveDbFailed": "保存到 DB 失败",
+      "writeConfigFailed": "写入配置文件失败",
+      "deleteFailed": "删除失败",
+      "sdkMissing": "MCP SDK 未加载，请尝试在开发环境使用此功能",
+      "invalidPath": "无效的项目路径",
+      "connectFailed": "无法连接到 MCP 服务，请检查 URL 是否正确、服务是否在线",
+      "writeClaudeJsonFailed": "写入 ~/.claude.json 失败"
+    },
+    "plugin": {
+      "nameRequired": "插件名不能为空",
+      "nameTooLong": "插件名过长",
+      "nameInvalidChars": "插件名包含无效字符: {name}",
+      "invalidScope": "无效的 scope: {scope} (应为 user/project/local/managed)",
+      "sourceRequired": "仓库来源不能为空",
+      "sourceTooLong": "仓库来源过长",
+      "sourceInvalidChars": "仓库来源包含无效字符 '{char}'",
+      "addMarketplaceFailed": "添加仓库失败",
+      "removeMarketplaceFailed": "移除仓库失败",
+      "updateMarketplaceFailed": "更新仓库失败",
+      "scopeRequiresCwd": "scope '{scope}' 需要有效的工作目录",
+      "operationFailed": "{verb} 操作失败",
+      "invalidPluginName": "非法插件名: {name}"
+    },
+    "provider": {
+      "nameRequired": "供应商名称不能为空",
+      "exists": "供应商 {name} 已存在",
+      "notFound": "供应商 {name} 不存在",
+      "modelExists": "模型 {id} 已存在",
+      "modelNotFound": "模型 {id} 不存在"
+    },
+    "pi": {
+      "missingPackageName": "缺少包名"
+    },
+    "dispatch": {
+      "claudeProtocolUnsupported": "供应商「{name}」协议为 {api}，仅 Anthropic Messages 协议供应商可下发 Claude Code",
+      "codexProtocolUnsupported": "供应商「{name}」协议为 {api}，Codex 仅支持 OpenAI Chat / Responses 协议供应商",
+      "minimaxProtocolUnsupported": "供应商「{name}」协议为 {api}，MiniMax Code 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
+      "qoderProtocolUnsupported": "供应商「{name}」协议为 {api}，Qoder 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
+      "zcodeProtocolUnsupported": "供应商「{name}」协议为 {api}，ZCode 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
+      "hermesProtocolUnsupported": "供应商「{name}」协议为 {api}，Hermes 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
+      "dshProtocolUnsupported": "供应商「{name}」协议为 {api}，dsh 仅支持 {protocols}",
+      "claudeModelExists": "Claude 配置「{name}」中已有模型 {model}",
+      "claudeSlotsFull": "Claude 配置「{name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发",
+      "claudeSaveFailed": "保存 Claude 配置失败",
+      "claudeSaveFailedReason": "保存 Claude 配置失败：{message}",
+      "claudeDispatched": "已写入 Claude 配置「{name}」：{model} → {slot}",
+      "slotDefault": "默认模型",
+      "opencodeWriteFailed": "写入 opencode 配置失败",
+      "opencodeDispatched": "provider[{id}]（{npm}）已更新，模型 {model} 已写入",
+      "providerModelUpdated": "供应商 {name} 已更新，模型 {model} 已写入",
+      "providerModelMerged": "供应商 {name} 已更新，模型 {model} 已合并更新",
+      "providerModelAliasUpdated": "供应商 {name} 已更新，模型别名 {alias} 已写入",
+      "ompModelRolesHint": "（默认模型请到 omp 配置页配置 modelRoles）",
+      "setAsDefault": "，已设为默认模型",
+      "setAsPrimary": "，已设为首选模型",
+      "keyNote": "（键 {key}）",
+      "idNote": "（ID {id}）",
+      "nameNote": "（名 {key}）",
+      "routeNote": "（路由 {route}）",
+      "selectProvider": "请选择供应商",
+      "selectModel": "请选择模型",
+      "selectTargetAgent": "请选择目标 agent",
+      "unknownTargetAgent": "未知目标 agent",
+      "routeMappingRequired": "请先在通用配置 · 网关中添加模型映射",
+      "routeModelsRequired": "请先在通用配置 · 自动网关中勾选要接入网关的模型"
+    },
+    "commands": {
+      "explain": {
+        "claudeConfig": "Claude Code 配置管理工具",
+        "installClaudeSkill": "从 SkillHub/魔搭社区 安装 Claude Code Skill",
+        "opencodeConfig": "OpenCode 配置管理工具",
+        "installOpencodeSkill": "从 SkillHub/魔搭社区 安装 OpenCode Skill",
+        "piConfig": "Pi Agent 配置管理工具",
+        "installPiExtension": "安装 Pi Agent 扩展",
+        "ompConfig": "omp CLI 配置管理工具",
+        "reasonixConfig": "Reasonix 配置管理工具",
+        "codexConfig": "Codex 模型配置管理工具（Desktop / CLI）",
+        "kimiConfig": "Kimi Code 模型配置管理工具",
+        "minimaxConfig": "MiniMax Code 模型配置管理工具（CLI / Desktop）",
+        "qoderConfig": "Qoder 模型配置管理工具",
+        "zcodeConfig": "ZCode 模型配置管理工具",
+        "hermesConfig": "Hermes 模型配置管理工具",
+        "dshConfig": "DSH（DeepSeek Harness）模型配置管理工具"
+      },
+      "label": {
+        "installClaudeSkill": "安装 Claude Code Skill",
+        "installOpencodeSkill": "安装 OpenCode Skill",
+        "installPiExtension": "安装 Pi Agent 扩展"
+      }
+    }
+  }
+}

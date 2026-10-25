@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Dialog, Input, Select, Button } from "tdesign-vue-next";
 import ApiKeyInput from "../../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../../components/DynamicKvEditor.vue";
@@ -15,12 +16,14 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:visible", "confirm"]);
 
+const { t } = useI18n();
+
 const dialogVisible = computed({
   get: () => props.visible,
   set: (v) => emit("update:visible", v),
 });
 
-const dialogTitle = computed(() => (props.mode === "edit" ? "编辑 Provider" : "新建 Provider"));
+const dialogTitle = computed(() => (props.mode === "edit" ? t("opencode.provider.editTitle") : t("opencode.provider.createTitle")));
 
 const NPM_OPTIONS = [
   { label: "@ai-sdk/openai", value: "@ai-sdk/openai" },
@@ -50,42 +53,42 @@ const handleConfirm = () => {
     <div class="oc-form">
       <!-- Provider ID -->
       <div class="oc-form-item">
-        <label>Provider ID <span class="required">*</span></label>
-        <Input v-model="formData.id" placeholder="例如: deepseek" :disabled="mode === 'edit'" />
+        <label>{{ t("opencode.provider.id") }} <span class="required">*</span></label>
+        <Input v-model="formData.id" :placeholder="t('opencode.provider.idPlaceholder')" :disabled="mode === 'edit'" />
       </div>
 
       <!-- NPM Package -->
       <div class="oc-form-item">
-        <label>NPM Package <span class="required">*</span></label>
-        <Select v-model="formData.npm" :options="NPM_OPTIONS" placeholder="选择 SDK 包" />
+        <label>{{ t("opencode.provider.npmPackage") }} <span class="required">*</span></label>
+        <Select v-model="formData.npm" :options="NPM_OPTIONS" :placeholder="t('opencode.provider.npmPlaceholder')" />
       </div>
 
       <!-- Display Name -->
       <div class="oc-form-item">
-        <label>显示名称</label>
-        <Input v-model="formData.name" placeholder="Provider 显示名称" />
+        <label>{{ t("opencode.provider.displayName") }}</label>
+        <Input v-model="formData.name" :placeholder="t('opencode.provider.displayNamePlaceholder')" />
       </div>
 
       <!-- Base URL -->
       <div class="oc-form-item">
-        <label>Base URL</label>
+        <label>{{ t("opencode.provider.baseUrl") }}</label>
         <Input v-model="formData.baseUrl" placeholder="https://api.example.com/v1" />
       </div>
 
       <!-- API Key -->
       <div class="oc-form-item">
-        <label>API Key</label>
+        <label>{{ t("opencode.provider.apiKey") }}</label>
         <ApiKeyInput v-model="formData.apiKey" placeholder="sk-..." />
       </div>
 
       <!-- Extra Options -->
       <div class="oc-form-item">
-        <label>额外选项 (options)</label>
+        <label>{{ t("opencode.provider.extraOptions") }}</label>
         <DynamicKvEditor
           v-model="formData.extraOptions"
           :key-options="[]"
-          key-placeholder="选项名"
-          value-placeholder="选项值 (JSON 或字符串)"
+          :key-placeholder="t('opencode.provider.optionName')"
+          :value-placeholder="t('opencode.provider.optionValue')"
         />
       </div>
     </div>
@@ -93,8 +96,8 @@ const handleConfirm = () => {
     <template #footer>
       <div class="oc-dialog-footer">
         <div class="oc-dialog-footer-right">
-          <Button variant="outline" @click="dialogVisible = false">取消</Button>
-          <Button theme="primary" @click="handleConfirm">保存</Button>
+          <Button variant="outline" @click="dialogVisible = false">{{ t("common.cancel") }}</Button>
+          <Button theme="primary" @click="handleConfirm">{{ t("common.save") }}</Button>
         </div>
       </div>
     </template>

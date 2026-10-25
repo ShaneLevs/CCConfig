@@ -3,6 +3,7 @@
 // - 热力图：固定展示最近 N 周（铺满整行，GitHub 风格）
 // - 模型使用分布：进度条相对最大值（最多的模型整条满，其余按比例）
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { Card, Statistic, Empty, Button, DateRangePicker, Space, Tooltip } from "tdesign-vue-next";
 import {
   RefreshIcon, ArrowDownIcon, ArrowUpIcon, SumIcon,
@@ -11,9 +12,11 @@ import {
 import ContributionGrid from "./ContributionGrid.vue";
 import "./styles/UsagePage.css";
 
+const { t } = useI18n();
+
 const props = defineProps({
   // 头部提示文案
-  tip: { type: String, default: "统计仅供参考" },
+  tip: { type: String, default: "" },
   // 数据加载函数：(force) => { summary, modelStats, contributions }（同步或 Promise 均可）
   fetcher: { type: Function, required: true },
   // 快速加载函数（可选）：进页面时同步返回落库/缓存历史（不解析源文件），
@@ -22,7 +25,7 @@ const props = defineProps({
   // 模型分布卡片右上角补充说明（如 Claude 的会话数口径说明）
   modelHint: { type: String, default: "" },
   // 完全无数据时的描述
-  emptyDescription: { type: String, default: "暂无使用数据" },
+  emptyDescription: { type: String, default: "" },
   // 完全无数据时的补充提示（如 OpenCode 的 db 路径说明）
   emptyHint: { type: String, default: "" },
 });
@@ -38,12 +41,18 @@ const usageData = ref({
 });
 
 const stats = [
-  { key: "total", title: "总 Tokens", icon: SumIcon, colorClass: "stat-green", iconColor: "#52c41a" },
-  { key: "input", title: "输入 Tokens（含缓存）", icon: ArrowUpIcon, colorClass: "stat-red", iconColor: "#f5222d" },
-  { key: "output", title: "输出 Tokens", icon: ArrowDownIcon, colorClass: "stat-pink", iconColor: "#eb2f96" },
+  { key: "total", titleKey: "usage.statTotal", icon: SumIcon, colorClass: "stat-green", iconColor: "#52c41a" },
+  { key: "input", titleKey: "usage.statInput", icon: ArrowUpIcon, colorClass: "stat-red", iconColor: "#f5222d" },
+  { key: "output", titleKey: "usage.statOutput", icon: ArrowDownIcon, colorClass: "stat-pink", iconColor: "#eb2f96" },
 ];
 
 const displayLimit = 5;
+
+// 日期区间快捷预设（label 随语言切换）
+const datePresets = computed(() => [
+  { label: t('usage.last7Days'), value: [new Date(Date.now() - 6 * 864e5), new Date()] },
+  { label: t('usage.last30Days'), value: [new Date(Date.now() - 29 * 864e5), new Date()] },
+]);
 
 const formatNumber = (num) => {
   if (!num || num === 0) return "0";
@@ -177,7 +186,7 @@ defineExpose({ loadData });
 <template>
   <div class="usage-page">
     <div class="usage-header">
-      <span class="usage-tip">{{ tip }}</span>
+      <span class="usage-tip">{{ tip || t('usage.defaultTip') }}</span>
       <div class="usage-actions">
         <DateRangePicker
           v-model="dateRange"
@@ -186,14 +195,11 @@ defineExpose({ loadData });
           clearable
           size="small"
           :enable-time-picker="false"
-          :presets="[
-            { label: '近 7 天', value: [new Date(Date.now() - 6 * 864e5), new Date()] },
-            { label: '近 30 天', value: [new Date(Date.now() - 29 * 864e5), new Date()] },
-          ]"
+          :presets="datePresets"
           class="usage-date-picker"
-          placeholder="选择日期区间"
+          :placeholder="t('usage.datePlaceholder')"
         />
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="handleRefresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -212,7 +218,7 @@ defineExpose({ loadData });
               <span class="stat-icon-wrap" :style="{ background: s.iconColor + '20', color: s.iconColor }">
                 <component :is="s.icon" size="14px" />
               </span>
-              <span>{{ s.title }}</span>
+              <span>{{ t(s.titleKey) }}</span>
             </span>
           </template>
         </Statistic>
@@ -220,32 +226,32 @@ defineExpose({ loadData });
     </div>
 
     <!-- 贡献墙（铺满最近 N 周） -->
-    <Card title="热力图">
+    <Card :title="t('usage.heatmap')">
       <div v-if="loading && !hasAnyData" class="empty-small">
-        <Empty description="加载中..." size="small" />
+        <Empty :description="t('common.loading')" size="small" />
       </div>
       <div v-else-if="filteredData.contributions.length === 0" class="empty-small">
-        <Empty :description="emptyDescription" size="small" />
+        <Empty :description="emptyDescription || t('usage.emptyDescription')" size="small" />
       </div>
       <ContributionGrid v-else :contributions="filteredData.contributions" />
     </Card>
 
     <!-- 模型使用分布（进度条相对最大值） -->
-    <Card title="模型使用分布" class="usage-model-card">
+    <Card :title="t('usage.modelDistribution')" class="usage-model-card">
       <template #actions>
         <span v-if="modelHint" class="model-hint">{{ modelHint }}</span>
         <Button v-if="hasMoreModels" size="small" variant="text" @click="showAllModels = !showAllModels">
           <template #icon>
             <component :is="showAllModels ? ChevronUpIcon : ChevronDownIcon" size="14px" />
           </template>
-          {{ showAllModels ? '收起' : `查看更多 (${filteredData.modelStats.length - displayLimit})` }}
+          {{ showAllModels ? t('usage.collapse') : t('usage.viewMore', { count: filteredData.modelStats.length - displayLimit }) }}
         </Button>
       </template>
       <div v-if="loading && !hasAnyData" class="empty-small">
-        <Empty description="加载中..." size="small" />
+        <Empty :description="t('common.loading')" size="small" />
       </div>
       <div v-else-if="filteredData.modelStats.length === 0" class="empty-small">
-        <Empty :description="emptyDescription" size="small" />
+        <Empty :description="emptyDescription || t('usage.emptyDescription')" size="small" />
       </div>
       <div v-else class="usage-model-list">
         <div v-for="model in displayedModelStats" :key="model.name" class="usage-model-row">
@@ -262,7 +268,7 @@ defineExpose({ loadData });
               <span class="usage-model-stat">out {{ formatNumber(model.outputTokens) }}</span>
               <template v-if="model.sessions">
                 <span class="usage-model-stat-divider">|</span>
-                <span class="usage-model-stat">{{ model.sessions }} 次会话</span>
+                <span class="usage-model-stat">{{ t('usage.sessions', { count: model.sessions }) }}</span>
               </template>
             </Space>
           </div>

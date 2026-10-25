@@ -28,6 +28,7 @@ const zcode = require('./zcode')
 const hermes = require('./hermes')
 const dsh = require('./dsh')
 const autoroute = require('./autoroute')
+const { t } = require('./i18n')
 
 // cost 规范化（与 pi/omp 一致：全 0 省略，Pi schema 约定 0 无效）
 const normalizeCost = (cost) => {
@@ -90,11 +91,18 @@ const upsertDispatchModel = (list, model) => {
 const DB_PREFIX = 'ccswitch_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
 const CLAUDE_MODEL_SLOTS = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel']
-const CLAUDE_SLOT_LABELS = { model: '默认模型', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
+const CLAUDE_SLOT_LABELS = { model: 'service.dispatch.slotDefault', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
+const claudeSlotLabel = (slot) =>
+  slot === 'model' ? t(CLAUDE_SLOT_LABELS[slot]) : CLAUDE_SLOT_LABELS[slot]
 
 const dispatchToClaude = (provider, model) => {
   if ((provider.api || 'openai-completions') !== 'anthropic-messages') {
-    throw new Error(`供应商「${provider.name}」协议为 ${provider.api || 'openai-completions'}，仅 Anthropic Messages 协议供应商可下发 Claude Code`)
+    throw new Error(
+      t('service.dispatch.claudeProtocolUnsupported', {
+        name: provider.name,
+        api: provider.api || 'openai-completions',
+      }),
+    )
   }
   const docId = DISPATCH_DB_PREFIX + provider.name
   let doc = null
@@ -123,23 +131,40 @@ const dispatchToClaude = (provider, model) => {
   next.updatedAt = now
   // 模型槽位：已有同模型跳过；否则填第一个空槽位；全满报错
   if (CLAUDE_MODEL_SLOTS.some(s => next[s] === model.id)) {
-    return `Claude 配置「${provider.name}」中已有模型 ${model.id}`
+    return t('service.dispatch.claudeModelExists', {
+      name: provider.name,
+      model: model.id,
+    })
   }
   const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
   if (!slot) {
-    throw new Error(`Claude 配置「${provider.name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发`)
+    throw new Error(
+      t('service.dispatch.claudeSlotsFull', { name: provider.name }),
+    )
   }
   next[slot] = model.id
   let res
   try {
     res = window.utools.db.put(next)
   } catch (e) {
-    throw new Error(`保存 Claude 配置失败: ${e.message || e}`)
+    throw new Error(
+      t('service.dispatch.claudeSaveFailedReason', {
+        message: e.message || e,
+      }),
+    )
   }
   if (!res || !res.ok) {
-    throw new Error('保存 Claude 配置失败' + (res && res.message ? `：${res.message}` : ''))
+    throw new Error(
+      res && res.message
+        ? t('service.dispatch.claudeSaveFailedReason', { message: res.message })
+        : t('service.dispatch.claudeSaveFailed'),
+    )
   }
-  return `已写入 Claude 配置「${provider.name}」：${model.id} → ${CLAUDE_SLOT_LABELS[slot]}`
+  return t('service.dispatch.claudeDispatched', {
+    name: provider.name,
+    model: model.id,
+    slot: claudeSlotLabel(slot),
+  })
 }
 
 // OpenCode：provider[id]（options.baseURL/apiKey）+ models[id]；通用库协议 → opencode npm 包
@@ -197,8 +222,13 @@ const dispatchToOpencode = (provider, model, opts) => {
     options: nextOptions,
     models: nextModels,
   }
-  if (!opencode.writeOpencodeConfig(current)) throw new Error('写入 opencode 配置失败')
-  return `provider[${id}]（${nextNpm.replace('@ai-sdk/', '')}）已更新，模型 ${model.id} 已写入`
+  if (!opencode.writeOpencodeConfig(current))
+    throw new Error(t('service.dispatch.opencodeWriteFailed'))
+  return t('service.dispatch.opencodeDispatched', {
+    id,
+    npm: nextNpm.replace('@ai-sdk/', ''),
+    model: model.id,
+  })
 }
 
 // Pi Agent：models.json providers[name] + settings.json（可选默认）
@@ -225,9 +255,16 @@ const dispatchToPi = (provider, model, opts) => {
     settings.defaultProvider = name
     settings.defaultModel = model.id
     pi.writePiSettings(settings)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  return `供应商 ${name} 已更新，模型 ${model.id} ${act === 'updated' ? '已合并更新' : '已写入'}${suffix}`
+  return (
+    t(
+      act === 'updated'
+        ? 'service.dispatch.providerModelMerged'
+        : 'service.dispatch.providerModelUpdated',
+      { name, model: model.id },
+    ) + suffix
+  )
 }
 
 // omp：models.yml providers[name]（无默认模型概念，modelRoles 需用户自行配置）
@@ -248,7 +285,14 @@ const dispatchToOmp = (provider, model, opts) => {
   const list = models.providers[name].models
   const act = upsertDispatchModel(list, model)
   omp.writeOmpModels(models)
-  return `供应商 ${name} 已更新，模型 ${model.id} ${act === 'updated' ? '已合并更新' : '已写入'}（默认模型请到 omp 配置页配置 modelRoles）`
+  return (
+    t(
+      act === 'updated'
+        ? 'service.dispatch.providerModelMerged'
+        : 'service.dispatch.providerModelUpdated',
+      { name, model: model.id },
+    ) + t('service.dispatch.ompModelRolesHint')
+  )
 }
 
 // Reasonix：config.toml providers[] + .env key + 可选 default_model
@@ -283,10 +327,13 @@ const dispatchToReasonix = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     doc.default_model = `${name}/${model.id}`
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
   reasonix.writeReasonixConfig(doc)
-  return `供应商 ${name} 已更新，模型 ${model.id} 已写入${suffix}`
+  return (
+    t('service.dispatch.providerModelUpdated', { name, model: model.id }) +
+    suffix
+  )
 }
 
 // Codex Desktop/CLI：config.toml [model_providers.<id>] + 顶层 model_provider/model。
@@ -301,7 +348,12 @@ const dispatchToCodex = (provider, model, opts) => {
   const id = opts.providerName || provider.name
   const wireApi = CODEX_WIRE_API[provider.api || 'openai-completions']
   if (!wireApi) {
-    throw new Error(`供应商「${provider.name}」协议为 ${provider.api}，Codex 仅支持 OpenAI Chat / Responses 协议供应商`)
+    throw new Error(
+      t('service.dispatch.codexProtocolUnsupported', {
+        name: provider.name,
+        api: provider.api,
+      }),
+    )
   }
   // base_url 必须停在版本段（Codex 自己追加 /responses 或 /chat/completions），
   // 主数据库里 …/v1、…/v1/、…/v1/chat/completions、无版本段的根地址都归一到这里
@@ -318,9 +370,12 @@ const dispatchToCodex = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     codex.setCodexDefaultModel(id, model.id)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  return `供应商 ${id} 已更新，模型 ${model.id} 已写入${suffix}`
+  return (
+    t('service.dispatch.providerModelUpdated', { name: id, model: model.id }) +
+    suffix
+  )
 }
 
 // Kimi Code：config.toml [providers.<name>] + [models."<name>/<id>"] + 可选 default_model。
@@ -340,9 +395,14 @@ const dispatchToKimi = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     kimi.setKimiDefaultModel(alias)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  return `供应商 ${name} 已更新，模型别名 ${alias} 已写入${suffix}`
+  return (
+    t('service.dispatch.providerModelAliasUpdated', {
+      name,
+      alias,
+    }) + suffix
+  )
 }
 
 // MiniMax Code：config.yaml custom_provider.<key>.models.<id> + 可选 defaultModel。
@@ -351,7 +411,12 @@ const dispatchToKimi = (provider, model, opts) => {
 const dispatchToMinimax = (provider, model, opts) => {
   const api = provider.api || 'openai-completions'
   if (!minimax.MINIMAX_API_FORMATS.includes(api)) {
-    throw new Error(`供应商「${provider.name}」协议为 ${api}，MiniMax Code 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+    throw new Error(
+      t('service.dispatch.minimaxProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
   }
   const name = opts.providerName || provider.name
   const key = minimax.providerKeyFor(name)
@@ -365,10 +430,16 @@ const dispatchToMinimax = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     minimax.setMinimaxDefaultModel(ref)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  const keyNote = key === name ? '' : `（键 ${key}）`
-  return `供应商 ${name}${keyNote} 已更新，模型 ${model.id} 已写入${suffix}`
+  const keyNote =
+    key === name ? '' : t('service.dispatch.keyNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: model.id,
+    }) + suffix
+  )
 }
 
 // Qoder：settings.json providers.<key>（openai-compatible）+ models[] + provider.model 默认模型。
@@ -378,7 +449,12 @@ const dispatchToQoder = (provider, model, opts) => {
   const api = provider.api || 'openai-completions'
   const protocol = api === 'anthropic-messages' ? 'anthropic' : 'openai'
   if (!['openai-completions', 'openai-responses', 'anthropic-messages'].includes(api)) {
-    throw new Error(`供应商「${provider.name}」协议为 ${api}，Qoder 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+    throw new Error(
+      t('service.dispatch.qoderProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
   }
   const name = opts.providerName || provider.name
   const key = qoder.providerKeyFor(name)
@@ -391,10 +467,16 @@ const dispatchToQoder = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     qoder.setQoderDefaultModel(key, modelId)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  const keyNote = key === name ? '' : `（键 ${key}）`
-  return `供应商 ${name}${keyNote} 已更新，模型 ${model.id} 已写入${suffix}`
+  const keyNote =
+    key === name ? '' : t('service.dispatch.keyNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: model.id,
+    }) + suffix
+  )
 }
 
 // ZCode：provider_config.json providerRules[providerId] + providerModelRules + 可选首选（providerOrder/modelOrder 置顶）。
@@ -410,7 +492,12 @@ const dispatchToZcode = (provider, model, opts) => {
   const api = provider.api || 'openai-completions'
   const apiType = ZCODE_API_TYPE[api]
   if (!apiType) {
-    throw new Error(`供应商「${provider.name}」协议为 ${api}，ZCode 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+    throw new Error(
+      t('service.dispatch.zcodeProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
   }
   const name = opts.providerName || provider.name
   const id = zcode.providerIdFor(name)
@@ -427,10 +514,16 @@ const dispatchToZcode = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     zcode.setZcodeDefaultModel(id, modelId)
-    suffix = '，已设为首选模型'
+    suffix = t('service.dispatch.setAsPrimary')
   }
-  const keyNote = id === name ? '' : `（ID ${id}）`
-  return `供应商 ${name}${keyNote} 已更新，模型 ${modelId} 已写入${suffix}`
+  const keyNote =
+    id === name ? '' : t('service.dispatch.idNote', { id })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: modelId,
+    }) + suffix
+  )
 }
 
 // Hermes：config.yaml custom_providers[name] + models 字典 + 可选默认（顶层 model.provider/model.default）。
@@ -447,7 +540,12 @@ const dispatchToHermes = (provider, model, opts) => {
   const api = provider.api || 'openai-completions'
   const apiMode = HERMES_API_MODE[api]
   if (!apiMode) {
-    throw new Error(`供应商「${provider.name}」协议为 ${api}，Hermes 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议`)
+    throw new Error(
+      t('service.dispatch.hermesProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
   }
   const name = opts.providerName || provider.name
   const key = hermes.providerKeyFor(name)
@@ -456,10 +554,16 @@ const dispatchToHermes = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     hermes.setHermesDefaultModel(key, modelId)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  const keyNote = key === name ? '' : `（名 ${key}）`
-  return `供应商 ${name}${keyNote} 已更新，模型 ${modelId} 已写入${suffix}`
+  const keyNote =
+    key === name ? '' : t('service.dispatch.nameNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: modelId,
+    }) + suffix
+  )
 }
 
 // DSH（DeepSeek Harness）：cordis.patch.yml 的 llm-pi-ai.providers[route] + models[] + agent-default-model（可选默认）。
@@ -469,7 +573,13 @@ const dispatchToHermes = (provider, model, opts) => {
 const dispatchToDsh = (provider, model, opts) => {
   const api = provider.api || 'openai-completions'
   if (!dsh.DSH_PROTOCOLS.includes(api)) {
-    throw new Error(`供应商「${provider.name}」协议为 ${api}，dsh 仅支持 ${dsh.DSH_PROTOCOLS.join(' / ')}`)
+    throw new Error(
+      t('service.dispatch.dshProtocolUnsupported', {
+        name: provider.name,
+        api,
+        protocols: dsh.DSH_PROTOCOLS.join(' / '),
+      }),
+    )
   }
   const name = opts.providerName || provider.name
   const route = dsh.providerRouteFor(name)
@@ -489,10 +599,16 @@ const dispatchToDsh = (provider, model, opts) => {
   let suffix = ''
   if (opts.setDefault) {
     dsh.setDshDefaultModel(route, modelId)
-    suffix = '，已设为默认模型'
+    suffix = t('service.dispatch.setAsDefault')
   }
-  const routeNote = route === name ? '' : `（路由 ${route}）`
-  return `供应商 ${name}${routeNote} 已更新，模型 ${modelId} 已写入${suffix}`
+  const routeNote =
+    route === name ? '' : t('service.dispatch.routeNote', { route })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + routeNote,
+      model: modelId,
+    }) + suffix
+  )
 }
 
 // ==================== 自动网关下发 ====================
@@ -571,9 +687,15 @@ const cleanupLegacyAutoRoute = (app) => {
 const dispatchAutoRoute = (targets) => {
   const config = autoroute.readAutoRouteConfig();
   const enabled = autoroute.resolveAutoRouteModels(config);
-  if (!enabled.length) throw new Error(config.mode === "mapping" ? "请先在通用配置 · 网关中添加模型映射" : "请先在通用配置 · 自动网关中勾选要接入网关的模型");
+  if (!enabled.length)
+    throw new Error(
+      config.mode === "mapping"
+        ? t("service.dispatch.routeMappingRequired")
+        : t("service.dispatch.routeModelsRequired"),
+    );
   const list = Array.isArray(targets) ? targets : [];
-  if (list.length === 0) throw new Error("请选择目标 agent");
+  if (list.length === 0)
+    throw new Error(t("service.dispatch.selectTargetAgent"));
   const baseUrl = `http://127.0.0.1:${config.port}`;
   // 映射模式下发给 agent 的模型 ID 用映射名（agent 侧固定的名字）；
   // 浅拷贝保留 contextWindow / cost 等元数据，仅覆盖 id/name，网关侧把映射名路由到实际模型
@@ -581,21 +703,21 @@ const dispatchAutoRoute = (targets) => {
     config.mode === "mapping" && alias ? { ...model, id: alias, name: alias } : model
   );
   const results = [];
-  for (const t of list) {
-    const d = APP_DISPATCHERS[t && t.app];
+  for (const target of list) {
+    const d = APP_DISPATCHERS[target && target.app];
     if (!d) {
-      results.push({ app: (t && t.app) || "unknown", ok: false, message: "未知目标 agent" });
+      results.push({ app: (target && target.app) || "unknown", ok: false, message: t("service.dispatch.unknownTargetAgent") });
       continue;
     }
-    const isCodex = (t && t.app) === "codex";
+    const isCodex = (target && target.app) === "codex";
     // kimi / zcode 的 openai 类型按 SDK 约定向 baseUrl 追加端点路径，网关路径需带 /v1（同 Codex）
-    const isKimi = (t && t.app) === "kimi";
-    const isZcode = (t && t.app) === "zcode";
+    const isKimi = (target && target.app) === "kimi";
+    const isZcode = (target && target.app) === "zcode";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // hermes 同 claude 走网关的 Anthropic Messages 入站（api_mode: anthropic_messages），base_url 不带 /v1；
       // dsh 的 pi-ai anthropic-messages 路由同样填网关根地址（SDK 自行追加 /v1/messages）
-      api: (t && t.app) === "claude" || (t && t.app) === "hermes" || (t && t.app) === "dsh" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
+      api: (target && target.app) === "claude" || (target && target.app) === "hermes" || (target && target.app) === "dsh" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
       baseUrl: isCodex || isKimi || isZcode ? `${baseUrl}/v1` : baseUrl,
       models,
@@ -608,14 +730,14 @@ const dispatchAutoRoute = (targets) => {
           // 只有 Codex 认模型目录 URL：指向网关的 /v1/codex/models（与 /v1/models 同一套模型 ID）
           codexModelCatalogUrl: isCodex ? `${baseUrl}/v1/codex/models` : undefined,
         });
-        targetResults.push({ app: t.app, ok: true, message });
+        targetResults.push({ app: target.app, ok: true, message });
       } catch (e) {
-        targetResults.push({ app: t.app, ok: false, message: e.message || String(e) });
+        targetResults.push({ app: target.app, ok: false, message: e.message || String(e) });
       }
     }
     // 该目标全部模型写入成功后，清理历史版本遗留的中文「自动路由」条目
     if (targetResults.length > 0 && targetResults.every((r) => r.ok)) {
-      cleanupLegacyAutoRoute(t.app);
+      cleanupLegacyAutoRoute(target.app);
     }
     results.push(...targetResults);
   }
@@ -640,25 +762,27 @@ const APP_DISPATCHERS = {
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
 // 返回 [{ app, ok, message }]，单个失败不中断其他目标
 const dispatchCommonModel = (provider, model, targets) => {
-  if (!provider || !provider.name) throw new Error('请选择供应商')
-  if (!model || !model.id) throw new Error('请选择模型')
+  if (!provider || !provider.name)
+    throw new Error(t('service.dispatch.selectProvider'))
+  if (!model || !model.id) throw new Error(t('service.dispatch.selectModel'))
   const list = Array.isArray(targets) ? targets : []
-  if (list.length === 0) throw new Error('请选择目标 agent')
+  if (list.length === 0)
+    throw new Error(t('service.dispatch.selectTargetAgent'))
   const results = []
-  for (const t of list) {
-    const d = APP_DISPATCHERS[t && t.app]
+  for (const target of list) {
+    const d = APP_DISPATCHERS[target && target.app]
     if (!d) {
-      results.push({ app: (t && t.app) || 'unknown', ok: false, message: '未知目标 agent' })
+      results.push({ app: (target && target.app) || 'unknown', ok: false, message: t('service.dispatch.unknownTargetAgent') })
       continue
     }
     try {
       const message = d.run(provider, model, {
-        providerName: (t.providerName && String(t.providerName).trim()) || provider.name,
-        setDefault: !!t.setDefault,
+        providerName: (target.providerName && String(target.providerName).trim()) || provider.name,
+        setDefault: !!target.setDefault,
       })
-      results.push({ app: t.app, ok: true, message })
+      results.push({ app: target.app, ok: true, message })
     } catch (e) {
-      results.push({ app: t.app, ok: false, message: e.message || String(e) })
+      results.push({ app: target.app, ok: false, message: e.message || String(e) })
     }
   }
   return results

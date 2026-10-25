@@ -1,5 +1,6 @@
 import { ref, watch } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
+import { t } from "../i18n";
 
 const DEFAULT_CONFIG = {
   getSkillsPath: 'getSkillsPath',
@@ -11,28 +12,28 @@ const DEFAULT_CONFIG = {
 
 // TRACE 评测维度（顺序与官方一致）
 const TRACE_DIMENSIONS = [
-  { key: 'trust', label: '可信任度' },
-  { key: 'reliability', label: '可靠性' },
-  { key: 'adaptability', label: '适用性' },
-  { key: 'convention', label: '规范性' },
-  { key: 'effectiveness', label: '有效性' },
+  { key: 'trust', labelKey: 'skill.trace.trust' },
+  { key: 'reliability', labelKey: 'skill.trace.reliability' },
+  { key: 'adaptability', labelKey: 'skill.trace.adaptability' },
+  { key: 'convention', labelKey: 'skill.trace.convention' },
+  { key: 'effectiveness', labelKey: 'skill.trace.effectiveness' },
 ];
 
-// 分类 key → 中文名（fetchSkillHubCategories 失败时的兜底）
+// 分类 key → 文案 key（fetchSkillHubCategories 失败时的兜底）
 const SKILLHUB_CATEGORY_FALLBACK = {
-  'pay-skill': 'Pay Skill',
-  'office-efficiency': '办公效率',
-  'content-creation': '内容创作',
-  'dev-programming': '开发编程',
-  'data-analysis': '数据分析',
-  'design-media': '设计多媒体',
-  'ai-agent': 'AI Agent',
-  'knowledge-management': '知识管理',
-  'business-ops': '商业运营',
-  education: '教育学习',
-  professional: '行业专业',
-  'it-ops-security': 'IT 运维与安全',
-  'life-service': '生活服务',
+  'pay-skill': 'skill.categories.paySkill',
+  'office-efficiency': 'skill.categories.officeEfficiency',
+  'content-creation': 'skill.categories.contentCreation',
+  'dev-programming': 'skill.categories.devProgramming',
+  'data-analysis': 'skill.categories.dataAnalysis',
+  'design-media': 'skill.categories.designMedia',
+  'ai-agent': 'skill.categories.aiAgent',
+  'knowledge-management': 'skill.categories.knowledgeManagement',
+  'business-ops': 'skill.categories.businessOps',
+  education: 'skill.categories.education',
+  professional: 'skill.categories.professional',
+  'it-ops-security': 'skill.categories.itOpsSecurity',
+  'life-service': 'skill.categories.lifeService',
 };
 
 // 计算 TRACE 评测总分（算法与官方一致：维度分 = items 均值，总分 = 五维均值）
@@ -107,23 +108,23 @@ export function useSkillInstall(loadSkills, config = {}) {
         }
         const catKey = info.skill?.category;
         const tags = [];
-        const catName = categoryMap[catKey] || SKILLHUB_CATEGORY_FALLBACK[catKey];
+        const fallbackKey = SKILLHUB_CATEGORY_FALLBACK[catKey];
+        const catName = categoryMap[catKey] || (fallbackKey ? t(fallbackKey) : null);
         if (catName) tags.push(catName);
         (info.skill?.subCategories || []).forEach((s) => {
           if (s?.name) tags.push(s.name);
         });
-        if (info.skill?.labels?.requires_api_key === 'true')
-          tags.push('需配置 API Key');
         installInfo.value = {
           source: 'skillhub',
           slug,
           namespace,
           displayName: info.skill?.displayName || slug,
-          summary: info.skill?.summary_zh || info.skill?.summary || "暂无描述",
-          version: info.latestVersion?.version || "unknown",
+          summary: info.skill?.summary_zh || info.skill?.summary || t('skill.noDescription'),
+          version: info.latestVersion?.version || 'unknown',
           downloads: info.skill?.stats?.downloads || 0,
-          author: info.owner?.displayName || info.owner?.handle || "未知",
+          author: info.owner?.displayName || info.owner?.handle || t('skill.unknownAuthor'),
           tags,
+          requiresApiKey: info.skill?.labels?.requires_api_key === 'true',
           evaluation: buildEvaluation(evaluation),
         };
       } else if (source === 'modelscope') {
@@ -133,14 +134,14 @@ export function useSkillInstall(loadSkills, config = {}) {
           source: 'modelscope',
           slug,
           displayName: info.DisplayName || info.Name || slug.split('/').pop(),
-          summary: info.Description || "暂无描述",
-          version: "master",
+          summary: info.Description || t('skill.noDescription'),
+          version: 'master',
           downloads: info.DownloadCount || 0,
-          author: info.Owner || info.SourceDeveloper || "未知"
+          author: info.Owner || info.SourceDeveloper || t('skill.unknownAuthor')
         };
       }
     } catch (e) {
-      MessagePlugin.error("获取 Skill 信息失败: " + e.message);
+      MessagePlugin.error(t('skill.fetchFailed', { message: e.message }));
     } finally {
       isFetchingInfo.value = false;
     }
@@ -218,12 +219,12 @@ export function useSkillInstall(loadSkills, config = {}) {
         showOverwriteDialog.value = true;
       } else {
         window.services[cfg.completeSkillInstall](result.skillName, result.extractDir);
-        MessagePlugin.success(`Skill "${result.skillName}" 安装成功`);
+        MessagePlugin.success(t('skill.installSuccess', { name: result.skillName }));
         showInstallDialog.value = false;
         loadSkills();
       }
     } catch (e) {
-      MessagePlugin.error("安装失败: " + e.message);
+      MessagePlugin.error(t('skill.installFailed', { message: e.message }));
       window.services[cfg.cancelSkillInstall]();
     } finally {
       isInstalling.value = false;
@@ -236,7 +237,7 @@ export function useSkillInstall(loadSkills, config = {}) {
       pendingInstall.value.skillName,
       pendingInstall.value.extractDir
     );
-    MessagePlugin.success(`Skill "${pendingInstall.value.skillName}" 已覆盖安装`);
+    MessagePlugin.success(t('skill.overwriteSuccess', { name: pendingInstall.value.skillName }));
     pendingInstall.value = null;
     showOverwriteDialog.value = false;
     loadSkills();

@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { Button, Space, Tag, Tooltip, Popconfirm } from "tdesign-vue-next";
 import { EditIcon, PlayIcon, DeleteIcon } from "tdesign-icons-vue-next";
 
@@ -12,6 +13,8 @@ const props = defineProps({
   isCurrent: { type: Function, required: true },
 });
 const emit = defineEmits(["drag-mousedown", "batch-edit", "preview", "switch", "edit", "del"]);
+
+const { t } = useI18n();
 
 const maskKey = (key) => {
   if (!key || key.length < 8) return key || "";
@@ -34,7 +37,7 @@ const keyPrefix = () => (props.side === "right" ? "r-" : "l-");
             <span class="group-url">{{ group.baseUrl }}</span>
           </div>
           <div class="group-conn-actions" @click.stop @mousedown.stop>
-            <Tooltip content="批量编辑 URL 和 Key" placement="top">
+            <Tooltip :content="t('claude.groups.batchEditTooltip')" placement="top">
               <Button size="small" theme="default" variant="text" @click="emit('batch-edit', group)"><EditIcon /></Button>
             </Tooltip>
           </div>
@@ -42,13 +45,13 @@ const keyPrefix = () => (props.side === "right" ? "r-" : "l-");
         <div v-for="config in group.configs" :key="config.id + '-' + (isCurrent(config) ? 'cur' : 'other')" class="config-row" @click="emit('preview', config)">
           <span class="config-name">{{ config.name }}</span>
           <Space size="small" @click.stop>
-            <Tag v-if="isCurrent(config)" theme="success" variant="light" size="small">当前</Tag>
-            <Button v-else size="small" theme="success" variant="text" @click="emit('switch', config)"><template #icon><PlayIcon /></template>启用</Button>
-            <Tooltip content="编辑" placement="top">
+            <Tag v-if="isCurrent(config)" theme="success" variant="light" size="small">{{ t('common.current') }}</Tag>
+            <Button v-else size="small" theme="success" variant="text" @click="emit('switch', config)"><template #icon><PlayIcon /></template>{{ t('common.enable') }}</Button>
+            <Tooltip :content="t('common.edit')" placement="top">
               <Button size="small" theme="default" variant="text" @click="emit('edit', config)"><EditIcon /></Button>
             </Tooltip>
-            <Tooltip content="删除" placement="top">
-              <Popconfirm theme="danger" content="确定要删除这个配置吗？" @confirm="emit('del', config)">
+            <Tooltip :content="t('common.delete')" placement="top">
+              <Popconfirm theme="danger" :content="t('claude.groups.deleteConfirm')" @confirm="emit('del', config)">
                 <Button size="small" theme="danger" variant="text"><DeleteIcon /></Button>
               </Popconfirm>
             </Tooltip>

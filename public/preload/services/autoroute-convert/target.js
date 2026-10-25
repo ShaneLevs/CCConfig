@@ -405,7 +405,7 @@ const anthropicTarget = {
         yield { type: "end", stopReason: finish || (sawTool ? "tool" : "stop"), usage: normalizeUsage(usage) };
         return;
       } else if (evt.type === "error") {
-        yield { type: "error", message: (evt.error && evt.error.message) || "上游返回错误" };
+        yield { type: "error", message: (evt.error && evt.error.message) || "Upstream returned an error" };
         return;
       }
       // ping / 其它事件忽略
@@ -540,7 +540,7 @@ const responsesTarget = {
         finished = true;
         return;
       } else if (type === "response.failed" || type === "error") {
-        const msg = (payload.response && payload.response.error && payload.response.error.message) || payload.message || "上游返回错误";
+        const msg = (payload.response && payload.response.error && payload.response.error.message) || payload.message || "Upstream returned an error";
         yield { type: "error", message: msg };
         return;
       }

@@ -1,4 +1,5 @@
 const { getNativeId, getMcpServers, upsertMcpServer, deleteMcpServer } = require('./config')
+const { t } = require('./i18n')
 
 // MCP SDK
 let _mcpClient, _mcpStdio, _mcpStreamableHttp, _mcpSSE
@@ -46,7 +47,7 @@ const getDisabledMcpServers = () => {
 const disableMcpServer = (name) => {
   try {
     const config = getMcpServers()
-    if (!config[name]) return { success: false, error: 'MCP 配置不存在' }
+    if (!config[name]) return { success: false, error: t('service.mcp.notFound') }
 
     const nativeId = getNativeId()
     const docId = `ccswitch_mcp_disabled_${nativeId}_${name}`
@@ -55,7 +56,7 @@ const disableMcpServer = (name) => {
     if (existingDoc) doc._rev = existingDoc._rev
 
     const result = window.utools.db.put(doc)
-    if (!result.ok) return { success: false, error: '保存到 DB 失败' }
+    if (!result.ok) return { success: false, error: t('service.mcp.saveDbFailed') }
 
     deleteMcpServer(name)
     return { success: true }
@@ -69,10 +70,10 @@ const enableMcpServer = (name) => {
   try {
     const docId = `ccswitch_mcp_disabled_${getNativeId()}_${name}`
     const doc = window.utools.db.get(docId)
-    if (!doc) return { success: false, error: 'DB 中未找到该 MCP 配置' }
+    if (!doc) return { success: false, error: t('service.mcp.dbNotFound') }
 
     const success = upsertMcpServer(name, doc.config)
-    if (!success) return { success: false, error: '写入配置文件失败' }
+    if (!success) return { success: false, error: t('service.mcp.writeConfigFailed') }
 
     window.utools.db.remove(docId)
     return { success: true }
@@ -86,9 +87,9 @@ const deleteDisabledMcpServer = (name) => {
   try {
     const docId = `ccswitch_mcp_disabled_${getNativeId()}_${name}`
     const doc = window.utools.db.get(docId)
-    if (!doc) return { success: false, error: '配置不存在' }
+    if (!doc) return { success: false, error: t('service.mcp.configNotFound') }
     const result = window.utools.db.remove(docId)
-    return { success: result.ok, error: result.ok ? null : '删除失败' }
+    return { success: result.ok, error: result.ok ? null : t('service.mcp.deleteFailed') }
   } catch (error) {
     console.error('删除关闭的 MCP 配置失败:', error)
     return { success: false, error: error.message }
@@ -138,7 +139,7 @@ const _tryConnectSSE = async (client, config) => {
 
 const getMcpServerTools = async (config) => {
   if (!_mcpClient) {
-    return { success: false, error: 'MCP SDK 未加载，请尝试在开发环境使用此功能' }
+    return { success: false, error: t('service.mcp.sdkMissing') }
   }
   let client = null
   try {
@@ -154,7 +155,7 @@ const getMcpServerTools = async (config) => {
           client = new Client({ name: 'ccswitch', version: '1.0.0' })
           await _tryConnectSSE(client, config)
         } catch (sseError) {
-          throw new Error('无法连接到 MCP 服务，请检查 URL 是否正确、服务是否在线')
+          throw new Error(t('service.mcp.connectFailed'))
         }
       }
     } else {

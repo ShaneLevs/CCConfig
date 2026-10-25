@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Dialog, Input, InputNumber, Select, Checkbox, AutoComplete } from "tdesign-vue-next";
 import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../../components/DynamicKvEditor.vue";
@@ -21,6 +22,8 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:visible", "confirm"]);
 
+const { t } = useI18n();
+
 const dialogVisible = computed({
   get: () => props.visible,
   set: (v) => emit("update:visible", v),
@@ -30,19 +33,21 @@ const isAdd = computed(() => props.mode === "add");
 
 // 输入/输出模态（opencode modalities 合法值，源自 provider.ts capabilities 解析）
 const MODALITY_OPTIONS = [
-  { label: "文本 (text)", value: "text" },
-  { label: "图像 (image)", value: "image" },
-  { label: "音频 (audio)", value: "audio" },
-  { label: "视频 (video)", value: "video" },
-  { label: "PDF", value: "pdf" },
+  { labelKey: "opencode.model.modalities.text", value: "text" },
+  { labelKey: "opencode.model.modalities.image", value: "image" },
+  { labelKey: "opencode.model.modalities.audio", value: "audio" },
+  { labelKey: "opencode.model.modalities.video", value: "video" },
+  { labelKey: "opencode.model.modalities.pdf", value: "pdf" },
 ];
 // 思考参数（options.effort / options.thinking，与 MiniMax 页同款枚举）
 const EFFORT_OPTIONS = ["minimal", "low", "medium", "high", "xhigh", "max"].map((v) => ({ label: v, value: v }));
 const THINKING_TYPE_OPTIONS = [
-  { label: "enabled（预算式思考）", value: "enabled" },
-  { label: "adaptive（自适应思考）", value: "adaptive" },
-  { label: "disabled（关闭思考）", value: "disabled" },
+  { labelKey: "opencode.model.thinkingTypes.enabled", value: "enabled" },
+  { labelKey: "opencode.model.thinkingTypes.adaptive", value: "adaptive" },
+  { labelKey: "opencode.model.thinkingTypes.disabled", value: "disabled" },
 ];
+const modalityOptions = computed(() => MODALITY_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })));
+const thinkingTypeOptions = computed(() => THINKING_TYPE_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })));
 
 const {
   autoModels, autoModelsLoading, autoModelsError, modelOptions, fetchAutoModels, resetAutoModels,
@@ -69,7 +74,7 @@ watch(
     if (isAdd.value) {
       resetAutoModels();
       // 打开弹窗即自动拉取模型列表，无需手动点击
-      fetchAutoModels(props.provider, "该 Provider 未配置 Base URL，无法自动获取");
+      fetchAutoModels(props.provider, t("opencode.model.missingBaseUrl"));
     }
   }
 );
@@ -82,18 +87,18 @@ const handleConfirm = () => {
 <template>
   <Dialog
     v-model:visible="dialogVisible"
-    :header="isAdd ? '添加模型' : '编辑模型'"
+    :header="isAdd ? t('opencode.model.addTitle') : t('opencode.model.editTitle')"
     width="520px"
-    :confirm-btn="{ content: isAdd ? '添加' : '保存', theme: 'primary' }"
+    :confirm-btn="{ content: isAdd ? t('opencode.model.add') : t('common.save'), theme: 'primary' }"
     @confirm="handleConfirm"
   >
     <div class="oc-form">
       <div class="oc-form-item">
-        <label>所属 Provider</label>
+        <label>{{ t("opencode.model.provider") }}</label>
         <div class="oc-provider-name">{{ providerName }}</div>
       </div>
       <div class="oc-form-item">
-        <label>模型 ID <span class="required">*</span></label>
+        <label>{{ t("opencode.model.id") }} <span class="required">*</span></label>
         <AutoComplete
           v-if="isAdd"
           v-model="form.id"
@@ -101,70 +106,70 @@ const handleConfirm = () => {
           :loading="autoModelsLoading"
           filterable
           clearable
-          placeholder="输入或从下拉选择模型"
+          :placeholder="t('opencode.model.inputOrSelect')"
           @select="onAutoModelSelect"
         />
-        <Input v-else v-model="form.id" placeholder="例如: deepseek-chat" />
+        <Input v-else v-model="form.id" :placeholder="t('opencode.model.idPlaceholder')" />
         <template v-if="isAdd">
-          <div v-if="autoModelsLoading" class="oc-form-hint">正在自动拉取模型列表…</div>
+          <div v-if="autoModelsLoading" class="oc-form-hint">{{ t("opencode.model.fetching") }}</div>
           <div v-else-if="autoModelsError" class="oc-form-hint oc-fetch-error">
-            自动获取失败：{{ autoModelsError }}
-            <span class="oc-fetch-retry" @click="fetchAutoModels(provider, '该 Provider 未配置 Base URL，无法自动获取')">重试</span>
+            {{ t("opencode.model.fetchFailed", { message: autoModelsError }) }}
+            <span class="oc-fetch-retry" @click="fetchAutoModels(provider, t('opencode.model.missingBaseUrl'))">{{ t("common.retry") }}</span>
           </div>
           <div v-else-if="autoModels.length > 0" class="oc-form-hint">
-            已自动获取 {{ autoModels.length }} 个模型，选中后自动填充名称/上下文等
+            {{ t("opencode.model.fetchedCount", { count: autoModels.length }) }}
           </div>
         </template>
       </div>
       <div class="oc-form-item">
-        <label>显示名称</label>
-        <Input v-model="form.name" placeholder="留空则使用模型 ID" />
+        <label>{{ t("opencode.model.displayName") }}</label>
+        <Input v-model="form.name" :placeholder="t('opencode.model.displayNamePlaceholder')" />
       </div>
       <ModelLimitsFields v-model:context="form.context" v-model:output="form.output" item-class="oc-form-item" />
       <div class="oc-form-item">
-        <Checkbox v-model="form.reasoning">推理模型 (reasoning)</Checkbox>
+        <Checkbox v-model="form.reasoning">{{ t("opencode.model.reasoning") }}</Checkbox>
       </div>
       <div class="oc-form-item-row">
         <div class="oc-form-item oc-form-item--flex">
-          <label>输入模态</label>
-          <Select v-model="form.modalitiesInput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
+          <label>{{ t("opencode.model.inputModalities") }}</label>
+          <Select v-model="form.modalitiesInput" multiple clearable :options="modalityOptions" :placeholder="t('opencode.model.defaultTextOnly')" />
         </div>
         <div class="oc-form-item oc-form-item--flex">
-          <label>输出模态</label>
-          <Select v-model="form.modalitiesOutput" multiple clearable :options="MODALITY_OPTIONS" placeholder="默认：仅文本" />
+          <label>{{ t("opencode.model.outputModalities") }}</label>
+          <Select v-model="form.modalitiesOutput" multiple clearable :options="modalityOptions" :placeholder="t('opencode.model.defaultTextOnly')" />
         </div>
       </div>
       <div class="oc-form-item-row">
         <div class="oc-form-item oc-form-item--flex">
-          <label>思考档位</label>
-          <Select v-model="form.effort" :options="EFFORT_OPTIONS" clearable placeholder="不设置" />
+          <label>{{ t("opencode.model.effort") }}</label>
+          <Select v-model="form.effort" :options="EFFORT_OPTIONS" clearable :placeholder="t('opencode.model.notSet')" />
         </div>
         <div class="oc-form-item oc-form-item--flex">
-          <label>思考模式</label>
-          <Select v-model="form.thinkingType" :options="THINKING_TYPE_OPTIONS" clearable placeholder="不设置" />
+          <label>{{ t("opencode.model.thinkingType") }}</label>
+          <Select v-model="form.thinkingType" :options="thinkingTypeOptions" clearable :placeholder="t('opencode.model.notSet')" />
         </div>
       </div>
       <div v-if="form.thinkingType === 'enabled'" class="oc-form-item">
-        <label>思考预算（budgetTokens，0 = 不写入）</label>
-        <InputNumber v-model="form.thinkingBudget" :min="0" :step="1024" placeholder="0 = 不写入" />
+        <label>{{ t("opencode.model.thinkingBudget") }}</label>
+        <InputNumber v-model="form.thinkingBudget" :min="0" :step="1024" :placeholder="t('opencode.model.thinkingBudgetPlaceholder')" />
       </div>
       <template v-if="!isAdd">
         <div class="oc-form-subsection">
-          <div class="oc-form-subsection-title">SDK Options</div>
+          <div class="oc-form-subsection-title">{{ t("opencode.model.sdkOptions") }}</div>
           <DynamicKvEditor
             v-model="form.sdkOptions"
             :key-options="[]"
-            key-placeholder="选项名"
-            value-placeholder="选项值"
+            :key-placeholder="t('opencode.model.optionName')"
+            :value-placeholder="t('opencode.model.optionValue')"
           />
         </div>
         <div class="oc-form-subsection">
-          <div class="oc-form-subsection-title">额外字段 (variants, cost, tool_call 等)</div>
+          <div class="oc-form-subsection-title">{{ t("opencode.model.extraFields") }}</div>
           <DynamicKvEditor
             v-model="form.extraFields"
             :key-options="[]"
-            key-placeholder="字段名"
-            value-placeholder="字段值 (JSON 或字符串)"
+            :key-placeholder="t('opencode.model.fieldName')"
+            :value-placeholder="t('opencode.model.fieldValue')"
           />
         </div>
       </template>

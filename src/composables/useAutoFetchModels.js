@@ -1,4 +1,5 @@
 import { ref, computed } from "vue";
+import { t } from "../i18n";
 
 // 「自动拉取模型列表」共享逻辑：调用 window.services.fetchProviderModels
 // （OpenAI 兼容 /models 接口），供各应用的添加/批量添加模型弹窗复用。
@@ -13,7 +14,7 @@ export function useAutoFetchModels() {
   );
 
   // prov 需为 { baseUrl, apiKey } 形状的供应商对象；missingMessage 为未配置 Base URL 的提示文案
-  const fetchAutoModels = async (prov, missingMessage = "该供应商未配置 Base URL，无法自动获取") => {
+  const fetchAutoModels = async (prov, missingMessage = t("common.noBaseUrl")) => {
     if (!prov || !prov.baseUrl) {
       autoModelsError.value = missingMessage;
       return;
@@ -23,7 +24,7 @@ export function useAutoFetchModels() {
     try {
       const list = await window.services.fetchProviderModels(prov.baseUrl, prov.apiKey);
       autoModels.value = list;
-      if (list.length === 0) autoModelsError.value = "接口返回空列表";
+      if (list.length === 0) autoModelsError.value = t("common.emptyModelList");
     } catch (e) {
       autoModelsError.value = e.message;
       autoModels.value = [];

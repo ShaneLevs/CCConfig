@@ -1,0 +1,24 @@
+{
+  "nav": {
+    "tab": {
+      "config": "配置",
+      "mcp": "MCP",
+      "skill": "Skill",
+      "plugin": "Plugin",
+      "usage": "统计",
+      "gateway": "网关"
+    },
+    "title": {
+      "configSwitch": "配置切换",
+      "configManage": "配置管理",
+      "modelConfig": "模型配置",
+      "mcpConfig": "MCP 配置",
+      "skillConfig": "Skill 配置",
+      "skillManage": "Skill 管理",
+      "pluginManage": "插件管理",
+      "extensionManage": "扩展管理",
+      "usage": "使用统计",
+      "gateway": "网关"
+    }
+  }
+}

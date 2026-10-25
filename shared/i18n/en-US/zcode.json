@@ -1,0 +1,77 @@
+{
+  "zcode": {
+    "config": {
+      "apiType": {
+        "anthropicMessages": "anthropic-messages (Anthropic Messages)",
+        "openaiChat": "openai-chat-completions (OpenAI Chat)",
+        "openaiResponses": "openai-responses (OpenAI Responses)"
+      },
+      "toolbarSubtitle": "Custom providers and models (changes take effect immediately in ZCode, no restart needed)",
+      "addProvider": "Add provider",
+      "emptyProviders": "No ZCode custom providers detected. Add one in ZCode, or add it here manually.",
+      "preferredProvider": "Preferred provider",
+      "modelCount": "{count} model | {count} models",
+      "deleteProviderTooltip": "Delete provider (its models are deleted too)",
+      "deleteProviderConfirm": "Delete this provider? Its model configuration will also be removed from provider_config.json",
+      "configured": "Configured",
+      "unconfigured": "Not configured",
+      "modelsTitle": "Models (selector order = modelOrder)",
+      "modelsEmpty": "No custom models yet. Click \"Add\" to create one.",
+      "reasoningCount": "Thinking ×{count}",
+      "preferred": "Preferred",
+      "setPreferredTooltip": "Set as preferred model (moves to top of providerOrder / modelOrder)",
+      "editModelTooltip": "Edit model configuration",
+      "deleteModelConfirm": "Delete this model?",
+      "providerName": "Provider name",
+      "providerIdHint": "The provider ID is generated from the name (lowercase letters/digits/hyphens, same as ZCode rules)",
+      "apiTypeLabel": "API protocol (api.type)",
+      "apiKeyPlainPlaceholder": "Stored in plain text in provider_config.json",
+      "apiKeySavedPlaceholder": "Saved; clear and save to delete, or modify to overwrite",
+      "apiKeyEmptyPlaceholder": "Leave empty to keep unchanged",
+      "fetchingModels": "Fetching model list from this provider…",
+      "modelFetchHint": "Fetched from the provider's Base URL /models endpoint; you can also enter it manually",
+      "enabledLabel": "Enabled (enabled)",
+      "outputLabel": "Max output tokens (optionSpecs.maxOutputTokens.max)",
+      "inputTypes": "Input types (inputFormat; text is supported by default)",
+      "image": "Image",
+      "video": "Video",
+      "audio": "Audio",
+      "capabilities": "Model capabilities (properties)",
+      "structuredOutput": "Structured output",
+      "webSearch": "Native web search",
+      "midSystem": "System messages mid-conversation",
+      "reasoningLevels": "Reasoning levels (low to high, optionSpecs.reasoningLevel.values)",
+      "reasoningPlaceholder": "e.g. low",
+      "addReasoningLevel": "Add reasoning level",
+      "reasoningHint": "Click \"+\" to enter a level and press Enter to turn it into a tag. Add them in ascending order, e.g. low → high → max",
+      "providerLabel": "Provider: {provider}",
+      "editModelIdHint": "Changing the ID automatically syncs both order lists (personalModelIds / modelOrder)",
+      "addTitle": "Add provider",
+      "editTitle": "Edit provider configuration",
+      "noModels": "No models returned"
+    },
+    "provider": {
+      "added": "Provider added",
+      "addFailed": "Add failed: {message}",
+      "updated": "Provider configuration updated",
+      "saveFailed": "Save failed: {message}",
+      "deleted": "Provider {id} deleted",
+      "deleteFailed": "Delete failed: {message}"
+    },
+    "model": {
+      "preferredSet": "Preferred model set to {model}",
+      "added": "Model {modelId} added",
+      "addFailed": "Add failed: {message}",
+      "updated": "Model configuration updated",
+      "saveFailed": "Save failed: {message}",
+      "deleted": "Model {modelId} deleted",
+      "deleteFailed": "Delete failed: {message}"
+    },
+    "usage": {
+      "tip": "ZCode usage (read from the local usage database; input includes cache)",
+      "empty": "No usage data yet. It will appear here after you chat with ZCode.",
+      "emptyHint": "Usage database not found: {path}. After usage is recorded, re-enter this page or click Refresh to collect statistics.",
+      "modelHint": "Model names match the ZCode settings page"
+    }
+  }
+}

@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const yaml = require('js-yaml')
+const { t } = require("./i18n")
 
 // MiniMax Code（CLI `mcode` / Desktop）：模型配置在 <data-dir>/config.yaml，默认数据目录 ~/.minimax。
 // 目录重定向环境变量（官方文档 cli/configuration）：MINIMAX_DATA_DIR 优先，MAVIS_DATA_DIR 为兼容回退。
@@ -50,7 +51,7 @@ const readMinimaxConfig = () => {
   } catch (e) {
     // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会覆盖整个
     // config.yaml，抹掉 runtime / provider / 其他节（同 kimi / reasonix / codex）
-    throw new Error(`config.yaml 解析失败，已阻止修改（请先修复 YAML 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.common.yamlParseFailed', { message: e.message }))
   }
 }
 
@@ -206,7 +207,7 @@ const providerKeyFor = (name) => {
 // 下发用：存在则合并更新（空值不覆盖既有 baseUrl/apiKey，同 kimi.upsertKimiProvider 纪律），否则创建。
 // 未知字段经 normalizeProvider._extra / _optionsExtra 原样往返，不会被抹掉。
 const upsertMinimaxProvider = (key, cfg) => {
-  if (!PROVIDER_KEY_RE.test(String(key))) throw new Error(`Provider 键 ${key} 不合法（仅限字母/数字/下划线/中划线）`)
+  if (!PROVIDER_KEY_RE.test(String(key))) throw new Error(t('serviceAgent.minimax.invalidProviderKey', { key }))
   assertApiFormat(cfg.api)
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
@@ -237,18 +238,18 @@ const getMinimaxProviderList = () => {
 
 const assertApiFormat = (api) => {
   if (api && !MINIMAX_API_FORMATS.includes(api)) {
-    throw new Error(`不支持的 API 格式 ${api}（可选：${MINIMAX_API_FORMATS.join(' / ')}）`)
+    throw new Error(t('serviceAgent.minimax.unsupportedApiFormat', { api, options: MINIMAX_API_FORMATS.join(' / ') }))
   }
 }
 
 const addMinimaxProvider = (cfg) => {
   const id = String(cfg?.id || '').trim()
-  if (!id) throw new Error('Provider ID 不能为空')
-  if (!PROVIDER_KEY_RE.test(id)) throw new Error('Provider ID 只能包含字母、数字、下划线、中划线')
+  if (!id) throw new Error(t('serviceAgent.common.providerIdRequired'))
+  if (!PROVIDER_KEY_RE.test(id)) throw new Error(t('serviceAgent.common.providerIdInvalidChars'))
   assertApiFormat(cfg.api)
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
-  if (tables[id]) throw new Error(`Provider ${id} 已存在`)
+  if (tables[id]) throw new Error(t('serviceAgent.common.providerExistsLabel', { name: id }))
   tables[id] = buildProviderYaml({
     id,
     name: String(cfg.name || '').trim() || id,
@@ -267,15 +268,15 @@ const addMinimaxProvider = (cfg) => {
 const updateMinimaxProvider = (id, updates) => {
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
-  if (!tables[id]) throw new Error(`Provider ${id} 不存在`)
+  if (!tables[id]) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: id }))
   const prev = normalizeProvider(id, tables[id], false)
-  if (prev.managed) throw new Error('内置供应商由 mcode login 托管，不可编辑')
+  if (prev.managed) throw new Error(t('serviceAgent.minimax.builtinManagedEdit'))
   assertApiFormat(updates.api)
   // 支持改 ID：ID 是子表键且参与 defaultModel 引用，改名需校验冲突并同步默认模型引用
   const newId = updates.id === undefined || updates.id === id ? id : String(updates.id).trim()
-  if (!newId) throw new Error('Provider ID 不能为空')
-  if (!PROVIDER_KEY_RE.test(newId)) throw new Error('Provider ID 只能包含字母、数字、下划线、中划线')
-  if (newId !== id && tables[newId]) throw new Error(`Provider ${newId} 已存在`)
+  if (!newId) throw new Error(t('serviceAgent.common.providerIdRequired'))
+  if (!PROVIDER_KEY_RE.test(newId)) throw new Error(t('serviceAgent.common.providerIdInvalidChars'))
+  if (newId !== id && tables[newId]) throw new Error(t('serviceAgent.common.providerExistsLabel', { name: newId }))
   const merged = { ...prev, ...updates, id: newId }
   if (updates.clearApiKey) merged.apiKey = ''
   const next = buildProviderYaml(merged)
@@ -295,10 +296,10 @@ const updateMinimaxProvider = (id, updates) => {
 const deleteMinimaxProvider = (id) => {
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
-  if (!tables[id]) throw new Error(`Provider ${id} 不存在`)
+  if (!tables[id]) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: id }))
   const refPrefix = `${CUSTOM_PREFIX}:${id}/`
   if (String(doc.defaultModel || '').startsWith(refPrefix)) {
-    throw new Error(`Provider ${id} 是当前默认模型所属供应商，请先切换默认模型`)
+    throw new Error(t('serviceAgent.minimax.providerIsDefault', { id }))
   }
   delete tables[id]
   writeMinimaxConfig(doc)
@@ -309,20 +310,20 @@ const deleteMinimaxProvider = (id) => {
 
 const requireCustomProvider = (doc, tables, providerId) => {
   const p = tables[providerId]
-  if (!p) throw new Error(`Provider ${providerId} 不存在`)
-  if (normalizeProvider(providerId, p, false).managed) throw new Error('内置供应商不可增删改模型')
+  if (!p) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerId }))
+  if (normalizeProvider(providerId, p, false).managed) throw new Error(t('serviceAgent.minimax.builtinManagedModels'))
   return p
 }
 
 const addMinimaxModel = (providerId, cfg) => {
   const modelId = String(cfg?.model || '').trim()
-  if (!modelId) throw new Error('模型 ID 不能为空')
-  if (!MODEL_ID_RE.test(modelId)) throw new Error('模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
+  if (!modelId) throw new Error(t('serviceAgent.common.modelIdRequired'))
+  if (!MODEL_ID_RE.test(modelId)) throw new Error(t('serviceAgent.common.modelIdInvalidChars'))
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
   const provider = requireCustomProvider(doc, tables, providerId)
   const models = (provider.models && typeof provider.models === 'object' && provider.models) || {}
-  if (models[modelId]) throw new Error(`模型 ${modelId} 已存在`)
+  if (models[modelId]) throw new Error(t('serviceAgent.common.modelExists', { id: modelId }))
   models[modelId] = buildModelYaml({ id: modelId, ...cfg }, modelId)
   provider.models = models
   writeMinimaxConfig(doc)
@@ -334,12 +335,12 @@ const updateMinimaxModel = (providerId, modelId, updates) => {
   const tables = getCustomProviderTables(doc)
   const provider = requireCustomProvider(doc, tables, providerId)
   const models = (provider.models && typeof provider.models === 'object' && provider.models) || {}
-  if (!models[modelId]) throw new Error(`模型 ${modelId} 不存在`)
+  if (!models[modelId]) throw new Error(t('serviceAgent.common.modelNotFound', { id: modelId }))
   // 支持改模型 ID（键即引用）：改名需校验冲突并同步 defaultModel 引用
   const newId = updates.model === undefined || updates.model === modelId ? modelId : String(updates.model).trim()
-  if (!newId) throw new Error('模型 ID 不能为空')
-  if (!MODEL_ID_RE.test(newId)) throw new Error('模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠')
-  if (newId !== modelId && models[newId]) throw new Error(`模型 ${newId} 已存在`)
+  if (!newId) throw new Error(t('serviceAgent.common.modelIdRequired'))
+  if (!MODEL_ID_RE.test(newId)) throw new Error(t('serviceAgent.common.modelIdInvalidChars'))
+  if (newId !== modelId && models[newId]) throw new Error(t('serviceAgent.common.modelExists', { id: newId }))
   const prev = normalizeModel(modelId, models[modelId])
   const merged = { ...prev, ...updates }
   models[newId] = buildModelYaml(merged, newId)
@@ -374,7 +375,7 @@ const deleteMinimaxModel = (providerId, modelId) => {
 // 返回 defaultModel 可引用的模型 ref（custom_provider:<key>/<modelId>）
 const upsertMinimaxModel = (providerId, modelId, opts = {}) => {
   const id = String(modelId || '').trim()
-  if (!MODEL_ID_RE.test(id)) throw new Error(`模型 ID ${id} 含非法字符，无法下发到 MiniMax Code`)
+  if (!MODEL_ID_RE.test(id)) throw new Error(t('serviceAgent.minimax.modelIdInvalidForDispatch', { id }))
   const doc = readMinimaxConfig()
   const tables = getCustomProviderTables(doc)
   const provider = requireCustomProvider(doc, tables, providerId)
@@ -430,7 +431,7 @@ const setMinimaxDefaultModel = (ref) => {
     return true
   }
   const parsed = parseMinimaxModelRef(s)
-  if (!parsed) throw new Error(`模型引用格式无效：${s}`)
+  if (!parsed) throw new Error(t('serviceAgent.minimax.invalidModelRef', { ref: s }))
   const base = s.split('#')[0]
   let exists = false
   if (parsed.kind === 'custom') {
@@ -438,7 +439,7 @@ const setMinimaxDefaultModel = (ref) => {
   } else {
     exists = !!(getBuiltinProviderTables(doc)[parsed.providerId]?.models || {})[parsed.modelId]
   }
-  if (!exists) throw new Error(`模型 ${base} 不存在，无法设为默认`)
+  if (!exists) throw new Error(t('serviceAgent.minimax.modelNotFoundForDefault', { model: base }))
   doc.defaultModel = base + s.slice(base.length)
   writeMinimaxConfig(doc)
   return true

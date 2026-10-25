@@ -1,0 +1,53 @@
+{
+  "skill": {
+    "install": {
+      "title": "安装 Skill",
+      "install": "安装",
+      "link": "Skill 链接",
+      "linkPlaceholder": "输入 Skill 详情页面链接",
+      "hintSourcesPrefix": "支持从",
+      "hintSourcesMiddle": "或",
+      "hintSourcesSuffix": "安装 Skill，复制其地址粘贴到上方输入框",
+      "hintManualPrefix": "手动安装请将 Skill 文件夹放到",
+      "hintManualSuffix": "目录下",
+      "author": "作者: {author}",
+      "downloads": "下载: {count}",
+      "sourceSkillHub": "SkillHub",
+      "sourceModelScope": "魔搭社区",
+      "trace": "TRACE 评测",
+      "downloading": "下载中... {progress}%",
+      "existsTitle": "Skill 已存在",
+      "overwrite": "覆盖安装",
+      "existsHint": "Skill \"{name}\" 已存在，是否覆盖安装？"
+    },
+    "noDescription": "暂无描述",
+    "unknownAuthor": "未知",
+    "requiresApiKey": "需配置 API Key",
+    "installSuccess": "Skill \"{name}\" 安装成功",
+    "installFailed": "安装失败: {message}",
+    "fetchFailed": "获取 Skill 信息失败: {message}",
+    "overwriteSuccess": "Skill \"{name}\" 已覆盖安装",
+    "trace": {
+      "trust": "可信任度",
+      "reliability": "可靠性",
+      "adaptability": "适用性",
+      "convention": "规范性",
+      "effectiveness": "有效性"
+    },
+    "categories": {
+      "paySkill": "Pay Skill",
+      "officeEfficiency": "办公效率",
+      "contentCreation": "内容创作",
+      "devProgramming": "开发编程",
+      "dataAnalysis": "数据分析",
+      "designMedia": "设计多媒体",
+      "aiAgent": "AI Agent",
+      "knowledgeManagement": "知识管理",
+      "businessOps": "商业运营",
+      "education": "教育学习",
+      "professional": "行业专业",
+      "itOpsSecurity": "IT 运维与安全",
+      "lifeService": "生活服务"
+    }
+  }
+}

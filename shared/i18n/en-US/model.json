@@ -1,0 +1,33 @@
+{
+  "model": {
+    "addTitle": "Add model",
+    "editTitle": "Edit model",
+    "add": "Add",
+    "save": "Save",
+    "provider": "Provider",
+    "id": "Model ID",
+    "idRequired": "Enter a model ID",
+    "idPlaceholder": "Model ID",
+    "selectOrEnter": "Type or select a model",
+    "fetching": "Fetching model list…",
+    "fetchFailed": "Auto-fetch failed: {message}",
+    "retry": "Retry",
+    "fetchedCount": "Fetched {count} model(s); selecting one fills in the name and limits",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Leave empty to use the model ID",
+    "displayNameEditPlaceholder": "Display name",
+    "inputType": "Input type",
+    "text": "Text (text)",
+    "image": "Image (image)",
+    "reasoning": "Reasoning model",
+    "advanced": "Advanced (cost / compatibility)",
+    "cost": "Cost — per 1M tokens",
+    "input": "Input",
+    "output": "Output",
+    "cacheRead": "Cache read",
+    "cacheWrite": "Cache write",
+    "compat": "Compatibility (compat)",
+    "compatKeyPlaceholder": "compat field",
+    "compatValuePlaceholder": "compat value"
+  }
+}

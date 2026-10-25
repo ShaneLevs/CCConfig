@@ -26,7 +26,7 @@
     const port = window.__CCCONFIG_PORT__;
     const token = window.__CCCONFIG_TOKEN__ || "";
     if (!port) {
-      throw new Error("CCConfig: sidecar 端口未注入（window.__CCCONFIG_PORT__ 缺失）");
+      throw new Error("CCConfig: sidecar port is not injected (window.__CCCONFIG_PORT__ missing)");
     }
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `http://127.0.0.1:${port}${path}`, false); // 同步，保持既有调用语义
@@ -40,7 +40,7 @@
     try {
       return JSON.parse(xhr.responseText);
     } catch (e) {
-      throw new Error(`CCConfig: ${path} 响应不是合法 JSON: ${xhr.responseText.slice(0, 120)}`);
+      throw new Error(`CCConfig: ${path} returned invalid JSON: ${xhr.responseText.slice(0, 120)}`);
     }
   }
 
@@ -50,7 +50,9 @@
       return pollAsyncTask(method, payload.taskId);
     }
     if (!payload.ok) {
-      throw new Error(`CCConfig: ${method} 失败: ${payload.error}`);
+      const err = new Error(`CCConfig: ${method} failed: ${payload.error}`);
+      err.svcCode = payload.svcCode || "";
+      throw err;
     }
     return payload.value;
   }
@@ -69,24 +71,26 @@
       if (token) xhr.setRequestHeader("X-CCConfig-Token", token);
       xhr.onload = () => {
         if (xhr.status !== 200) {
-          reject(new Error(`CCConfig: ${method} 轮询 HTTP ${xhr.status}`));
+          reject(new Error(`CCConfig: ${method} poll HTTP ${xhr.status}`));
           return;
         }
         let payload;
         try {
           payload = JSON.parse(xhr.responseText);
         } catch (e) {
-          reject(new Error(`CCConfig: ${method} 轮询响应不是合法 JSON`));
+          reject(new Error(`CCConfig: ${method} poll returned invalid JSON`));
           return;
         }
         if (payload.status === "done") resolve(payload.value);
         else if (payload.status === "pending") resolve(pollAsyncTask(method, taskId));
-        else if (payload.status === "error")
-          reject(new Error(`CCConfig: ${method} 失败: ${payload.error}`));
-        else reject(new Error(`CCConfig: ${method} 任务结果丢失（${payload.status}）`));
+        else if (payload.status === "error") {
+          const err = new Error(`CCConfig: ${method} failed: ${payload.error}`);
+          err.svcCode = payload.svcCode || "";
+          reject(err);
+        } else reject(new Error(`CCConfig: ${method} task result lost (${payload.status})`));
       };
-      xhr.onerror = () => reject(new Error(`CCConfig: ${method} 轮询网络错误（sidecar 不可达？）`));
-      xhr.ontimeout = () => reject(new Error(`CCConfig: ${method} 轮询超时`));
+      xhr.onerror = () => reject(new Error(`CCConfig: ${method} poll network error (sidecar unreachable?)`));
+      xhr.ontimeout = () => reject(new Error(`CCConfig: ${method} poll timed out`));
       xhr.send(JSON.stringify({ taskId }));
     });
   }
@@ -214,9 +218,9 @@
   window.utools = {
     db: {
       get: (id) => safeCall("__utools.db.get", [id], null),
-      put: (doc) => safeCall("__utools.db.put", [doc], { error: true, name: "unavailable", message: "sidecar 不可用" }),
+      put: (doc) => safeCall("__utools.db.put", [doc], { error: true, name: "unavailable", message: "sidecar unavailable" }),
       remove: (idOrDoc, rev) =>
-        safeCall("__utools.db.remove", [idOrDoc, rev], { error: true, name: "unavailable", message: "sidecar 不可用" }),
+        safeCall("__utools.db.remove", [idOrDoc, rev], { error: true, name: "unavailable", message: "sidecar unavailable" }),
       allDocs: () => safeCall("__utools.db.allDocs", [], []),
     },
 

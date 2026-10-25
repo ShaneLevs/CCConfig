@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("./crypto");
+const { t } = require("./i18n");
 
 // ==================== 通用配置 ====================
 // 设计约定：
@@ -65,7 +66,9 @@ const writeDoc = (docId, data) => {
   } catch (e) {
     console.error(`写入通用配置(${docId})失败:`, e);
     // 抛出带原始错误信息的异常，让上层 UI 能显示具体失败原因
-    throw new Error(`写入 uTools DB 失败: ${(e && e.message) || e}`);
+    throw new Error(
+      t("service.common.writeDbFailed", { message: (e && e.message) || e }),
+    );
   }
 };
 
@@ -101,8 +104,13 @@ const getCommonProviderList = () => readCommonProviders().providers;
 
 const addCommonProvider = (provider) => {
   const { providers } = readCommonProviders();
-  if (providers.some((p) => p.name === provider.name))
-    throw new Error(`供应商 ${provider.name} 已存在`);
+  if (providers.some((p) => p.name === provider.name)) {
+    const err = new Error(
+      t("service.provider.exists", { name: provider.name }),
+    );
+    err.svcCode = "PROVIDER_EXISTS";
+    throw err;
+  }
   providers.push({
     name: provider.name,
     apiKey: "",
@@ -119,7 +127,8 @@ const addCommonProvider = (provider) => {
 const updateCommonProvider = (name, patch) => {
   const { providers } = readCommonProviders();
   const idx = providers.findIndex((p) => p.name === name);
-  if (idx === -1) throw new Error(`供应商 ${name} 不存在`);
+  if (idx === -1)
+    throw new Error(t("service.provider.notFound", { name }));
   providers[idx] = { ...providers[idx], ...patch, name };
   return writeCommonProviders({ providers });
 };
@@ -128,16 +137,20 @@ const deleteCommonProvider = (name) => {
   const { providers } = readCommonProviders();
   const next = providers.filter((p) => p.name !== name);
   if (next.length === providers.length)
-    throw new Error(`供应商 ${name} 不存在`);
+    throw new Error(t("service.provider.notFound", { name }));
   return writeCommonProviders({ providers: next });
 };
 
 const addCommonModel = (providerName, model) => {
   const { providers } = readCommonProviders();
   const prov = providers.find((p) => p.name === providerName);
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`);
-  if (prov.models.some((m) => m.id === model.id))
-    throw new Error(`模型 ${model.id} 已存在`);
+  if (!prov)
+    throw new Error(t("service.provider.notFound", { name: providerName }));
+  if (prov.models.some((m) => m.id === model.id)) {
+    const err = new Error(t("service.provider.modelExists", { id: model.id }));
+    err.svcCode = "MODEL_EXISTS";
+    throw err;
+  }
   prov.models.push(model);
   return writeCommonProviders({ providers });
 };
@@ -147,7 +160,8 @@ const addCommonModel = (providerName, model) => {
 const addCommonModels = (providerName, models) => {
   const { providers } = readCommonProviders();
   const prov = providers.find((p) => p.name === providerName);
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`);
+  if (!prov)
+    throw new Error(t("service.provider.notFound", { name: providerName }));
   const existing = new Set(prov.models.map((m) => m.id));
   const added = [];
   const skipped = [];
@@ -168,9 +182,11 @@ const addCommonModels = (providerName, models) => {
 const updateCommonModel = (providerName, modelId, patch) => {
   const { providers } = readCommonProviders();
   const prov = providers.find((p) => p.name === providerName);
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`);
+  if (!prov)
+    throw new Error(t("service.provider.notFound", { name: providerName }));
   const idx = prov.models.findIndex((m) => m.id === modelId);
-  if (idx === -1) throw new Error(`模型 ${modelId} 不存在`);
+  if (idx === -1)
+    throw new Error(t("service.provider.modelNotFound", { id: modelId }));
   prov.models[idx] = { ...prov.models[idx], ...patch, id: patch.id || modelId };
   return writeCommonProviders({ providers });
 };
@@ -178,7 +194,8 @@ const updateCommonModel = (providerName, modelId, patch) => {
 const deleteCommonModel = (providerName, modelId) => {
   const { providers } = readCommonProviders();
   const prov = providers.find((p) => p.name === providerName);
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`);
+  if (!prov)
+    throw new Error(t("service.provider.notFound", { name: providerName }));
   prov.models = prov.models.filter((m) => m.id !== modelId);
   return writeCommonProviders({ providers });
 };
@@ -286,12 +303,16 @@ const saveLocalMcpTargets = (paths) => {
     ),
   ];
   if (list.length === 0)
-    throw new Error("请至少保留一个本地存放位置（否则本地端将无文件可写）");
+    throw new Error(t("service.common.mcpKeepOneLocation"));
   // 写入逻辑用严格 JSON.parse，非 JSON 文件会被整文件覆盖破坏 → 仅允许 .json
   const notJson = list.filter((p) => !/\.json$/i.test(p));
   if (notJson.length)
     throw new Error(
-      `仅支持 .json 文件，以下路径非法：${notJson.map(toDisplayMcpPath).join("、")}`,
+      t("service.common.mcpOnlyJson", {
+        paths: notJson
+          .map(toDisplayMcpPath)
+          .join(t("service.common.listSeparator")),
+      }),
     );
   const presets = MCP_LOCAL_PRESETS();
   const ordered = [
@@ -326,9 +347,11 @@ const saveLocalMcpTargets = (paths) => {
 const selectLocalMcpTargetFile = () => {
   try {
     const result = window.utools.showOpenDialog({
-      title: "选择 MCP 配置文件",
+      title: t("service.common.selectMcpConfigTitle"),
       properties: ["openFile"],
-      filters: [{ name: "MCP 配置 (*.json)", extensions: ["json"] }],
+      filters: [
+        { name: t("service.common.mcpConfigFilterName"), extensions: ["json"] },
+      ],
     });
     const picked = Array.isArray(result) && result.length ? result[0] : null;
     if (picked && !/\.json$/i.test(picked)) {
@@ -447,7 +470,7 @@ const deleteCommonMcpServer = (name) => {
 // 启停开关：开 = 写入全部选中本地文件，关 = 从全部文件移除（主档始终保留一份）
 const setCommonMcpEnabled = (name, enabled) => {
   if (!(name in getCommonMcpServers()))
-    throw new Error(`服务器 ${name} 不存在`);
+    throw new Error(t("service.common.mcpServerNotFound", { name }));
   const state = readMcpLocalState();
   const idx = state.disabled.indexOf(name);
   if (enabled) {
@@ -523,7 +546,7 @@ const getDisabledSkillsDir = () =>
 
 // 设置通用 Skill 启用/禁用（物理移动目录到 .disabled / 移回）
 const setCommonSkillEnabled = (skillName, enabled) => {
-  if (!skillName) return { success: false, error: "Skill 名不能为空" };
+  if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
   const disabledDir = getDisabledSkillsDir();
   const sourceDir = enabled
     ? path.join(disabledDir, skillName)
@@ -532,7 +555,7 @@ const setCommonSkillEnabled = (skillName, enabled) => {
     ? path.join(COMMON_SKILLS_DIR(), skillName)
     : path.join(disabledDir, skillName);
   if (!fs.existsSync(sourceDir))
-    return { success: false, error: "Skill 不存在" };
+    return { success: false, error: t("service.skill.notFound") };
   try {
     if (!enabled) fs.mkdirSync(disabledDir, { recursive: true });
     fs.renameSync(sourceDir, targetDir);
@@ -544,13 +567,13 @@ const setCommonSkillEnabled = (skillName, enabled) => {
 
 // 删除通用 Skill（已禁用时从 .disabled 删除）
 const deleteCommonSkill = (skillName) => {
-  if (!skillName) return { success: false, error: "Skill 名不能为空" };
+  if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
   const candidates = [
     path.join(COMMON_SKILLS_DIR(), skillName),
     path.join(getDisabledSkillsDir(), skillName),
   ];
   const dir = candidates.find((p) => fs.existsSync(p));
-  if (!dir) return { success: false, error: "Skill 目录不存在" };
+  if (!dir) return { success: false, error: t("service.skill.dirMissing") };
   try {
     fs.rmSync(dir, { recursive: true, force: true });
     return { success: true };

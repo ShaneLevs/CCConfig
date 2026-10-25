@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { Dialog, Input, Button, Tag, Loading } from "tdesign-vue-next";
 import { useSkillInstall } from "../composables/useSkillInstall";
 
@@ -21,6 +22,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["installed"]);
+const { t } = useI18n();
 
 const {
   showInstallDialog, installUrl, isFetchingInfo, isInstalling,
@@ -42,47 +44,48 @@ defineExpose({ open, openInstallWithUrl, openDir });
 <template>
   <Dialog
     v-model:visible="showInstallDialog"
-    header="安装 Skill"
+    :header="t('skill.install.title')"
     width="500px"
-    :confirm-btn="{ content: '安装', loading: isInstalling, theme: 'primary', disabled: !installInfo }"
+    :confirm-btn="{ content: t('skill.install.install'), loading: isInstalling, theme: 'primary', disabled: !installInfo }"
     @confirm="confirmInstall"
   >
     <div class="install-form">
-      <div class="skill-install-form-item"><label>Skill 链接</label><Input v-model="installUrl" placeholder="输入 Skill 详情页面链接" :disabled="isFetchingInfo || isInstalling" /></div>
-      <div class="install-hint">支持从 <span class="hint-link" @click="openExternal('https://skillhub.cn/skills')">SkillHub</span> 或 <span class="hint-link" @click="openExternal('https://www.modelscope.cn/skills')">魔搭社区</span> 安装 Skill，复制其地址粘贴到上方输入框</div>
-      <div class="install-hint">手动安装请将 Skill 文件夹放到 <span class="hint-link" @click="openDir">{{ manualDirLabel }}</span> 目录下</div>
+      <div class="skill-install-form-item"><label>{{ t('skill.install.link') }}</label><Input v-model="installUrl" :placeholder="t('skill.install.linkPlaceholder')" :disabled="isFetchingInfo || isInstalling" /></div>
+      <div class="install-hint">{{ t('skill.install.hintSourcesPrefix') }} <span class="hint-link" @click="openExternal('https://skillhub.cn/skills')">SkillHub</span> {{ t('skill.install.hintSourcesMiddle') }} <span class="hint-link" @click="openExternal('https://www.modelscope.cn/skills')">{{ t('skill.install.sourceModelScope') }}</span> {{ t('skill.install.hintSourcesSuffix') }}</div>
+      <div class="install-hint">{{ t('skill.install.hintManualPrefix') }} <span class="hint-link" @click="openDir">{{ manualDirLabel }}</span> {{ t('skill.install.hintManualSuffix') }}</div>
       <div v-if="installInfo" class="install-info-card">
         <div class="install-info-header">
           <span class="install-info-name">{{ installInfo.displayName }}</span>
         </div>
         <div class="install-info-meta">
-          <span>作者: {{ installInfo.author }}</span><span>下载: {{ installInfo.downloads }}</span>
-          <Tag size="small" :theme="installInfo.source === 'skillhub' ? 'primary' : 'warning'" variant="light" class="install-info-source">{{ installInfo.source === 'skillhub' ? 'SkillHub' : '魔搭社区' }}</Tag>
+          <span>{{ t('skill.install.author', { author: installInfo.author }) }}</span><span>{{ t('skill.install.downloads', { count: installInfo.downloads }) }}</span>
+          <Tag size="small" :theme="installInfo.source === 'skillhub' ? 'primary' : 'warning'" variant="light" class="install-info-source">{{ installInfo.source === 'skillhub' ? t('skill.install.sourceSkillHub') : t('skill.install.sourceModelScope') }}</Tag>
           <span class="install-info-version">v{{ installInfo.version }}</span>
         </div>
-        <div v-if="installInfo.tags?.length" class="install-info-tags">
-          <Tag v-for="t in installInfo.tags" :key="t" size="small" variant="light" :theme="t === '需配置 API Key' ? 'warning' : 'default'" class="install-info-tag">{{ t }}</Tag>
+        <div v-if="installInfo.tags?.length || installInfo.requiresApiKey" class="install-info-tags">
+          <Tag v-for="tag in installInfo.tags" :key="tag" size="small" variant="light" theme="default" class="install-info-tag">{{ tag }}</Tag>
+          <Tag v-if="installInfo.requiresApiKey" size="small" variant="light" theme="warning" class="install-info-tag">{{ t('skill.requiresApiKey') }}</Tag>
         </div>
         <div class="install-info-summary">{{ installInfo.summary }}</div>
         <div v-if="installInfo.evaluation" class="install-eval">
-          <span class="install-eval-label">TRACE 评测</span>
+          <span class="install-eval-label">{{ t('skill.install.trace') }}</span>
           <span class="install-eval-score">{{ installInfo.evaluation.total }}/5</span>
         </div>
-        <div v-if="installProgress > 0 && installProgress < 100" class="install-progress"><Loading size="small" /><span>下载中... {{ installProgress }}%</span></div>
+        <div v-if="installProgress > 0 && installProgress < 100" class="install-progress"><Loading size="small" /><span>{{ t('skill.install.downloading', { progress: installProgress }) }}</span></div>
       </div>
     </div>
   </Dialog>
 
   <Dialog
     v-model:visible="showOverwriteDialog"
-    header="Skill 已存在"
+    :header="t('skill.install.existsTitle')"
     width="400px"
-    :confirm-btn="{ content: '覆盖安装', theme: 'primary' }"
-    :cancel-btn="{ content: '取消' }"
+    :confirm-btn="{ content: t('skill.install.overwrite'), theme: 'primary' }"
+    :cancel-btn="{ content: t('common.cancel') }"
     @confirm="overwriteInstall"
     @close="cancelInstall"
   >
-    <div class="overwrite-hint">Skill "{{ pendingInstall?.skillName }}" 已存在，是否覆盖安装？</div>
+    <div class="overwrite-hint">{{ t('skill.install.existsHint', { name: pendingInstall?.skillName }) }}</div>
   </Dialog>
 </template>
 

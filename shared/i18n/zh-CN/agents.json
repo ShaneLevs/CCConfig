@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "common": "通用",
+    "visibility": {
+      "title": "Agent 显示",
+      "desc": "勾选需要在切换器中显示的 Agent，拖拽可调整顺序。关闭的 Agent 不会出现在左侧栏、下拉菜单和统计分组中，其 uTools 启动指令也会一并移除。",
+      "current": "当前"
+    }
+  }
+}

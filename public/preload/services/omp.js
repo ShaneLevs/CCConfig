@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const yaml = require('js-yaml')
+const { t } = require("./i18n")
 
 const OMP_DIR = () => path.join(os.homedir(), '.omp', 'agent')
 const OMP_CONFIG_PATH = () => path.join(OMP_DIR(), 'config.yml')
@@ -28,7 +29,7 @@ const writeConfigFile = (doc) => {
 const readOmpModelRoles = () => readConfigFile().modelRoles || {}
 
 const writeOmpModelRoles = (roles) => {
-  if (!roles || typeof roles !== 'object') throw new Error('modelRoles 数据格式不正确')
+  if (!roles || typeof roles !== 'object') throw new Error(t('serviceAgent.omp.invalidModelRoles'))
   const doc = readConfigFile()
   doc.modelRoles = roles
   writeConfigFile(doc)
@@ -94,10 +95,10 @@ const getOmpProviderList = () => {
 }
 
 const addOmpProvider = (providerName, cfg = {}) => {
-  if (!providerName || typeof providerName !== 'string') throw new Error('供应商名不能为空')
+  if (!providerName || typeof providerName !== 'string') throw new Error(t('serviceAgent.common.providerNameRequired'))
   const models = readOmpModels()
   if (!models.providers) models.providers = {}
-  if (models.providers[providerName]) throw new Error(`供应商 ${providerName} 已存在`)
+  if (models.providers[providerName]) throw new Error(t('serviceAgent.common.providerExists', { name: providerName }))
   models.providers[providerName] = {
     apiKey: cfg.apiKey || '',
     baseUrl: cfg.baseUrl || '',
@@ -119,11 +120,11 @@ const updateOmpProvider = (providerName, updates) => {
 
 const deleteOmpProvider = (providerName) => {
   const models = readOmpModels()
-  if (!models.providers?.[providerName]) throw new Error('供应商不存在')
+  if (!models.providers?.[providerName]) throw new Error(t('serviceAgent.common.providerNotFoundNoName'))
   // 保护：modelRoles 引用检查
   const referenced = getOmpModelRoleRefs().filter(({ ref }) => parseOmpModelRef(ref)?.provider === providerName)
   if (referenced.length) {
-    throw new Error(`供应商 ${providerName} 有模型被模型角色引用（${referenced.map(r => r.role).join('、')}），请先修改模型角色`)
+    throw new Error(t('serviceAgent.omp.providerReferenced', { name: providerName, roles: referenced.map(r => r.role).join(t('serviceAgent.common.listSeparator')) }))
   }
   delete models.providers[providerName]
   writeOmpModels(models)
@@ -143,13 +144,13 @@ const normalizeCost = (cost) => {
 }
 
 const addOmpModel = (providerName, model) => {
-  if (!providerName) throw new Error('供应商名不能为空')
-  if (!model?.id) throw new Error('模型 ID 不能为空')
+  if (!providerName) throw new Error(t('serviceAgent.common.providerNameRequired'))
+  if (!model?.id) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const models = readOmpModels()
-  if (!models.providers?.[providerName]) throw new Error(`供应商 ${providerName} 不存在`)
+  if (!models.providers?.[providerName]) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
   const prov = models.providers[providerName]
   if (!prov.models) prov.models = []
-  if (prov.models.some(m => m.id === model.id)) throw new Error(`模型 ${model.id} 已存在`)
+  if (prov.models.some(m => m.id === model.id)) throw new Error(t('serviceAgent.common.modelExists', { id: model.id }))
   const cost = normalizeCost(model.cost)
   const next = {
     id: model.id,
@@ -173,11 +174,11 @@ const addOmpModel = (providerName, model) => {
 
 const updateOmpModel = (providerName, modelId, updates) => {
   const models = readOmpModels()
-  if (!models.providers?.[providerName]) throw new Error(`供应商 ${providerName} 不存在`)
+  if (!models.providers?.[providerName]) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
   const prov = models.providers[providerName]
   if (!prov.models) return
   const idx = prov.models.findIndex(m => m.id === modelId)
-  if (idx === -1) throw new Error(`模型 ${modelId} 不存在`)
+  if (idx === -1) throw new Error(t('serviceAgent.common.modelNotFound', { id: modelId }))
   // 不允许通过编辑改 id（id 是唯一标识，改名由 UI 层 删旧+建新）
   const next = { ...prov.models[idx] }
   if (updates.name !== undefined) next.name = updates.name
@@ -220,7 +221,7 @@ const updateOmpModel = (providerName, modelId, updates) => {
 
 const deleteOmpModel = (providerName, modelId) => {
   const models = readOmpModels()
-  if (!models.providers?.[providerName]) throw new Error(`供应商 ${providerName} 不存在`)
+  if (!models.providers?.[providerName]) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
   const prov = models.providers[providerName]
   if (!prov.models) return
   // 保护：modelRoles 引用检查
@@ -229,7 +230,7 @@ const deleteOmpModel = (providerName, modelId) => {
     return parsed?.provider === providerName && parsed.model === modelId
   })
   if (referenced.length) {
-    throw new Error(`模型 ${modelId} 被模型角色引用（${referenced.map(r => r.role).join('、')}），请先修改模型角色`)
+    throw new Error(t('serviceAgent.omp.modelReferenced', { model: modelId, roles: referenced.map(r => r.role).join(t('serviceAgent.common.listSeparator')) }))
   }
   prov.models = prov.models.filter(m => m.id !== modelId)
   writeOmpModels(models)

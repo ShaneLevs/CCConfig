@@ -2,6 +2,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execSync } = require('node:child_process')
 
+const { t } = require('./i18n')
+
 const HOME = () => require('os').homedir()
 const PLUGINS_DIR = () => path.join(HOME(), '.claude', 'plugins')
 const KNOWN_MARKETPLACES_PATH = () => path.join(PLUGINS_DIR(), 'known_marketplaces.json')
@@ -80,27 +82,33 @@ const discoverPluginComponents = (pluginDir, lspServersJson) => {
 // ==================== 输入校验 ====================
 
 const validatePluginName = (name) => {
-  if (!name || name.length === 0) return { valid: false, error: '插件名不能为空' }
-  if (name.length > 256) return { valid: false, error: '插件名过长' }
+  if (!name || name.length === 0) return { valid: false, error: t('service.plugin.nameRequired') }
+  if (name.length > 256) return { valid: false, error: t('service.plugin.nameTooLong') }
   const valid = [...name].every(c => /[a-zA-Z0-9\-_.@/]/.test(c))
-  if (!valid) return { valid: false, error: `插件名包含无效字符: ${name}` }
+  if (!valid) return { valid: false, error: t('service.plugin.nameInvalidChars', { name }) }
   return { valid: true }
 }
 
 const validateScope = (scope) => {
   if (!['user', 'project', 'local', 'managed'].includes(scope)) {
-    return { valid: false, error: `无效的 scope: ${scope} (应为 user/project/local/managed)` }
+    return {
+      valid: false,
+      error: t('service.plugin.invalidScope', { scope }),
+    }
   }
   return { valid: true }
 }
 
 const validateMarketplaceSource = (source) => {
-  if (!source || source.length === 0) return { valid: false, error: '仓库来源不能为空' }
-  if (source.length > 1024) return { valid: false, error: '仓库来源过长' }
+  if (!source || source.length === 0) return { valid: false, error: t('service.plugin.sourceRequired') }
+  if (source.length > 1024) return { valid: false, error: t('service.plugin.sourceTooLong') }
   const dangerous = [';', '|', '&', '`', '$', '(', ')', '{', '}', '<', '>', '\n', '\r']
   for (const c of dangerous) {
     if (source.includes(c)) {
-      return { valid: false, error: `仓库来源包含无效字符 '${c}'` }
+      return {
+        valid: false,
+        error: t('service.plugin.sourceInvalidChars', { char: c }),
+      }
     }
   }
   return { valid: true }
@@ -192,7 +200,7 @@ const addMarketplace = (source) => {
     const result = runPluginCommand(['marketplace', 'add', source])
     return { success: result.success, message: result.success ? result.stdout : result.stderr }
   } catch (error) {
-    return { success: false, message: error.message || '添加仓库失败' }
+    return { success: false, message: error.message || t('service.plugin.addMarketplaceFailed') }
   }
 }
 
@@ -204,7 +212,7 @@ const removeMarketplace = (name) => {
     const result = runPluginCommand(['marketplace', 'remove', name])
     return { success: result.success, message: result.success ? result.stdout : result.stderr }
   } catch (error) {
-    return { success: false, message: error.message || '移除仓库失败' }
+    return { success: false, message: error.message || t('service.plugin.removeMarketplaceFailed') }
   }
 }
 
@@ -218,7 +226,7 @@ const updateMarketplace = (name) => {
     const result = runPluginCommand(args)
     return { success: result.success, message: result.success ? result.stdout : result.stderr }
   } catch (error) {
-    return { success: false, message: error.message || '更新仓库失败' }
+    return { success: false, message: error.message || t('service.plugin.updateMarketplaceFailed') }
   }
 }
 
@@ -333,13 +341,19 @@ const pluginLifecycleOp = (verb, name, scope, cwd) => {
 
     // project/local scope 需要 cwd
     if ((scope === 'project' || scope === 'local') && (!cwd || !fs.existsSync(cwd))) {
-      return { success: false, message: `scope '${scope}' 需要有效的工作目录` }
+      return {
+        success: false,
+        message: t('service.plugin.scopeRequiresCwd', { scope }),
+      }
     }
 
     const result = runPluginCommand([verb, name, '--scope', scope], scope === 'project' || scope === 'local' ? cwd : undefined)
     return { success: result.success, message: result.success ? result.stdout : result.stderr }
   } catch (error) {
-    return { success: false, message: error.message || `${verb} 操作失败` }
+    return {
+      success: false,
+      message: error.message || t('service.plugin.operationFailed', { verb }),
+    }
   }
 }
 

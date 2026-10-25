@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { Dialog } from "tdesign-vue-next";
 
 // claude 配置详情预览弹窗（点击配置行打开）。
@@ -8,6 +9,8 @@ const props = defineProps({
   config: { type: Object, default: null },
 });
 const emit = defineEmits(["update:visible"]);
+
+const { t } = useI18n();
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -21,12 +24,12 @@ const maskKey = (key) => {
 </script>
 
 <template>
-  <Dialog v-model:visible="dialogVisible" header="配置详情" width="560px" :footer="false">
+  <Dialog v-model:visible="dialogVisible" :header="t('claude.preview.title')" width="560px" :footer="false">
     <div v-if="config" class="preview-content">
-      <div class="preview-item"><span class="preview-label">配置名称</span><span class="preview-value">{{ config.name }}</span></div>
-      <div class="preview-item"><span class="preview-label">{{ config.authVar || 'ANTHROPIC_AUTH_TOKEN' }}</span><span class="preview-value">{{ maskKey(config.key) || "未设置" }}</span></div>
-      <div class="preview-item"><span class="preview-label">BASE_URL</span><span class="preview-value">{{ config.baseUrl || "未设置" }}</span></div>
-      <div class="preview-item"><span class="preview-label">MODEL</span><span class="preview-value">{{ config.model || "未设置" }}</span></div>
+      <div class="preview-item"><span class="preview-label">{{ t('claude.preview.name') }}</span><span class="preview-value">{{ config.name }}</span></div>
+      <div class="preview-item"><span class="preview-label">{{ config.authVar || 'ANTHROPIC_AUTH_TOKEN' }}</span><span class="preview-value">{{ maskKey(config.key) || t('common.notSet') }}</span></div>
+      <div class="preview-item"><span class="preview-label">BASE_URL</span><span class="preview-value">{{ config.baseUrl || t('common.notSet') }}</span></div>
+      <div class="preview-item"><span class="preview-label">MODEL</span><span class="preview-value">{{ config.model || t('common.notSet') }}</span></div>
       <div v-if="config.defaultHaikuModel || config.defaultSonnetModel || config.defaultOpusModel || config.defaultFableModel" class="preview-divider"></div>
       <div v-if="config.defaultHaikuModel" class="preview-item"><span class="preview-label">HAIKU_MODEL</span><span class="preview-value">{{ config.defaultHaikuModel }}</span></div>
       <div v-if="config.defaultSonnetModel" class="preview-item"><span class="preview-label">SONNET_MODEL</span><span class="preview-value">{{ config.defaultSonnetModel }}</span></div>
@@ -35,7 +38,7 @@ const maskKey = (key) => {
       <div v-if="config.subagentModel" class="preview-item"><span class="preview-label">SUBAGENT_MODEL</span><span class="preview-value">{{ config.subagentModel }}</span></div>
       <template v-if="config.extraFields && config.extraFields.length">
         <div class="preview-divider"></div>
-        <div class="preview-subtitle">env 其他字段</div>
+        <div class="preview-subtitle">{{ t('claude.preview.extraFields') }}</div>
         <div v-for="(field, idx) in config.extraFields" :key="idx" class="preview-item">
           <span class="preview-label">{{ field.key }}</span>
           <span class="preview-value">{{ field.value }}</span>

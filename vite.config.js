@@ -65,8 +65,14 @@ function bundlePreloadPlugin() {
       await buildPreload()
       const watcher = server.watcher
       watcher.add(path.resolve(__dirname, 'public/preload/**'))
+      // 共享文案目录也会被 esbuild 内联进 services.js（preload i18n），改动同样要重打包
+      watcher.add(path.resolve(__dirname, 'shared/i18n/**'))
       watcher.on('change', async (file) => {
-        if (file.includes('public\\preload\\') || file.includes('public/preload/')) {
+        const normalized = file.replace(/\\/g, '/')
+        if (
+          normalized.includes('public/preload/') ||
+          normalized.includes('shared/i18n/')
+        ) {
           console.log('[preload] 文件变动，重新构建...')
           await buildPreload()
         }

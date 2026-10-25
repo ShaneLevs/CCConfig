@@ -4,7 +4,8 @@
 // 星标 = 设为默认模型（顶层 model.provider / model.default）。
 // Hermes v12+ 顶层 providers 字典（Web UI 托管）只读展示：可设默认，禁改禁删。
 // 风格与 ZCode 配置页一致：供应商手风琴 + 模型标签；模型在供应商弹窗内编辑（Hermes 数据模型如此）。
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Dialog, Input, InputNumber, MessagePlugin,
   Select, Popconfirm, Alert as TAlert, Tooltip, Link,
@@ -16,13 +17,18 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import "./styles/ConfigView.css";
 
+const { t } = useI18n();
+
 // API 模式与服务层 HERMES_API_MODES 一致（chat_completions / anthropic_messages / codex_responses / bedrock_converse）
 const apiModeOptions = [
-  { label: "chat_completions（OpenAI Chat）", value: "chat_completions" },
-  { label: "anthropic_messages（Anthropic Messages）", value: "anthropic_messages" },
-  { label: "codex_responses（OpenAI Responses）", value: "codex_responses" },
-  { label: "bedrock_converse（AWS Bedrock）", value: "bedrock_converse" },
+  { labelKey: "hermes.config.apiMode.chatCompletions", value: "chat_completions" },
+  { labelKey: "hermes.config.apiMode.anthropicMessages", value: "anthropic_messages" },
+  { labelKey: "hermes.config.apiMode.codexResponses", value: "codex_responses" },
+  { labelKey: "hermes.config.apiMode.bedrockConverse", value: "bedrock_converse" },
 ];
+const apiModeSelectOptions = computed(() =>
+  apiModeOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+);
 
 const loading = ref(false);
 const warningMsg = ref("");
@@ -52,7 +58,7 @@ const refresh = () => {
     defaultKey.value = window.services.getHermesDefaultModel() || null;
   } catch (e) {
     console.error("加载 Hermes 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -91,7 +97,7 @@ const openAddDialog = () => {
 
 const handleAddProvider = () => {
   const name = addForm.value.name.trim();
-  if (!name) { MessagePlugin.warning("请输入供应商名称"); return; }
+  if (!name) { MessagePlugin.warning(t("hermes.provider.nameRequired")); return; }
   try {
     window.services.addHermesProvider({
       name,
@@ -101,11 +107,11 @@ const handleAddProvider = () => {
       rateLimitDelay: Number(addForm.value.rateLimitDelay) || 0,
       models: addForm.value.models,
     });
-    MessagePlugin.success("供应商已添加");
+    MessagePlugin.success(t("hermes.provider.added"));
     addDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("hermes.provider.addFailed", { message: e.message }));
   }
 };
 
@@ -135,21 +141,21 @@ const handleSaveProvider = () => {
     if (!editForm.value.apiKey && originalApiKey.value) payload.clearApiKey = true;
     else if (editForm.value.apiKey !== originalApiKey.value) payload.apiKey = editForm.value.apiKey.trim();
     window.services.updateHermesProvider(editingProvider.value, payload);
-    MessagePlugin.success("供应商配置已更新");
+    MessagePlugin.success(t("hermes.provider.updated"));
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("hermes.provider.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (provider) => {
   try {
     window.services.deleteHermesProvider(provider.name);
-    MessagePlugin.success(`供应商 ${provider.name} 已删除`);
+    MessagePlugin.success(t("hermes.provider.deleted", { name: provider.name }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("hermes.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -160,10 +166,10 @@ const handleDeleteProvider = (provider) => {
 const setDefaultModel = (p, m) => {
   try {
     window.services.setHermesDefaultModel(p.name, m.modelId);
-    MessagePlugin.success(`默认模型已设为 ${m.modelId}`);
+    MessagePlugin.success(t("hermes.model.defaultSet", { model: m.modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("hermes.model.saveFailed", { message: e.message }));
   }
 };
 
@@ -177,14 +183,14 @@ onMounted(refresh);
       <div class="hermes-toolbar-left">
         <span class="hermes-toolbar-tip">
           <Link theme="primary" :underline="true" @click="openConfigFile">~/.hermes/config.yaml</Link>
-          <span class="hermes-toolbar-sub">custom_providers 供应商与顶层 model 默认指针</span>
+          <span class="hermes-toolbar-sub">{{ t("hermes.config.toolbarSubtitle") }}</span>
         </span>
       </div>
       <div class="hermes-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("hermes.config.addProvider") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -198,7 +204,7 @@ onMounted(refresh);
 
     <template v-if="!loading">
       <div v-if="providers.length === 0" class="hermes-config-empty">
-        <Empty description="未检测到 Hermes 供应商；可在 Hermes 内添加，或在此手动添加" />
+        <Empty :description="t('hermes.config.emptyProviders')" />
       </div>
 
       <div v-else class="hermes-provider-list">
@@ -208,31 +214,31 @@ onMounted(refresh);
                 <div class="hermes-provider-header-left">
                   <span class="hermes-provider-name">{{ p.name }}</span>
                   <Tag size="small" variant="outline">{{ p.apiMode }}</Tag>
-                  <Tooltip v-if="p.readonly" content="由 Hermes Web UI 托管（providers 节），仅可设为默认" placement="top">
-                    <Tag size="small" theme="default" variant="light"><LockOnIcon size="11px" style="vertical-align: -1px" /> Hermes 托管</Tag>
+                  <Tooltip v-if="p.readonly" :content="t('hermes.config.readonlyTooltip')" placement="top">
+                    <Tag size="small" theme="default" variant="light"><LockOnIcon size="11px" style="vertical-align: -1px" /> {{ t("hermes.config.managedTag") }}</Tag>
                   </Tooltip>
-                  <Tag v-if="defaultKey && defaultKey.provider === p.name" size="small" theme="warning" variant="light">默认供应商</Tag>
-                  <span class="hermes-model-count">{{ p.models.length }} 个模型</span>
+                  <Tag v-if="defaultKey && defaultKey.provider === p.name" size="small" theme="warning" variant="light">{{ t("hermes.config.defaultProvider") }}</Tag>
+                  <span class="hermes-model-count">{{ t("hermes.config.modelCount", { count: p.models.length }) }}</span>
                 </div>
               </template>
               <template #headerRightContent>
                 <div class="hermes-provider-header-right" @click.stop>
-                  <Tooltip v-if="p.readonly" content="由 Hermes Web UI 托管，不可在此编辑" placement="top">
+                  <Tooltip v-if="p.readonly" :content="t('hermes.config.readonlyEditTooltip')" placement="top">
                     <Button size="small" theme="default" variant="text" disabled>
-                      <template #icon><EditIcon /></template> 编辑
+                      <template #icon><EditIcon /></template> {{ t("common.edit") }}
                     </Button>
                   </Tooltip>
                   <Button v-else size="small" theme="default" variant="text" @click="handleEdit(p)">
-                    <template #icon><EditIcon /></template> 编辑
+                    <template #icon><EditIcon /></template> {{ t("common.edit") }}
                   </Button>
-                  <Tooltip v-if="p.readonly" content="由 Hermes Web UI 托管，不可在此删除" placement="top">
+                  <Tooltip v-if="p.readonly" :content="t('hermes.config.readonlyDeleteTooltip')" placement="top">
                     <Button size="small" theme="danger" variant="text" disabled>
                       <template #icon><DeleteIcon /></template>
                     </Button>
                   </Tooltip>
                   <Popconfirm
                     v-else
-                    content="删除该供应商？若为当前默认供应商，默认指针将改指首个剩余供应商"
+                    :content="t('hermes.config.deleteProviderConfirm')"
                     theme="danger"
                     @confirm="handleDeleteProvider(p)"
                   >
@@ -253,27 +259,27 @@ onMounted(refresh);
                     </div>
                     <div class="hermes-detail-item">
                       <span class="hermes-detail-label">API Key</span>
-                      <span class="hermes-detail-value mono">{{ p.apiKey ? "已配置" : "未配置" }}</span>
+                      <span class="hermes-detail-value mono">{{ p.apiKey ? t("hermes.config.configured") : t("hermes.config.unconfigured") }}</span>
                     </div>
                     <div class="hermes-detail-item">
-                      <span class="hermes-detail-label">请求间隔（rate_limit_delay）</span>
-                      <span class="hermes-detail-value">{{ p.rateLimitDelay ? `${p.rateLimitDelay} 秒` : "—" }}</span>
+                      <span class="hermes-detail-label">{{ t("hermes.config.rateLimitLabel") }}</span>
+                      <span class="hermes-detail-value">{{ p.rateLimitDelay ? t("hermes.config.seconds", { count: p.rateLimitDelay }) : "—" }}</span>
                     </div>
                   </div>
 
                   <div class="hermes-models-section">
                     <div class="hermes-models-title">
-                      <span>模型（星标 = 设为默认，写入顶层 model.provider / model.default）</span>
+                      <span>{{ t("hermes.config.modelsTitle") }}</span>
                     </div>
                     <div v-if="p.models.length === 0" class="hermes-models-empty">
-                      暂无模型{{ p.readonly ? "" : "，点击「编辑」在弹窗中添加" }}
+                      {{ p.readonly ? t("hermes.config.modelsEmpty") : t("hermes.config.modelsEmptyEditable") }}
                     </div>
                     <div class="hermes-model-tags">
                       <span v-for="m in p.models" :key="m.modelId" class="hermes-model-tag">
                         <span class="hermes-model-tag-name">{{ m.modelId }}</span>
                         <span v-if="m.contextLength" class="hermes-model-tag-sub">{{ formatNumber(m.contextLength) }}</span>
-                        <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">默认</Tag>
-                        <Tooltip content="设为默认模型" placement="top">
+                        <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">{{ t("common.default") }}</Tag>
+                        <Tooltip :content="t('hermes.config.setDefaultTooltip')" placement="top">
                           <span class="hermes-model-tag-star" @click="setDefaultModel(p, m)"><StarIcon size="12px" /></span>
                         </Tooltip>
                       </span>
@@ -287,83 +293,83 @@ onMounted(refresh);
     </template>
 
     <!-- 添加供应商弹窗（模型内嵌编辑） -->
-    <Dialog v-model:visible="addDialog" header="添加供应商" width="640px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
+    <Dialog v-model:visible="addDialog" :header="t('hermes.config.addProvider')" width="640px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddProvider">
       <div class="hermes-edit-form">
         <div class="hermes-form-item">
-          <label>供应商名称 <span class="hermes-form-required">*</span></label>
+          <label>{{ t("hermes.config.providerName") }} <span class="hermes-form-required">*</span></label>
           <Input v-model="addForm.name" placeholder="openrouter" />
-          <div class="hermes-form-hint">名称即 config.yaml 中的 YAML 身份，被顶层 model.provider 引用</div>
+          <div class="hermes-form-hint">{{ t("hermes.config.nameHint") }}</div>
         </div>
         <div class="hermes-form-item">
-          <label>API 模式（api_mode）</label>
-          <Select v-model="addForm.apiMode" :options="apiModeOptions" />
+          <label>{{ t("hermes.config.apiModeLabel") }}</label>
+          <Select v-model="addForm.apiMode" :options="apiModeSelectOptions" />
         </div>
         <div class="hermes-form-item">
-          <label>Base URL（base_url）</label>
+          <label>{{ t("hermes.config.baseUrlLabel") }}</label>
           <Input v-model="addForm.baseUrl" placeholder="https://openrouter.ai/api/v1" />
         </div>
         <div class="hermes-form-item">
-          <label>API Key（api_key）</label>
-          <ApiKeyInput v-model="addForm.apiKey" placeholder="明文写入 config.yaml" />
+          <label>{{ t("hermes.config.apiKeyLabel") }}</label>
+          <ApiKeyInput v-model="addForm.apiKey" :placeholder="t('hermes.config.apiKeyPlaceholder')" />
         </div>
         <div class="hermes-form-item">
-          <label>请求间隔秒数（rate_limit_delay，可选）</label>
+          <label>{{ t("hermes.config.rateLimitFieldLabel") }}</label>
           <InputNumber v-model="addForm.rateLimitDelay" :min="0" :step="1" placeholder="0" style="width: 220px" />
         </div>
         <div class="hermes-form-item">
-          <label>模型（models，首个模型将作为该供应商的 model 默认值）</label>
+          <label>{{ t("hermes.config.modelsLabel") }}</label>
           <div class="hermes-model-rows">
             <div v-for="(m, idx) in addForm.models" :key="idx" class="hermes-model-row">
-              <Input v-model="m.modelId" placeholder="模型 ID，如 anthropic/claude-opus-4-8" />
-              <InputNumber v-model="m.contextLength" :min="0" :step="1000" placeholder="上下文长度" class="hermes-model-row-ctx" />
+              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholder')" />
+              <InputNumber v-model="m.contextLength" :min="0" :step="1000" :placeholder="t('hermes.config.contextPlaceholder')" class="hermes-model-row-ctx" />
               <span class="hermes-model-row-del" @click="removeModelRow(addForm, idx)"><DeleteIcon size="14px" /></span>
             </div>
             <Button size="small" variant="outline" @click="addModelRow(addForm)">
-              <template #icon><AddIcon /></template> 添加模型
+              <template #icon><AddIcon /></template> {{ t("hermes.config.addModel") }}
             </Button>
           </div>
-          <div class="hermes-form-hint">模型 ID 必填；上下文长度（context_length）可选</div>
+          <div class="hermes-form-hint">{{ t("hermes.config.modelsHint") }}</div>
         </div>
       </div>
     </Dialog>
 
     <!-- 编辑供应商弹窗（名称固定；模型内嵌编辑，未知字段自动保留） -->
-    <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="640px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
+    <Dialog v-model:visible="editDialog" :header="t('hermes.config.editTitle')" width="640px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="hermes-edit-form">
         <div class="hermes-form-item">
-          <label>供应商名称</label>
+          <label>{{ t("hermes.config.providerName") }}</label>
           <Input :value="editForm.name" disabled />
-          <div class="hermes-form-hint">名称被 model.provider 引用，不随编辑变化</div>
+          <div class="hermes-form-hint">{{ t("hermes.config.nameReadonlyHint") }}</div>
         </div>
         <div class="hermes-form-item">
-          <label>API 模式（api_mode）</label>
-          <Select v-model="editForm.apiMode" :options="apiModeOptions" />
+          <label>{{ t("hermes.config.apiModeLabel") }}</label>
+          <Select v-model="editForm.apiMode" :options="apiModeSelectOptions" />
         </div>
         <div class="hermes-form-item">
-          <label>Base URL（base_url）</label>
+          <label>{{ t("hermes.config.baseUrlLabel") }}</label>
           <Input v-model="editForm.baseUrl" />
         </div>
         <div class="hermes-form-item">
-          <label>API Key（api_key）</label>
-          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? '已保存，清空并保存将删除；修改则覆盖' : '留空不写入'" />
+          <label>{{ t("hermes.config.apiKeyLabel") }}</label>
+          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? t('hermes.config.apiKeySavedPlaceholder') : t('hermes.config.apiKeyEmptyPlaceholder')" />
         </div>
         <div class="hermes-form-item">
-          <label>请求间隔秒数（rate_limit_delay，可选）</label>
+          <label>{{ t("hermes.config.rateLimitFieldLabel") }}</label>
           <InputNumber v-model="editForm.rateLimitDelay" :min="0" :step="1" placeholder="0" style="width: 220px" />
         </div>
         <div class="hermes-form-item">
-          <label>模型（models，首个模型将作为该供应商的 model 默认值）</label>
+          <label>{{ t("hermes.config.modelsLabel") }}</label>
           <div class="hermes-model-rows">
             <div v-for="(m, idx) in editForm.models" :key="idx" class="hermes-model-row">
-              <Input v-model="m.modelId" placeholder="模型 ID" />
-              <InputNumber v-model="m.contextLength" :min="0" :step="1000" placeholder="上下文长度" class="hermes-model-row-ctx" />
+              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholderEdit')" />
+              <InputNumber v-model="m.contextLength" :min="0" :step="1000" :placeholder="t('hermes.config.contextPlaceholder')" class="hermes-model-row-ctx" />
               <span class="hermes-model-row-del" @click="removeModelRow(editForm, idx)"><DeleteIcon size="14px" /></span>
             </div>
             <Button size="small" variant="outline" @click="addModelRow(editForm)">
-              <template #icon><AddIcon /></template> 添加模型
+              <template #icon><AddIcon /></template> {{ t("hermes.config.addModel") }}
             </Button>
           </div>
-          <div class="hermes-form-hint">改模型 ID = 删旧建新；模型条目上的其他自定义键（如 name / max_tokens）自动保留</div>
+          <div class="hermes-form-hint">{{ t("hermes.config.modelsEditHint") }}</div>
         </div>
       </div>
     </Dialog>

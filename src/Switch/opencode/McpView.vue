@@ -1,6 +1,7 @@
 <script setup>
 
 import { ref, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Tag, Button, Tooltip, MessagePlugin, Space, Popconfirm, Switch,
 } from "tdesign-vue-next";
@@ -11,6 +12,8 @@ import McpToolDrawer from "../../components/McpToolDrawer.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
 import "./styles/McpView.css";
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const servers = ref([]);
@@ -95,11 +98,11 @@ const handleSaveMcp = ({ mode, name, config }) => {
     }
     const isEdit = mode === 'edit' && !!raw[name];
     window.services.setOpencodeMcpServer(name, toOpencode(config, raw[name], isEdit));
-    MessagePlugin.success(mode === 'create' ? 'MCP 配置已添加' : 'MCP 配置已更新');
+    MessagePlugin.success(mode === 'create' ? t('opencode.mcp.added') : t('opencode.mcp.updated'));
     mcpDialogRef.value?.close();
     loadServers();
   } catch (e) {
-    MessagePlugin.error('保存失败: ' + e.message);
+    MessagePlugin.error(t('opencode.mcp.saveFailed', { message: e.message }));
   }
 };
 
@@ -107,20 +110,20 @@ const handleSaveMcp = ({ mode, name, config }) => {
 const toggleMcpStatus = (srv) => {
   try {
     window.services.setOpencodeMcpServer(srv.name, { ...srv.raw, enabled: !srv.enabled });
-    MessagePlugin.success(srv.enabled ? 'MCP 已关闭' : 'MCP 已开启');
+    MessagePlugin.success(srv.enabled ? t('opencode.mcp.disabledToast') : t('opencode.mcp.enabledToast'));
     loadServers();
   } catch (e) {
-    MessagePlugin.error('操作失败: ' + e.message);
+    MessagePlugin.error(t('opencode.mcp.operationFailed', { message: e.message }));
   }
 };
 
 const deleteMcpServer = (srv) => {
   try {
     window.services.removeOpencodeMcpServer(srv.name);
-    MessagePlugin.success('MCP 配置已删除');
+    MessagePlugin.success(t('opencode.mcp.deleted'));
     loadServers();
   } catch (e) {
-    MessagePlugin.error('删除失败: ' + e.message);
+    MessagePlugin.error(t('opencode.mcp.deleteFailed', { message: e.message }));
   }
 };
 
@@ -130,7 +133,7 @@ const toolServerName = ref("");
 const toolServerConfig = ref(null);
 const openToolDrawer = (srv) => {
   if (!srv.enabled) {
-    return MessagePlugin.warning("请先开启 MCP 后再查看工具");
+    return MessagePlugin.warning(t("opencode.mcp.enableFirst"));
   }
   toolServerName.value = srv.name;
   toolServerConfig.value = srv.config;
@@ -155,13 +158,13 @@ onMounted(loadServers);
   <div class="oc-mcp-container">
     <div class="oc-mcp-header">
       <div class="oc-mcp-header-left">
-        <span class="oc-mcp-tip">OpenCode MCP 服务器配置（直接编辑 <span class="hint-link" @click="openConfigFile">opencode.json/mcp</span>）</span>
+        <span class="oc-mcp-tip">{{ t("opencode.mcp.tipPrefix") }}<span class="hint-link" @click="openConfigFile">opencode.json/mcp</span>{{ t("opencode.mcp.tipSuffix") }}</span>
       </div>
       <div class="oc-mcp-actions">
         <Button size="small" theme="primary" @click="openCreateDialog">
-          <template #icon><AddIcon /></template> 添加 MCP
+          <template #icon><AddIcon /></template> {{ t("opencode.mcp.add") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -170,10 +173,10 @@ onMounted(loadServers);
     </div>
 
     <div v-if="servers.length === 0" class="oc-mcp-empty">
-      <Empty description="暂无 MCP 配置">
+      <Empty :description="t('opencode.mcp.empty')">
         <template #action>
           <Button size="small" theme="primary" @click="openCreateDialog">
-            <template #icon><AddIcon /></template> 添加 MCP
+            <template #icon><AddIcon /></template> {{ t("opencode.mcp.add") }}
           </Button>
         </template>
       </Empty>
@@ -190,24 +193,24 @@ onMounted(loadServers);
       >
         <template #tags>
           <Tag size="small" variant="light" :theme="srv.enabled ? 'success' : 'default'">
-            {{ srv.enabled ? '已启用' : '已禁用' }}
+            {{ srv.enabled ? t('common.enabled') : t('common.disabled') }}
           </Tag>
         </template>
         <template #actions>
           <Space size="small">
             <Switch :value="srv.enabled" size="small" @change="toggleMcpStatus(srv)" />
-            <Tooltip content="查看工具" placement="top">
+            <Tooltip :content="t('mcp.viewTools')" placement="top">
               <Button size="small" variant="text" :disabled="!srv.enabled" @click="openToolDrawer(srv)">
                 <template #icon><ToolsIcon /></template>
               </Button>
             </Tooltip>
-            <Tooltip content="编辑" placement="top">
+            <Tooltip :content="t('common.edit')" placement="top">
               <Button size="small" variant="text" @click="openEditDialog(srv)">
                 <template #icon><EditIcon /></template>
               </Button>
             </Tooltip>
-            <Popconfirm content="确定删除此 MCP 配置？" @confirm="deleteMcpServer(srv)">
-              <Tooltip content="删除" placement="top">
+            <Popconfirm :content="t('opencode.mcp.deleteConfirm')" @confirm="deleteMcpServer(srv)">
+              <Tooltip :content="t('common.delete')" placement="top">
                 <Button size="small" variant="text" theme="danger">
                   <template #icon><DeleteIcon /></template>
                 </Button>

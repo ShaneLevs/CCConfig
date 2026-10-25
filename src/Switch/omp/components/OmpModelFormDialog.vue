@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Dialog, Input, InputNumber, Textarea, MessagePlugin, Select, Space, CheckboxGroup, Checkbox, Collapse, CollapsePanel, AutoComplete } from "tdesign-vue-next";
 import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
@@ -20,6 +21,8 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:visible", "confirm"]);
 
+const { t } = useI18n();
+
 const dialogVisible = computed({
   get: () => props.visible,
   set: (v) => emit("update:visible", v),
@@ -28,8 +31,8 @@ const dialogVisible = computed({
 const isAdd = computed(() => props.mode === "add");
 
 const INPUT_TYPE_OPTIONS = [
-  { label: "文本 (text)", value: "text" },
-  { label: "图像 (image)", value: "image" },
+  { labelKey: "model.text", value: "text" },
+  { labelKey: "model.image", value: "image" },
 ];
 
 const THINKING_MODE_OPTIONS = [
@@ -51,10 +54,10 @@ const dumpYaml = (obj) => {
   try { return yamlDump(obj, { indent: 4 }).replace(/\n$/, ""); } catch { return ""; }
 };
 const parseYaml = (str) => {
-  const t = (str ?? "").trim();
-  if (!t) return {};
+  const text = (str ?? "").trim();
+  if (!text) return {};
   try {
-    const result = yamlLoad(t);
+    const result = yamlLoad(text);
     // 必须是普通对象（映射）；标量/数组展开成 `...other` 会产生数字键垃圾
     if (result === null || typeof result !== "object" || Array.isArray(result)) return null;
     return result;
@@ -80,7 +83,7 @@ const dumpOtherFields = (model) => {
 // 表单字段在后覆盖同名键；thinking 仅在有值时写入
 const buildModelPayload = (form, fallbackId) => {
   const other = parseYaml(form.otherYaml);
-  if (other === null) throw new Error("其他参数 (YAML) 格式不正确");
+  if (other === null) throw new Error(t("omp.advanced.yamlInvalid"));
   const id = form.id?.trim() || fallbackId;
   const thinking = {};
   if (form.thinking?.mode) thinking.mode = form.thinking.mode;
@@ -157,14 +160,14 @@ watch(
 const handleConfirm = () => {
   const id = finalId.value;
   if (isAdd.value && !id) {
-    MessagePlugin.warning("请输入模型 ID");
+    MessagePlugin.warning(t("model.idRequired"));
     return;
   }
   let payload;
   try {
     payload = buildModelPayload({ ...form.value, id }, id);
   } catch (e) {
-    MessagePlugin.error((isAdd.value ? "添加失败: " : "保存失败: ") + e.message);
+    MessagePlugin.error(t(isAdd.value ? "omp.model.addFailed" : "omp.model.saveFailed", { message: e.message }));
     return;
   }
   emit("confirm", {
@@ -180,20 +183,20 @@ const handleConfirm = () => {
 <template>
   <Dialog
     v-model:visible="dialogVisible"
-    :header="isAdd ? '添加模型' : '编辑模型'"
+    :header="isAdd ? t('model.addTitle') : t('model.editTitle')"
     width="520px"
-    :confirm-btn="{ content: isAdd ? '添加' : '保存', theme: 'primary' }"
+    :confirm-btn="{ content: isAdd ? t('common.add') : t('common.save'), theme: 'primary' }"
     @confirm="handleConfirm"
   >
     <div class="omp-edit-form">
       <div v-if="isAdd" class="omp-form-item">
-        <label>所属供应商</label>
+        <label>{{ t("model.provider") }}</label>
         <div class="omp-edit-provider-name">{{ providerName }}</div>
       </div>
 
       <!-- 模型 ID：添加模式用 AutoComplete（弹窗打开时已自动拉取模型列表），编辑模式可改名 -->
       <div class="omp-form-item">
-        <label>模型 ID <span v-if="isAdd" class="omp-form-required">*</span></label>
+        <label>{{ t("model.id") }} <span v-if="isAdd" class="omp-form-required">*</span></label>
         <AutoComplete
           v-if="isAdd"
           v-model="form.id"
@@ -201,88 +204,88 @@ const handleConfirm = () => {
           :loading="autoModelsLoading"
           filterable
           clearable
-          placeholder="输入或从下拉选择模型"
+          :placeholder="t('model.selectOrEnter')"
           @select="(val) => onModelIdSelect(val, form)"
         />
-        <Input v-else v-model="newModelId" placeholder="模型 ID" />
+        <Input v-else v-model="newModelId" :placeholder="t('model.idPlaceholder')" />
         <template v-if="isAdd">
-          <div v-if="autoModelsLoading" class="omp-form-hint">正在自动拉取模型列表…</div>
+          <div v-if="autoModelsLoading" class="omp-form-hint">{{ t("model.fetching") }}</div>
           <div v-else-if="autoModelsError" class="omp-form-hint omp-fetch-error">
-            自动获取失败：{{ autoModelsError }}
-            <span class="omp-fetch-retry" @click="fetchAutoModels(provider)">重试</span>
+            {{ t("model.fetchFailed", { message: autoModelsError }) }}
+            <span class="omp-fetch-retry" @click="fetchAutoModels(provider)">{{ t("model.retry") }}</span>
           </div>
           <div v-else-if="autoModels.length > 0" class="omp-form-hint">
-            已自动获取 {{ autoModels.length }} 个模型，选中后自动填充名称/上下文等
+            {{ t("model.fetchedCount", { count: autoModels.length }) }}
           </div>
         </template>
       </div>
       <div class="omp-form-item">
-        <label>显示名称</label>
-        <Input v-model="form.name" :placeholder="isAdd ? '留空则使用模型 ID' : '显示名称'" />
+        <label>{{ t("model.displayName") }}</label>
+        <Input v-model="form.name" :placeholder="isAdd ? t('model.displayNamePlaceholder') : t('model.displayNameEditPlaceholder')" />
       </div>
       <div class="omp-form-item">
-        <label>输入类型</label>
+        <label>{{ t("model.inputType") }}</label>
         <Space size="16px" align="center" wrap>
           <CheckboxGroup v-model="form.input" class="omp-checkbox-group">
-            <Checkbox v-for="opt in INPUT_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</Checkbox>
+            <Checkbox v-for="opt in INPUT_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ t(opt.labelKey) }}</Checkbox>
           </CheckboxGroup>
-          <Checkbox v-model="form.reasoning" class="omp-reasoning-checkbox">推理模型</Checkbox>
+          <Checkbox v-model="form.reasoning" class="omp-reasoning-checkbox">{{ t("model.reasoning") }}</Checkbox>
         </Space>
       </div>
       <ModelLimitsFields v-model:context="form.contextWindow" v-model:output="form.maxTokens" item-class="omp-form-item" />
       <Collapse v-model="advancedOpen" class="omp-advanced-collapse">
-        <CollapsePanel value="1" header="高级配置（思考级别 / 费用 / 兼容性）">
+        <CollapsePanel value="1" :header="t('omp.advanced.title')">
           <div class="omp-form-item">
-            <label>思考级别 (thinking)</label>
+            <label>{{ t("omp.advanced.thinking") }}</label>
             <div class="omp-form-row">
               <div class="omp-form-item">
-                <label>模式</label>
-                <Select v-model="form.thinking.mode" :options="THINKING_MODE_OPTIONS" clearable placeholder="不设置" />
+                <label>{{ t("omp.advanced.mode") }}</label>
+                <Select v-model="form.thinking.mode" :options="THINKING_MODE_OPTIONS" clearable :placeholder="t('omp.advanced.modePlaceholder')" />
               </div>
             </div>
             <div class="omp-form-row">
               <div class="omp-form-item">
-                <label>最小级别</label>
-                <Select v-model="form.thinking.minLevel" :options="LEVEL_ORDER.map(v => ({ label: v, value: v }))" clearable placeholder="不限制" />
+                <label>{{ t("omp.advanced.minLevel") }}</label>
+                <Select v-model="form.thinking.minLevel" :options="LEVEL_ORDER.map(v => ({ label: v, value: v }))" clearable :placeholder="t('omp.advanced.levelPlaceholder')" />
               </div>
               <div class="omp-form-item">
-                <label>最大级别</label>
-                <Select v-model="form.thinking.maxLevel" :options="LEVEL_ORDER.map(v => ({ label: v, value: v }))" clearable placeholder="不限制" />
+                <label>{{ t("omp.advanced.maxLevel") }}</label>
+                <Select v-model="form.thinking.maxLevel" :options="LEVEL_ORDER.map(v => ({ label: v, value: v }))" clearable :placeholder="t('omp.advanced.levelPlaceholder')" />
               </div>
             </div>
-            <div class="omp-form-hint">角色选择模型时，思考级别只显示 minLevel ~ maxLevel 范围</div>
+            <div class="omp-form-hint">{{ t("omp.advanced.thinkingHint") }}</div>
           </div>
           <div class="omp-form-item">
-            <label>费用 (cost) — 每百万 Token</label>
+            <label>{{ t("model.cost") }}</label>
             <div class="omp-form-row">
               <div class="omp-form-item">
-                <label>输入</label>
+                <label>{{ t("model.input") }}</label>
                 <InputNumber v-model="form.cost.input" :min="0" :step="0.1" placeholder="0" />
               </div>
               <div class="omp-form-item">
-                <label>输出</label>
+                <label>{{ t("model.output") }}</label>
                 <InputNumber v-model="form.cost.output" :min="0" :step="0.1" placeholder="0" />
               </div>
             </div>
             <div class="omp-form-row">
               <div class="omp-form-item">
-                <label>缓存读取</label>
+                <label>{{ t("model.cacheRead") }}</label>
                 <InputNumber v-model="form.cost.cacheRead" :min="0" :step="0.1" placeholder="0" />
               </div>
               <div class="omp-form-item">
-                <label>缓存写入</label>
+                <label>{{ t("model.cacheWrite") }}</label>
                 <InputNumber v-model="form.cost.cacheWrite" :min="0" :step="0.1" placeholder="0" />
               </div>
             </div>
           </div>
           <div class="omp-form-item">
-            <label>其他参数</label>
+            <label>{{ t("omp.advanced.otherParams") }}</label>
             <Textarea
               v-model="form.otherYaml"
-              placeholder="compat:&#10;    supportsDeveloperRole: false&#10;    reasoningEffortMap:&#10;        high: high&#10;自定义字段: 值"
+              :placeholder="t('omp.advanced.otherParamsPlaceholder')"
               :autosize="{ minRows: 4, maxRows: 14 }"
             />
-            <div class="omp-form-hint">原生 YAML，除上方表单字段外的模型参数都在这里，子级 4 空格缩进</div>
+            <div class="omp-form-hint">{{ t("omp.advanced.otherParamsHint") }}</div>
           </div>
         </CollapsePanel>
       </Collapse>

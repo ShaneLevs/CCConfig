@@ -1,0 +1,68 @@
+{
+  "qoder": {
+    "config": {
+      "toolbarSubtitle": "settings.json (providers)",
+      "addProvider": "Add provider",
+      "editTitle": "Edit provider config",
+      "emptyProviders": "No Qoder custom providers found. Add one in Qoder, or add it manually here.",
+      "noBaseUrl": "No Base URL configured",
+      "defaultModelTag": "Default {model}",
+      "modelCount": "{count} model | {count} models",
+      "deleteProviderTooltip": "Delete provider (its models are deleted too)",
+      "deleteProviderConfirm": "Delete this provider? Its models and apiKey will also be removed from settings.json.",
+      "configured": "Configured",
+      "unconfigured": "Not configured",
+      "modelsTitle": "Models (providers.<id>.models)",
+      "modelsEmpty": "No models yet. The default model (provider.model) must reference a model ID defined here.",
+      "vision": "Vision",
+      "thinking": "Thinking",
+      "setDefaultTooltip": "Set as default model (provider.model)",
+      "editModelTooltip": "Edit model config",
+      "deleteModelConfirm": "Delete this model?",
+      "addModelTitle": "Add model",
+      "editModelTitle": "Edit model",
+      "protocolLabel": "Protocol",
+      "apiKeyPlaceholder": "Written in plaintext to settings.json apiKey",
+      "providerIdAutoHint": "The Provider ID is generated automatically per the official format (qoder-custom-<uuid>)",
+      "apiKeySavedPlaceholder": "Saved; clear and save to delete, or edit to overwrite",
+      "apiKeyEmptyPlaceholder": "Leave empty to write nothing",
+      "modelIdLabel": "Model ID",
+      "noModels": "No models fetched",
+      "fetchingModels": "Fetching models from this provider…",
+      "fetchHint": "Fetched from the provider's Base URL /models endpoint; you can also type one manually",
+      "displayNameLabel": "Display name (displayName)",
+      "displayNamePlaceholder": "Leave empty to use the model ID",
+      "visionLabel": "Vision (capabilities.vision)",
+      "thinkingLabel": "Thinking (capabilities.thinking)",
+      "supportsEffortLabel": "Supports reasoning levels (supportsEffort)",
+      "effortLevelsLabel": "Supported levels (supportedEffortLevels)",
+      "effortPlaceholder": "Select none = do not declare levels",
+      "effortEditPlaceholder": "Clear = do not declare levels",
+      "editIdSyncHint": "Changing the ID also updates the default model if it points here",
+      "displayNameEditPlaceholder": "Leave empty to clear and fall back to the model ID",
+      "providerLabel": "Provider: {name}",
+      "protocol": {
+        "anthropic": "anthropic (Anthropic Messages)",
+        "openai": "openai (OpenAI Chat)"
+      }
+    },
+    "provider": {
+      "added": "Provider added",
+      "addFailed": "Add failed: {message}",
+      "updated": "Provider config updated",
+      "saveFailed": "Save failed: {message}",
+      "deleted": "Provider {id} deleted",
+      "deleteFailed": "Delete failed: {message}"
+    },
+    "model": {
+      "idRequired": "Enter a model ID",
+      "added": "Model {id} added",
+      "addFailed": "Add failed: {message}",
+      "updated": "Model config updated",
+      "saveFailed": "Save failed: {message}",
+      "deleted": "Model {id} deleted",
+      "deleteFailed": "Delete failed: {message}",
+      "defaultSet": "Default model set to {id}"
+    }
+  }
+}

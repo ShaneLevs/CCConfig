@@ -1,0 +1,129 @@
+{
+  "service": {
+    "common": {
+      "unknownError": "Unknown error",
+      "operationFailed": "Operation failed",
+      "invalidPath": "Invalid project path",
+      "writeDbFailed": "Failed to write to uTools DB: {message}",
+      "mcpKeepOneLocation": "Keep at least one local location, otherwise there will be no local file to write to",
+      "mcpOnlyJson": "Only .json files are supported. Invalid paths: {paths}",
+      "mcpServerNotFound": "Server {name} not found",
+      "selectMcpConfigTitle": "Select MCP config file",
+      "mcpConfigFilterName": "MCP config (*.json)",
+      "listSeparator": ", "
+    },
+    "skill": {
+      "notFound": "Skill not found",
+      "sourceNotFound": "Source skill not found",
+      "alreadyExists": "A skill with the same name already exists in your user directory",
+      "skillMdMissing": "SKILL.md not found",
+      "folderMissing": "Skill folder not found",
+      "nameRequired": "Skill name is required",
+      "dirMissing": "Skill directory not found",
+      "requestFailed": "Request failed: HTTP {status}",
+      "parseResponseFailed": "Failed to parse response",
+      "tooManyRedirects": "Too many redirects",
+      "redirectMissingLocation": "Redirect is missing a location header",
+      "downloadFailed": "Download failed: HTTP {status}",
+      "archiveSkillMdMissing": "No SKILL.md found in the archive",
+      "downloadEmpty": "Downloaded file is missing or empty",
+      "downloadMissing": "Downloaded file not found",
+      "downloadTooSmall": "Downloaded file is too small; the download may have failed",
+      "fetchFailed": "Fetch failed"
+    },
+    "mcp": {
+      "notFound": "MCP config not found",
+      "dbNotFound": "MCP config not found in DB",
+      "configNotFound": "Config not found",
+      "saveDbFailed": "Failed to save to DB",
+      "writeConfigFailed": "Failed to write config file",
+      "deleteFailed": "Delete failed",
+      "sdkMissing": "MCP SDK is not loaded. Try this feature in the development environment.",
+      "invalidPath": "Invalid project path",
+      "connectFailed": "Unable to connect to the MCP server. Check that the URL is correct and the server is online.",
+      "writeClaudeJsonFailed": "Failed to write ~/.claude.json"
+    },
+    "plugin": {
+      "nameRequired": "Plugin name is required",
+      "nameTooLong": "Plugin name is too long",
+      "nameInvalidChars": "Plugin name contains invalid characters: {name}",
+      "invalidScope": "Invalid scope: {scope} (expected user/project/local/managed)",
+      "sourceRequired": "Repository source is required",
+      "sourceTooLong": "Repository source is too long",
+      "sourceInvalidChars": "Repository source contains invalid character '{char}'",
+      "addMarketplaceFailed": "Failed to add marketplace",
+      "removeMarketplaceFailed": "Failed to remove marketplace",
+      "updateMarketplaceFailed": "Failed to update marketplace",
+      "scopeRequiresCwd": "Scope '{scope}' requires a valid working directory",
+      "operationFailed": "{verb} failed",
+      "invalidPluginName": "Invalid plugin name: {name}"
+    },
+    "provider": {
+      "nameRequired": "Provider name is required",
+      "exists": "Provider {name} already exists",
+      "notFound": "Provider {name} not found",
+      "modelExists": "Model {id} already exists",
+      "modelNotFound": "Model {id} not found"
+    },
+    "pi": {
+      "missingPackageName": "Package name is required"
+    },
+    "dispatch": {
+      "claudeProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; only Anthropic Messages providers can be dispatched to Claude Code",
+      "codexProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Codex only supports OpenAI Chat / Responses providers",
+      "minimaxProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; MiniMax Code only supports OpenAI Chat / Responses / Anthropic Messages",
+      "qoderProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Qoder only supports OpenAI Chat / Responses / Anthropic Messages",
+      "zcodeProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; ZCode only supports OpenAI Chat / Responses / Anthropic Messages",
+      "hermesProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Hermes only supports OpenAI Chat / Responses / Anthropic Messages",
+      "dshProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; dsh only supports {protocols}",
+      "claudeModelExists": "Claude config \"{name}\" already contains model {model}",
+      "claudeSlotsFull": "All 5 model slots in Claude config \"{name}\" are full. Clean up the Claude config page before dispatching",
+      "claudeSaveFailed": "Failed to save Claude config",
+      "claudeSaveFailedReason": "Failed to save Claude config: {message}",
+      "claudeDispatched": "Written to Claude config \"{name}\": {model} → {slot}",
+      "slotDefault": "Default model",
+      "opencodeWriteFailed": "Failed to write OpenCode config",
+      "opencodeDispatched": "provider[{id}] ({npm}) updated; model {model} written",
+      "providerModelUpdated": "Provider {name} updated; model {model} written",
+      "providerModelMerged": "Provider {name} updated; model {model} merged",
+      "providerModelAliasUpdated": "Provider {name} updated; model alias {alias} written",
+      "ompModelRolesHint": " (configure modelRoles on the omp config page for the default model)",
+      "setAsDefault": ", set as default model",
+      "setAsPrimary": ", set as preferred model",
+      "keyNote": " (key {key})",
+      "idNote": " (ID {id})",
+      "nameNote": " (name {key})",
+      "routeNote": " (route {route})",
+      "selectProvider": "Select a provider",
+      "selectModel": "Select a model",
+      "selectTargetAgent": "Select at least one target agent",
+      "unknownTargetAgent": "Unknown target agent",
+      "routeMappingRequired": "Add a model mapping in Common Config · Gateway first",
+      "routeModelsRequired": "Select the models to expose through the gateway in Common Config · Auto Gateway first"
+    },
+    "commands": {
+      "explain": {
+        "claudeConfig": "Manage Claude Code configuration",
+        "installClaudeSkill": "Install a Claude Code skill from SkillHub / ModelScope",
+        "opencodeConfig": "Manage OpenCode configuration",
+        "installOpencodeSkill": "Install an OpenCode skill from SkillHub / ModelScope",
+        "piConfig": "Manage Pi Agent configuration",
+        "installPiExtension": "Install a Pi Agent extension",
+        "ompConfig": "Manage omp CLI configuration",
+        "reasonixConfig": "Manage Reasonix configuration",
+        "codexConfig": "Manage Codex model configuration (Desktop / CLI)",
+        "kimiConfig": "Manage Kimi Code model configuration",
+        "minimaxConfig": "Manage MiniMax Code model configuration (CLI / Desktop)",
+        "qoderConfig": "Manage Qoder model configuration",
+        "zcodeConfig": "Manage ZCode model configuration",
+        "hermesConfig": "Manage Hermes model configuration",
+        "dshConfig": "Manage DSH (DeepSeek Harness) model configuration"
+      },
+      "label": {
+        "installClaudeSkill": "Install Claude Code Skill",
+        "installOpencodeSkill": "Install OpenCode Skill",
+        "installPiExtension": "Install Pi Agent Extension"
+      }
+    }
+  }
+}

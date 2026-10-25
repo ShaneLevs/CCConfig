@@ -9,6 +9,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod i18n;
 mod node_runtime;
 mod sidecar;
 
@@ -180,8 +181,14 @@ fn apply_glass(
 
 fn build_guide_window(app: &tauri::AppHandle) -> tauri::Result<()> {
     let dark = system_is_dark();
+    let locale = current_locale(app);
+    let locale_code = match locale {
+        i18n::Locale::Zh => "zh-CN",
+        i18n::Locale::En => "en-US",
+    };
+    let title = i18n::native(locale, &["guide", "title"]);
     WebviewWindowBuilder::new(app, GUIDE_WINDOW, WebviewUrl::App("guide.html".into()))
-        .title("CCConfig · 需要 Node.js")
+        .title(title)
         .inner_size(720.0, 560.0)
         .center()
         .theme(Some(if dark {
@@ -189,21 +196,67 @@ fn build_guide_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         } else {
             tauri::Theme::Light
         }))
+        .initialization_script(&format!(
+            "window.__CC_LOCALE__ = {}; window.__CC_GUIDE__ = {};",
+            serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+            i18n::native_value(locale, &["guide"])
+        ))
         .build()?;
     Ok(())
+}
+
+/// 当前界面语言：优先读本机文档 ccswitch_locale_<nativeId>，再回退旧共享档 / 系统语言。
+/// 走 /rpc 而不是直接读 db.json：sidecar 的落盘有 200ms 防抖，窗口长期开着时文件可能滞后。
+fn current_locale(app: &tauri::AppHandle) -> i18n::Locale {
+    let native_id = sidecar_rpc(app, "__utools.getNativeId")
+        .and_then(|v| v.get("value").and_then(|x| x.as_str()).map(str::to_string))
+        .filter(|id| !id.is_empty());
+    let doc_id = match &native_id {
+        Some(id) => format!("ccswitch_locale_{id}"),
+        None => "ccswitch_locale".to_string(),
+    };
+
+    let doc = sidecar_rpc_args(app, "__utools.db.get", serde_json::json!([doc_id.clone()]));
+    let preference = json_at(&doc, &["locale"]).and_then(|v| v.as_str());
+    if let Some(locale) = i18n::from_preference(preference) {
+        return locale;
+    }
+
+    // 本机尚无记录：回退旧共享档（只作迁移种子）
+    if doc_id != "ccswitch_locale" {
+        let legacy = sidecar_rpc_args(
+            app,
+            "__utools.db.get",
+            serde_json::json!(["ccswitch_locale"]),
+        );
+        let legacy_preference = json_at(&legacy, &["locale"]).and_then(|v| v.as_str());
+        if let Some(locale) = i18n::from_preference(legacy_preference) {
+            return locale;
+        }
+    }
+
+    i18n::system_locale()
 }
 
 // ==================== 网关状态（菜单栏展示用） ====================
 // 只读几个数字，不值得为此引入 HTTP 库：本地 127.0.0.1 短连接 + 手写最小 HTTP/1.1 请求，
 // 响应体用 serde_json 解析（services 的同步方法直接回 {ok:true,value:...}）。
 fn sidecar_rpc(app: &tauri::AppHandle, method: &str) -> Option<serde_json::Value> {
+    sidecar_rpc_args(app, method, serde_json::json!([]))
+}
+
+fn sidecar_rpc_args(
+    app: &tauri::AppHandle,
+    method: &str,
+    args: serde_json::Value,
+) -> Option<serde_json::Value> {
     let state = app.try_state::<AppState>()?;
     let (port, token) = {
         let guard = state.sidecar.lock().ok()?;
         let s = guard.as_ref()?;
         (s.port, s.token.clone())
     };
-    let body = format!("{{\"method\":\"{method}\",\"args\":[]}}");
+    let body = serde_json::json!({ "method": method, "args": args }).to_string();
     let req = format!(
         "POST /rpc HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-CCConfig-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
@@ -275,12 +328,13 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let cached = json_u64(&status, &["stats", "cachedTokens"]);
     let output = json_u64(&status, &["stats", "outputTokens"]);
 
+    let locale = current_locale(app);
     let status_text = if !enabled {
-        "网关未开启 · 在「通用 → 网关」里开启".to_string()
+        i18n::native(locale, &["tray", "gatewayDisabled"])
     } else if !running {
-        format!("网关未运行 · 端口 {port} 可能被占用")
+        i18n::native(locale, &["tray", "gatewayPortBusy"]).replace("{port}", &port.to_string())
     } else {
-        format!("网关运行中 · 端口 {port}")
+        i18n::native(locale, &["tray", "gatewayRunning"]).replace("{port}", &port.to_string())
     };
 
     let mut items: Vec<Box<dyn IsMenuItem<tauri::Wry>>> = Vec::new();
@@ -289,25 +343,53 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     if enabled && running {
         // 一行一项：标签与主窗口「网关」页的四项统计保持一致
         for (id, text) in [
-            ("stat-requests", format!("累计调用 {requests}")),
-            ("stat-success", format!("成功率 {}", fmt_pct(successes, requests))),
-            ("stat-tokens", format!("Token 消耗 {}", fmt_tokens(prompt + output))),
-            ("stat-cache", format!("累计缓存命中率 {}", fmt_pct(cached, prompt))),
+            (
+                "stat-requests",
+                i18n::native(locale, &["tray", "requests"])
+                    .replace("{count}", &requests.to_string()),
+            ),
+            (
+                "stat-success",
+                i18n::native(locale, &["tray", "successRate"])
+                    .replace("{value}", &fmt_pct(successes, requests)),
+            ),
+            (
+                "stat-tokens",
+                i18n::native(locale, &["tray", "tokens"])
+                    .replace("{value}", &fmt_tokens(prompt + output)),
+            ),
+            (
+                "stat-cache",
+                i18n::native(locale, &["tray", "cacheHitRate"])
+                    .replace("{value}", &fmt_pct(cached, prompt)),
+            ),
         ] {
             items.push(Box::new(MenuItem::with_id(app, id, text, false, None::<&str>)?));
         }
     }
 
     items.push(Box::new(PredefinedMenuItem::separator(app)?));
-    items.push(Box::new(MenuItem::with_id(app, "show", "打开主窗口", true, None::<&str>)?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "show",
+        i18n::native(locale, &["tray", "showWindow"]),
+        true,
+        None::<&str>,
+    )?));
     items.push(Box::new(MenuItem::with_id(
         app,
         "restart-gateway",
-        "重启网关",
+        i18n::native(locale, &["tray", "restartGateway"]),
         enabled,
         None::<&str>,
     )?));
-    items.push(Box::new(MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?));
+    items.push(Box::new(MenuItem::with_id(
+        app,
+        "quit",
+        i18n::native(locale, &["tray", "quit"]),
+        true,
+        None::<&str>,
+    )?));
 
     let refs: Vec<&dyn IsMenuItem<tauri::Wry>> = items.iter().map(|b| b.as_ref()).collect();
     Menu::with_items(app, &refs)

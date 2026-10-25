@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Button, Dropdown, Dialog, RadioGroup, RadioButton } from "tdesign-vue-next";
 import { ChevronDownIcon, SettingIcon } from "tdesign-icons-vue-next";
 import ConfigView from "./claude/ConfigView.vue";
@@ -35,7 +36,8 @@ import CommonAutoRouteView from "./common/AutoRouteView.vue";
 import CommonUsageView from "./common/UsageView.vue";
 import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
-import BackgroundEffectSettings from "../components/BackgroundEffectSettings.vue";
+import AppearanceSettings from "../components/AppearanceSettings.vue";
+import GeneralSettings from "../components/GeneralSettings.vue";
 import AgentSideRail from "../components/AgentSideRail.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
@@ -47,14 +49,15 @@ const props = defineProps({
   payload: String,
 });
 
+const { t } = useI18n();
 const { activeApp, setActiveApp } = useAppContext();
 const { AGENT_META, appDropdownOptions, toggleAgentVisibility, visibleAgents } = useAgentVisibility();
 
 // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
 const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
-// 设置弹窗页签：agents = Agent 显示，background = 深色背景特效
-const settingsTab = ref("agents");
+// 设置弹窗页签：general = 通用（语言），agents = Agent 显示，appearance = 外观（主题 + 特效）
+const settingsTab = ref("general");
 const showSettings = ref(false);
 
 // 左侧 agent 快速切换栏：窗口 ≥ 1000px（= 800 + 2×100）时显示；此时侧栏+内容总占位
@@ -106,13 +109,15 @@ watch([activeTab, activeApp], () => {
 });
 
 const appLabel = computed(
-  () => (activeApp.value === "common" ? "通用" : AGENT_META[activeApp.value]?.name) || "通用"
+  () =>
+    (activeApp.value === "common" ? t("agents.common") : AGENT_META[activeApp.value]?.name) ||
+    t("agents.common")
 );
 
-// 页标题后缀：页签的 title 字段（按钮文案 label 之外的完整标题）
+// 页标题后缀：页签的 titleKey（按钮文案 labelKey 之外的完整标题）
 const pageTitleSuffix = computed(() => {
-  const tab = (APP_TABS[activeApp.value] || []).find((t) => t.key === activeTab.value);
-  return tab?.title || "配置切换";
+  const tab = (APP_TABS[activeApp.value] || []).find((item) => item.key === activeTab.value);
+  return tab?.titleKey ? t(tab.titleKey) : t("nav.title.configSwitch");
 });
 
 const pageTitle = computed(() => `${appLabel.value} ${pageTitleSuffix.value}`);
@@ -383,19 +388,21 @@ onUnmounted(() => {
 
       <Dialog
         v-model:visible="showSettings"
-        header="设置"
+        :header="t('settings.title')"
         :footer="false"
         width="540px"
         placement="center"
       >
         <div class="settings-body">
           <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
-            <RadioButton value="agents">Agent 显示</RadioButton>
-            <RadioButton value="background">背景特效</RadioButton>
+            <RadioButton value="general">{{ t('settings.tab.general') }}</RadioButton>
+            <RadioButton value="agents">{{ t('settings.tab.agents') }}</RadioButton>
+            <RadioButton value="appearance">{{ t('settings.tab.appearance') }}</RadioButton>
           </RadioGroup>
 
-          <AgentVisibilitySettings v-if="settingsTab === 'agents'" />
-          <BackgroundEffectSettings v-else />
+          <GeneralSettings v-if="settingsTab === 'general'" />
+          <AgentVisibilitySettings v-else-if="settingsTab === 'agents'" />
+          <AppearanceSettings v-else-if="settingsTab === 'appearance'" />
         </div>
       </Dialog>
     </div>

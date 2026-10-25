@@ -6,6 +6,7 @@ const os = require('node:os')
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-test-'))
 process.env.HERMES_HOME = tmp
+process.env.CCCONFIG_LOCALE = process.env.CCCONFIG_LOCALE || 'zh-CN'
 const hermes = require('../public/preload/services/hermes')
 
 let passed = 0

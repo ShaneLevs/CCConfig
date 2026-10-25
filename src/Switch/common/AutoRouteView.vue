@@ -1,9 +1,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
 import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
+
+const { t } = useI18n();
 
 // 自动网关：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
 // 开启状态同步到共享 ref，驱动 index.vue「网关」tab 按钮的绿点标识
@@ -38,6 +41,13 @@ const mappingRows = computed(() => config.value.mappings || []);
 const readyMappings = computed(() => mappingRows.value.filter((m) => m.alias && m.provider && m.modelId).length);
 const modelCount = computed(() => (isMappingMode.value ? readyMappings.value : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
+// 下发弹窗说明里的模型范围随模式变化
+const dispatchHint = computed(() => {
+  const scope = isMappingMode.value
+    ? t('commonApp.autoRoute.scopeMappings', { count: modelCount.value })
+    : t('commonApp.autoRoute.scopeModels', { count: modelCount.value });
+  return t('commonApp.autoRoute.dispatchHint', { baseUrl: baseUrl.value, scope });
+});
 
 // 供应商 → 模型 两级级联选项，直连多选与映射目标单选共用；
 // 没有模型的供应商不出现（否则会渲染成一个可选却无模型 ID 的父节点）
@@ -63,7 +73,7 @@ const loadAll = () => {
     selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
     portDraft.value = config.value.port;
   } catch (e) {
-    MessagePlugin.error("加载自动网关配置失败: " + e.message);
+    MessagePlugin.error(t('commonApp.autoRoute.loadFailed', { message: e.message }));
   }
 };
 
@@ -101,14 +111,14 @@ const saveSelection = () => {
   try {
     config.value = window.services.writeAutoRouteConfig({ selection: flattenSelection(selectionKeys.value) });
   } catch (e) {
-    MessagePlugin.error("保存网关模型失败: " + e.message);
+    MessagePlugin.error(t('commonApp.autoRoute.saveModelsFailed', { message: e.message }));
   }
 };
 
 const onModeChange = (val) => {
   try {
     config.value = window.services.writeAutoRouteConfig({ mode: val });
-    MessagePlugin.success(val === "mapping" ? "已切换为模型映射模式" : "已切换为模型直连模式");
+    MessagePlugin.success(val === "mapping" ? t('commonApp.autoRoute.modeMappingOn') : t('commonApp.autoRoute.modeDirectOn'));
   } catch (e) {
     config.value.mode = val === "mapping" ? "direct" : "mapping";
     MessagePlugin.error(e.message);
@@ -127,7 +137,7 @@ const saveMappings = (mappings) => {
   try {
     config.value = window.services.writeAutoRouteConfig({ mappings });
   } catch (e) {
-    MessagePlugin.error("保存模型映射失败: " + e.message);
+    MessagePlugin.error(t('commonApp.autoRoute.saveMappingsFailed', { message: e.message }));
     loadAll();
   }
 };
@@ -140,7 +150,7 @@ const removeMapping = (index) => {
 const addMapping = () => {
   const mappings = mappingRows.value;
   if (mappings.length >= MAX_MAPPINGS) {
-    MessagePlugin.warning(`最多可添加 ${MAX_MAPPINGS} 个映射`);
+    MessagePlugin.warning(t('commonApp.autoRoute.maxMappings', { max: MAX_MAPPINGS }));
     return;
   }
   const used = new Set(mappings.map((m) => m.alias));
@@ -163,7 +173,7 @@ const onToggleEnabled = async (val) => {
   try {
     status.value = await window.services.setAutoRouteEnabled(!!val);
     autoRouteEnabled.value = !!val;
-    MessagePlugin.success(val ? "自动网关已开启" : "自动网关已关闭");
+    MessagePlugin.success(val ? t('commonApp.autoRoute.enabledOn') : t('commonApp.autoRoute.enabledOff'));
   } catch (e) {
     config.value.enabled = !val;
     // 启动失败时 preload 已回写 enabled=false，从 DB 重读保持绿点一致
@@ -184,9 +194,9 @@ const onPortChange = async (val) => {
     if (status.value.running) {
       await window.services.stopAutoRoute();
       status.value = await window.services.startAutoRoute();
-      MessagePlugin.success(`端口已切换为 ${port}，网关已重启`);
+      MessagePlugin.success(t('commonApp.autoRoute.portRestarted', { port }));
     } else {
-      MessagePlugin.success(`端口已保存为 ${port}`);
+      MessagePlugin.success(t('commonApp.autoRoute.portSaved', { port }));
     }
   } catch (e) {
     portDraft.value = config.value.port;
@@ -198,7 +208,7 @@ const onPortChange = async (val) => {
 const onRegenKey = () => {
   try {
     config.value = { ...config.value, key: window.services.regenerateAutoRouteKey() };
-    MessagePlugin.success("已重新生成 Key，旧 key 失效");
+    MessagePlugin.success(t('commonApp.autoRoute.keyRegenerated'));
   } catch (e) {
     MessagePlugin.error(e.message);
   }
@@ -206,7 +216,7 @@ const onRegenKey = () => {
 
 const copy = (text) => {
   window.utools.copyText(text);
-  MessagePlugin.success("已复制");
+  MessagePlugin.success(t('common.copied'));
 };
 
 // 下发到 Agent：虚拟供应商「router」写入各 agent（Claude 走 anthropic 协议，其余 openai 兼容；
@@ -217,13 +227,13 @@ const dispatchTargets = ref([]);
 
 const openDispatchDialog = () => {
   if (modelCount.value === 0)
-    return MessagePlugin.warning(isMappingMode.value ? "请先添加模型映射" : "请先勾选要接入网关的模型");
+    return MessagePlugin.warning(isMappingMode.value ? t('commonApp.autoRoute.mappingRequired') : t('commonApp.autoRoute.modelsRequired'));
   dispatchTargets.value = [];
   dispatchDialog.value = true;
 };
 
 const handleDispatch = async () => {
-  if (dispatchTargets.value.length === 0) return MessagePlugin.warning("请选择目标 agent");
+  if (dispatchTargets.value.length === 0) return MessagePlugin.warning(t('commonApp.autoRoute.targetRequired'));
   dispatchSubmitting.value = true;
   try {
     const results = await window.services.dispatchAutoRoute(dispatchTargets.value.map((app) => ({ app })));
@@ -238,12 +248,12 @@ const handleDispatch = async () => {
     });
     Object.entries(byApp).forEach(([app, s]) => {
       const label = (AGENT_DISPATCH_OPTIONS.find((o) => o.value === app) || {}).label || app;
-      if (s.fail === 0) MessagePlugin.success(`${label}: ${s.ok} 个模型下发成功`);
-      else MessagePlugin.warning(`${label}: ${s.ok} 成功 / ${s.fail} 失败（${s.err}）`);
+      if (s.fail === 0) MessagePlugin.success(t('commonApp.autoRoute.dispatchSuccess', { label, count: s.ok }));
+      else MessagePlugin.warning(t('commonApp.autoRoute.dispatchPartial', { label, ok: s.ok, fail: s.fail, error: s.err }));
     });
     dispatchDialog.value = false;
   } catch (e) {
-    MessagePlugin.error("下发失败: " + e.message);
+    MessagePlugin.error(t('commonApp.autoRoute.dispatchFailed', { message: e.message }));
   } finally {
     dispatchSubmitting.value = false;
   }
@@ -254,16 +264,18 @@ const endpoints = [
   { method: "POST", path: "/v1/chat/completions", desc: "OpenAI Chat Completions" },
   { method: "POST", path: "/v1/messages", desc: "Anthropic Messages" },
   { method: "POST", path: "/v1/responses", desc: "OpenAI Responses" },
-  { method: "GET", path: "/v1/models", desc: "已启用模型列表" },
-  { method: "GET", path: "/v1/codex/models", desc: "Codex 模型目录（model_catalog_url）" },
+  { method: "GET", path: "/v1/models", descKey: "commonApp.autoRoute.modelsListDesc" },
+  { method: "GET", path: "/v1/codex/models", descKey: "commonApp.autoRoute.codexCatalogDesc" },
 ];
+const endpointDesc = (ep) => (ep.descKey ? t(ep.descKey) : ep.desc);
 
 // 日志协议显示名：源为适配器标识（anthropic/chat/responses），目标为供应商 api 标识（anthropic-messages 等）
 const PROTO_LABELS = {
-  anthropic: "Anthropic", chat: "Chat", responses: "Responses", models: "模型列表",
+  anthropic: "Anthropic", chat: "Chat", responses: "Responses",
   "anthropic-messages": "Anthropic", "openai-completions": "Chat", "openai-responses": "Responses",
 };
-const protoLabel = (p) => PROTO_LABELS[p] || p || "-";
+const protoLabel = (p) =>
+  p === "models" ? t("commonApp.autoRoute.modelsListDesc") : (PROTO_LABELS[p] || p || "-");
 
 const formatTime = (ts) => {
   const d = new Date(ts);
@@ -295,14 +307,14 @@ const logUsage = (log) => {
   const titleParts = [`prompt ${prompt}`, `completion ${out}`];
   if (cached) {
     text += ` c${fmtTokensK(cached)}`;
-    titleParts.push(`缓存读 ${cached}`);
+    titleParts.push(`${t('commonApp.autoRoute.cacheRead')} ${cached}`);
   }
-  if (u.cacheWriteTokens) titleParts.push(`缓存写 ${u.cacheWriteTokens}`);
+  if (u.cacheWriteTokens) titleParts.push(`${t('commonApp.autoRoute.cacheWrite')} ${u.cacheWriteTokens}`);
   return { text, title: titleParts.join(" / ") };
 };
 
 const formatNumber = (n) => {
-  if (!n) return "默认";
+  if (!n) return t('common.default');
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(1) + "K";
   return String(n);
@@ -348,11 +360,11 @@ onUnmounted(() => {
 <template>
   <div class="autoroute-container">
     <div class="autoroute-header">
-      <span class="autoroute-tip">把主数据模型暴露为本机 OpenAI / Anthropic 兼容端点，跨协议自动转换</span>
+      <span class="autoroute-tip">{{ t('commonApp.autoRoute.tip') }}</span>
       <div class="autoroute-actions">
-        <Tooltip content="作为虚拟供应商写入各 agent" placement="top">
+        <Tooltip :content="t('commonApp.autoRoute.dispatchTooltip')" placement="top">
           <Button size="small" variant="outline" :disabled="modelCount === 0" @click="openDispatchDialog">
-            <template #icon><SendIcon /></template> 下发到 Agent
+            <template #icon><SendIcon /></template> {{ t('commonApp.config.dispatchToAgent') }}
           </Button>
         </Tooltip>
       </div>
@@ -361,8 +373,8 @@ onUnmounted(() => {
     <div class="autoroute-card">
       <div class="autoroute-status-row">
         <Switch v-model="config.enabled" @change="onToggleEnabled" />
-        <Tag v-if="status.running" theme="success" size="small">运行中</Tag>
-        <Tag v-else theme="default" size="small">已停止</Tag>
+        <Tag v-if="status.running" theme="success" size="small">{{ t('commonApp.autoRoute.running') }}</Tag>
+        <Tag v-else theme="default" size="small">{{ t('commonApp.autoRoute.stopped') }}</Tag>
         <template v-if="status.running">
           <code class="autoroute-url">{{ status.baseUrl }}</code>
           <Button size="small" variant="text" @click="copy(status.baseUrl)">
@@ -370,39 +382,39 @@ onUnmounted(() => {
           </Button>
         </template>
       </div>
-      <div class="autoroute-hint">随 uTools 启停，仅本机访问。</div>
+      <div class="autoroute-hint">{{ t('commonApp.autoRoute.runningHint') }}</div>
 
       <div class="autoroute-form-row">
-        <span class="autoroute-label">端口</span>
+        <span class="autoroute-label">{{ t('commonApp.autoRoute.port') }}</span>
         <Input v-model="portDraft" type="number" size="small" class="autoroute-port" placeholder="1-65535" @change="onPortChange" />
         <span class="autoroute-label">Key</span>
         <code class="autoroute-key">{{ config.key }}</code>
-        <Tooltip content="复制 Key" placement="top">
+        <Tooltip :content="t('commonApp.autoRoute.copyKey')" placement="top">
           <Button size="small" variant="text" @click="copy(config.key)">
             <template #icon><CopyIcon /></template>
           </Button>
         </Tooltip>
-        <Tooltip content="重新生成（旧 key 失效）" placement="top">
+        <Tooltip :content="t('commonApp.autoRoute.regenerateTooltip')" placement="top">
           <Button size="small" variant="text" @click="onRegenKey">
-            <template #icon><RefreshIcon /></template> 重新生成
+            <template #icon><RefreshIcon /></template> {{ t('commonApp.autoRoute.regenerate') }}
           </Button>
         </Tooltip>
       </div>
 
       <div class="autoroute-form-row">
-        <span class="autoroute-label">接入模式</span>
+        <span class="autoroute-label">{{ t('commonApp.autoRoute.mode') }}</span>
         <RadioGroup v-model="config.mode" variant="default-filled" size="small" @change="onModeChange">
-          <RadioButton value="direct">模型直连</RadioButton>
-          <RadioButton value="mapping">模型映射</RadioButton>
+          <RadioButton value="direct">{{ t('commonApp.autoRoute.modeDirect') }}</RadioButton>
+          <RadioButton value="mapping">{{ t('commonApp.autoRoute.modeMapping') }}</RadioButton>
         </RadioGroup>
         <span v-if="isMappingMode" class="autoroute-hint autoroute-mode-hint">
-          自定义固定模型名映射到任意主数据模型，/v1/models 只返回映射名；换上游只需改映射，agent 侧配置不用动
+          {{ t('commonApp.autoRoute.mappingHint') }}
         </span>
       </div>
 
       <template v-if="!isMappingMode">
         <div class="autoroute-form-row">
-          <span class="autoroute-label">网关模型</span>
+          <span class="autoroute-label">{{ t('commonApp.autoRoute.gatewayModels') }}</span>
           <Cascader
             v-model="selectionKeys"
             :options="routeOptions"
@@ -411,12 +423,12 @@ onUnmounted(() => {
             clearable
             :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
             class="autoroute-cascader"
-            placeholder="选择供应商与模型（勾选供应商 = 全选）"
+            :placeholder="t('commonApp.autoRoute.selectModelsPlaceholder')"
             @change="saveSelection"
           />
         </div>
         <div class="autoroute-hint">
-          已启用 {{ modelCount }} 个模型。请求 model 填模型 ID；重名模型用「供应商/模型ID」。
+          {{ t('commonApp.autoRoute.enabledModelsHint', { count: modelCount }) }}
         </div>
       </template>
 
@@ -427,7 +439,7 @@ onUnmounted(() => {
             :value="m.alias"
             size="small"
             class="autoroute-mapping-alias"
-            placeholder="映射名"
+            :placeholder="t('commonApp.autoRoute.mappingAliasPlaceholder')"
             @change="(val) => onAliasChange(i, val)"
           />
           <span class="autoroute-mapping-arrow">→</span>
@@ -439,10 +451,10 @@ onUnmounted(() => {
             clearable
             :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
             class="autoroute-mapping-target"
-            placeholder="选择目标模型"
+            :placeholder="t('commonApp.autoRoute.selectTargetPlaceholder')"
             @change="(val) => onMappingTargetChange(i, val)"
           />
-          <Tooltip content="删除此映射" placement="top">
+          <Tooltip :content="t('commonApp.autoRoute.removeMapping')" placement="top">
             <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
               <template #icon><DeleteIcon /></template>
             </Button>
@@ -455,10 +467,10 @@ onUnmounted(() => {
             :disabled="mappingRows.length >= MAX_MAPPINGS"
             @click="addMapping"
           >
-            <template #icon><AddIcon /></template> 添加映射
+            <template #icon><AddIcon /></template> {{ t('commonApp.autoRoute.addMapping') }}
           </Button>
           <span class="autoroute-hint">
-            {{ readyMappings }}/{{ mappingRows.length }} 行已选目标（上限 {{ MAX_MAPPINGS }}）。默认预置 flash / plus / pro；名字可改，同名取靠前的映射。
+            {{ t('commonApp.autoRoute.mappingStatus', { ready: readyMappings, total: mappingRows.length, max: MAX_MAPPINGS }) }}
           </span>
         </div>
       </template>
@@ -467,40 +479,40 @@ onUnmounted(() => {
     <div class="autoroute-card autoroute-endpoints">
       <div class="autoroute-endpoints-header" @click="endpointsExpanded = !endpointsExpanded">
         <ChevronDownIcon class="autoroute-endpoints-chevron" :class="{ 'is-expanded': endpointsExpanded }" />
-        <span class="autoroute-endpoints-title">支持的接口</span>
+        <span class="autoroute-endpoints-title">{{ t('commonApp.autoRoute.supportedEndpoints') }}</span>
         <span class="autoroute-endpoints-count">{{ endpoints.length }}</span>
       </div>
       <template v-if="endpointsExpanded">
         <div v-for="ep in endpoints" :key="ep.path" class="autoroute-endpoint-row">
           <Tag size="small" variant="outline" :theme="ep.method === 'POST' ? 'primary' : 'default'" class="autoroute-endpoint-method">{{ ep.method }}</Tag>
           <code class="autoroute-endpoint-path">{{ ep.path }}</code>
-          <span class="autoroute-endpoint-desc">{{ ep.desc }}</span>
+          <span class="autoroute-endpoint-desc">{{ endpointDesc(ep) }}</span>
         </div>
       </template>
     </div>
 
     <div v-if="sessionStats.requests" class="autoroute-stats">
       <div class="autoroute-stat">
-        <span class="autoroute-stat-label">累计调用</span>
+        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statRequests') }}</span>
         <span class="autoroute-stat-value">{{ sessionStats.requests }}</span>
       </div>
       <div class="autoroute-stat">
-        <span class="autoroute-stat-label">成功率</span>
+        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statSuccessRate') }}</span>
         <span class="autoroute-stat-value">{{ sessionStats.successRate }}</span>
       </div>
       <div class="autoroute-stat">
-        <span class="autoroute-stat-label">Token 消耗</span>
+        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statTokens') }}</span>
         <span class="autoroute-stat-value">{{ sessionStats.tokens }}</span>
       </div>
       <div class="autoroute-stat">
-        <span class="autoroute-stat-label">累计缓存命中率</span>
+        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statCacheHit') }}</span>
         <span class="autoroute-stat-value">{{ sessionStats.cacheHit }}</span>
       </div>
     </div>
 
     <div class="autoroute-logs">
-      <div class="autoroute-logs-title">最近请求（最多 10 条）</div>
-      <div v-if="!status.logs.length" class="autoroute-logs-empty">暂无请求</div>
+      <div class="autoroute-logs-title">{{ t('commonApp.autoRoute.recentRequests') }}</div>
+      <div v-if="!status.logs.length" class="autoroute-logs-empty">{{ t('commonApp.autoRoute.noRequests') }}</div>
       <div v-for="log in status.logs" :key="log.seq" class="autoroute-log-row">
         <span class="autoroute-log-time">{{ formatTime(log.time) }}</span>
         <Tag size="small" variant="outline">{{ protoLabel(log.protocol) }}</Tag>
@@ -508,11 +520,11 @@ onUnmounted(() => {
           <span class="autoroute-log-arrow">→</span>
           <Tag size="small" variant="outline" theme="warning">{{ protoLabel(log.target) }}</Tag>
         </template>
-        <span v-if="log.alias" class="autoroute-log-alias" :title="`映射名 ${log.alias} → 实际模型 ${log.model || '-'}`">{{ log.alias }}</span>
+        <span v-if="log.alias" class="autoroute-log-alias" :title="t('commonApp.autoRoute.mappingTitle', { alias: log.alias, model: log.model || '-' })">{{ log.alias }}</span>
         <span v-if="log.alias" class="autoroute-log-arrow">→</span>
         <span class="autoroute-log-model" :title="log.model || '-'" :class="{ 'is-mapped-target': log.alias }">{{ log.model || "-" }}</span>
-        <span v-if="log.passthrough" class="autoroute-log-flag">直通</span>
-        <Tag v-if="isPending(log)" size="small" theme="primary" variant="light">进行中</Tag>
+        <span v-if="log.passthrough" class="autoroute-log-flag">{{ t('commonApp.autoRoute.passthrough') }}</span>
+        <Tag v-if="isPending(log)" size="small" theme="primary" variant="light">{{ t('commonApp.autoRoute.pending') }}</Tag>
         <Tag v-else size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>
         <span v-if="logUsage(log)" class="autoroute-log-usage" :title="logUsage(log).title">{{ logUsage(log).text }}</span>
         <span v-if="log.error" class="autoroute-log-error" :title="log.error">{{ log.error }}</span>
@@ -523,10 +535,10 @@ onUnmounted(() => {
     <!-- 下发到 Agent 弹窗 -->
     <Dialog
       v-model:visible="dispatchDialog"
-      header="下发自动网关到 Agent"
+      :header="t('commonApp.autoRoute.dispatchTitle')"
       width="520px"
       dialog-class-name="autoroute-dispatch-dialog"
-      :confirm-btn="{ content: '下发', theme: 'primary', loading: dispatchSubmitting }"
+      :confirm-btn="{ content: t('commonApp.autoRoute.dispatch'), theme: 'primary', loading: dispatchSubmitting }"
       @confirm="handleDispatch"
     >
       <div class="autoroute-dispatch-form">
@@ -536,7 +548,7 @@ onUnmounted(() => {
           </label>
         </CheckboxGroup>
         <div class="autoroute-hint">
-          写入虚拟供应商「router」（{{ baseUrl }}，{{ isMappingMode ? `全部 ${modelCount} 个映射` : `全部已启用的 ${modelCount} 个模型` }}）；映射模式写入映射名，Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。
+          {{ dispatchHint }}
         </div>
       </div>
     </Dialog>

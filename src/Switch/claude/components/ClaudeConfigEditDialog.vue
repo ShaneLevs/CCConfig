@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Button, Input, AutoComplete, Dialog, Tag, Space, Tooltip, RadioGroup, RadioButton, Checkbox, Divider, MessagePlugin,
 } from "tdesign-vue-next";
@@ -24,6 +25,8 @@ const props = defineProps({
   extraFieldKeyOptions: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["update:visible", "save"]);
+
+const { t } = useI18n();
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -121,7 +124,7 @@ const configModelsToForm = (src) => {
   return result;
 };
 
-const dialogTitle = computed(() => (props.editingConfig ? "编辑配置" : "新建配置"));
+const dialogTitle = computed(() => t(props.editingConfig ? "claude.config.editTitle" : "claude.config.create"));
 
 const fillCurrentConfig = () => {
   formData.value.key = props.currentConfig.key;
@@ -209,36 +212,36 @@ const handleSave = () => {
   <Dialog v-model:visible="dialogVisible" :header="dialogTitle" width="560px">
     <div class="dialog-switch">
       <RadioGroup v-model="dialogTab" variant="default-filled" size="small">
-        <RadioButton value="basic">基础配置</RadioButton>
-        <RadioButton value="extra">env其他字段</RadioButton>
+        <RadioButton value="basic">{{ t('claude.editDialog.basicTab') }}</RadioButton>
+        <RadioButton value="extra">{{ t('claude.editDialog.extraTab') }}</RadioButton>
       </RadioGroup>
     </div>
     <div v-if="dialogTab === 'basic'" class="form">
-      <div class="form-item"><label>名称 <span class="required">*</span></label><Input v-model="formData.name" placeholder="方便分辨的名字" /></div>
+      <div class="form-item"><label>{{ t('common.name') }} <span class="required">*</span></label><Input v-model="formData.name" :placeholder="t('claude.editDialog.namePlaceholder')" /></div>
       <div class="form-item"><label>URL <span class="required">*</span></label><Input v-model="formData.baseUrl" placeholder="ANTHROPIC_BASE_URL" /></div>
-      <div class="form-item"><label>认证方式</label>
+      <div class="form-item"><label>{{ t('claude.editDialog.authMethod') }}</label>
         <RadioGroup v-model="formData.authVar" variant="default-filled" size="small" class="auth-var-group">
           <RadioButton value="ANTHROPIC_AUTH_TOKEN">AUTH_TOKEN</RadioButton>
           <RadioButton value="ANTHROPIC_API_KEY">API_KEY</RadioButton>
         </RadioGroup>
       </div>
       <div class="form-item"><label>TOKEN <span class="required">*</span></label><Input v-model="formData.key" type="password" :placeholder="formData.authVar || 'ANTHROPIC_AUTH_TOKEN'" /></div>
-      <div class="form-hint">设置默认对话模型，留空则跟随系统默认</div>
+      <div class="form-hint">{{ t('claude.editDialog.modelHint') }}</div>
       <ClaudeModelFieldRow label="MODEL" placeholder="ANTHROPIC_MODEL" :options="modelCandidates" v-model="formData.model" v-model:one-m="formData.model1m" />
-      <div class="form-hint">分别指定各层级模型版本，留空则使用系统默认分配</div>
+      <div class="form-hint">{{ t('claude.editDialog.levelHint') }}</div>
       <ClaudeModelFieldRow label="HAIKU" placeholder="ANTHROPIC_DEFAULT_HAIKU_MODEL" :options="modelCandidates" v-model="formData.defaultHaikuModel" v-model:one-m="formData.defaultHaikuModel1m" />
       <ClaudeModelFieldRow label="SONNET" placeholder="ANTHROPIC_DEFAULT_SONNET_MODEL" :options="modelCandidates" v-model="formData.defaultSonnetModel" v-model:one-m="formData.defaultSonnetModel1m" />
       <ClaudeModelFieldRow label="OPUS" placeholder="ANTHROPIC_DEFAULT_OPUS_MODEL" :options="modelCandidates" v-model="formData.defaultOpusModel" v-model:one-m="formData.defaultOpusModel1m" />
       <ClaudeModelFieldRow label="FABLE" placeholder="ANTHROPIC_DEFAULT_FABLE_MODEL" :options="modelCandidates" v-model="formData.defaultFableModel" v-model:one-m="formData.defaultFableModel1m" />
-      <div class="form-hint">设置子代理（工具调用、后台任务等）使用的模型</div>
+      <div class="form-hint">{{ t('claude.editDialog.subagentHint') }}</div>
       <ClaudeModelFieldRow label="SUBAGENT" placeholder="CLAUDE_CODE_SUBAGENT_MODEL" :options="modelCandidates" v-model="formData.subagentModel" v-model:one-m="formData.subagentModel1m" />
     </div>
     <div v-else class="extra-fields-dialog">
       <div class="extra-fields-hint">
-        <p>以下字段会与全局 env 其他字段合并（配置优先），切换配置时生效。</p>
+        <p>{{ t('claude.editDialog.extraHint') }}</p>
       </div>
       <div v-if="globalFields.length" class="active-config-extras">
-        <div class="active-config-extras-title">当前全局字段</div>
+        <div class="active-config-extras-title">{{ t('claude.editDialog.globalFields') }}</div>
         <!-- 预设项用 disabled checkbox/radio 展示 -->
         <ClaudeEnvPresetEditor
           v-if="globalFields.some(f => presetKeys.has(f.key?.trim()))"
@@ -257,30 +260,30 @@ const handleSave = () => {
       </div>
       <!-- 预设区 -->
       <div class="env-preset-section">
-        <div class="env-preset-title">常用设置</div>
+        <div class="env-preset-title">{{ t('claude.config.commonPresets') }}</div>
         <ClaudeEnvPresetEditor :values="dialogPresetValues" />
       </div>
       <Divider />
-      <div class="env-preset-title">自定义字段</div>
+      <div class="env-preset-title">{{ t('claude.config.customFields') }}</div>
       <div class="extra-fields-list">
         <div v-for="(field, idx) in dialogCustomFields" :key="idx" class="extra-field-wrap">
           <div class="extra-field-row">
-            <AutoComplete v-model="field.key" class="field-key" :options="extraFieldKeyOptions" filterable placeholder="字段名" />
-            <Input v-model="field.value" class="field-value" placeholder="字段值" />
+            <AutoComplete v-model="field.key" class="field-key" :options="extraFieldKeyOptions" filterable :placeholder="t('common.fieldName')" />
+            <Input v-model="field.value" class="field-value" :placeholder="t('common.fieldValue')" />
             <Button size="small" theme="danger" variant="text" @click="removeDialogExtraField(formData.extraFields.indexOf(field))"><DeleteIcon /></Button>
           </div>
           <div v-if="globalFields.some(f => f.key?.trim() === field.key?.trim())" class="field-tag-row">
-            <Tag size="small" theme="warning" variant="light">覆盖全局</Tag>
+            <Tag size="small" theme="warning" variant="light">{{ t('claude.config.overridesGlobal') }}</Tag>
           </div>
         </div>
       </div>
-      <Button size="small" variant="outline" @click="addDialogExtraField" class="add-field-btn"><template #icon><AddIcon /></template> 添加字段</Button>
+      <Button size="small" variant="outline" @click="addDialogExtraField" class="add-field-btn"><template #icon><AddIcon /></template> {{ t('common.addField') }}</Button>
     </div>
     <template #footer>
       <div class="dialog-footer">
-        <Button v-if="!editingConfig" variant="outline" @click="fillCurrentConfig"><template #icon><RefreshIcon /></template> 读取当前配置</Button>
+        <Button v-if="!editingConfig" variant="outline" @click="fillCurrentConfig"><template #icon><RefreshIcon /></template> {{ t('claude.editDialog.fillCurrent') }}</Button>
         <span v-else></span>
-        <div class="dialog-footer-right"><Button variant="outline" @click="dialogVisible = false">取消</Button><Button theme="primary" @click="handleSave">保存</Button></div>
+        <div class="dialog-footer-right"><Button variant="outline" @click="dialogVisible = false">{{ t('common.cancel') }}</Button><Button theme="primary" @click="handleSave">{{ t('common.save') }}</Button></div>
       </div>
     </template>
   </Dialog>

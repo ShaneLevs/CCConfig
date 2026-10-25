@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const yaml = require('js-yaml')
+const { t } = require("./i18n")
 
 // Hermes（Nous Research Agent CLI）：模型配置在 <hermes-home>/config.yaml（YAML）。
 // 目录解析镜像 Hermes 自身 get_hermes_home()：HERMES_HOME 环境变量优先；
@@ -60,7 +61,7 @@ const readHermesConfig = () => {
   } catch (e) {
     // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会覆盖整个
     // config.yaml，抹掉 agent / memory / mcp_servers 等节（同 minimax / kimi / codex）
-    throw new Error(`config.yaml 解析失败，已阻止修改（请先在 Hermes 中修复 YAML 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.hermes.configParseFailed', { message: e.message }))
   }
 }
 
@@ -169,7 +170,7 @@ const buildProviderYaml = (cfg) => {
 
 const assertApiMode = (mode) => {
   if (mode && !HERMES_API_MODES.includes(mode)) {
-    throw new Error(`不支持的 API 模式 ${mode}（可选：${HERMES_API_MODES.join(' / ')}）`)
+    throw new Error(t('serviceAgent.hermes.unsupportedApiMode', { mode, options: HERMES_API_MODES.join(' / ') }))
   }
 }
 
@@ -196,12 +197,12 @@ const getHermesProviderList = () => {
 
 const addHermesProvider = (cfg) => {
   const name = String(cfg?.name || '').trim()
-  if (!name) throw new Error('供应商名称不能为空')
+  if (!name) throw new Error(t('serviceAgent.common.providerDisplayNameRequired'))
   assertApiMode(cfg.apiMode)
   const doc = readHermesConfig()
   const list = getCustomProviders(doc)
   if (list.some((p) => p && p.name === name) || getProvidersDict(doc)[name] !== undefined) {
-    throw new Error(`Provider ${name} 已存在`)
+    throw new Error(t('serviceAgent.common.providerExistsLabel', { name }))
   }
   list.push(buildProviderYaml({
     name,
@@ -220,7 +221,7 @@ const updateHermesProvider = (name, updates) => {
   const doc = readHermesConfig()
   const list = getCustomProviders(doc)
   const entry = list.find((p) => p && p.name === name)
-  if (!entry) throw new Error(`Provider ${name} 不存在`)
+  if (!entry) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name }))
   assertApiMode(updates.apiMode)
   const prev = normalizeProvider(entry)
   const merged = {
@@ -240,7 +241,7 @@ const updateHermesProvider = (name, updates) => {
 const removeHermesProvider = (name) => {
   const doc = readHermesConfig()
   if (getProvidersDict(doc)[name] !== undefined) {
-    throw new Error(`Provider ${name} 由 Hermes Web UI 托管（providers 节），不可在此删除`)
+    throw new Error(t('serviceAgent.hermes.managedDelete', { name }))
   }
   const list = getCustomProviders(doc)
   const idx = list.findIndex((p) => p && p.name === name)
@@ -283,12 +284,12 @@ const setHermesDefaultModel = (providerName, modelId) => {
   const doc = readHermesConfig()
   let entry = getCustomProviders(doc).find((p) => p && p.name === providerName)
   if (!entry) entry = getProvidersDict(doc)[providerName]
-  if (!entry || typeof entry !== 'object') throw new Error(`Provider ${providerName} 不存在`)
+  if (!entry || typeof entry !== 'object') throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerName }))
   const ids = modelsToUi(entry.models).map((m) => m.modelId)
   if (modelId) {
-    if (!ids.includes(modelId)) throw new Error(`模型 ${modelId} 不存在，无法设为默认`)
+    if (!ids.includes(modelId)) throw new Error(t('serviceAgent.hermes.modelNotFoundForDefault', { model: modelId }))
   } else if (!ids.length) {
-    throw new Error(`Provider ${providerName} 没有模型，请先添加模型`)
+    throw new Error(t('serviceAgent.hermes.providerHasNoModels', { providerName }))
   }
   if (!doc.model || typeof doc.model !== 'object' || Array.isArray(doc.model)) doc.model = {}
   doc.model.provider = providerName
@@ -319,11 +320,11 @@ const providerKeyFor = (name) => {
 // providers 字典条目（Hermes 托管）拒绝写入
 const upsertHermesProvider = (key, cfg) => {
   const name = String(key || '').trim()
-  if (!name) throw new Error('Provider name 不能为空')
+  if (!name) throw new Error(t('serviceAgent.hermes.providerNameRequired'))
   assertApiMode(cfg.apiMode)
   const doc = readHermesConfig()
   if (getProvidersDict(doc)[name] !== undefined) {
-    throw new Error(`Provider ${name} 由 Hermes Web UI 托管（providers 节），无法下发`)
+    throw new Error(t('serviceAgent.hermes.managedDispatch', { name }))
   }
   const list = getCustomProviders(doc)
   const entry = list.find((p) => p && p.name === name)
@@ -358,10 +359,10 @@ const upsertHermesProvider = (key, cfg) => {
 // 条目尚无 model（单数）指针时补为首个写入的模型；返回模型 ID
 const upsertHermesModel = (providerName, modelId, opts = {}) => {
   const id = String(modelId || '').trim()
-  if (!id) throw new Error('模型 ID 不能为空')
+  if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readHermesConfig()
   const entry = getCustomProviders(doc).find((p) => p && p.name === providerName)
-  if (!entry) throw new Error(`Provider ${providerName} 不存在`)
+  if (!entry) throw new Error(t('serviceAgent.common.providerNotFoundLabel', { name: providerName }))
   const models = entry.models && typeof entry.models === 'object' && !Array.isArray(entry.models)
     ? entry.models
     : {}

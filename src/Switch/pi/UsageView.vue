@@ -1,7 +1,10 @@
 <script setup>
 // Pi Agent 统计页：复用通用统计页（shared/UsagePage.vue），仅注入数据源与文案
 // 重统计走后台线程（readPiUsageAsync），不阻塞渲染层；进页面先用落库历史快速展示
+import { useI18n } from "vue-i18n";
 import UsagePage from "../shared/UsagePage.vue";
+
+const { t } = useI18n();
 
 const fetcher = () => window.services.readPiUsageAsync();
 
@@ -11,8 +14,8 @@ const quickFetcher = () => window.services.readAgentUsageFromHistory("pi");
 
 <template>
   <UsagePage
-    tip="Pi Agent 使用统计（从会话 JSONL 解析）"
+    :tip="t('pi.usage.tip')"
     :fetcher="fetcher"
-    empty-description="暂无使用数据，使用 Pi Agent 后会在此处显示"
+    :empty-description="t('pi.usage.emptyDescription')"
   />
 </template>

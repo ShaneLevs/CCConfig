@@ -1,0 +1,61 @@
+{
+  "hermes": {
+    "config": {
+      "toolbarSubtitle": "custom_providers 供应商与顶层 model 默认指针",
+      "addProvider": "添加供应商",
+      "emptyProviders": "未检测到 Hermes 供应商；可在 Hermes 内添加，或在此手动添加",
+      "readonlyTooltip": "由 Hermes Web UI 托管（providers 节），仅可设为默认",
+      "managedTag": "Hermes 托管",
+      "defaultProvider": "默认供应商",
+      "modelCount": "{count} 个模型",
+      "readonlyEditTooltip": "由 Hermes Web UI 托管，不可在此编辑",
+      "readonlyDeleteTooltip": "由 Hermes Web UI 托管，不可在此删除",
+      "deleteProviderConfirm": "删除该供应商？若为当前默认供应商，默认指针将改指首个剩余供应商",
+      "configured": "已配置",
+      "unconfigured": "未配置",
+      "rateLimitLabel": "请求间隔（rate_limit_delay）",
+      "seconds": "{count} 秒",
+      "modelsTitle": "模型（星标 = 设为默认，写入顶层 model.provider / model.default）",
+      "modelsEmpty": "暂无模型",
+      "modelsEmptyEditable": "暂无模型，点击「编辑」在弹窗中添加",
+      "setDefaultTooltip": "设为默认模型",
+      "editTitle": "编辑供应商配置",
+      "providerName": "供应商名称",
+      "nameHint": "名称即 config.yaml 中的 YAML 身份，被顶层 model.provider 引用",
+      "nameReadonlyHint": "名称被 model.provider 引用，不随编辑变化",
+      "apiModeLabel": "API 模式（api_mode）",
+      "baseUrlLabel": "Base URL（base_url）",
+      "apiKeyLabel": "API Key（api_key）",
+      "apiKeyPlaceholder": "明文写入 config.yaml",
+      "rateLimitFieldLabel": "请求间隔秒数（rate_limit_delay，可选）",
+      "modelsLabel": "模型（models，首个模型将作为该供应商的 model 默认值）",
+      "modelIdPlaceholder": "模型 ID，如 anthropic/claude-opus-4-8",
+      "modelIdPlaceholderEdit": "模型 ID",
+      "contextPlaceholder": "上下文长度",
+      "addModel": "添加模型",
+      "modelsHint": "模型 ID 必填；上下文长度（context_length）可选",
+      "modelsEditHint": "改模型 ID = 删旧建新；模型条目上的其他自定义键（如 name / max_tokens）自动保留",
+      "apiKeySavedPlaceholder": "已保存，清空并保存将删除；修改则覆盖",
+      "apiKeyEmptyPlaceholder": "留空不写入",
+      "apiMode": {
+        "chatCompletions": "chat_completions（OpenAI Chat）",
+        "anthropicMessages": "anthropic_messages（Anthropic Messages）",
+        "codexResponses": "codex_responses（OpenAI Responses）",
+        "bedrockConverse": "bedrock_converse（AWS Bedrock）"
+      }
+    },
+    "provider": {
+      "nameRequired": "请输入供应商名称",
+      "added": "供应商已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "供应商配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "供应商 {name} 已删除",
+      "deleteFailed": "删除失败: {message}"
+    },
+    "model": {
+      "defaultSet": "默认模型已设为 {model}",
+      "saveFailed": "保存失败: {message}"
+    }
+  }
+}

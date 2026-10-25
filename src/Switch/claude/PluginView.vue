@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Card,
   Empty,
@@ -27,6 +28,8 @@ import ClaudeComponentBadges from "./components/ClaudeComponentBadges.vue";
 import ClaudeMarketplaceManager from "./components/ClaudeMarketplaceManager.vue";
 import ClaudePluginDetailDialog from "./components/ClaudePluginDetailDialog.vue";
 import "./styles/PluginView.css";
+
+const { t } = useI18n();
 
 const activeTab = ref("installed"); // installed | browse | marketplace
 const loading = ref(false);
@@ -72,7 +75,7 @@ const filteredPlugins = computed(() => {
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
-        (p.tags && p.tags.some((t) => t.toLowerCase().includes(q))),
+        (p.tags && p.tags.some((tag) => tag.toLowerCase().includes(q))),
     );
   }
   if (categoryFilter.value !== "all") {
@@ -126,13 +129,13 @@ const handleInstall = async (pluginName) => {
   try {
     const result = window.services.installPlugin(pluginName, "user");
     if (result.success) {
-      MessagePlugin.success(`插件 "${pluginName}" 安装成功`);
+      MessagePlugin.success(t("claude.plugin.installSuccess", { name: pluginName }));
       await refreshAll();
     } else {
-      MessagePlugin.error(result.message || "安装失败");
+      MessagePlugin.error(result.message || t("claude.plugin.installFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("安装插件失败: " + e.message);
+    MessagePlugin.error(t("claude.plugin.installError", { message: e.message }));
   } finally {
     operationLoading.value = null;
   }
@@ -145,13 +148,13 @@ const handleUninstall = async (plugin) => {
   try {
     const result = window.services.uninstallPlugin(pluginId, scope);
     if (result.success) {
-      MessagePlugin.success(`插件 "${plugin.name}" 已卸载`);
+      MessagePlugin.success(t("claude.plugin.uninstallSuccess", { name: plugin.name }));
       loadInstalledPlugins();
     } else {
-      MessagePlugin.error(result.message || "卸载失败");
+      MessagePlugin.error(result.message || t("claude.plugin.uninstallFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("卸载插件失败: " + e.message);
+    MessagePlugin.error(t("claude.plugin.uninstallError", { message: e.message }));
   } finally {
     operationLoading.value = null;
   }
@@ -169,13 +172,13 @@ const handleToggleEnabled = async (plugin) => {
   try {
     const result = fn(pluginId, scope);
     if (result.success) {
-      MessagePlugin.success(plugin.enabled !== false ? `已禁用 "${plugin.name}"` : `已启用 "${plugin.name}"`);
+      MessagePlugin.success(t(plugin.enabled !== false ? "claude.plugin.disabledSuccess" : "claude.plugin.enabledSuccess", { name: plugin.name }));
       plugin.enabled = plugin.enabled === false;
     } else {
-      MessagePlugin.error(result.message || "操作失败");
+      MessagePlugin.error(result.message || t("common.operationFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("操作失败: " + e.message);
+    MessagePlugin.error(t("claude.plugin.operationError", { message: e.message }));
   } finally {
     operationLoading.value = null;
   }
@@ -188,13 +191,13 @@ const handleUpdateInstalled = async (plugin) => {
   try {
     const result = window.services.updatePlugin(pluginId, scope);
     if (result.success) {
-      MessagePlugin.success(`插件 "${plugin.name}" 更新成功`);
+      MessagePlugin.success(t("claude.plugin.updateSuccess", { name: plugin.name }));
       loadInstalledPlugins();
     } else {
-      MessagePlugin.error(result.message || "更新失败");
+      MessagePlugin.error(result.message || t("common.updateFailed"));
     }
   } catch (e) {
-    MessagePlugin.error("更新插件失败: " + e.message);
+    MessagePlugin.error(t("claude.plugin.updateError", { message: e.message }));
   } finally {
     operationLoading.value = null;
   }
@@ -204,7 +207,7 @@ const handleOpenPluginsDir = () => {
   try {
     window.services.openPluginsDir();
   } catch (e) {
-    MessagePlugin.error("打开目录失败");
+    MessagePlugin.error(t("claude.plugin.openDirFailed"));
   }
 };
 
@@ -234,11 +237,11 @@ onMounted(() => {
   <div class="plugin-container">
     <div class="plugin-header">
       <span class="plugin-tip">
-        管理 Claude Code 插件 —
+        {{ t('claude.plugin.tip') }}
         <span class="hint-link" @click="handleOpenPluginsDir">~/.claude/plugins</span>
       </span>
       <div class="plugin-actions">
-        <Tooltip content="刷新所有数据" placement="top">
+        <Tooltip :content="t('claude.plugin.refreshAll')" placement="top">
           <Button
             size="small"
             variant="outline"
@@ -254,12 +257,12 @@ onMounted(() => {
     <!-- 子标签栏 -->
     <div class="plugin-tabs">
       <RadioGroup v-model="activeTab" size="small" variant="default-filled">
-        <RadioButton value="installed">已安装</RadioButton>
-        <RadioButton value="browse">浏览插件</RadioButton>
+        <RadioButton value="installed">{{ t('claude.plugin.tabInstalled') }}</RadioButton>
+        <RadioButton value="browse">{{ t('claude.plugin.tabBrowse') }}</RadioButton>
         <RadioButton value="marketplace">Marketplace</RadioButton>
       </RadioGroup>
-      <span v-if="activeTab === 'installed'" class="section-count">共 {{ installedPlugins.length }} 个插件</span>
-      <span v-if="activeTab === 'marketplace'" class="section-count">共 {{ marketplaceCount }} 个仓库</span>
+      <span v-if="activeTab === 'installed'" class="section-count">{{ t('claude.plugin.totalPlugins', { count: installedPlugins.length }) }}</span>
+      <span v-if="activeTab === 'marketplace'" class="section-count">{{ t('claude.plugin.totalMarketplaces', { count: marketplaceCount }) }}</span>
     </div>
 
     <!-- ==================== Marketplace 管理 ==================== -->
@@ -277,7 +280,7 @@ onMounted(() => {
         <div class="search-row">
           <Input
             v-model="searchQuery"
-            placeholder="搜索插件名称、描述或标签..."
+            :placeholder="t('claude.plugin.searchPlaceholder')"
             clearable
             class="search-input"
           >
@@ -291,7 +294,7 @@ onMounted(() => {
               :theme="categoryFilter === 'all' ? 'primary' : 'default'"
               :variant="categoryFilter === 'all' ? 'base' : 'outline'"
               @click="categoryFilter = 'all'"
-              >全部</Button
+              >{{ t('common.all') }}</Button
             >
             <Button
               v-for="cat in availableCategories"
@@ -307,7 +310,7 @@ onMounted(() => {
       </div>
 
       <div v-if="filteredPlugins.length === 0" class="empty-state">
-        <Empty description="暂无插件" />
+        <Empty :description="t('claude.plugin.noPlugins')" />
       </div>
 
       <div v-else class="plugin-grid">
@@ -336,9 +339,9 @@ onMounted(() => {
             >
           </div>
           <div class="plugin-card-footer">
-            <span v-if="plugin.installCount" class="plugin-installs">{{ plugin.installCount }} 次安装</span>
+            <span v-if="plugin.installCount" class="plugin-installs">{{ t('claude.plugin.installCount', { count: plugin.installCount }) }}</span>
             <span class="plugin-marketplace-tag">@{{ plugin.marketplaceName }}</span>
-            <Tooltip content="安装此插件" placement="top">
+            <Tooltip :content="t('claude.plugin.installTooltip')" placement="top">
               <Button
                 size="small"
                 theme="primary"
@@ -347,7 +350,7 @@ onMounted(() => {
                 @click.stop="handleInstall(plugin.name)"
               >
                 <template #icon><DownloadIcon /></template>
-                安装
+                {{ t('claude.plugin.install') }}
               </Button>
             </Tooltip>
           </div>
@@ -358,7 +361,7 @@ onMounted(() => {
     <!-- ==================== 已安装插件 ==================== -->
     <template v-if="activeTab === 'installed'">
       <div v-if="installedPlugins.length === 0" class="empty-state">
-        <Empty description="暂无已安装的插件" />
+        <Empty :description="t('claude.plugin.noInstalled')" />
       </div>
 
       <div v-else class="installed-list">
@@ -384,7 +387,7 @@ onMounted(() => {
               </div>
               <Space size="small">
                 <Tooltip
-                  :content="plugin.enabled !== false ? '点击禁用此插件' : '点击启用此插件'"
+                  :content="t(plugin.enabled !== false ? 'claude.plugin.clickDisable' : 'claude.plugin.clickEnable')"
                   placement="top"
                 >
                   <Switch
@@ -394,7 +397,7 @@ onMounted(() => {
                     @click.stop
                   />
                 </Tooltip>
-                <Tooltip content="更新插件到最新版本" placement="top">
+                <Tooltip :content="t('claude.plugin.updateTooltip')" placement="top">
                   <Button
                     size="small"
                     variant="text"
@@ -406,10 +409,10 @@ onMounted(() => {
                 </Tooltip>
                 <Popconfirm
                   theme="danger"
-                  :content="'确认卸载插件 ' + plugin.name + '？'"
+                  :content="t('claude.plugin.uninstallConfirm', { name: plugin.name })"
                   @confirm="handleUninstall(plugin)"
                 >
-                  <Tooltip content="卸载此插件" placement="top">
+                  <Tooltip :content="t('claude.plugin.uninstallTooltip')" placement="top">
                     <Button
                       size="small"
                       theme="danger"
@@ -434,14 +437,14 @@ onMounted(() => {
                 class="installed-meta-item"
                 :title="new Date(plugin.installedAt).toLocaleString()"
               >
-                安装于 {{ formatRelativeTime(plugin.installedAt) }}
+                {{ t('claude.plugin.installedAt', { time: formatRelativeTime(plugin.installedAt) }) }}
               </span>
               <span
                 v-if="plugin.lastUpdated && plugin.lastUpdated !== plugin.installedAt"
                 class="installed-meta-item"
                 :title="new Date(plugin.lastUpdated).toLocaleString()"
               >
-                更新于 {{ formatRelativeTime(plugin.lastUpdated) }}
+                {{ t('claude.plugin.updatedAt', { time: formatRelativeTime(plugin.lastUpdated) }) }}
               </span>
             </div>
             <div v-if="plugin.tags && plugin.tags.length" class="installed-tags">

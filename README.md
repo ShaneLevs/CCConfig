@@ -22,7 +22,8 @@ It gives twelve AI coding CLIs a single place to manage API providers, models, M
 - **MCP management** — per-app MCP server config plus a live tool-discovery canvas; shared MCP servers in Common Config mirror into local JSON files with a per-machine enable switch
 - **Skill & plugin management** — install skills from SkillHub / ModelScope, toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
 - **Usage analytics** — token usage, model distribution and GitHub-style contribution heatmaps, aggregated across agents in one view
-- **Batch edit, import/export, dark mode** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and system-following dark theme with optional animated backgrounds
+- **Batch edit, import/export, appearance** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and a three-mode appearance setting (follow system / light / dark) with optional dark-mode animated backgrounds
+- **Bilingual UI** — Simplified Chinese and English, follows the system language by default and can be switched in Settings → General
 
 ## Supported apps
 
@@ -84,7 +85,7 @@ Both builds share `src/` and `public/preload/`; only the shell differs. Architec
 
 ## Tech Stack
 
-Vue 3 + Vite + TDesign Vue Next on the renderer; a bundled esbuild preload for all filesystem/network work, served through the uTools API or a Tauri v2 Node sidecar. Config parsing via json5, js-yaml and smol-toml; MCP tool discovery via `@modelcontextprotocol/sdk`; background effects via ogl.
+Vue 3 + Vite + TDesign Vue Next on the renderer; UI copy via vue-i18n with a shared `shared/i18n` JSON catalog used by Vue, preload, and Rust. A bundled esbuild preload handles all filesystem/network work, served through the uTools API or a Tauri v2 Node sidecar. Config parsing via json5, js-yaml and smol-toml; MCP tool discovery via `@modelcontextprotocol/sdk`; background effects via ogl.
 
 ## License
 

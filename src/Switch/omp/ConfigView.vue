@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Space, Tooltip, Dialog, Input, MessagePlugin,
   Select, Switch, Collapse, CollapsePanel, Popconfirm,
@@ -11,6 +12,8 @@ import OmpRolesCard from "./components/OmpRolesCard.vue";
 import OmpModelFormDialog from "./components/OmpModelFormDialog.vue";
 import { formatNumber } from "../../utils/format";
 import "./styles/ConfigView.css";
+
+const { t } = useI18n();
 
 // ==================== Constants ====================
 
@@ -55,7 +58,7 @@ const refresh = () => {
     providers.value = window.services.getOmpProviderList();
   } catch (e) {
     console.error("加载 omp 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -96,11 +99,11 @@ const handleSaveProvider = () => {
     const payload = buildProviderPayload(editForm.value);
     // 供应商名称是 providers 的唯一 key，不允许重命名
     window.services.updateOmpProvider(editingProvider.value, payload);
-    MessagePlugin.success("供应商配置已更新");
+    MessagePlugin.success(t("omp.provider.updated"));
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("omp.provider.saveFailed", { message: e.message }));
   }
 };
 
@@ -112,23 +115,23 @@ const openAddProviderDialog = () => {
 const handleAddProvider = () => {
   try {
     const name = addProviderForm.value.name.trim();
-    if (!name) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!name) { MessagePlugin.warning(t("omp.provider.nameRequired")); return; }
     window.services.addOmpProvider(name, buildProviderPayload(addProviderForm.value));
-    MessagePlugin.success(`供应商 ${name} 已添加`);
+    MessagePlugin.success(t("omp.provider.added", { name }));
     addProviderDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("omp.provider.addFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (providerName) => {
   try {
     window.services.deleteOmpProvider(providerName);
-    MessagePlugin.success(`供应商 ${providerName} 已删除`);
+    MessagePlugin.success(t("omp.provider.deleted", { name: providerName }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("omp.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -155,30 +158,30 @@ const handleModelFormConfirm = ({ mode, providerName, originalId, id, payload })
   try {
     if (mode === "add") {
       window.services.addOmpModel(providerName, payload);
-      MessagePlugin.success(`模型 ${id} 已添加`);
+      MessagePlugin.success(t("omp.model.added", { id }));
     } else if (id !== originalId) {
       // ID 变化：删旧 + 建新
       window.services.deleteOmpModel(providerName, originalId);
       window.services.addOmpModel(providerName, payload);
-      MessagePlugin.success("模型已更新");
+      MessagePlugin.success(t("omp.model.updated"));
     } else {
       window.services.updateOmpModel(providerName, originalId, payload);
-      MessagePlugin.success("模型已更新");
+      MessagePlugin.success(t("omp.model.updated"));
     }
     modelFormVisible.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error((mode === "add" ? "添加失败: " : "保存失败: ") + e.message);
+    MessagePlugin.error(t(mode === "add" ? "omp.model.addFailed" : "omp.model.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteModel = (providerName, modelId) => {
   try {
     window.services.deleteOmpModel(providerName, modelId);
-    MessagePlugin.success(`模型 ${modelId} 已删除`);
+    MessagePlugin.success(t("omp.model.deleted", { id: modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("omp.model.deleteFailed", { message: e.message }));
   }
 };
 
@@ -195,14 +198,14 @@ onMounted(refresh);
   <div class="omp-config-container">
     <div class="omp-config-header">
       <span class="omp-config-tip">
-        omp CLI 配置 — 模型角色走 <code class="hint-link">omp config</code>，供应商见
+        {{ t("omp.config.toolbarTipPrefix") }}<code class="hint-link">omp config</code>{{ t("omp.config.toolbarTipSuffix") }}
         <span class="hint-link" @click="openOmpDir">~/.omp/agent/models.yml</span>
       </span>
       <div class="omp-config-actions">
         <Button size="small" variant="outline" @click="openOmpDir">
-          <template #icon><FolderOpen1Icon /></template> 打开目录
+          <template #icon><FolderOpen1Icon /></template> {{ t("omp.config.openDir") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -220,14 +223,14 @@ onMounted(refresh);
 
       <!-- 供应商与模型 -->
       <div class="omp-providers-header">
-        <span class="omp-providers-title">供应商与模型 · models.yml</span>
+        <span class="omp-providers-title">{{ t("omp.config.providersTitle") }}</span>
         <Button size="small" variant="outline" @click="openAddProviderDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("omp.provider.addTitle") }}
         </Button>
       </div>
 
       <div v-if="providers.length === 0" class="omp-config-empty">
-        <Empty description="未检测到 omp 供应商配置，请在终端中配置或手动编辑 models.yml" />
+        <Empty :description="t('omp.config.emptyProviders')" />
       </div>
 
       <div v-else class="omp-provider-list">
@@ -242,17 +245,17 @@ onMounted(refresh);
               <div class="omp-provider-header-left">
                 <span class="omp-provider-name">{{ prov.name }}</span>
                 <Tag size="small" variant="outline">{{ prov.api || 'openai-completions' }}</Tag>
-                <span class="omp-model-count">{{ prov.models.length }} 个模型</span>
+                <span class="omp-model-count">{{ t("omp.config.modelCount", { count: prov.models.length }, prov.models.length) }}</span>
               </div>
             </template>
             <template #headerRightContent>
               <div class="omp-provider-header-right" @click.stop>
-                <Tooltip content="编辑配置" placement="top">
+                <Tooltip :content="t('omp.provider.editTooltip')" placement="top">
                   <Button size="small" variant="text" @click="handleEdit(prov)">
                     <template #icon><EditIcon /></template>
                   </Button>
                 </Tooltip>
-                <Popconfirm content="确定删除此供应商？其下所有模型也会被删除。" @confirm="handleDeleteProvider(prov.name)">
+                <Popconfirm :content="t('omp.provider.deleteConfirm')" @confirm="handleDeleteProvider(prov.name)">
                   <Button size="small" variant="text" theme="danger">
                     <template #icon><DeleteIcon /></template>
                   </Button>
@@ -265,19 +268,19 @@ onMounted(refresh);
             <div class="omp-provider-info">
               <Space size="8px" align="center" class="omp-info-row">
                 <span class="omp-info-label">API Key</span>
-                <span class="omp-info-value mono">{{ prov.apiKey ? prov.apiKey.slice(0, 8) + '...' + prov.apiKey.slice(-4) : '未设置' }}</span>
+                <span class="omp-info-value mono">{{ prov.apiKey ? prov.apiKey.slice(0, 8) + '...' + prov.apiKey.slice(-4) : t("common.notSet") }}</span>
               </Space>
               <Space size="8px" align="center" class="omp-info-row">
                 <span class="omp-info-label">Base URL</span>
-                <span class="omp-info-value mono">{{ prov.baseUrl || '默认' }}</span>
+                <span class="omp-info-value mono">{{ prov.baseUrl || t("common.default") }}</span>
               </Space>
             </div>
 
             <div class="omp-models-section">
               <div class="omp-models-title">
-                <span>模型列表</span>
+                <span>{{ t("omp.config.modelsTitle") }}</span>
                 <Button size="small" variant="text" @click="openAddModelDialog(prov.name)">
-                  <template #icon><AddIcon /></template> 添加模型
+                  <template #icon><AddIcon /></template> {{ t("model.addTitle") }}
                 </Button>
               </div>
               <div v-for="m in prov.models" :key="m.id" class="omp-model-item">
@@ -285,20 +288,20 @@ onMounted(refresh);
                   <span class="omp-model-name">{{ m.name }}</span>
                 </Space>
                 <Space size="12px" align="center" class="omp-model-meta">
-                  <span class="omp-model-stat">上下文: {{ formatNumber(m.contextWindow) }}</span>
-                  <span class="omp-model-stat">最大输出: {{ formatNumber(m.maxTokens) }}</span>
-                  <span v-if="m.input && m.input.includes('image')" class="omp-model-stat">图像</span>
+                  <span class="omp-model-stat">{{ t("common.contextWindow") }}: {{ formatNumber(m.contextWindow) }}</span>
+                  <span class="omp-model-stat">{{ t("common.maxOutput") }}: {{ formatNumber(m.maxTokens) }}</span>
+                  <span v-if="m.input && m.input.includes('image')" class="omp-model-stat">{{ t("omp.model.image") }}</span>
                   <span v-if="m.cost && m.cost.input != null" class="omp-model-stat">
-                    费用: ¥{{ m.cost.input }}/1M in · ¥{{ m.cost.output }}/1M out
+                    {{ t("omp.model.cost", { input: m.cost.input, output: m.cost.output }) }}
                   </span>
                 </Space>
                 <div class="omp-model-actions" @click.stop>
-                  <Tooltip content="编辑模型" placement="top">
+                  <Tooltip :content="t('omp.model.editTooltip')" placement="top">
                     <Button size="small" variant="text" @click="openEditModelDialog(prov.name, m)">
                       <template #icon><EditIcon /></template>
                     </Button>
                   </Tooltip>
-                  <Popconfirm content="确定删除此模型？" @confirm="handleDeleteModel(prov.name, m.id)">
+                  <Popconfirm :content="t('omp.model.deleteConfirm')" @confirm="handleDeleteModel(prov.name, m.id)">
                     <Button size="small" variant="text" theme="danger">
                       <template #icon><DeleteIcon /></template>
                     </Button>
@@ -313,70 +316,70 @@ onMounted(refresh);
     </template>
 
     <!-- 供应商编辑弹窗 -->
-    <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="480px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
+    <Dialog v-model:visible="editDialog" :header="t('omp.provider.editTitle')" width="480px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="omp-edit-form">
         <div class="omp-form-item">
-          <label>供应商名称</label>
+          <label>{{ t("omp.provider.name") }}</label>
           <div class="omp-edit-provider-name">{{ editingProvider }}</div>
         </div>
         <div class="omp-form-item">
           <label>Base URL</label>
-          <Input v-model="editForm.baseUrl" placeholder="留空则使用默认 URL" />
+          <Input v-model="editForm.baseUrl" :placeholder="t('omp.provider.baseUrlPlaceholderEdit')" />
         </div>
         <div class="omp-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="editForm.apiKey" placeholder="输入 API Key" />
+          <ApiKeyInput v-model="editForm.apiKey" :placeholder="t('omp.provider.apiKeyPlaceholder')" />
         </div>
         <div class="omp-form-item">
-          <label>API 类型</label>
+          <label>{{ t("omp.provider.apiType") }}</label>
           <Select v-model="editForm.api" :options="API_TYPE_OPTIONS" />
         </div>
         <div class="omp-form-item">
-          <label>自动添加 Authorization 头</label>
+          <label>{{ t("omp.provider.authHeader") }}</label>
           <Switch v-model="editForm.authHeader" />
         </div>
         <div class="omp-form-item">
-          <label>自定义请求头 (headers)</label>
+          <label>{{ t("omp.provider.headers") }}</label>
           <DynamicKvEditor
             v-model="editForm.headers"
             :key-options="HEADER_KEY_OPTIONS"
-            key-placeholder="Header 名"
-            value-placeholder="Header 值"
+            :key-placeholder="t('omp.provider.headerKeyPlaceholder')"
+            :value-placeholder="t('omp.provider.headerValuePlaceholder')"
           />
         </div>
       </div>
     </Dialog>
 
     <!-- 供应商添加弹窗 -->
-    <Dialog v-model:visible="addProviderDialog" header="添加供应商" width="480px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
+    <Dialog v-model:visible="addProviderDialog" :header="t('omp.provider.addTitle')" width="480px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddProvider">
       <div class="omp-edit-form">
         <div class="omp-form-item">
-          <label>供应商名称 <span class="omp-form-required">*</span></label>
-          <Input v-model="addProviderForm.name" placeholder="例如：openai、deepseek、zhipu" />
+          <label>{{ t("omp.provider.name") }} <span class="omp-form-required">*</span></label>
+          <Input v-model="addProviderForm.name" :placeholder="t('omp.provider.namePlaceholder')" />
         </div>
         <div class="omp-form-item">
           <label>Base URL</label>
-          <Input v-model="addProviderForm.baseUrl" placeholder="留空使用供应商默认 URL" />
+          <Input v-model="addProviderForm.baseUrl" :placeholder="t('omp.provider.baseUrlPlaceholderAdd')" />
         </div>
         <div class="omp-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="输入 API Key（可留空后续再填）" />
+          <ApiKeyInput v-model="addProviderForm.apiKey" :placeholder="t('omp.provider.apiKeyPlaceholderAdd')" />
         </div>
         <div class="omp-form-item">
-          <label>API 类型</label>
+          <label>{{ t("omp.provider.apiType") }}</label>
           <Select v-model="addProviderForm.api" :options="API_TYPE_OPTIONS" />
         </div>
         <div class="omp-form-item">
-          <label>自动添加 Authorization 头</label>
+          <label>{{ t("omp.provider.authHeader") }}</label>
           <Switch v-model="addProviderForm.authHeader" />
         </div>
         <div class="omp-form-item">
-          <label>自定义请求头 (headers)</label>
+          <label>{{ t("omp.provider.headers") }}</label>
           <DynamicKvEditor
             v-model="addProviderForm.headers"
             :key-options="HEADER_KEY_OPTIONS"
-            key-placeholder="Header 名"
-            value-placeholder="Header 值"
+            :key-placeholder="t('omp.provider.headerKeyPlaceholder')"
+            :value-placeholder="t('omp.provider.headerValuePlaceholder')"
           />
         </div>
       </div>

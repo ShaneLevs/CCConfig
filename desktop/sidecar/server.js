@@ -51,7 +51,7 @@ try {
   require("./services.js");
   services = globalThis.services;
   if (!services || typeof services !== "object") {
-    throw new Error("services.js 执行完毕但未挂载 window.services");
+    throw new Error("services.js finished without attaching window.services");
   }
   console.error(`[sidecar] services 已装载，方法数 ${Object.keys(services).length}`);
 } catch (e) {
@@ -106,6 +106,7 @@ function registerAsyncTask(method, promise) {
     ok: false,
     value: null,
     error: "",
+    svcCode: "",
     waiters: [],
   };
   asyncTasks.set(taskId, task);
@@ -132,10 +133,11 @@ function settleAsyncTask(task, ok, payload) {
       task.value = value;
     } catch (e) {
       task.ok = false;
-      task.error = `返回值无法序列化为 JSON: ${e.message}`;
+      task.error = `return value is not JSON-serializable: ${e.message}`;
     }
   } else {
     task.error = String((payload && payload.message) || payload);
+    task.svcCode = String((payload && payload.svcCode) || "");
   }
   const cost = Date.now() - task.createdAt;
   if (!task.ok) console.error(`[sidecar] ${task.method} (异步) 失败: ${task.error}`);
@@ -146,7 +148,11 @@ function settleAsyncTask(task, ok, payload) {
 function sendPollResult(res, task) {
   if (!task.settled) return sendJson(res, 200, { status: "pending" });
   if (task.ok) return sendJson(res, 200, { status: "done", value: task.value });
-  return sendJson(res, 200, { status: "error", error: task.error });
+  return sendJson(res, 200, {
+    status: "error",
+    error: task.error,
+    svcCode: task.svcCode || undefined,
+  });
 }
 
 // ==================== HTTP ====================
@@ -175,7 +181,7 @@ function readBody(req) {
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        reject(new Error(`请求体超过 ${MAX_BODY_BYTES} 字节`));
+        reject(new Error(`request body exceeds ${MAX_BODY_BYTES} bytes`));
         req.destroy();
         return;
       }
@@ -190,12 +196,12 @@ function dispatch(method, args) {
   if (method.startsWith("__utools.")) {
     const key = method.slice("__utools.".length);
     const handler = utoolsHandlers[key];
-    if (!handler) throw new Error(`未知的 utools 方法: ${key}`);
+    if (!handler) throw new Error(`unknown utools method: ${key}`);
     return handler(...args);
   }
-  if (bootError) throw new Error(`services 未就绪: ${bootError.message}`);
+  if (bootError) throw new Error(`services not ready: ${bootError.message}`);
   const fn = services[method];
-  if (typeof fn !== "function") throw new Error(`未知的 services 方法: ${method}`);
+  if (typeof fn !== "function") throw new Error(`unknown services method: ${method}`);
   // 故意不 await：thenable 交给异步任务通道，由 /rpc-poll 取结果
   return fn(...args);
 }
@@ -224,7 +230,7 @@ const server = http.createServer(async (req, res) => {
 
   // 除 /health 外一律校验 token
   if (TOKEN && req.headers["x-ccconfig-token"] !== TOKEN) {
-    sendJson(res, 403, { ok: false, error: "token 校验失败" });
+    sendJson(res, 403, { ok: false, error: "token validation failed" });
     return;
   }
 
@@ -280,7 +286,7 @@ const server = http.createServer(async (req, res) => {
       clearTimeout(warnTimer);
       const message = String((e && e.message) || e);
       console.error(`[sidecar] ${method} 失败: ${message}`);
-      sendJson(res, 200, { ok: false, error: message });
+      sendJson(res, 200, { ok: false, error: message, svcCode: (e && e.svcCode) || undefined });
     }
     return;
   }
@@ -292,7 +298,7 @@ const server = http.createServer(async (req, res) => {
       const payload = raw ? JSON.parse(raw) : {};
       taskId = String(payload.taskId || "");
     } catch (e) {
-      sendJson(res, 400, { ok: false, error: "请求体不是合法 JSON" });
+      sendJson(res, 400, { ok: false, error: "invalid JSON body" });
       return;
     }
     const task = asyncTasks.get(taskId);
@@ -316,7 +322,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  sendJson(res, 404, { ok: false, error: `未实现的路由: ${req.method} ${url}` });
+  sendJson(res, 404, { ok: false, error: `unimplemented route: ${req.method} ${url}` });
 });
 
 // ==================== 生命周期 ====================

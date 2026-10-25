@@ -3,6 +3,8 @@ const path = require('node:path')
 const zlib = require('node:zlib')
 const https = require('node:https')
 
+const { t } = require('./i18n')
+
 const CLAUDE_SETTINGS_PATH = path.join(window.utools.getPath('home'), '.claude', 'settings.json')
 const CLAUDE_JSON_PATH = path.join(window.utools.getPath('home'), '.claude.json')
 const CLAUDE_SKILLS_PATH = path.join(window.utools.getPath('home'), '.claude', 'skills')
@@ -97,9 +99,9 @@ const upsertMcpServer = (name, serverConfig) => {
 
 const deleteMcpServer = (name) => {
   const config = readClaudeJson() || {}
-  if (!config.mcpServers || !config.mcpServers[name]) return { success: false, error: 'MCP 配置不存在' }
+  if (!config.mcpServers || !config.mcpServers[name]) return { success: false, error: t('service.mcp.notFound') }
   delete config.mcpServers[name]
-  if (!writeClaudeJson(config)) return { success: false, error: '写入 ~/.claude.json 失败' }
+  if (!writeClaudeJson(config)) return { success: false, error: t('service.mcp.writeClaudeJsonFailed') }
   return { success: true }
 }
 

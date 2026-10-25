@@ -1,6 +1,7 @@
 <script setup>
 
 import { ref, onMounted, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Button,
   Dialog,
@@ -26,13 +27,21 @@ import OcModelFormDialog from "./components/OcModelFormDialog.vue";
 import OcProviderDialog from "./components/OcProviderDialog.vue";
 import "./styles/ConfigView.css";
 
+const { t } = useI18n();
+
 // ==================== Constants ====================
 
 const KNOWN_PROVIDER_OPTION_KEYS = ["baseURL", "apiKey", "headers"];
 const KNOWN_MODEL_KEYS = ["name", "limit", "options", "reasoning", "modalities"];
 
 // 思考参数摘要中的模态文案
-const MODALITY_LABELS = { text: "文本", image: "图像", audio: "音频", video: "视频", pdf: "PDF" };
+const MODALITY_LABELS = {
+  text: "opencode.model.modalities.text",
+  image: "opencode.model.modalities.image",
+  audio: "opencode.model.modalities.audio",
+  video: "opencode.model.modalities.video",
+  pdf: "opencode.model.modalities.pdf",
+};
 
 // ==================== State ====================
 
@@ -204,11 +213,11 @@ const openAddModelDialog = (providerId) => {
 const thinkingStat = (m) => {
   const o = m.raw?.options || {};
   const parts = [];
-  if (o.effort) parts.push("档位 " + o.effort);
-  if (o.thinking?.type) parts.push("思考 " + o.thinking.type + (o.thinking.budgetTokens ? " " + formatCtx(o.thinking.budgetTokens) : ""));
+  if (o.effort) parts.push(t("opencode.config.thinkingEffort", { effort: o.effort }));
+  if (o.thinking?.type) parts.push(t("opencode.config.thinking", { type: o.thinking.type }) + (o.thinking.budgetTokens ? " " + formatCtx(o.thinking.budgetTokens) : ""));
   return parts.join(" · ");
 };
-const modTag = (mods) => mods.map((x) => MODALITY_LABELS[x] || x).join("/");
+const modTag = (mods) => mods.map((x) => (MODALITY_LABELS[x] ? t(MODALITY_LABELS[x]) : x)).join("/");
 
 // 表单 → opencode 模型配置条目（limit 仅在 >0 时写入，0/默认不写；
 // reasoning/modalities/effort/thinking 为一级字段，与自由格式 SDK Options 合并写回 options）
@@ -250,7 +259,7 @@ const buildModelEntry = (form) => {
 const mutateProviderModels = (providerId, mutate) => {
   const current = window.services.getOpencodeProviders();
   const prov = current[providerId];
-  if (!prov) return { ok: false, error: "Provider 不存在" };
+  if (!prov) return { ok: false, error: t("opencode.config.providerNotExist") };
   const models = { ...(prov.models || {}) };
   const res = mutate(models);
   if (res && res.error) return { ok: false, error: res.error };
@@ -260,18 +269,18 @@ const mutateProviderModels = (providerId, mutate) => {
 // 确认添加（支持手动输入 ID，不依赖下拉）
 const confirmAddModel = (form) => {
   const id = form.id.trim();
-  if (!id) return MessagePlugin.warning("请输入模型 ID");
+  if (!id) return MessagePlugin.warning(t("opencode.config.modelIdRequired"));
   const res = mutateProviderModels(addModelProviderId.value, (models) => {
-    if (models[id]) return { error: "模型已存在: " + id };
+    if (models[id]) return { error: t("opencode.config.modelExists", { id }) };
     models[id] = buildModelEntry({ ...form, id });
   });
   if (res.error) return MessagePlugin.warning(res.error);
   if (res.ok) {
-    MessagePlugin.success(`模型 ${id} 已添加`);
+    MessagePlugin.success(t("opencode.config.modelAdded", { id }));
     showAddModelDialog.value = false;
     loadProviders();
   } else {
-    MessagePlugin.error("添加失败");
+    MessagePlugin.error(t("opencode.config.addFailed"));
   }
 };
 
@@ -312,20 +321,20 @@ const openEditModelDialog = (providerId, model) => {
 
 const handleSaveModel = (form) => {
   const id = form.id.trim();
-  if (!id) return MessagePlugin.warning("请输入模型 ID");
+  if (!id) return MessagePlugin.warning(t("opencode.config.modelIdRequired"));
   const origId = editModelOrigId.value;
   const res = mutateProviderModels(editModelProviderId.value, (models) => {
-    if (id !== origId && models[id]) return { error: "模型已存在: " + id };
+    if (id !== origId && models[id]) return { error: t("opencode.config.modelExists", { id }) };
     if (id !== origId) delete models[origId];
     models[id] = buildModelEntry({ ...form, id });
   });
   if (res.error) return MessagePlugin.warning(res.error);
   if (res.ok) {
-    MessagePlugin.success(`模型 ${id} 已更新`);
+    MessagePlugin.success(t("opencode.config.modelUpdated", { id }));
     showEditModelDialog.value = false;
     loadProviders();
   } else {
-    MessagePlugin.error("保存失败");
+    MessagePlugin.error(t("opencode.config.saveFailed"));
   }
 };
 
@@ -334,10 +343,10 @@ const handleDeleteModel = (providerId, modelId) => {
     delete models[modelId];
   });
   if (res.ok) {
-    MessagePlugin.success(`模型 ${modelId} 已删除`);
+    MessagePlugin.success(t("opencode.config.modelDeleted", { id: modelId }));
     loadProviders();
   } else {
-    MessagePlugin.error("删除失败");
+    MessagePlugin.error(t("opencode.config.deleteFailed"));
   }
 };
 
@@ -346,11 +355,11 @@ const handleDeleteModel = (providerId, modelId) => {
 // 弹窗确认 → 合并写盘：编辑时基于磁盘最新配置合并，models 等其他字段原样保留
 const saveProvider = (form) => {
   const id = form.id.trim();
-  if (!id) return MessagePlugin.warning("请输入 Provider ID");
-  if (!form.npm) return MessagePlugin.warning("请选择 NPM Package");
+  if (!id) return MessagePlugin.warning(t("opencode.config.providerIdRequired"));
+  if (!form.npm) return MessagePlugin.warning(t("opencode.config.npmRequired"));
 
   if (providerDialogMode.value === "create" && providers.value[id]) {
-    return MessagePlugin.warning("Provider ID 已存在: " + id);
+    return MessagePlugin.warning(t("opencode.config.providerIdExists", { id }));
   }
 
   // Build options
@@ -371,11 +380,11 @@ const saveProvider = (form) => {
   };
 
   if (window.services.setOpencodeProvider(id, providerConfig)) {
-    MessagePlugin.success(providerDialogMode.value === "create" ? "Provider 已添加" : "Provider 已更新");
+    MessagePlugin.success(providerDialogMode.value === "create" ? t("opencode.config.providerAdded") : t("opencode.config.providerUpdated"));
     showProviderDialog.value = false;
     loadProviders();
   } else {
-    MessagePlugin.error("保存失败");
+    MessagePlugin.error(t("opencode.config.saveFailed"));
   }
 };
 
@@ -383,10 +392,10 @@ const saveProvider = (form) => {
 
 const deleteProvider = (providerId) => {
   if (window.services.removeOpencodeProvider(providerId)) {
-    MessagePlugin.success("Provider 已删除");
+    MessagePlugin.success(t("opencode.config.providerDeleted"));
     loadProviders();
   } else {
-    MessagePlugin.error("删除失败");
+    MessagePlugin.error(t("opencode.config.deleteFailed"));
   }
 };
 
@@ -403,12 +412,12 @@ const handleExport = () => {
   try {
     const currentProviders = window.services.getOpencodeProviders();
     const list = Object.entries(currentProviders).map(([id, config]) => ({ id, ...config }));
-    if (!list.length) return MessagePlugin.warning("没有 Provider 可导出");
+    if (!list.length) return MessagePlugin.warning(t("opencode.config.noProvidersExport"));
     const compressed = window.services.compressConfigs(list);
     window.utools.copyText(compressed);
-    MessagePlugin.success("已复制到剪贴板");
+    MessagePlugin.success(t("common.copiedToClipboard"));
   } catch (e) {
-    MessagePlugin.error("导出失败: " + e.message);
+    MessagePlugin.error(t("opencode.config.exportFailed", { message: e.message }));
   }
 };
 
@@ -418,10 +427,10 @@ const openImportDialog = () => {
 };
 
 const handleImport = () => {
-  if (!importString.value.trim()) return MessagePlugin.warning("请粘贴配置字符串");
+  if (!importString.value.trim()) return MessagePlugin.warning(t("opencode.config.configStringRequired"));
   try {
     const decompressed = window.services.decompressConfigs(importString.value.trim());
-    if (!Array.isArray(decompressed)) return MessagePlugin.error("解压数据格式不正确");
+    if (!Array.isArray(decompressed)) return MessagePlugin.error(t("opencode.config.invalidImportData"));
 
     const batch = {};
     for (const item of decompressed) {
@@ -436,14 +445,14 @@ const handleImport = () => {
     }
     const count = Object.keys(batch).length;
     if (count && window.services.setOpencodeProviders(batch)) {
-      MessagePlugin.success(`已导入 ${count} 个 Provider`);
+      MessagePlugin.success(t("opencode.config.imported", { count }));
       showImportDialog.value = false;
       loadProviders();
     } else if (!count) {
-      MessagePlugin.warning("没有有效的 Provider 可导入");
+      MessagePlugin.warning(t("opencode.config.noValidProviders"));
     }
   } catch (e) {
-    MessagePlugin.error("导入失败: " + e.message);
+    MessagePlugin.error(t("opencode.config.importFailed", { message: e.message }));
   }
 };
 
@@ -480,19 +489,19 @@ onMounted(() => {
     <!-- Section Header -->
     <div class="section-header">
       <span class="section-tip">
-        直接编辑 <span class="hint-link" @click="openConfigFile">opencode.json</span>
+        {{ t("opencode.config.tipPrefix") }}<span class="hint-link" @click="openConfigFile">opencode.json</span>
       </span>
       <Space size="small">
         <Button size="small" variant="outline" @click="handleExport">
-          <template #icon><DownloadIcon /></template> 导出
+          <template #icon><DownloadIcon /></template> {{ t("opencode.config.export") }}
         </Button>
         <Button size="small" variant="outline" @click="openImportDialog">
-          <template #icon><UploadIcon /></template> 导入
+          <template #icon><UploadIcon /></template> {{ t("opencode.config.import") }}
         </Button>
         <Button size="small" theme="primary" @click="openCreateDialog">
-          <template #icon><AddIcon /></template> 新建配置
+          <template #icon><AddIcon /></template> {{ t("opencode.config.newConfig") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" @click="loadProviders">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -502,10 +511,10 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div v-if="!providerList.length" class="empty-state">
-      <Empty description="暂无配置">
+      <Empty :description="t('opencode.config.empty')">
         <template #action>
           <Button theme="primary" @click="openCreateDialog">
-            <template #icon><AddIcon /></template> 添加第一个配置
+            <template #icon><AddIcon /></template> {{ t("opencode.config.addFirst") }}
           </Button>
         </template>
       </Empty>
@@ -529,15 +538,15 @@ onMounted(() => {
           </template>
           <template #headerRightContent>
             <div class="oc-provider-header-right" @click.stop>
-              <span class="oc-model-count">{{ provider.models.length }} 个模型</span>
+              <span class="oc-model-count">{{ t("opencode.config.modelCount", { count: provider.models.length }) }}</span>
               <Space size="small">
-                <Tooltip content="编辑配置" placement="top">
+                <Tooltip :content="t('opencode.config.editConfig')" placement="top">
                   <Button size="small" variant="text" @click="openEditDialog(provider)">
                     <template #icon><EditIcon /></template>
                   </Button>
                 </Tooltip>
-                <Popconfirm theme="danger" content="确定要删除这个 Provider 吗？" @confirm="deleteProvider(provider.id)">
-                  <Tooltip content="删除" placement="top">
+                <Popconfirm theme="danger" :content="t('opencode.config.deleteConfirm')" @confirm="deleteProvider(provider.id)">
+                  <Tooltip :content="t('common.delete')" placement="top">
                     <Button size="small" theme="danger" variant="text">
                       <template #icon><DeleteIcon /></template>
                     </Button>
@@ -551,45 +560,45 @@ onMounted(() => {
             <div class="oc-provider-info">
               <div class="oc-info-row">
                 <span class="oc-info-label">API Key</span>
-                <span class="oc-info-value mono">{{ provider.options?.apiKey ? provider.options.apiKey.slice(0, 8) + '...' + provider.options.apiKey.slice(-4) : '未设置' }}</span>
+                <span class="oc-info-value mono">{{ provider.options?.apiKey ? provider.options.apiKey.slice(0, 8) + '...' + provider.options.apiKey.slice(-4) : t('common.notSet') }}</span>
               </div>
               <div class="oc-info-row">
                 <span class="oc-info-label">Base URL</span>
-                <span class="oc-info-value mono">{{ provider.options?.baseURL || '默认' }}</span>
+                <span class="oc-info-value mono">{{ provider.options?.baseURL || t('opencode.config.defaultBaseUrl') }}</span>
               </div>
               <div v-if="provider.name && provider.name !== provider.id" class="oc-info-row">
-                <span class="oc-info-label">显示名称</span>
+                <span class="oc-info-label">{{ t("opencode.config.displayName") }}</span>
                 <span class="oc-info-value">{{ provider.name }}</span>
               </div>
             </div>
 
             <div class="oc-models-section">
               <div class="oc-models-title">
-                <span>模型列表</span>
+                <span>{{ t("opencode.config.modelList") }}</span>
                 <Button size="small" variant="text" @click="openAddModelDialog(provider.id)">
-                  <template #icon><AddIcon /></template> 添加模型
+                  <template #icon><AddIcon /></template> {{ t("opencode.config.addModel") }}
                 </Button>
               </div>
-              <div v-if="!provider.models.length" class="oc-models-empty">暂无模型</div>
+              <div v-if="!provider.models.length" class="oc-models-empty">{{ t("opencode.config.noModels") }}</div>
               <div v-else class="oc-model-item" v-for="m in provider.models" :key="m.id">
                 <div class="oc-model-info">
                   <span class="oc-model-name">{{ m.name }}</span>
-                  <Tag v-if="m.reasoning" size="small" theme="warning" variant="light">推理</Tag>
-                  <Tag v-if="m.modIn.length" size="small" theme="primary" variant="light">{{ modTag(m.modIn) }}入</Tag>
-                  <Tag v-if="m.modOut.length" size="small" theme="success" variant="light">{{ modTag(m.modOut) }}出</Tag>
+                  <Tag v-if="m.reasoning" size="small" theme="warning" variant="light">{{ t("opencode.config.reasoning") }}</Tag>
+                  <Tag v-if="m.modIn.length" size="small" theme="primary" variant="light">{{ t("opencode.config.inputModality", { modality: modTag(m.modIn) }) }}</Tag>
+                  <Tag v-if="m.modOut.length" size="small" theme="success" variant="light">{{ t("opencode.config.outputModality", { modality: modTag(m.modOut) }) }}</Tag>
                 </div>
                 <div class="oc-model-meta">
-                  <span class="oc-model-stat">上下文: {{ m.context ? formatCtx(m.context) : '-' }}</span>
-                  <span class="oc-model-stat">输出: {{ m.output ? formatCtx(m.output) : '-' }}</span>
+                  <span class="oc-model-stat">{{ t("opencode.config.context", { value: m.context ? formatCtx(m.context) : '-' }) }}</span>
+                  <span class="oc-model-stat">{{ t("opencode.config.output", { value: m.output ? formatCtx(m.output) : '-' }) }}</span>
                   <span v-if="thinkingStat(m)" class="oc-model-stat">{{ thinkingStat(m) }}</span>
                 </div>
                 <div class="oc-model-actions" @click.stop>
-                  <Tooltip content="编辑模型" placement="top">
+                  <Tooltip :content="t('opencode.config.editModel')" placement="top">
                     <Button size="small" variant="text" @click="openEditModelDialog(provider.id, m)">
                       <template #icon><EditIcon /></template>
                     </Button>
                   </Tooltip>
-                  <Popconfirm content="确定删除此模型？" @confirm="handleDeleteModel(provider.id, m.id)">
+                  <Popconfirm :content="t('opencode.config.deleteModelConfirm')" @confirm="handleDeleteModel(provider.id, m.id)">
                     <Button size="small" variant="text" theme="danger">
                       <template #icon><DeleteIcon /></template>
                     </Button>
@@ -628,14 +637,14 @@ onMounted(() => {
     />
 
     <!-- Import Dialog -->
-    <Dialog v-model:visible="showImportDialog" header="从字符串导入" width="480px" @confirm="handleImport">
+    <Dialog v-model:visible="showImportDialog" :header="t('opencode.config.importTitle')" width="480px" @confirm="handleImport">
       <div class="oc-form">
         <div class="oc-form-item-vertical">
-          <label>配置字符串</label>
+          <label>{{ t("opencode.config.configString") }}</label>
           <Textarea
             v-if="showImportDialog"
             v-model="importString"
-            placeholder="粘贴配置字符串"
+            :placeholder="t('opencode.config.pasteConfig')"
             :autosize="{ minRows: 4, maxRows: 8 }"
           />
         </div>

@@ -1,0 +1,61 @@
+{
+  "hermes": {
+    "config": {
+      "toolbarSubtitle": "custom_providers and the top-level model default pointer",
+      "addProvider": "Add provider",
+      "emptyProviders": "No Hermes providers found. Add one in Hermes, or add it manually here.",
+      "readonlyTooltip": "Managed by the Hermes Web UI (providers section); can only be set as default",
+      "managedTag": "Hermes-managed",
+      "defaultProvider": "Default provider",
+      "modelCount": "{count} model | {count} models",
+      "readonlyEditTooltip": "Managed by the Hermes Web UI; cannot be edited here",
+      "readonlyDeleteTooltip": "Managed by the Hermes Web UI; cannot be deleted here",
+      "deleteProviderConfirm": "Delete this provider? If it is the current default, the default pointer will move to the first remaining provider.",
+      "configured": "Configured",
+      "unconfigured": "Not configured",
+      "rateLimitLabel": "Request interval (rate_limit_delay)",
+      "seconds": "{count} second | {count} seconds",
+      "modelsTitle": "Models (star = set as default, written to top-level model.provider / model.default)",
+      "modelsEmpty": "No models",
+      "modelsEmptyEditable": "No models. Click \"Edit\" to add one in the dialog.",
+      "setDefaultTooltip": "Set as default model",
+      "editTitle": "Edit provider config",
+      "providerName": "Provider name",
+      "nameHint": "The name is the YAML identity in config.yaml and is referenced by the top-level model.provider",
+      "nameReadonlyHint": "The name is referenced by model.provider and does not change when editing",
+      "apiModeLabel": "API mode (api_mode)",
+      "baseUrlLabel": "Base URL (base_url)",
+      "apiKeyLabel": "API Key (api_key)",
+      "apiKeyPlaceholder": "Written in plaintext to config.yaml",
+      "rateLimitFieldLabel": "Request interval in seconds (rate_limit_delay, optional)",
+      "modelsLabel": "Models (models; the first model becomes this provider's model default)",
+      "modelIdPlaceholder": "Model ID, e.g. anthropic/claude-opus-4-8",
+      "modelIdPlaceholderEdit": "Model ID",
+      "contextPlaceholder": "Context length",
+      "addModel": "Add model",
+      "modelsHint": "Model ID is required; context length (context_length) is optional",
+      "modelsEditHint": "Changing a model ID deletes the old entry and creates a new one; other custom keys on the model entry (such as name / max_tokens) are preserved automatically",
+      "apiKeySavedPlaceholder": "Saved; clear and save to delete, or edit to overwrite",
+      "apiKeyEmptyPlaceholder": "Leave empty to write nothing",
+      "apiMode": {
+        "chatCompletions": "chat_completions (OpenAI Chat)",
+        "anthropicMessages": "anthropic_messages (Anthropic Messages)",
+        "codexResponses": "codex_responses (OpenAI Responses)",
+        "bedrockConverse": "bedrock_converse (AWS Bedrock)"
+      }
+    },
+    "provider": {
+      "nameRequired": "Enter a provider name",
+      "added": "Provider added",
+      "addFailed": "Add failed: {message}",
+      "updated": "Provider config updated",
+      "saveFailed": "Save failed: {message}",
+      "deleted": "Provider {name} deleted",
+      "deleteFailed": "Delete failed: {message}"
+    },
+    "model": {
+      "defaultSet": "Default model set to {model}",
+      "saveFailed": "Save failed: {message}"
+    }
+  }
+}

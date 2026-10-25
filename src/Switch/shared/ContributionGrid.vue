@@ -1,7 +1,19 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { Tooltip } from "tdesign-vue-next";
 import { agentLabel } from "../../composables/agentMeta";
+
+const { t, locale } = useI18n();
+
+// 月份 / 星期标签跟随当前语言（zh-CN: 1月/一，en-US: Jan/M）
+const monthText = (month) =>
+  new Date(2000, month, 1).toLocaleDateString(locale.value, { month: 'short' });
+const weekdayLabels = computed(() => {
+  const narrow = (offset) =>
+    new Date(2024, 0, 1 + offset).toLocaleDateString(locale.value, { weekday: 'narrow' });
+  return ['', narrow(0), '', narrow(2), '', narrow(4), ''];
+});
 
 const props = defineProps({
   contributions: { type: Array, default: () => [] },
@@ -152,11 +164,11 @@ const monthLabels = computed(() => {
     if (!validDay) { span++; continue; }
     const month = new Date(validDay.date + "T00:00:00").getMonth();
     if (month !== currentMonth) {
-      if (currentMonth !== -1) labels.push({ text: `${currentMonth + 1}月`, span });
+      if (currentMonth !== -1) labels.push({ text: monthText(currentMonth), span });
       currentMonth = month; span = 1;
     } else { span++; }
   }
-  if (currentMonth !== -1) labels.push({ text: `${currentMonth + 1}月`, span });
+  if (currentMonth !== -1) labels.push({ text: monthText(currentMonth), span });
   return labels;
 });
 </script>
@@ -173,7 +185,7 @@ const monthLabels = computed(() => {
     </div>
     <div class="contrib-body">
       <div class="contrib-day-labels">
-        <span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span>
+        <span v-for="(label, i) in weekdayLabels" :key="i">{{ label }}</span>
       </div>
       <div class="contrib-grid" :style="{ width: gridWidth + 'px' }">
         <div v-for="(week, wi) in visibleWeeks" :key="wi" class="contrib-week">
@@ -198,7 +210,7 @@ const monthLabels = computed(() => {
                       </div>
                       <div v-for="m in group.lines" :key="m.name" class="tip-line tip-line-grouped">
                         <span class="tip-name">{{ m.name }}</span>
-                        <span class="tip-detail">Input: {{ m.input }} Output: {{ m.output }}</span>
+                        <span class="tip-detail">{{ t('usage.tooltipLine', { input: m.input, output: m.output }) }}</span>
                       </div>
                     </div>
                   </template>
@@ -206,7 +218,7 @@ const monthLabels = computed(() => {
                   <template v-else>
                     <div v-for="m in day.modelLines" :key="m.name" class="tip-line">
                       <span class="tip-name">{{ m.name }}</span>
-                      <span class="tip-detail">Input: {{ m.input }} Output: {{ m.output }}</span>
+                      <span class="tip-detail">{{ t('usage.tooltipLine', { input: m.input, output: m.output }) }}</span>
                     </div>
                   </template>
                 </div>

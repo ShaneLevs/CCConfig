@@ -1,0 +1,77 @@
+{
+  "zcode": {
+    "config": {
+      "apiType": {
+        "anthropicMessages": "anthropic-messages（Anthropic Messages）",
+        "openaiChat": "openai-chat-completions（OpenAI Chat）",
+        "openaiResponses": "openai-responses（OpenAI Responses）"
+      },
+      "toolbarSubtitle": "自定义供应商与模型（ZCode 修改后即时生效，无需重启）",
+      "addProvider": "添加供应商",
+      "emptyProviders": "未检测到 ZCode 自定义供应商；可在 ZCode 内添加，或在此手动添加",
+      "preferredProvider": "首选供应商",
+      "modelCount": "{count} 个模型",
+      "deleteProviderTooltip": "删除供应商（其模型一并删除）",
+      "deleteProviderConfirm": "删除该供应商？其模型配置将一并从 provider_config.json 移除",
+      "configured": "已配置",
+      "unconfigured": "未配置",
+      "modelsTitle": "模型（选择器顺序 = modelOrder）",
+      "modelsEmpty": "暂无自定义模型，点击「添加」创建",
+      "reasoningCount": "思考×{count}",
+      "preferred": "首选",
+      "setPreferredTooltip": "设为首选模型（providerOrder / modelOrder 置顶）",
+      "editModelTooltip": "编辑模型配置",
+      "deleteModelConfirm": "删除该模型？",
+      "providerName": "供应商名称",
+      "providerIdHint": "Provider ID 按名称自动生成（小写字母/数字/中划线，与 ZCode 规则一致）",
+      "apiTypeLabel": "API 协议（api.type）",
+      "apiKeyPlainPlaceholder": "明文写入 provider_config.json",
+      "apiKeySavedPlaceholder": "已保存，清空并保存将删除；修改则覆盖",
+      "apiKeyEmptyPlaceholder": "留空不写入",
+      "fetchingModels": "正在从该供应商拉取模型列表…",
+      "modelFetchHint": "从供应商 Base URL 的 /models 接口获取，也可手动输入",
+      "enabledLabel": "启用（enabled）",
+      "outputLabel": "最大输出 Token（optionSpecs.maxOutputTokens.max）",
+      "inputTypes": "输入类型（inputFormat，文本默认支持）",
+      "image": "图片",
+      "video": "视频",
+      "audio": "音频",
+      "capabilities": "模型能力（properties）",
+      "structuredOutput": "结构化输出",
+      "webSearch": "原生联网搜索",
+      "midSystem": "对话中系统消息",
+      "reasoningLevels": "思考等级（从低到高，optionSpecs.reasoningLevel.values）",
+      "reasoningPlaceholder": "如 low",
+      "addReasoningLevel": "添加思考等级",
+      "reasoningHint": "点「+」输入，回车确认成标签；按从低到高的顺序依次添加，如 low → high → max",
+      "providerLabel": "供应商：{provider}",
+      "editModelIdHint": "改 ID 后两个顺序表（personalModelIds / modelOrder）自动同步",
+      "addTitle": "添加供应商",
+      "editTitle": "编辑供应商配置",
+      "noModels": "未获取到模型"
+    },
+    "provider": {
+      "added": "供应商已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "供应商配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "供应商 {id} 已删除",
+      "deleteFailed": "删除失败: {message}"
+    },
+    "model": {
+      "preferredSet": "首选模型已设为 {model}",
+      "added": "模型 {modelId} 已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "模型配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "模型 {modelId} 已删除",
+      "deleteFailed": "删除失败: {message}"
+    },
+    "usage": {
+      "tip": "ZCode 使用统计（读取本地用量数据库，输入含缓存）",
+      "empty": "暂无使用数据，使用 ZCode 对话后会在此处显示",
+      "emptyHint": "未找到用量数据库：{path}；产生用量后重新进入本页或点刷新即可统计",
+      "modelHint": "模型名与 ZCode 设置页口径一致"
+    }
+  }
+}

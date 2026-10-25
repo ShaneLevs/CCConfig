@@ -4,11 +4,15 @@ import 'tdesign-vue-next/es/style/index.css'
 import './theme.css'
 import './main.css'
 import App from './App.vue'
-import { installSystemTheme } from './systemTheme'
+import { i18n } from './i18n'
+import { installLocale } from './composables/useLocale'
+import { installAppearance } from './composables/useAppearance'
 
-// 系统主题 → <html theme-mode>（与桌面版菜单栏面板共用同一实现）
-installSystemTheme()
+// 首帧前解析语言与外观，避免界面闪变
+installLocale()
+installAppearance()
 
 const app = createApp(App)
 app.use(TDesign)
+app.use(i18n)
 app.mount('#app')

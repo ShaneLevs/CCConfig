@@ -1,0 +1,53 @@
+{
+  "skill": {
+    "install": {
+      "title": "Install Skill",
+      "install": "Install",
+      "link": "Skill URL",
+      "linkPlaceholder": "Paste a Skill detail page URL",
+      "hintSourcesPrefix": "Install skills from",
+      "hintSourcesMiddle": "or",
+      "hintSourcesSuffix": ". Copy the URL and paste it above.",
+      "hintManualPrefix": "To install manually, put the skill folder in",
+      "hintManualSuffix": "",
+      "author": "Author: {author}",
+      "downloads": "Downloads: {count}",
+      "sourceSkillHub": "SkillHub",
+      "sourceModelScope": "ModelScope",
+      "trace": "TRACE score",
+      "downloading": "Downloading... {progress}%",
+      "existsTitle": "Skill already exists",
+      "overwrite": "Overwrite",
+      "existsHint": "Skill \"{name}\" already exists. Overwrite it?"
+    },
+    "noDescription": "No description",
+    "unknownAuthor": "Unknown",
+    "requiresApiKey": "API key required",
+    "installSuccess": "Skill \"{name}\" installed",
+    "installFailed": "Install failed: {message}",
+    "fetchFailed": "Failed to fetch skill info: {message}",
+    "overwriteSuccess": "Skill \"{name}\" overwritten",
+    "trace": {
+      "trust": "Trust",
+      "reliability": "Reliability",
+      "adaptability": "Adaptability",
+      "convention": "Convention",
+      "effectiveness": "Effectiveness"
+    },
+    "categories": {
+      "paySkill": "Pay Skill",
+      "officeEfficiency": "Office efficiency",
+      "contentCreation": "Content creation",
+      "devProgramming": "Development",
+      "dataAnalysis": "Data analysis",
+      "designMedia": "Design & media",
+      "aiAgent": "AI Agent",
+      "knowledgeManagement": "Knowledge management",
+      "businessOps": "Business operations",
+      "education": "Education",
+      "professional": "Professional",
+      "itOpsSecurity": "IT ops & security",
+      "lifeService": "Lifestyle"
+    }
+  }
+}

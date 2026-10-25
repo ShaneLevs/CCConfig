@@ -1,12 +1,13 @@
 import { ref } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
+import { t } from "../i18n";
 
 export function useConfigImportExport(savedConfigs, loadSavedConfigs) {
   const showImportStringDialog = ref(false);
   const importString = ref("");
 
   const handleExportAsString = () => {
-    if (!savedConfigs.value.length) return MessagePlugin.warning("没有可导出的配置");
+    if (!savedConfigs.value.length) return MessagePlugin.warning(t("claude.config.noExport"));
     const keyDict = new Map(), urlDict = new Map(), list = [];
     savedConfigs.value.forEach((c, i) => {
       const idx = i + 1, cfg = {};
@@ -22,16 +23,16 @@ export function useConfigImportExport(savedConfigs, loadSavedConfigs) {
       list.push(cfg);
     });
     window.utools.copyText(window.services.encryptString(window.services.compressConfigs(list)));
-    MessagePlugin.success("配置已复制到剪贴板");
+    MessagePlugin.success(t("claude.config.copiedToClipboard"));
   };
 
   const openImportStringDialog = () => { importString.value = ""; showImportStringDialog.value = true; };
 
   const handleImportFromString = () => {
     const str = importString.value.trim();
-    if (!str) return MessagePlugin.warning("请输入配置字符串");
+    if (!str) return MessagePlugin.warning(t("claude.config.enterImportString"));
     const decompressed = window.services.decompressConfigs(window.services.decryptString(str));
-    if (!decompressed || !Array.isArray(decompressed)) return MessagePlugin.error("配置字符串格式不正确");
+    if (!decompressed || !Array.isArray(decompressed)) return MessagePlugin.error(t("claude.config.invalidImportString"));
 
     const configs = [], keyMap = new Map(), urlMap = new Map();
     decompressed.forEach((raw, i) => {
@@ -73,7 +74,11 @@ export function useConfigImportExport(savedConfigs, loadSavedConfigs) {
     }
     loadSavedConfigs();
     showImportStringDialog.value = false;
-    ok > 0 && fail === 0 ? MessagePlugin.success(`成功导入 ${ok} 个配置`) : ok > 0 ? MessagePlugin.warning(`成功导入 ${ok} 个，失败 ${fail} 个`) : MessagePlugin.error("导入失败");
+    ok > 0 && fail === 0
+      ? MessagePlugin.success(t("claude.config.importSuccess", { count: ok }))
+      : ok > 0
+        ? MessagePlugin.warning(t("claude.config.importPartial", { ok, fail }))
+        : MessagePlugin.error(t("claude.config.importFailed"));
   };
 
   return {

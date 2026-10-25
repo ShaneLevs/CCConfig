@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { Tag, Tooltip, Button, Space, Popconfirm, MessagePlugin } from "tdesign-vue-next";
 import { ToolsIcon, MoveIcon, EditIcon, DeleteIcon } from "tdesign-icons-vue-next";
 
@@ -24,17 +26,18 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['view-tools', 'copy', 'edit', 'delete']);
+const { t } = useI18n();
 
 const defaultTypeLabel = (config) => (config.type === 'http' || config.url) ? 'HTTP' : 'STDIO';
 const typeLabel = props.typeText || defaultTypeLabel(props.srv.config);
 const typeTheme = props.typeTheme || (defaultTypeLabel(props.srv.config) === 'HTTP' ? 'primary' : 'success');
-const otherLabel = props.target === 'local' ? '云端' : '本地';
+const otherLabel = computed(() => (props.target === 'local' ? t('mcp.cloud') : t('mcp.local')));
 const formatArgs = (args) => (Array.isArray(args) ? args.join(' ') : '');
 const copyName = () => {
   try {
     window.utools.copyText(props.srv.name);
-    MessagePlugin.success("名称已复制");
-  } catch { MessagePlugin.error("复制失败"); }
+    MessagePlugin.success(t('mcp.nameCopied'));
+  } catch { MessagePlugin.error(t('common.copyFailed')); }
 };
 </script>
 
@@ -42,7 +45,7 @@ const copyName = () => {
   <div class="mcp-server-card" :class="{ 'mcp-server-card--disabled': disabled }">
     <div class="mcp-server-card-header">
       <div class="mcp-server-srv-name-wrap">
-        <Tooltip content="点击复制名称" placement="top">
+        <Tooltip :content="t('mcp.copyName')" placement="top">
           <span class="mcp-server-srv-name" @click="copyName">{{ srv.name }}</span>
         </Tooltip>
         <Tag size="small" :theme="typeTheme" variant="light">
@@ -53,22 +56,22 @@ const copyName = () => {
       <div class="mcp-server-card-actions">
         <slot name="actions">
           <Space size="small">
-            <Tooltip content="查看工具" placement="top">
+            <Tooltip :content="t('mcp.viewTools')" placement="top">
               <Button size="small" variant="text" @click="emit('view-tools')">
                 <template #icon><ToolsIcon /></template>
               </Button>
             </Tooltip>
-            <Tooltip :content="`复制到${otherLabel}`" placement="top">
+            <Tooltip :content="t('mcp.copyTo', { target: otherLabel })" placement="top">
               <Button size="small" variant="text" @click="emit('copy')">
                 <template #icon><MoveIcon /></template>
               </Button>
             </Tooltip>
-            <Tooltip content="编辑" placement="top">
+            <Tooltip :content="t('common.edit')" placement="top">
               <Button size="small" variant="text" @click="emit('edit')">
                 <template #icon><EditIcon /></template>
               </Button>
             </Tooltip>
-            <Popconfirm content="确定删除此 MCP 服务器？" @confirm="emit('delete')">
+            <Popconfirm :content="t('mcp.deleteConfirm')" @confirm="emit('delete')">
               <Button size="small" variant="text" theme="danger">
                 <template #icon><DeleteIcon /></template>
               </Button>
@@ -81,11 +84,11 @@ const copyName = () => {
     <div class="mcp-server-card-body">
       <slot name="body">
         <div v-if="defaultTypeLabel(srv.config) === 'STDIO'" class="mcp-server-info-row">
-          <span class="mcp-server-label">命令</span>
+          <span class="mcp-server-label">{{ t('mcp.commandLabel') }}</span>
           <span class="mcp-server-value mono">{{ srv.config.command }}</span>
         </div>
         <div v-if="srv.config.args?.length" class="mcp-server-info-row">
-          <span class="mcp-server-label">参数</span>
+          <span class="mcp-server-label">{{ t('mcp.argsLabel') }}</span>
           <span class="mcp-server-value mono">{{ formatArgs(srv.config.args) }}</span>
         </div>
         <div v-if="srv.config.url" class="mcp-server-info-row">
@@ -93,11 +96,11 @@ const copyName = () => {
           <span class="mcp-server-value mono">{{ srv.config.url }}</span>
         </div>
         <div v-if="Object.keys(srv.config.env || {}).length" class="mcp-server-info-row">
-          <span class="mcp-server-label">环境变量</span>
+          <span class="mcp-server-label">{{ t('mcp.envLabel') }}</span>
           <span class="mcp-server-value mono">{{ Object.keys(srv.config.env).join(', ') }}</span>
         </div>
         <div v-if="Object.keys(srv.config.headers || {}).length" class="mcp-server-info-row">
-          <span class="mcp-server-label">请求头</span>
+          <span class="mcp-server-label">{{ t('mcp.headersLabel') }}</span>
           <span class="mcp-server-value mono">{{ Object.keys(srv.config.headers).join(', ') }}</span>
         </div>
       </slot>

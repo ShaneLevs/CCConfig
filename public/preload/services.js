@@ -22,6 +22,7 @@ const codex = require("./services/codex");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
+const i18n = require("./services/i18n");
 const autoroute = require("./services/autoroute");
 
 const {
@@ -82,6 +83,13 @@ const {
 
 window.services = {
   getNativeId,
+  getLocale: i18n.getLocale,
+  setLocale: (locale) => {
+    const next = i18n.setLocale(locale);
+    // 语言变化后重新注册 uTools 指令（explain / label / cmds 跟随当前语言）
+    try { commands.initFromDb(); } catch (e) { console.error("[i18n] 重新同步指令失败", e); }
+    return next;
+  },
   getDisabledMcpServers,
   disableMcpServer,
   enableMcpServer,

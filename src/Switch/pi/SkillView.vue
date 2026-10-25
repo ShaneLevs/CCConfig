@@ -1,8 +1,11 @@
 <script setup>
 import { ref, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { Card, Empty, Tag, Button, Tooltip } from "tdesign-vue-next";
 import { RefreshIcon, FolderOpen1Icon } from "tdesign-icons-vue-next";
 import "./styles/SkillView.css";
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const skills = ref([]);
@@ -44,9 +47,9 @@ onMounted(loadSkills);
 <template>
   <div class="pi-skill-container">
     <div class="pi-section-header">
-      <span class="pi-skill-tip">Pi Agent 扩展包提供的 Skills — 通过 <code class="pi-hint-link" @click="openPiSkillsDir">pi config</code> 管理</span>
+      <span class="pi-skill-tip">{{ t("pi.skill.tipPrefix") }}<code class="pi-hint-link" @click="openPiSkillsDir">pi config</code>{{ t("pi.skill.tipSuffix") }}</span>
 
-      <Tooltip content="刷新" placement="top">
+      <Tooltip :content="t('common.refresh')" placement="top">
 
         <Button size="small" variant="outline" :loading="loading" @click="loadSkills">
         <template #icon><RefreshIcon /></template>
@@ -56,7 +59,7 @@ onMounted(loadSkills);
     </div>
 
     <div v-if="skills.length === 0" class="pi-empty-state">
-      <Empty description="已安装的扩展中未发现 Skills" />
+      <Empty :description="t('pi.skill.empty')" />
     </div>
 
     <div v-else class="pi-skill-list">
@@ -70,7 +73,7 @@ onMounted(loadSkills);
         <template #header>
           <div class="pi-skill-header-wrapper">
             <div class="pi-skill-header-left">
-              <Tooltip content="点击复制名称" placement="top">
+              <Tooltip :content="t('pi.skill.copyName')" placement="top">
                 <span class="pi-skill-name-link" @click.stop="copySkillName(sk.name)">{{ sk.name }}</span>
               </Tooltip>
               <Tag size="small" variant="outline">@{{ sk.package }}</Tag>
@@ -78,10 +81,10 @@ onMounted(loadSkills);
           </div>
         </template>
         <div class="pi-skill-description">
-          {{ getDescription(sk.frontmatter) || '暂无描述' }}
+          {{ getDescription(sk.frontmatter) || t('skill.noDescription') }}
         </div>
         <div class="pi-skill-stats">
-          <Tag size="small" variant="light" theme="success">可用</Tag>
+          <Tag size="small" variant="light" theme="success">{{ t("pi.skill.available") }}</Tag>
         </div>
       </Card>
     </div>

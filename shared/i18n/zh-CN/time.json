@@ -1,0 +1,11 @@
+{
+  "time": {
+    "neverUsed": "从未使用",
+    "justNow": "刚刚",
+    "minutesAgo": "{count} 分钟前",
+    "hoursAgo": "{count} 小时前",
+    "yesterday": "昨天",
+    "daysAgo": "{count} 天前",
+    "weeksAgo": "{count} 周前"
+  }
+}

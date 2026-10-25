@@ -2,6 +2,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const JSON5 = require('json5')
 
+const { t } = require('./i18n')
+
 const OPENCODE_DIR = path.join(window.utools.getPath('home'), '.config', 'opencode')
 
 // 动态解析配置文件路径：支持 opencode.json 和 opencode.jsonc（JSON with Comments）
@@ -164,7 +166,7 @@ const runNpmAsync = (cmd, timeout) =>
 const isValidPluginName = (name) => /^[@a-zA-Z0-9._/-]+$/.test(name)
 
 const installOpencodePlugin = async (pluginName) => {
-  if (!isValidPluginName(pluginName)) throw new Error(`非法插件名: ${pluginName}`)
+  if (!isValidPluginName(pluginName)) throw new Error(t('service.plugin.invalidPluginName', { name: pluginName }))
   if (!fs.existsSync(OPENCODE_DIR)) fs.mkdirSync(OPENCODE_DIR, { recursive: true })
   // 确保有 package.json，否则 npm install 会失败
   const pkgPath = path.join(OPENCODE_DIR, 'package.json')
@@ -188,7 +190,7 @@ const removeOpencodePlugin = (pluginName) => {
 }
 
 const uninstallOpencodePlugin = async (pluginName) => {
-  if (!isValidPluginName(pluginName)) throw new Error(`非法插件名: ${pluginName}`)
+  if (!isValidPluginName(pluginName)) throw new Error(t('service.plugin.invalidPluginName', { name: pluginName }))
   // 先从配置移除
   removeOpencodePlugin(pluginName)
   // 卸载 npm 包
@@ -263,7 +265,7 @@ const getOpencodeSkills = () => {
 const deleteOpencodeSkill = (skillName) => {
   try {
     const skillPath = path.join(OPENCODE_SKILLS_PATH, skillName)
-    if (!fs.existsSync(skillPath)) return { success: false, error: 'Skill 不存在' }
+    if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
     fs.rmSync(skillPath, { recursive: true, force: true })
     return { success: true }
   } catch (error) {

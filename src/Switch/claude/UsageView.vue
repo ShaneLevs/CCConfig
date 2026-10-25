@@ -1,7 +1,10 @@
 <script setup>
 // Claude Code 统计页：复用通用统计页（shared/UsagePage.vue），仅注入数据源与文案
 // 重统计走后台线程（readClaudeUsageAsync），不阻塞渲染层；进页面先用落库历史快速展示
+import { useI18n } from "vue-i18n";
 import UsagePage from "../shared/UsagePage.vue";
+
+const { t } = useI18n();
 
 // DB 缓存优先；JSONL 读取失败时回退到历史持久化数据
 const fetcher = (force) =>
@@ -15,10 +18,10 @@ const quickFetcher = () => window.services.readPersistedUsage();
 
 <template>
   <UsagePage
-    tip="统计仅供参考"
+    :tip="t('claude.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"
-    model-hint="同一会话可能使用多个模型，故各模型会话数之和可能大于总会话数"
-    empty-description="暂无 Claude Code 使用数据"
+    :model-hint="t('claude.usage.modelHint')"
+    :empty-description="t('claude.usage.empty')"
   />
 </template>

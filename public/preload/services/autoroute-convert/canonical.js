@@ -513,7 +513,7 @@ const extractUpstreamErrorMessage = (bodyText, statusCode) => {
   const msg = parsed && parsed.error && (parsed.error.message || parsed.error.type);
   if (typeof msg === "string" && msg) return truncate(msg);
   if (typeof bodyText === "string" && bodyText.trim()) return truncate(bodyText);
-  return `上游返回 ${statusCode}`;
+  return `Upstream returned ${statusCode}`;
 };
 
 module.exports = {

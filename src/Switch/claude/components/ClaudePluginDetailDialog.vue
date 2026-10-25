@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Button, Dialog, Tag, MessagePlugin } from "tdesign-vue-next";
 import { DownloadIcon } from "tdesign-icons-vue-next";
 import ClaudeComponentBadges from "./ClaudeComponentBadges.vue";
@@ -13,6 +14,8 @@ const props = defineProps({
   operationLoading: { type: String, default: null },
 });
 const emit = defineEmits(["update:visible", "install"]);
+
+const { t } = useI18n();
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -46,9 +49,9 @@ watch(
 const copyToClipboard = async (text) => {
   try {
     await navigator.clipboard.writeText(text);
-    MessagePlugin.success(`已复制: ${text}`);
+    MessagePlugin.success(t('claude.copied', { name: text }));
   } catch {
-    MessagePlugin.error('复制失败');
+    MessagePlugin.error(t('common.copyFailed'));
   }
 };
 
@@ -61,7 +64,7 @@ const handleInstall = () => {
 <template>
   <Dialog
     v-model:visible="dialogVisible"
-    header="插件详情"
+    :header="t('claude.plugin.detailTitle')"
     width="520px"
     :footer="false"
   >
@@ -74,7 +77,7 @@ const handleInstall = () => {
         </div>
         <span v-if="plugin.author" class="plugin-detail-author">{{ plugin.author.name || plugin.author }}</span>
       </div>
-      <p class="plugin-detail-desc">{{ plugin.description || '暂无描述' }}</p>
+      <p class="plugin-detail-desc">{{ plugin.description || t('skill.noDescription') }}</p>
       <div v-if="plugin.tags && plugin.tags.length" class="plugin-detail-tags">
         <Tag v-for="tag in plugin.tags" :key="tag" size="small" variant="light">{{ tag }}</Tag>
       </div>
@@ -90,39 +93,39 @@ const handleInstall = () => {
       </div>
       <div class="plugin-detail-meta">
         <div v-if="plugin.scope" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">范围</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.scopeLabel') }}</span>
           <Tag size="small" :theme="getScopeTheme(plugin.scope)" variant="light">{{ getScopeLabel(plugin.scope) }}</Tag>
         </div>
         <div v-if="plugin.pluginId" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">状态</span>
-          <Tag size="small" :theme="plugin.enabled !== false ? 'success' : 'default'" variant="light">{{ plugin.enabled !== false ? '已启用' : '已禁用' }}</Tag>
+          <span class="plugin-detail-label">{{ t('claude.plugin.status') }}</span>
+          <Tag size="small" :theme="plugin.enabled !== false ? 'success' : 'default'" variant="light">{{ plugin.enabled !== false ? t('common.enabled') : t('common.disabled') }}</Tag>
         </div>
         <div v-if="plugin.installedAt" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">安装时间</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.installedAtLabel') }}</span>
           <span class="plugin-detail-value">{{ new Date(plugin.installedAt).toLocaleString() }}</span>
         </div>
         <div v-if="plugin.lastUpdated && plugin.lastUpdated !== plugin.installedAt" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">更新时间</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.updatedAtLabel') }}</span>
           <span class="plugin-detail-value">{{ new Date(plugin.lastUpdated).toLocaleString() }}</span>
         </div>
         <div v-if="plugin.homepage" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">主页</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.homepage') }}</span>
           <a :href="plugin.homepage" target="_blank" class="plugin-detail-link">{{ plugin.homepage }}</a>
         </div>
         <div v-if="plugin.marketplaceName" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">来源</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.source') }}</span>
           <span class="plugin-detail-value">@{{ plugin.marketplaceName }}</span>
         </div>
         <div v-if="plugin.installCount" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">安装次数</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.installCountLabel') }}</span>
           <span class="plugin-detail-value">{{ plugin.installCount }}</span>
         </div>
         <div v-if="plugin.category" class="plugin-detail-meta-item">
-          <span class="plugin-detail-label">分类</span>
+          <span class="plugin-detail-label">{{ t('claude.plugin.category') }}</span>
           <span class="plugin-detail-value">{{ plugin.category }}</span>
         </div>
         <div v-if="plugin.strict" class="plugin-detail-meta-item">
-          <Tag size="small" theme="warning" variant="light">严格模式</Tag>
+          <Tag size="small" theme="warning" variant="light">{{ t('claude.plugin.strict') }}</Tag>
         </div>
       </div>
       <div v-if="!plugin.pluginId" class="plugin-detail-actions">
@@ -132,7 +135,7 @@ const handleInstall = () => {
           @click="handleInstall"
         >
           <template #icon><DownloadIcon /></template>
-          安装
+          {{ t('claude.plugin.install') }}
         </Button>
       </div>
     </div>

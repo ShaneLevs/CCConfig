@@ -1,4 +1,5 @@
 import { MessagePlugin } from "tdesign-vue-next";
+import { t } from "../i18n";
 import { managedFields } from "../constants";
 
 export function useConfigSwitch(currentConfig, loadCurrentConfig) {
@@ -69,10 +70,10 @@ export function useConfigSwitch(currentConfig, loadCurrentConfig) {
         if (existing) activeDoc._rev = existing._rev;
         window.utools.db.put(activeDoc);
       }
-      MessagePlugin.success("配置已切换");
+      MessagePlugin.success(t("claude.config.switched"));
       loadCurrentConfig();
     } else {
-      MessagePlugin.error("切换失败");
+      MessagePlugin.error(t("claude.config.switchFailed"));
     }
   };
 

@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { Button } from "tdesign-vue-next";
 import { APP_TABS } from "../Switch/appTabs";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
@@ -10,6 +11,7 @@ const props = defineProps({
   app: { type: String, required: true },
 });
 const activeTab = defineModel("activeTab", { type: String, default: "config" });
+const { t } = useI18n();
 
 const tabs = computed(() => APP_TABS[props.app] || []);
 const { autoRouteEnabled } = useAutoRouteStatus();
@@ -26,7 +28,7 @@ const { autoRouteEnabled } = useAutoRouteStatus();
           :variant="activeTab === tab.key ? 'base' : 'outline'"
           @click="activeTab = tab.key"
         >
-          <template #icon><component :is="tab.icon" /></template> {{ tab.label }}
+          <template #icon><component :is="tab.icon" /></template> {{ t(tab.labelKey) }}
         </Button>
         <!-- 自动网关开启标识：按钮右上角绿点 -->
         <span v-if="autoRouteEnabled" class="route-on-dot" />
@@ -38,7 +40,7 @@ const { autoRouteEnabled } = useAutoRouteStatus();
         :variant="activeTab === tab.key ? 'base' : 'outline'"
         @click="activeTab = tab.key"
       >
-        <template #icon><component :is="tab.icon" /></template> {{ tab.label }}
+        <template #icon><component :is="tab.icon" /></template> {{ t(tab.labelKey) }}
       </Button>
     </template>
   </div>

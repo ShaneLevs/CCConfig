@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Dialog, Input, InputNumber, AutoComplete, Space, CheckboxGroup, Checkbox, Collapse, CollapsePanel, MessagePlugin,
 } from "tdesign-vue-next";
@@ -23,6 +24,7 @@ const props = defineProps({
   compatKeyOptions: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["update:visible", "confirm"]);
+const { t } = useI18n();
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -31,10 +33,10 @@ const dialogVisible = computed({
 
 const isAdd = computed(() => props.mode === "add");
 
-const INPUT_TYPE_OPTIONS = [
-  { label: "文本 (text)", value: "text" },
-  { label: "图像 (image)", value: "image" },
-];
+const INPUT_TYPE_OPTIONS = computed(() => [
+  { label: t("model.text"), value: "text" },
+  { label: t("model.image"), value: "image" },
+]);
 
 const {
   autoModels, autoModelsLoading, autoModelsError, modelOptions, fetchAutoModels, resetAutoModels, onModelIdSelect,
@@ -92,7 +94,7 @@ watch(
 const handleConfirm = () => {
   const id = finalId.value;
   if (isAdd.value && !id) {
-    MessagePlugin.warning("请输入模型 ID");
+    MessagePlugin.warning(t("model.idRequired"));
     return;
   }
   const compatObj = {};
@@ -118,20 +120,20 @@ const handleConfirm = () => {
 <template>
   <Dialog
     v-model:visible="dialogVisible"
-    :header="isAdd ? '添加模型' : '编辑模型'"
+    :header="isAdd ? t('model.addTitle') : t('model.editTitle')"
     :width="isAdd ? '520px' : '480px'"
-    :confirm-btn="{ content: isAdd ? '添加' : '保存', theme: 'primary' }"
+    :confirm-btn="{ content: isAdd ? t('model.add') : t('model.save'), theme: 'primary' }"
     @confirm="handleConfirm"
   >
     <div class="common-edit-form">
       <div v-if="isAdd" class="common-form-item">
-        <label>所属供应商</label>
+        <label>{{ t('model.provider') }}</label>
         <div class="common-edit-provider-name">{{ providerName }}</div>
       </div>
 
       <!-- 模型 ID：添加模式用 AutoComplete（弹窗打开时已自动拉取模型列表），编辑模式可改名 -->
       <div class="common-form-item">
-        <label>模型 ID <span v-if="isAdd" class="common-form-required">*</span></label>
+        <label>{{ t('model.id') }} <span v-if="isAdd" class="common-form-required">*</span></label>
         <AutoComplete
           v-if="isAdd"
           v-model="form.id"
@@ -139,68 +141,68 @@ const handleConfirm = () => {
           :loading="autoModelsLoading"
           filterable
           clearable
-          placeholder="输入或从下拉选择模型"
+          :placeholder="t('model.selectOrEnter')"
           :popup-props="{ overlayStyle: { maxHeight: '280px', overflowY: 'auto' } }"
           @select="(val) => onModelIdSelect(val, form)"
         />
-        <Input v-else v-model="newModelId" placeholder="模型 ID" />
+        <Input v-else v-model="newModelId" :placeholder="t('model.idPlaceholder')" />
         <template v-if="isAdd">
-          <div v-if="autoModelsLoading" class="common-form-hint">正在自动拉取模型列表…</div>
+          <div v-if="autoModelsLoading" class="common-form-hint">{{ t('model.fetching') }}</div>
           <div v-else-if="autoModelsError" class="common-form-hint common-fetch-error">
-            自动获取失败：{{ autoModelsError }}
-            <span class="common-fetch-retry" @click="fetchAutoModels(provider)">重试</span>
+            {{ t('model.fetchFailed', { message: autoModelsError }) }}
+            <span class="common-fetch-retry" @click="fetchAutoModels(provider)">{{ t('model.retry') }}</span>
           </div>
           <div v-else-if="autoModels.length > 0" class="common-form-hint">
-            已自动获取 {{ autoModels.length }} 个模型，选中后自动填充名称/上下文等
+            {{ t('model.fetchedCount', { count: autoModels.length }) }}
           </div>
         </template>
       </div>
       <div class="common-form-item">
-        <label>显示名称</label>
-        <Input v-model="form.name" :placeholder="isAdd ? '留空则使用模型 ID' : '显示名称'" />
+        <label>{{ t('model.displayName') }}</label>
+        <Input v-model="form.name" :placeholder="isAdd ? t('model.displayNamePlaceholder') : t('model.displayNameEditPlaceholder')" />
       </div>
       <div class="common-form-item">
-        <label>输入类型</label>
+        <label>{{ t('model.inputType') }}</label>
         <Space size="16px" align="center" wrap>
           <CheckboxGroup v-model="form.input" class="common-checkbox-group">
             <Checkbox v-for="opt in INPUT_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</Checkbox>
           </CheckboxGroup>
-          <Checkbox v-model="form.reasoning" class="common-reasoning-checkbox">推理模型</Checkbox>
+          <Checkbox v-model="form.reasoning" class="common-reasoning-checkbox">{{ t('model.reasoning') }}</Checkbox>
         </Space>
       </div>
       <ModelLimitsFields v-model:context="form.contextWindow" v-model:output="form.maxTokens" item-class="common-form-item" />
       <Collapse v-model="advancedOpen" class="common-advanced-collapse">
-        <CollapsePanel value="1" header="高级配置（费用 / 兼容性）">
+        <CollapsePanel value="1" :header="t('model.advanced')">
           <div class="common-form-item">
-            <label>费用 (cost) — 每百万 Token</label>
+            <label>{{ t('model.cost') }}</label>
             <div class="common-form-row">
               <div class="common-form-item">
-                <label>输入</label>
+                <label>{{ t('model.input') }}</label>
                 <InputNumber v-model="form.cost.input" :min="0" :step="0.1" placeholder="0" />
               </div>
               <div class="common-form-item">
-                <label>输出</label>
+                <label>{{ t('model.output') }}</label>
                 <InputNumber v-model="form.cost.output" :min="0" :step="0.1" placeholder="0" />
               </div>
             </div>
             <div class="common-form-row">
               <div class="common-form-item">
-                <label>缓存读取</label>
+                <label>{{ t('model.cacheRead') }}</label>
                 <InputNumber v-model="form.cost.cacheRead" :min="0" :step="0.1" placeholder="0" />
               </div>
               <div class="common-form-item">
-                <label>缓存写入</label>
+                <label>{{ t('model.cacheWrite') }}</label>
                 <InputNumber v-model="form.cost.cacheWrite" :min="0" :step="0.1" placeholder="0" />
               </div>
             </div>
           </div>
           <div class="common-form-item">
-            <label>兼容性 (compat)</label>
+            <label>{{ t('model.compat') }}</label>
             <DynamicKvEditor
               v-model="form.compat"
               :key-options="compatKeyOptions"
-              key-placeholder="compat 字段名"
-              value-placeholder="compat 值"
+              :key-placeholder="t('model.compatKeyPlaceholder')"
+              :value-placeholder="t('model.compatValuePlaceholder')"
             />
           </div>
           <!-- 各应用特有高级字段（如 opencode 思考参数） -->

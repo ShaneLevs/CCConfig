@@ -7,6 +7,8 @@ const yaml = require('js-yaml')
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-test-'))
 process.env.DSH_HOME = tmp
+// 固定服务层语言，既有断言沿用中文
+process.env.CCCONFIG_LOCALE = process.env.CCCONFIG_LOCALE || 'zh-CN'
 const dsh = require('../public/preload/services/dsh')
 
 let passed = 0

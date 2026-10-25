@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { Button, Dialog, Tag, MessagePlugin, RadioGroup, RadioButton, Switch, Tooltip } from "tdesign-vue-next";
 import { DownloadIcon } from "tdesign-icons-vue-next";
 
@@ -15,6 +16,8 @@ const props = defineProps({
   installingName: { type: String, default: "" },
 });
 const emit = defineEmits(["install", "changed"]);
+
+const { t } = useI18n();
 
 const detailVisible = ref(false);
 const detailLoading = ref(false);
@@ -54,10 +57,10 @@ const loadLocalDetail = () => {
       detailLocal.value = res.data;
       detailLocalError.value = "";
     } else {
-      detailLocalError.value = (res && res.message) || "读取本地包信息失败";
+      detailLocalError.value = (res && res.message) || t("pi.detail.loadLocalFailed");
     }
   } catch (e) {
-    detailLocalError.value = (e && e.message) || "读取本地包信息失败";
+    detailLocalError.value = (e && e.message) || t("pi.detail.loadLocalFailed");
   }
 };
 
@@ -72,7 +75,7 @@ const loadMarketDetail = async (force = false) => {
   } catch (e) {
     detail.value = null;
     detailError.value =
-      (e && (e.message || e.stack || String(e))) || "加载 pi.dev 详情失败";
+      (e && (e.message || e.stack || String(e))) || t("pi.detail.loadMarketFailed");
     marketFetched.value = false; // 失败允许重试（重试按钮或再次切换 Tab）
   } finally {
     detailLoading.value = false;
@@ -126,25 +129,30 @@ const handleDetailToggleEnabled = () => {
   try {
     const next = !(d.enabled !== false);
     const r = window.services.setPiExtensionEnabled(d.source, next);
-    if (r.success) MessagePlugin.success(`${next ? "已启用" : "已禁用"} "${d.name}"，Pi 下次启动生效`);
-    else MessagePlugin.error("操作失败: " + (r.message || "未知错误"));
+    if (r.success) MessagePlugin.success(next ? t("pi.plugin.enabledToast", { name: d.name }) : t("pi.plugin.disabledToast", { name: d.name }));
+    else MessagePlugin.error(t("pi.detail.operationFailed", { message: r.message || t("pi.plugin.unknownError") }));
   } catch (e) {
-    MessagePlugin.error("操作失败: " + (e && e.message ? e.message : String(e)));
+    MessagePlugin.error(t("pi.detail.operationFailed", { message: e && e.message ? e.message : String(e) }));
   } finally {
     detailToggling.value = false;
     refreshDetailLocal();
   }
 };
 
-const RES_TYPE_LABELS = { extensions: "扩展", skills: "Skill", prompts: "Prompt", themes: "主题" };
+const RES_TYPE_LABELS = {
+  extensions: "pi.detail.resources.extensions",
+  skills: "pi.detail.resources.skills",
+  prompts: "pi.detail.resources.prompts",
+  themes: "pi.detail.resources.themes",
+};
 const RES_TYPE_COLORS = { extensions: "#1890ff", skills: "#f5222d", prompts: "#722ed1", themes: "#13c2c2" };
 const detailResourceRows = computed(() => {
   const d = detailLocal.value;
   if (!d || !d.resources) return [];
   const rows = [];
-  for (const t of ["extensions", "skills", "prompts", "themes"]) {
-    for (const r of d.resources[t] || []) {
-      rows.push({ type: t, label: RES_TYPE_LABELS[t], color: RES_TYPE_COLORS[t], path: r.path, enabled: r.enabled !== false });
+  for (const type of ["extensions", "skills", "prompts", "themes"]) {
+    for (const r of d.resources[type] || []) {
+      rows.push({ type, label: t(RES_TYPE_LABELS[type]), color: RES_TYPE_COLORS[type], path: r.path, enabled: r.enabled !== false });
     }
   }
   return rows;
@@ -159,10 +167,10 @@ const handleDetailResToggle = (row) => {
   try {
     const next = !row.enabled;
     const r = window.services.setPiPackageResourceEnabled(d.source, row.type, row.path, next);
-    if (r.success) MessagePlugin.success(`${next ? "已启用" : "已禁用"} ${row.path}，Pi 下次启动生效`);
-    else MessagePlugin.error("操作失败: " + (r.message || "未知错误"));
+    if (r.success) MessagePlugin.success(next ? t("pi.detail.resourceEnabledToast", { path: row.path }) : t("pi.detail.resourceDisabledToast", { path: row.path }));
+    else MessagePlugin.error(t("pi.detail.operationFailed", { message: r.message || t("pi.plugin.unknownError") }));
   } catch (e) {
-    MessagePlugin.error("操作失败: " + (e && e.message ? e.message : String(e)));
+    MessagePlugin.error(t("pi.detail.operationFailed", { message: e && e.message ? e.message : String(e) }));
   } finally {
     detailResToggling.value = "";
     refreshDetailLocal();
@@ -186,7 +194,7 @@ const openExternal = (url) => {
 const copyInstallCmd = () => {
   if (detail.value && detail.value.install) {
     window.utools.copyText(detail.value.install);
-    MessagePlugin.success("已复制安装命令");
+    MessagePlugin.success(t("pi.detail.copyCommandSuccess"));
   }
 };
 
@@ -219,10 +227,10 @@ defineExpose({ openMarket, openInstalled });
     <!-- 头部：插件名称 + 本地/市场 Tab（同一行，仅有一个数据源时隐藏 Tab） -->
     <template #header>
       <div class="pi-detail-header">
-        <span class="pi-detail-header-name">{{ detailName || (detail && detail.name) || '包详情' }}</span>
+        <span class="pi-detail-header-name">{{ detailName || (detail && detail.name) || t('pi.detail.packageTitle') }}</span>
         <RadioGroup v-if="showDetailTabs" v-model="detailTab" size="small" variant="default-filled" @change="onDetailTabChange">
-          <RadioButton value="local">本地信息</RadioButton>
-          <RadioButton value="market">市场信息</RadioButton>
+          <RadioButton value="local">{{ t("pi.detail.localTab") }}</RadioButton>
+          <RadioButton value="market">{{ t("pi.detail.marketTab") }}</RadioButton>
         </RadioGroup>
       </div>
     </template>
@@ -231,15 +239,15 @@ defineExpose({ openMarket, openInstalled });
     <div v-if="detailTab === 'local' && showLocalTab" class="pi-detail">
       <div v-if="detailLocalError && !detailLocal" class="pi-detail-error">
         <span>{{ detailLocalError }}</span>
-        <Button size="small" variant="outline" @click="retryDetail">重试</Button>
+        <Button size="small" variant="outline" @click="retryDetail">{{ t("common.retry") }}</Button>
       </div>
       <template v-else-if="detailLocal">
       <div class="pi-detail-head">
         <span class="pi-detail-name mono">{{ detailLocal.name }}</span>
         <Tag v-if="detailLocal.version" size="small" variant="light">{{ detailLocal.version }}</Tag>
-        <Tag size="small" theme="success" variant="light">已安装</Tag>
-        <Tag v-if="!detailLocal.enabled" size="small" theme="warning" variant="light">已禁用</Tag>
-        <Tooltip :content="detailLocal.enabled ? '禁用此扩展（Pi 下次启动生效）' : '启用此扩展（Pi 下次启动生效）'" placement="top">
+        <Tag size="small" theme="success" variant="light">{{ t("pi.detail.installed") }}</Tag>
+        <Tag v-if="!detailLocal.enabled" size="small" theme="warning" variant="light">{{ t("pi.detail.disabled") }}</Tag>
+        <Tooltip :content="detailLocal.enabled ? t('pi.plugin.disableExtension') : t('pi.plugin.enableExtension')" placement="top">
           <Switch
             class="pi-detail-head-switch"
             :value="detailLocal.enabled"
@@ -253,19 +261,19 @@ defineExpose({ openMarket, openInstalled });
 
       <div v-if="detailLocal.dir" class="pi-detail-meta">
         <div class="pi-detail-meta-item pi-detail-meta-dir">
-          <span>路径</span><b class="mono" title="点击打开目录" @click="openLocalDir">{{ detailLocal.dir }}</b>
+          <span>{{ t("pi.detail.path") }}</span><b class="mono" :title="t('pi.detail.openDirTooltip')" @click="openLocalDir">{{ detailLocal.dir }}</b>
         </div>
       </div>
 
       <div v-if="detailLocal.repoUrl || detailLocal.homepage || detailLocal.dir" class="pi-detail-actions">
         <Button v-if="detailLocal.repoUrl" size="small" variant="outline" @click="openExternal(detailLocal.repoUrl)">repo</Button>
         <Button v-if="detailLocal.homepage && detailLocal.homepage !== detailLocal.repoUrl" size="small" variant="outline" @click="openExternal(detailLocal.homepage)">home</Button>
-        <Button v-if="detailLocal.dir" size="small" variant="outline" @click="openLocalDir">打开目录</Button>
+        <Button v-if="detailLocal.dir" size="small" variant="outline" @click="openLocalDir">{{ t("pi.detail.openDir") }}</Button>
       </div>
 
       <!-- 逐资源启停（对齐 pi config 的过滤语义） -->
       <div v-if="detailResourceRows.length" class="pi-detail-res">
-        <div class="pi-detail-manifest-title">资源（{{ detailResourceRows.length }}）</div>
+        <div class="pi-detail-manifest-title">{{ t("pi.detail.resourceCount", { count: detailResourceRows.length }) }}</div>
         <div
           v-for="row in detailResourceRows"
           :key="row.type + ':' + row.path"
@@ -274,7 +282,7 @@ defineExpose({ openMarket, openInstalled });
         >
           <Tag size="small" variant="light" :style="{ background: row.color + '18', color: row.color, borderColor: row.color + '40' }">{{ row.label }}</Tag>
           <span class="pi-detail-res-path mono">{{ row.path }}</span>
-          <Tooltip :content="row.enabled ? '禁用此资源（Pi 下次启动生效）' : '启用此资源（Pi 下次启动生效）'" placement="top">
+          <Tooltip :content="row.enabled ? t('pi.detail.disableResource') : t('pi.detail.enableResource')" placement="top">
             <Switch
               size="small"
               :value="row.enabled"
@@ -286,7 +294,7 @@ defineExpose({ openMarket, openInstalled });
       </div>
 
       <div v-if="detailLocal.mcpServers && detailLocal.mcpServers.length" class="pi-detail-res">
-        <div class="pi-detail-manifest-title">MCP 服务器（{{ detailLocal.mcpServers.length }}）</div>
+        <div class="pi-detail-manifest-title">{{ t("pi.detail.mcpServers", { count: detailLocal.mcpServers.length }) }}</div>
         <div v-for="s in detailLocal.mcpServers" :key="s" class="pi-detail-res-row">
           <Tag size="small" variant="light" :style="{ background: '#13c2c218', color: '#13c2c2', borderColor: '#13c2c240' }">MCP</Tag>
           <span class="pi-detail-res-path mono">{{ s }}</span>
@@ -297,46 +305,46 @@ defineExpose({ openMarket, openInstalled });
 
     <!-- ==================== 市场信息 Tab（pi.dev，首次切换才加载） ==================== -->
     <template v-if="detailTab === 'market' && showMarketTab">
-      <div v-if="detailLoading" class="pi-detail-loading">加载中...</div>
+      <div v-if="detailLoading" class="pi-detail-loading">{{ t("common.loading") }}</div>
       <div v-else-if="detailError" class="pi-detail-error">
         <span>{{ detailError }}</span>
-        <Button size="small" variant="outline" @click="retryDetail">重试</Button>
+        <Button size="small" variant="outline" @click="retryDetail">{{ t("common.retry") }}</Button>
       </div>
       <div v-else-if="detail" class="pi-detail">
       <div class="pi-detail-head">
         <span class="pi-detail-name mono">{{ detail.name }}</span>
-        <Tag v-for="t in detail.types" :key="t" size="small" variant="light">{{ t }}</Tag>
-        <Tag v-if="installedNames.has(detail.name)" size="small" theme="success" variant="light">已安装</Tag>
+        <Tag v-for="pkgType in detail.types" :key="pkgType" size="small" variant="light">{{ pkgType }}</Tag>
+        <Tag v-if="installedNames.has(detail.name)" size="small" theme="success" variant="light">{{ t("pi.detail.installed") }}</Tag>
       </div>
       <p v-if="detail.description" class="pi-detail-desc">{{ detail.description }}</p>
 
       <div class="pi-detail-meta">
         <div v-if="detail.version" class="pi-detail-meta-item">
-          <span>版本</span><b>{{ detail.version }}</b>
+          <span>{{ t("pi.detail.version") }}</span><b>{{ detail.version }}</b>
         </div>
         <div v-if="detail.published" class="pi-detail-meta-item">
-          <span>发布</span><b>{{ detail.published }}</b>
+          <span>{{ t("pi.detail.published") }}</span><b>{{ detail.published }}</b>
         </div>
         <div v-if="detail.downloads" class="pi-detail-meta-item">
-          <span>下载</span><b>{{ detail.downloads }}</b>
+          <span>{{ t("pi.detail.downloads") }}</span><b>{{ detail.downloads }}</b>
         </div>
         <div v-if="detail.author" class="pi-detail-meta-item">
-          <span>作者</span><b>@{{ detail.author }}</b>
+          <span>{{ t("pi.detail.author") }}</span><b>@{{ detail.author }}</b>
         </div>
         <div v-if="detail.license" class="pi-detail-meta-item">
-          <span>许可证</span><b>{{ detail.license }}</b>
+          <span>{{ t("pi.detail.license") }}</span><b>{{ detail.license }}</b>
         </div>
         <div v-if="detail.size" class="pi-detail-meta-item">
-          <span>大小</span><b>{{ detail.size }}</b>
+          <span>{{ t("pi.detail.size") }}</span><b>{{ detail.size }}</b>
         </div>
         <div v-if="detail.dependencies" class="pi-detail-meta-item">
-          <span>依赖</span><b>{{ detail.dependencies }}</b>
+          <span>{{ t("pi.detail.dependencies") }}</span><b>{{ detail.dependencies }}</b>
         </div>
       </div>
 
       <div v-if="detail.install" class="pi-detail-install">
         <code class="mono">{{ detail.install }}</code>
-        <Button size="small" variant="outline" @click="copyInstallCmd">复制</Button>
+        <Button size="small" variant="outline" @click="copyInstallCmd">{{ t("common.copy") }}</Button>
       </div>
 
       <div class="pi-detail-actions">
@@ -348,9 +356,9 @@ defineExpose({ openMarket, openInstalled });
           :disabled="!piInstalled || !!installingName"
           @click="handleInstall"
         >
-          <template #icon><DownloadIcon /></template> 安装
+          <template #icon><DownloadIcon /></template> {{ t("pi.plugin.install") }}
         </Button>
-        <Button v-else size="small" variant="outline" disabled>已安装</Button>
+        <Button v-else size="small" variant="outline" disabled>{{ t("pi.detail.installed") }}</Button>
         <Button v-if="detail.npm" size="small" variant="outline" @click="openExternal(detail.npm)">npm</Button>
         <Button v-if="detail.repo" size="small" variant="outline" @click="openExternal(detail.repo)">repo</Button>
         <Button v-if="detail.home" size="small" variant="outline" @click="openExternal(detail.home)">home</Button>

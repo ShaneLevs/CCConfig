@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>CCConfig · 需要 Node.js</title>
+<title data-i18n="title">CCConfig · 需要 Node.js</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -67,35 +67,54 @@
 </style>
 </head>
 <body>
-  <h1>需要 Node.js 才能启动</h1>
-  <p class="sub">CCConfig 桌面版直接复用你已安装的 Node.js 运行本地服务，不内置运行时。</p>
+  <h1 data-i18n="heading">需要 Node.js 才能启动</h1>
+  <p class="sub" data-i18n="subtitle">CCConfig 桌面版直接复用你已安装的 Node.js 运行本地服务，不内置运行时。</p>
 
   <div class="card">
-    <h2>安装方式</h2>
+    <h2 data-i18n="installTitle">安装方式</h2>
     <ol>
-      <li>用 Homebrew：<code>brew install node</code></li>
-      <li>或从官网下载安装包：<a href="https://nodejs.org/zh-cn/download" target="_blank" rel="noreferrer">nodejs.org/download</a></li>
+      <li><span data-i18n="installBrewPrefix">用 Homebrew：</span><code>brew install node</code></li>
+      <li><span data-i18n="installDownloadPrefix">或从官网下载安装包：</span><a id="node-download" href="https://nodejs.org/zh-cn/download" target="_blank" rel="noreferrer">nodejs.org/download</a></li>
     </ol>
-    <p style="margin:10px 0 0;color:var(--muted)">版本要求 <code>&gt;= 18</code>。装好后请<b>完全退出并重新打开</b> CCConfig。</p>
+    <p style="margin:10px 0 0;color:var(--muted)" data-i18n="installRequirement">版本要求 <code>&gt;= 18</code>。装好后请<b>完全退出并重新打开</b> CCConfig。</p>
   </div>
 
   <div class="card">
-    <h2>如果已经装了 Node，但仍然看到这个页面</h2>
-    <p style="margin:0">从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：</p>
-    <pre># 1. 在终端确认 node 位置
+    <h2 data-i18n="pathTitle">如果已经装了 Node，但仍然看到这个页面</h2>
+    <p style="margin:0" data-i18n="pathDesc">从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：</p>
+    <pre><span data-i18n="pathComment1"># 1. 在终端确认 node 位置</span>
 which node
 
-# 2. 用环境变量指定后重启应用
+<span data-i18n="pathComment2"># 2. 用环境变量指定后重启应用</span>
 CCCONFIG_NODE=$(which node) open -a CCConfig</pre>
-    <p style="margin:10px 0 0;color:var(--muted)">也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：</p>
+    <p style="margin:10px 0 0;color:var(--muted)" data-i18n="pathLaunchctlDesc">也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：</p>
     <pre>launchctl setenv CCCONFIG_NODE $(which node)</pre>
   </div>
 
   <div class="card">
-    <h2>排查</h2>
-    <p style="margin:0">启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。也可以用托盘菜单「打开日志目录」。</p>
+    <h2 data-i18n="troubleshootTitle">排查</h2>
+    <p style="margin:0" data-i18n="troubleshootDesc">启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。</p>
   </div>
 
-  <p class="foot">CCConfig · 跨 agent 配置管理</p>
+  <p class="foot" data-i18n="footer">CCConfig · 跨 agent 配置管理</p>
+
+<script>
+  // 文案由 Rust 通过 initialization_script 注入（shared/i18n/<locale>/native.json 的 guide 块）；
+  // 直接双击打开本文件时没有注入，保留上面的中文作为静态回退。
+  (function () {
+    var guide = window.__CC_GUIDE__;
+    var locale = window.__CC_LOCALE__ ||
+      ((navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh-CN' : 'en-US');
+    document.documentElement.lang = locale;
+    if (!guide) return;
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (typeof guide[key] === 'string') el.innerHTML = guide[key];
+    });
+    if (guide.title) document.title = guide.title;
+    var link = document.getElementById('node-download');
+    if (link && guide.nodeDownloadUrl) link.href = guide.nodeDownloadUrl;
+  })();
+</script>
 </body>
 </html>

@@ -10,18 +10,18 @@
   "features": [
     {
       "code": "commonConfig",
-      "explain": "通用配置（跨 agent 主数据）",
+      "explain": "通用配置（跨 agent 主数据） / Common configuration (cross-agent master data)",
       "icon": "gen.svg",
-      "cmds": ["通用配置"]
+      "cmds": ["通用配置", "Common Config", "common config"]
     },
     {
       "code": "installCommonSkill",
-      "explain": "从 SkillHub/魔搭社区 安装通用 Skill（~/.agents/skills）",
+      "explain": "从 SkillHub/魔搭社区 安装通用 Skill（~/.agents/skills） / Install a common skill from SkillHub / ModelScope",
       "icon": "gen.svg",
       "cmds": [
         {
           "type": "regex",
-          "label": "安装通用 Skill",
+          "label": "安装通用 Skill / Install common Skill",
           "match": "/^https:\\/\\/(www\\.)?(skillhub\\.(tencent\\.com|cn)\\/skills\\/[\\w-]+(\\/[\\w-]+)?|modelscope\\.cn\\/skills\\/@[\\w-]+\\/[\\w-]+)$/",
           "minLength": 30,
           "maxLength": 200

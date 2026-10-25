@@ -10,6 +10,7 @@ const {
   getUsageCache,
 } = require("./config");
 const usage = require("./usage");
+const { t } = require("./i18n");
 
 // MCP 调用统计缓存（签名命中则跳过 JSONL 重扫）
 let _mcpUsageCache = null;
@@ -552,7 +553,7 @@ function getMcpUsage() {
 
 function copyClaudeCommand(projectPath) {
   if (!projectPath || projectPath === "unknown")
-    return { success: false, error: "无效的项目路径" };
+    return { success: false, error: t("service.common.invalidPath") };
   try {
     window.utools.copyText(`cd "${projectPath}" && claude`);
     return { success: true };

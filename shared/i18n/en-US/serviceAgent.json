@@ -1,0 +1,166 @@
+{
+  "serviceAgent": {
+    "common": {
+      "listSeparator": ", ",
+      "etcSuffix": " etc.",
+      "emptyValue": "(empty)",
+      "tomlParseFailed": "Failed to parse config.toml; modification was blocked (fix the TOML syntax first): {message}",
+      "yamlParseFailed": "Failed to parse config.yaml; modification was blocked (fix the YAML syntax first): {message}",
+      "providerNameRequired": "Provider name is required",
+      "providerNameInvalidChars": "Provider name may contain only letters, digits, underscores, hyphens, dots, colons, and slashes",
+      "providerDisplayNameRequired": "Provider name is required",
+      "providerExists": "Provider {name} already exists",
+      "providerNotFound": "Provider {name} not found",
+      "providerExistsLabel": "Provider {name} already exists",
+      "providerNotFoundLabel": "Provider {name} not found",
+      "providerNotFoundNoName": "Provider not found",
+      "providerIdRequired": "Provider ID is required",
+      "providerIdInvalidChars": "Provider ID may contain only letters, digits, underscores, and hyphens",
+      "providerRequired": "Provider is required",
+      "selectProviderFirst": "Select a provider first",
+      "selectProvider": "Select a provider",
+      "selectModel": "Select a model",
+      "modelIdRequired": "Model ID is required",
+      "modelIdInvalidChars": "Model ID may contain only letters, digits, underscores, hyphens, dots, colons, and slashes",
+      "modelExists": "Model {id} already exists",
+      "modelNotFound": "Model {id} not found",
+      "modelAliasRequired": "Model alias is required",
+      "modelAliasInvalidChars": "Model alias may contain only letters, digits, underscores, hyphens, dots, colons, and slashes",
+      "baseUrlInvalid": "Base URL must start with http:// or https://"
+    },
+    "kimi": {
+      "unsupportedProviderType": "Unsupported provider type: {type}",
+      "managedByLoginEdit": "Provider {name} is managed by /login (contains OAuth credentials) and cannot be edited",
+      "managedByLoginLogout": "Provider {name} is managed by /login (contains OAuth credentials); use kimi /logout to manage it",
+      "providerInUseByAliases": "Provider {name} is referenced by model aliases ({aliases}); delete those models first",
+      "fieldOnlyAnthropic": "{field} is supported only by anthropic providers (current: {providerType})",
+      "fieldOnlyOpenai": "{field} is supported only by OpenAI-protocol providers (current: {providerType})",
+      "fieldArrayRequired": "{field} must be an array",
+      "fieldUnsupportedValue": "{field} contains an unsupported value {value} (options: {options})",
+      "fieldEffortInvalid": "{field} must be one of low/medium/high/xhigh/max/none",
+      "fieldPositiveInt": "{field} must be an integer greater than or equal to 1",
+      "displayNameAscii": "Display name may contain ASCII characters only",
+      "aliasExists": "Model alias {alias} already exists",
+      "aliasNotFound": "Model alias {alias} not found",
+      "fields": {
+        "displayName": "Display name",
+        "maxInputSize": "Max input",
+        "maxOutputSize": "Max output",
+        "capabilities": "Capabilities",
+        "supportEfforts": "Thinking efforts",
+        "defaultEffort": "Default effort",
+        "offEffort": "Off effort",
+        "reasoningKey": "Reasoning key",
+        "adaptiveThinking": "Adaptive Thinking"
+      }
+    },
+    "dsh": {
+      "patchParseFailed": "Failed to parse cordis.patch.yml; modification was blocked (fix the YAML syntax in dsh first): {message} [{path}]",
+      "patchNotArray": "cordis.patch.yml must be a top-level YAML array; modification was blocked [{path}]",
+      "credentialsParseFailed": "Failed to parse .credentials.yaml; modification was blocked (fix it in dsh first): {message} [{path}]",
+      "credentialsNotMapping": "Top level must be a YAML mapping",
+      "credentialNameRequired": "Credential reference name is required",
+      "credentialEnvRequired": "Credential reference name (apiKeyEnv) is required",
+      "unsupportedProtocol": "Unsupported protocol {api} (options: {options})",
+      "providerBaseUrlRequired": "Provider \"{name}\" requires a Base URL",
+      "routeExists": "Provider route {route} already exists",
+      "modelsRequired": "A third-party provider needs at least one model (pi-ai handwritten routes require a non-empty models list)",
+      "routeRequired": "Provider route is required",
+      "providerModelsRequired": "Provider \"{name}\" needs at least one model",
+      "selectRoute": "Select a provider route",
+      "officialNotConfigured": "The official DeepSeek route is not configured yet; cannot set as default",
+      "routeNotFoundForDefault": "Provider route {route} not found; cannot set as default",
+      "modelNotInCatalog": "Model {model} is not in the catalog of provider {provider}",
+      "upsertProtocolUnsupported": "Provider \"{name}\" uses protocol {api}; dsh supports only {protocols}",
+      "upsertMissingBaseUrl": "Provider {name} is missing a Base URL",
+      "upsertMissingApi": "Provider {name} is missing a protocol (api)"
+    },
+    "minimax": {
+      "invalidProviderKey": "Provider key {key} is invalid (only letters, digits, underscores, and hyphens are allowed)",
+      "unsupportedApiFormat": "Unsupported API format {api} (options: {options})",
+      "builtinManagedEdit": "Built-in providers are managed by mcode login and cannot be edited",
+      "builtinManagedModels": "Models of built-in providers cannot be added, edited, or deleted",
+      "providerIsDefault": "Provider {id} owns the current default model; switch the default model first",
+      "modelIdInvalidForDispatch": "Model ID {id} contains invalid characters and cannot be dispatched to MiniMax Code",
+      "invalidModelRef": "Invalid model reference format: {ref}",
+      "modelNotFoundForDefault": "Model {model} not found; cannot set as default"
+    },
+    "codex": {
+      "providerIdRequired": "Provider ID is required",
+      "providerIdInvalidChars": "Provider ID may contain only letters, digits, underscores, and hyphens",
+      "providerInUse": "Provider {id} is currently in use; switch to another model first",
+      "saveModelListFailed": "Failed to save the model list",
+      "saveModelListFailedReason": "Failed to save the model list: {message}",
+      "modelsParseFailed": "Failed to parse models.json; modification was blocked (fix the JSON syntax first): {message}"
+    },
+    "qoder": {
+      "readFailed": "Failed to parse {path}; modification and sync were blocked (fix the JSON syntax first): {message}",
+      "notJsonObject": "The top level of {path} is not a JSON object; modification and sync were blocked",
+      "unsupportedProtocol": "Unsupported protocol {protocol} (options: {options})",
+      "providerIdInvalid": "Provider ID {id} is invalid",
+      "modelNotFoundForDefault": "Model {model} not found; cannot set as default",
+      "modelIdInvalidForDispatch": "Model ID {id} contains invalid characters and cannot be dispatched to Qoder"
+    },
+    "zcode": {
+      "readFailed": "Failed to parse {path}; modification was blocked (fix the JSON syntax in ZCode first): {message}",
+      "notJsonObject": "The top level of {path} is not a JSON object; modification was blocked",
+      "unsupportedApiType": "Unsupported API protocol {apiType} (options: {options})",
+      "modelNotFoundForDefault": "Model {model} not found; cannot set as preferred",
+      "noUsableNode": "No usable node (>= 22.5) subprocess found: neither common install locations nor PATH could be probed (node missing or too old)"
+    },
+    "reasonix": {
+      "invalidEnvKey": "Key environment variable name {key} is invalid",
+      "providerInUseByDefault": "Provider {name} is referenced by default_model ({reference}); change the default model first",
+      "invalidSecretKeyName": "Secret name {key} is invalid"
+    },
+    "hermes": {
+      "unsupportedApiMode": "Unsupported API mode {mode} (options: {options})",
+      "managedDelete": "Provider {name} is managed by the Hermes Web UI (providers section) and cannot be deleted here",
+      "managedDispatch": "Provider {name} is managed by the Hermes Web UI (providers section) and cannot be dispatched",
+      "modelNotFoundForDefault": "Model {model} not found; cannot set as default",
+      "providerHasNoModels": "Provider {providerName} has no models; add a model first",
+      "providerNameRequired": "Provider name is required",
+      "configParseFailed": "Failed to parse config.yaml; modification was blocked (fix the YAML syntax in Hermes first): {message}"
+    },
+    "omp": {
+      "invalidModelRoles": "modelRoles data has an invalid format",
+      "providerReferenced": "Provider {name} has models referenced by model roles ({roles}); update the model roles first",
+      "modelReferenced": "Model {model} is referenced by model roles ({roles}); update the model roles first"
+    },
+    "pi": {
+      "invalidResponse": "Invalid response format",
+      "fetchModelsFailed": "Failed to fetch the model list"
+    },
+    "piPackage": {
+      "packageEntryNotFound": "Package entry not found: {source}",
+      "extensionAlreadyEnabled": "This extension is already enabled",
+      "extensionAlreadyDisabled": "This extension is already disabled",
+      "enabledNextStart": "Enabled; takes effect the next time Pi starts",
+      "disabledNextStart": "Disabled; takes effect the next time Pi starts",
+      "unsupportedResourceType": "Unsupported resource type: {type}",
+      "resourcePathEmpty": "Resource path is empty",
+      "resourceAlreadyEnabled": "This resource is already enabled",
+      "resourceDisabledWithPackage": "This resource is disabled along with the whole package"
+    },
+    "autoroute": {
+      "saveConfigFailedWithMessage": "Failed to save the gateway configuration: {message}",
+      "saveConfigFailed": "Failed to save the gateway configuration",
+      "saveConfigFailedReason": "Failed to save the gateway configuration: {message}",
+      "invalidUpstreamUrl": "Invalid upstream URL: {url}",
+      "upstreamRequestFailed": "Upstream request failed",
+      "invalidApiKey": "Invalid API Key (copy the correct key from the CCConfig gateway page)",
+      "unknownEndpoint": "Unknown endpoint: {method} {path}",
+      "invalidJsonBody": "Request body is not valid JSON",
+      "modelNotMapped": "Model {model} is not in the model mapping; add a mapping under CCConfig General Settings · Gateway",
+      "modelNotEnabled": "Model {model} is not enabled in the gateway; enable it under CCConfig General Settings, or disambiguate with \"provider/model ID\"",
+      "providerProtocolUnsupported": "Provider \"{name}\" uses protocol {api}, which the gateway does not support yet",
+      "providerBaseUrlInvalid": "Provider \"{name}\" has an invalid baseUrl",
+      "clientDisconnected": "Client disconnected early (upstream aborted)",
+      "upstreamStreamInterrupted": "Upstream stream interrupted",
+      "invalidUpstreamResponse": "Upstream returned an unparseable response",
+      "internalError": "Gateway internal error: {message}",
+      "internalErrorShort": "Gateway internal error",
+      "portInUse": "Port {port} is already in use; choose another port"
+    }
+  }
+}

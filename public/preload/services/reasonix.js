@@ -3,6 +3,7 @@ const path = require('node:path')
 const os = require('node:os')
 const crypto = require('node:crypto')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
+const { t } = require("./i18n")
 
 // .env 变量名合法格式（与 writeReasonixEnvKey / deleteReasonixEnvKey 共用）
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -34,7 +35,7 @@ const readReasonixConfig = () => {
   } catch (e) {
     // 解析失败必须抛错而非静默返回 {}：任何「读 → 改 → 全量写回」都会用
     // {providers:[...]} 覆盖整个 config.toml，抹掉 [agent]/[ui]/[sandbox]/[[plugins]] 等节
-    throw new Error(`config.toml 解析失败，已阻止修改（请先修复 TOML 语法）: ${e.message}`)
+    throw new Error(t('serviceAgent.common.tomlParseFailed', { message: e.message }))
   }
 }
 
@@ -100,14 +101,14 @@ const getReasonixProviderList = () => {
 }
 
 const addReasonixProvider = (cfg) => {
-  if (!cfg?.name || typeof cfg.name !== 'string') throw new Error('供应商名不能为空')
+  if (!cfg?.name || typeof cfg.name !== 'string') throw new Error(t('serviceAgent.common.providerNameRequired'))
   // 先校验 key 变量名，避免写了一半才因非法名失败留下部分状态
   if (cfg.apiKey && cfg.apiKeyEnv && !ENV_KEY_RE.test(cfg.apiKeyEnv)) {
-    throw new Error(`Key 环境变量名 ${cfg.apiKeyEnv} 不合法`)
+    throw new Error(t('serviceAgent.reasonix.invalidEnvKey', { key: cfg.apiKeyEnv }))
   }
   const doc = readReasonixConfig()
   if (!Array.isArray(doc.providers)) doc.providers = []
-  if (doc.providers.some(p => p.name === cfg.name)) throw new Error(`供应商 ${cfg.name} 已存在`)
+  if (doc.providers.some(p => p.name === cfg.name)) throw new Error(t('serviceAgent.common.providerExists', { name: cfg.name }))
   doc.providers.push(buildProviderToml(cfg))
   if (cfg.apiKey && cfg.apiKeyEnv) writeReasonixEnvKey(cfg.apiKeyEnv, cfg.apiKey)
   try {
@@ -122,17 +123,17 @@ const addReasonixProvider = (cfg) => {
 
 const updateReasonixProvider = (name, updates) => {
   const doc = readReasonixConfig()
-  if (!Array.isArray(doc.providers)) throw new Error(`供应商 ${name} 不存在`)
+  if (!Array.isArray(doc.providers)) throw new Error(t('serviceAgent.common.providerNotFound', { name }))
   const idx = doc.providers.findIndex(p => p.name === name)
-  if (idx === -1) throw new Error(`供应商 ${name} 不存在`)
+  if (idx === -1) throw new Error(t('serviceAgent.common.providerNotFound', { name }))
   const oldProvider = doc.providers[idx]
   // 支持重命名：name 是唯一 key，改名需校验冲突并同步 default_model 引用
   const newName = (updates.name === undefined || updates.name === name)
     ? name
     : String(updates.name).trim()
-  if (!newName) throw new Error('供应商名不能为空')
+  if (!newName) throw new Error(t('serviceAgent.common.providerNameRequired'))
   if (newName !== name && doc.providers.some(p => p.name === newName)) {
-    throw new Error(`供应商 ${newName} 已存在`)
+    throw new Error(t('serviceAgent.common.providerExists', { name: newName }))
   }
   const oldEnv = oldProvider.api_key_env || ''
   // 未传 apiKeyEnv 时保留原值；显式传空串才表示清空
@@ -182,11 +183,11 @@ const updateReasonixProvider = (name, updates) => {
 const deleteReasonixProvider = (name) => {
   const doc = readReasonixConfig()
   if (!Array.isArray(doc.providers) || !doc.providers.some(p => p.name === name)) {
-    throw new Error(`供应商 ${name} 不存在`)
+    throw new Error(t('serviceAgent.common.providerNotFound', { name }))
   }
   const dm = doc.default_model || ''
   if (dm === name || dm.startsWith(name + '/')) {
-    throw new Error(`供应商 ${name} 被 default_model（${dm}）引用，请先修改默认模型`)
+    throw new Error(t('serviceAgent.reasonix.providerInUseByDefault', { name, reference: dm }))
   }
   doc.providers = doc.providers.filter(p => p.name !== name)
   writeReasonixConfig(doc)
@@ -196,13 +197,13 @@ const deleteReasonixProvider = (name) => {
 // ==================== 模型 CRUD（models 为字符串数组） ====================
 
 const addReasonixModel = (providerName, modelId) => {
-  if (!providerName) throw new Error('供应商名不能为空')
-  if (!modelId || typeof modelId !== 'string') throw new Error('模型 ID 不能为空')
+  if (!providerName) throw new Error(t('serviceAgent.common.providerNameRequired'))
+  if (!modelId || typeof modelId !== 'string') throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readReasonixConfig()
   const prov = (doc.providers || []).find(p => p.name === providerName)
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`)
+  if (!prov) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
   const list = Array.isArray(prov.models) ? prov.models : (prov.model ? [prov.model] : [])
-  if (list.includes(modelId)) throw new Error(`模型 ${modelId} 已存在`)
+  if (list.includes(modelId)) throw new Error(t('serviceAgent.common.modelExists', { id: modelId }))
   list.push(modelId)
   prov.models = list
   delete prov.model
@@ -213,7 +214,7 @@ const addReasonixModel = (providerName, modelId) => {
 const deleteReasonixModel = (providerName, modelId) => {
   const doc = readReasonixConfig()
   const prov = (doc.providers || []).find(p => p.name === providerName)
-  if (!prov) throw new Error(`供应商 ${providerName} 不存在`)
+  if (!prov) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
   const list = Array.isArray(prov.models) ? prov.models : (prov.model ? [prov.model] : [])
   if (!list.includes(modelId)) return true
   const clearedDefault = prov.default === modelId
@@ -286,7 +287,7 @@ const generateReasonixApiKeyEnv = (name) => {
 }
 
 const writeReasonixEnvKey = (key, value) => {
-  if (!key || !ENV_KEY_RE.test(key)) throw new Error(`密钥名 ${key} 不合法`)
+  if (!key || !ENV_KEY_RE.test(key)) throw new Error(t('serviceAgent.reasonix.invalidSecretKeyName', { key }))
   // dotenv 兼容：值含 # / 空格 / 引号 / 反斜杠时用双引号包裹并转义，
   // 避免被解析器当作注释截断或意外切分（Reasonix CLI 与 readReasonixEnv 均按此解析）
   let lineValue = String(value)
@@ -306,7 +307,7 @@ const writeReasonixEnvKey = (key, value) => {
 }
 
 const deleteReasonixEnvKey = (key) => {
-  if (!key || !ENV_KEY_RE.test(key)) throw new Error(`密钥名 ${key} 不合法`)
+  if (!key || !ENV_KEY_RE.test(key)) throw new Error(t('serviceAgent.reasonix.invalidSecretKeyName', { key }))
   const p = REASONIX_ENV_PATH()
   if (!fs.existsSync(p)) return true
   const re = new RegExp(`^(?:export\\s+)?${key}\\s*=`)

@@ -1,0 +1,34 @@
+{
+  "native": {
+    "tray": {
+      "gatewayDisabled": "网关未开启 · 在「通用 → 网关」里开启",
+      "gatewayPortBusy": "网关未运行 · 端口 {port} 可能被占用",
+      "gatewayRunning": "网关运行中 · 端口 {port}",
+      "requests": "累计调用 {count}",
+      "successRate": "成功率 {value}",
+      "tokens": "Token 消耗 {value}",
+      "cacheHitRate": "累计缓存命中率 {value}",
+      "showWindow": "打开主窗口",
+      "restartGateway": "重启网关",
+      "quit": "退出"
+    },
+    "guide": {
+      "title": "CCConfig · 需要 Node.js",
+      "heading": "需要 Node.js 才能启动",
+      "subtitle": "CCConfig 桌面版直接复用你已安装的 Node.js 运行本地服务，不内置运行时。",
+      "installTitle": "安装方式",
+      "installBrewPrefix": "用 Homebrew：",
+      "installDownloadPrefix": "或从官网下载安装包：",
+      "installRequirement": "版本要求 <code>&gt;= 18</code>。装好后请<b>完全退出并重新打开</b> CCConfig。",
+      "pathTitle": "如果已经装了 Node，但仍然看到这个页面",
+      "pathDesc": "从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：",
+      "pathComment1": "# 1. 在终端确认 node 位置",
+      "pathComment2": "# 2. 用环境变量指定后重启应用",
+      "pathLaunchctlDesc": "也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：",
+      "troubleshootTitle": "排查",
+      "troubleshootDesc": "启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。",
+      "footer": "CCConfig · 跨 agent 配置管理",
+      "nodeDownloadUrl": "https://nodejs.org/zh-cn/download"
+    }
+  }
+}

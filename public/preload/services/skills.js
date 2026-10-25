@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { CLAUDE_SKILLS_PATH, CLAUDE_JSON_PATH } = require("./config");
+const { t } = require("./i18n");
 const { _buildProjectPathMap } = require("./claude-usage");
 
 // 缓存：签名 = 技能目录 mtime:disabled 目录 mtime；projectPathMap 只构建一次
@@ -261,7 +262,7 @@ function disableSkill(skillName) {
     const disabledDir = path.join(CLAUDE_SKILLS_PATH, ".disabled");
     const targetPath = path.join(disabledDir, skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     if (!fs.existsSync(disabledDir))
       fs.mkdirSync(disabledDir, { recursive: true });
     fs.renameSync(skillPath, targetPath);
@@ -278,7 +279,7 @@ function enableSkill(skillName) {
     const skillPath = path.join(disabledDir, skillName);
     const targetPath = path.join(CLAUDE_SKILLS_PATH, skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     fs.renameSync(skillPath, targetPath);
     _skillsCache = null;
     return { success: true };
@@ -293,7 +294,7 @@ function deleteSkill(skillName, isDisabled) {
       ? path.join(CLAUDE_SKILLS_PATH, ".disabled", skillName)
       : path.join(CLAUDE_SKILLS_PATH, skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     fs.rmSync(skillPath, { recursive: true, force: true });
     _skillsCache = null;
     return { success: true };
@@ -313,7 +314,7 @@ function disableProjectSkill(skillName, projectPath) {
     );
     const targetPath = path.join(disabledDir, skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     if (!fs.existsSync(disabledDir))
       fs.mkdirSync(disabledDir, { recursive: true });
     fs.renameSync(skillPath, targetPath);
@@ -335,7 +336,7 @@ function enableProjectSkill(skillName, projectPath) {
     const skillPath = path.join(disabledDir, skillName);
     const targetPath = path.join(projectPath, ".claude", "skills", skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     fs.renameSync(skillPath, targetPath);
     _skillsCache = null;
     return { success: true };
@@ -350,7 +351,7 @@ function deleteProjectSkill(skillName, projectPath, isDisabled) {
       ? path.join(projectPath, ".claude", "skills", ".disabled", skillName)
       : path.join(projectPath, ".claude", "skills", skillName);
     if (!fs.existsSync(skillPath))
-      return { success: false, error: "Skill 不存在" };
+      return { success: false, error: t("service.skill.notFound") };
     fs.rmSync(skillPath, { recursive: true, force: true });
     _skillsCache = null;
     return { success: true };
@@ -364,9 +365,9 @@ function moveProjectSkillToGlobal(skillName, projectPath) {
     const srcPath = path.join(projectPath, ".claude", "skills", skillName);
     const destPath = path.join(CLAUDE_SKILLS_PATH, skillName);
     if (!fs.existsSync(srcPath))
-      return { success: false, error: "源 Skill 不存在" };
+      return { success: false, error: t("service.skill.sourceNotFound") };
     if (fs.existsSync(destPath))
-      return { success: false, error: "用户目录下已存在同名 Skill" };
+      return { success: false, error: t("service.skill.alreadyExists") };
     if (!fs.existsSync(CLAUDE_SKILLS_PATH))
       fs.mkdirSync(CLAUDE_SKILLS_PATH, { recursive: true });
     fs.renameSync(srcPath, destPath);
@@ -390,7 +391,7 @@ function getSkillMdPath(skillName, scope, projectPath, isDisabled) {
     }
     const mdPath = path.join(skillDir, "SKILL.md");
     if (!fs.existsSync(mdPath))
-      return { success: false, error: "SKILL.md 不存在" };
+      return { success: false, error: t("service.skill.skillMdMissing") };
     return { success: true, path: mdPath };
   } catch (error) {
     return { success: false, error: error.message };
@@ -410,7 +411,7 @@ function getSkillDirPath(skillName, scope, projectPath, isDisabled) {
         : path.join(CLAUDE_SKILLS_PATH, skillName);
     }
     if (!fs.existsSync(skillDir))
-      return { success: false, error: "Skill 文件夹不存在" };
+      return { success: false, error: t("service.skill.folderMissing") };
     return { success: true, path: skillDir };
   } catch (error) {
     return { success: false, error: error.message };

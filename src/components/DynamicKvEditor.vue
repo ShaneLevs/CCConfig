@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { Button, Textarea, AutoComplete, Tag } from "tdesign-vue-next";
 import { AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
 import { load, dump } from "js-yaml";
@@ -8,12 +9,15 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   keyOptions: { type: Array, default: () => [] },
   readonly: { type: Boolean, default: false },
-  keyPlaceholder: { type: String, default: "字段名" },
-  valuePlaceholder: { type: String, default: "字段值" },
+  keyPlaceholder: { type: String, default: "" },
+  valuePlaceholder: { type: String, default: "" },
   showAdd: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(["update:modelValue"]);
+const { t } = useI18n();
+const keyPlaceholderText = computed(() => props.keyPlaceholder || t("common.fieldName"));
+const valuePlaceholderText = computed(() => props.valuePlaceholder || t("common.fieldValue"));
 
 const addField = () => {
   emit("update:modelValue", [...props.modelValue, { key: "", value: "" }]);
@@ -78,14 +82,14 @@ const onBlurCommitKey = (idx, e) => {
             class="kv-key"
             :options="keyOptions"
             filterable
-            :placeholder="keyPlaceholder"
+            :placeholder="keyPlaceholderText"
             @blur="onBlurCommitKey(idx, $event)"
             @change="(val) => updateKey(idx, val)"
           />
           <Textarea
             :value="displayValue(field.value)"
             class="kv-value"
-            :placeholder="valuePlaceholder"
+            :placeholder="valuePlaceholderText"
             :autosize="{ minRows: 1, maxRows: 8 }"
             @change="(val) => updateValue(idx, val)"
           />
@@ -107,7 +111,7 @@ const onBlurCommitKey = (idx, e) => {
       @click="addField"
       class="kv-add-btn"
     >
-      <template #icon><AddIcon /></template> 添加字段
+      <template #icon><AddIcon /></template> {{ t('common.addField') }}
     </Button>
   </div>
 </template>

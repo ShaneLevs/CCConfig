@@ -22,7 +22,8 @@
 - **MCP 管理** — 逐应用 MCP Server 配置 + 实时工具发现画布；通用配置里的共享 MCP 按机器开关镜像写入本地 JSON 文件
 - **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill 并用 `.disabled` 机制启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
 - **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图，跨 agent 汇总一页查看
-- **批量编辑 / 导入导出 / 深色模式** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出，跟随系统深色主题并可选动态背景特效
+- **批量编辑 / 导入导出 / 外观** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出；外观支持跟随系统 / 固定浅色 / 固定深色，深色下可选动态背景特效
+- **中英双语** — 默认跟随系统语言，可在「设置 → 通用」中切换简体中文 / English
 
 ## 支持的应用
 
@@ -84,7 +85,7 @@ npm run tauri:build  # 桌面版打包 → .dmg
 
 ## 技术栈
 
-渲染层 Vue 3 + Vite + TDesign Vue Next；文件读写与网络请求全部在打包后的 preload 里，经 uTools API 或 Tauri v2 Node sidecar 暴露。配置解析用 json5 / js-yaml / smol-toml；MCP 工具发现用 `@modelcontextprotocol/sdk`；背景特效用 ogl。
+渲染层 Vue 3 + Vite + TDesign Vue Next；文案用 vue-i18n 与共享的 `shared/i18n` JSON（Vue / preload / Rust 三端共用）。文件读写与网络请求全部在打包后的 preload 里，经 uTools API 或 Tauri v2 Node sidecar 暴露。配置解析用 json5 / js-yaml / smol-toml；MCP 工具发现用 `@modelcontextprotocol/sdk`；背景特效用 ogl。
 
 ## License
 

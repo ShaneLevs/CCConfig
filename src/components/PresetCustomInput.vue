@@ -5,6 +5,7 @@
 // 也可显式传 options 覆盖（如批量导入表格需合并非标准值）。
 // modelValue 始终为最终数值：选中预设时 = 预设值；自定义时 = 输入框值
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { RadioGroup, RadioButton, InputNumber } from "tdesign-vue-next";
 import { MODEL_LIMIT_PRESETS } from "../constants";
 
@@ -17,8 +18,16 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue"]);
 
+const { t } = useI18n();
 const kindPreset = computed(() => MODEL_LIMIT_PRESETS[props.kind] || {});
-const options = computed(() => props.options || kindPreset.value.options || []);
+const rawOptions = computed(() => props.options || kindPreset.value.options || []);
+// 选项允许 label（数字档位）或 labelKey（翻译文案），统一解析成展示文本
+const options = computed(() =>
+  rawOptions.value.map((option) => ({
+    ...option,
+    label: option.labelKey ? t(option.labelKey) : option.label,
+  }))
+);
 const step = computed(() => props.step || kindPreset.value.step || 1000);
 const defaultCustom = computed(
   () => props.defaultCustom || kindPreset.value.defaultCustom || 32000,
@@ -76,7 +85,7 @@ watch(
   <div class="preset-custom-input">
     <RadioGroup v-model="radio" variant="default-filled" size="small">
       <RadioButton v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</RadioButton>
-      <RadioButton :value="-1">自定义</RadioButton>
+      <RadioButton :value="-1">{{ t('common.custom') }}</RadioButton>
     </RadioGroup>
     <div v-if="radio === -1" class="preset-custom-row">
       <InputNumber
@@ -85,7 +94,7 @@ watch(
         size="small"
         style="width: 220px"
       />
-      <span class="preset-custom-hint">单位 Token</span>
+      <span class="preset-custom-hint">{{ t('common.tokenUnit') }}</span>
     </div>
   </div>
 </template>

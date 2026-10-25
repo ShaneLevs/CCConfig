@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { Card, Tooltip, MessagePlugin } from "tdesign-vue-next";
 
 // 通用 Skill 展示卡片（Claude / OpenCode / 通用 三视图共用）
@@ -18,13 +19,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["detail"]);
+const { t } = useI18n();
 
 const copyName = () => {
   try {
     window.utools.copyText(props.name);
-    MessagePlugin.success("名称已复制");
+    MessagePlugin.success(t("mcp.nameCopied"));
   } catch {
-    MessagePlugin.error("复制失败");
+    MessagePlugin.error(t("common.copyFailed"));
   }
 };
 </script>
@@ -39,7 +41,7 @@ const copyName = () => {
     <template #header>
       <div class="skill-card-header">
         <div class="skill-card-left">
-          <Tooltip content="点击复制名称" placement="top">
+          <Tooltip :content="t('mcp.copyName')" placement="top">
             <span class="skill-card-name" @click.stop="copyName">{{ name }}</span>
           </Tooltip>
           <slot name="header-extra" />

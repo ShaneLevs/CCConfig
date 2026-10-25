@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Space, Dialog, Input, InputNumber, MessagePlugin,
   Select, Popconfirm, Alert as TAlert, Tooltip, Link,
@@ -11,6 +12,8 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import "./styles/ConfigView.css";
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const warningMsg = ref("");
@@ -98,13 +101,13 @@ const cancelEditEnv = () => {
 
 const saveEnvEntry = (entry) => {
   try {
-    if (!String(editingEnvValue.value || "").trim()) { MessagePlugin.warning("值不能为空，如需删除请用删除按钮"); return; }
+    if (!String(editingEnvValue.value || "").trim()) { MessagePlugin.warning(t("reasonix.env.valueRequired")); return; }
     window.services.writeReasonixEnvKey(entry.name, String(editingEnvValue.value).trim());
     entry.value = String(editingEnvValue.value).trim();
-    MessagePlugin.success(`${entry.name} 已保存`);
+    MessagePlugin.success(t("reasonix.env.saved", { name: entry.name }));
     cancelEditEnv();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("reasonix.env.saveFailed", { message: e.message }));
   }
 };
 
@@ -117,29 +120,29 @@ const handleAddEnv = () => {
   try {
     const name = envForm.value.name.trim();
     const value = String(envForm.value.value || "").trim();
-    if (!name) { MessagePlugin.warning("请输入变量名"); return; }
+    if (!name) { MessagePlugin.warning(t("reasonix.env.nameRequired")); return; }
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-      MessagePlugin.warning("变量名只能包含字母、数字、下划线，且不能以数字开头");
+      MessagePlugin.warning(t("reasonix.env.nameInvalid"));
       return;
     }
-    if (envEntries.value.some(e => e.name === name)) { MessagePlugin.warning(`变量 ${name} 已存在`); return; }
-    if (!value) { MessagePlugin.warning("请输入变量值"); return; }
+    if (envEntries.value.some(e => e.name === name)) { MessagePlugin.warning(t("reasonix.env.exists", { name })); return; }
+    if (!value) { MessagePlugin.warning(t("reasonix.env.valueEmpty")); return; }
     window.services.writeReasonixEnvKey(name, value);
-    MessagePlugin.success(`${name} 已添加`);
+    MessagePlugin.success(t("reasonix.env.added", { name }));
     envDialog.value = false;
     loadEnv();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("reasonix.env.addFailed", { message: e.message }));
   }
 };
 
 const handleDeleteEnv = (name) => {
   try {
     window.services.deleteReasonixEnvKey(name);
-    MessagePlugin.success(`${name} 已删除`);
+    MessagePlugin.success(t("reasonix.env.deleted", { name }));
     loadEnv();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("reasonix.env.deleteFailed", { message: e.message }));
   }
 };
 
@@ -147,9 +150,9 @@ const handleDeleteEnv = (name) => {
 const copyEnvValue = (val) => {
   try {
     window.utools.copyText(val);
-    MessagePlugin.success("已复制到剪贴板");
+    MessagePlugin.success(t("common.copiedToClipboard"));
   } catch {
-    MessagePlugin.error("复制失败");
+    MessagePlugin.error(t("common.copyFailed"));
   }
 };
 
@@ -166,7 +169,7 @@ const refresh = () => {
     loadEnv();
   } catch (e) {
     console.error("加载 Reasonix 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -197,10 +200,10 @@ const setDefaultModel = (providerName, modelId) => {
   try {
     const ref = `${providerName}/${modelId}`;
     window.services.setReasonixDefaultModel(ref);
-    MessagePlugin.success(`默认模型已设为 ${ref}`);
+    MessagePlugin.success(t("reasonix.model.defaultSet", { ref }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("reasonix.model.saveFailed", { message: e.message }));
   }
 };
 
@@ -233,24 +236,28 @@ const onAddApiKeyEnvChange = (newEnv) => {
   if (!env) { addApiKeyEnvHint.value = ""; return; }
   const key = window.services.getReasonixApiKey(env);
   const refs = envRefProviders(env);
-  addApiKeyEnvHint.value = key
-    ? `该变量已存有 Key${refs.length ? `，且被 ${refs.join("、")} 引用` : ""}，保存后直接使用`
-    : "该变量暂无已存 Key，可在下方 API Key 栏填写";
+  if (key) {
+    addApiKeyEnvHint.value = refs.length
+      ? t("reasonix.env.hintHasKeyWithRefs", { providers: refs.join(t("common.listSeparator")) })
+      : t("reasonix.env.hintHasKey");
+  } else {
+    addApiKeyEnvHint.value = t("reasonix.env.hintNoKey");
+  }
 };
 
 const handleAddProvider = () => {
   try {
     const name = addProviderForm.value.name.trim();
-    if (!name) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!name) { MessagePlugin.warning(t("reasonix.provider.nameRequired")); return; }
     const form = { ...addProviderForm.value, name, apiKeyEnv: addProviderForm.value.apiKeyEnv.trim() };
     // 留空时按 Reasonix 官方命名规则生成（CONFIG_PATHS.md "Custom provider api_key_env names"）
     if (!form.apiKeyEnv) form.apiKeyEnv = window.services.generateReasonixApiKeyEnv(name);
     window.services.addReasonixProvider(buildProviderPayload(form));
-    MessagePlugin.success(`供应商 ${name} 已添加`);
+    MessagePlugin.success(t("reasonix.provider.added", { name }));
     addProviderDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("reasonix.provider.addFailed", { message: e.message }));
   }
 };
 
@@ -280,10 +287,10 @@ const buildEnvHint = (providerName, env) => {
     .map(p => p.name);
   const key = window.services.getReasonixApiKey(env);
   const parts = [];
-  if (shared.length) parts.push(`该变量已被 ${shared.join("、")} 引用，这些供应商将共用此 Key`);
-  if (key) parts.push(`已存有 Key，保存后不填写则直接沿用`);
-  else parts.push(`暂无已存 Key，填写后保存将写入 .env`);
-  return parts.join("；");
+  if (shared.length) parts.push(t("reasonix.env.sharedRefs", { providers: shared.join(t("common.listSeparator")) }));
+  if (key) parts.push(t("reasonix.env.keyExistsHint"));
+  else parts.push(t("reasonix.env.noKeyHint"));
+  return parts.join(t("reasonix.env.hintSeparator"));
 };
 
 // 编辑弹窗：Key 环境变量名变更 → 重载该变量已存的 key，避免静默指向共享/已有 key
@@ -300,7 +307,7 @@ const handleSaveProvider = () => {
   try {
     const { apiKey, ...rest } = editForm.value;
     const newName = String(editForm.value.name || "").trim();
-    if (!newName) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!newName) { MessagePlugin.warning(t("reasonix.provider.nameRequired")); return; }
     // 已保存过 key 且用户清空了输入框 → 走删除确认流程
     if (originalApiKey.value && !apiKey && editForm.value.apiKeyEnv) {
       const newEnv = editForm.value.apiKeyEnv;
@@ -323,12 +330,12 @@ const handleSaveProvider = () => {
     }
     // 填了新 key 但 env 名为空 → key 无处可存，提示而非静默丢弃
     if (apiKey && !editForm.value.apiKeyEnv) {
-      MessagePlugin.warning("未设置 Key 环境变量名，API Key 未保存（请先填写变量名）");
+      MessagePlugin.warning(t("reasonix.provider.envRequiredForKey"));
       return;
     }
     // 清空了 key 且 env 名为空 → 无法定位要删的 key，提示旧 key 仍保留在 .env
     if (originalApiKey.value && !apiKey && !editForm.value.apiKeyEnv) {
-      MessagePlugin.warning("已清空 Key 但未设置环境变量名，原 Key 仍保留在 .env，可在环境变量区块手动删除");
+      MessagePlugin.warning(t("reasonix.provider.clearedNoEnv"));
       return;
     }
     const payload = buildProviderPayload({ ...rest, name: newName });
@@ -336,11 +343,11 @@ const handleSaveProvider = () => {
     if (apiKey && apiKey !== originalApiKey.value) payload.apiKey = apiKey;
     const renamed = newName !== editingProvider.value;
     window.services.updateReasonixProvider(editingProvider.value, payload);
-    MessagePlugin.success(renamed ? `供应商配置已更新（重命名为 ${newName}）` : "供应商配置已更新");
+    MessagePlugin.success(renamed ? t("reasonix.provider.updatedRenamed", { name: newName }) : t("reasonix.provider.updated"));
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("reasonix.provider.saveFailed", { message: e.message }));
   }
 };
 
@@ -359,28 +366,28 @@ const cancelDeleteKey = () => {
 const confirmDeleteKey = () => {
   try {
     const newName = String(editForm.value.name || "").trim();
-    if (!newName) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!newName) { MessagePlugin.warning(t("reasonix.provider.nameRequired")); return; }
     // clearApiKey 由后端统一处理：清理旧/新 env 名下已保存的 key
     window.services.updateReasonixProvider(editingProvider.value, {
       ...buildProviderPayload({ ...editForm.value, name: newName }),
       clearApiKey: true,
     });
-    MessagePlugin.success("供应商配置已更新（Key 已删除）");
+    MessagePlugin.success(t("reasonix.provider.keyDeleted"));
     deleteKeyDialog.value = false;
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("reasonix.provider.deleteFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (providerName) => {
   try {
     window.services.deleteReasonixProvider(providerName);
-    MessagePlugin.success(`供应商 ${providerName} 已删除`);
+    MessagePlugin.success(t("reasonix.provider.deleted", { name: providerName }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("reasonix.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -395,23 +402,23 @@ const openAddModelDialog = (providerName) => {
 const handleAddModel = () => {
   try {
     const id = addModelId.value.trim();
-    if (!id) { MessagePlugin.warning("请输入模型 ID"); return; }
+    if (!id) { MessagePlugin.warning(t("model.idRequired")); return; }
     window.services.addReasonixModel(addModelProvider.value, id);
-    MessagePlugin.success(`模型 ${id} 已添加`);
+    MessagePlugin.success(t("reasonix.model.added", { id }));
     addModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("reasonix.model.addFailed", { message: e.message }));
   }
 };
 
 const handleDeleteModel = (providerName, modelId) => {
   try {
     window.services.deleteReasonixModel(providerName, modelId);
-    MessagePlugin.success(`模型 ${modelId} 已删除`);
+    MessagePlugin.success(t("reasonix.model.deleted", { id: modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("reasonix.model.deleteFailed", { message: e.message }));
   }
 };
 
@@ -441,9 +448,9 @@ onMounted(refresh);
       </div>
       <div class="reasonix-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddProviderDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("reasonix.provider.add") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -458,7 +465,7 @@ onMounted(refresh);
     <template v-if="!loading">
       <!-- 供应商列表 -->
       <div v-if="providers.length === 0" class="reasonix-config-empty">
-        <Empty description="未检测到 Reasonix 供应商配置，请运行 reasonix setup 或手动编辑 config.toml" />
+        <Empty :description="t('reasonix.config.emptyProviders')" />
       </div>
 
       <div v-else class="reasonix-provider-list">
@@ -473,18 +480,18 @@ onMounted(refresh);
               <div class="reasonix-provider-header-left">
                 <span class="reasonix-provider-name">{{ p.name }}</span>
                 <Tag size="small" variant="outline">{{ p.kind }}</Tag>
-                <Tag v-if="isDefaultProvider(p)" size="small" theme="warning" variant="light">默认</Tag>
-                <span class="reasonix-model-count">{{ p.models.length }} 个模型</span>
+                <Tag v-if="isDefaultProvider(p)" size="small" theme="warning" variant="light">{{ t("common.default") }}</Tag>
+                <span class="reasonix-model-count">{{ t("reasonix.config.modelCount", { count: p.models.length }, p.models.length) }}</span>
               </div>
             </template>
             <template #headerRightContent>
               <div class="reasonix-provider-header-right" @click.stop>
                 <Button size="small" theme="default" variant="text" @click="handleEdit(p)">
-                  <template #icon><EditIcon /></template> 编辑
+                  <template #icon><EditIcon /></template> {{ t("common.edit") }}
                 </Button>
-                <Tooltip content="删除供应商">
+                <Tooltip :content="t('reasonix.provider.deleteTooltip')">
                   <Popconfirm
-                    :content="`删除该供应商及其所有模型？${p.apiKeyEnv ? '对应 .env 变量 ' + p.apiKeyEnv + ' 将保留' : ''}`"
+                    :content="p.apiKeyEnv ? t('reasonix.provider.deleteConfirmWithEnv', { env: p.apiKeyEnv }) : t('reasonix.provider.deleteConfirm')"
                     theme="danger"
                     @confirm="handleDeleteProvider(p.name)"
                   >
@@ -513,15 +520,15 @@ onMounted(refresh);
                 <span class="reasonix-detail-value">{{ p.modelsUrl }}</span>
               </div>
               <div class="reasonix-detail-item">
-                <span class="reasonix-detail-label">Key 变量</span>
+                <span class="reasonix-detail-label">{{ t("reasonix.provider.keyEnv") }}</span>
                 <span class="reasonix-detail-value mono">{{ p.apiKeyEnv || "—" }}</span>
               </div>
               <div v-if="p.contextWindow || p.maxOutputTokens" class="reasonix-detail-item">
-                <span class="reasonix-detail-label">限制</span>
+                <span class="reasonix-detail-label">{{ t("reasonix.provider.limits") }}</span>
                 <span class="reasonix-detail-value">
-                  <template v-if="p.contextWindow">上下文 {{ formatNumber(p.contextWindow) }}</template>
+                  <template v-if="p.contextWindow">{{ t("common.contextWindow") }} {{ formatNumber(p.contextWindow) }}</template>
                   <template v-if="p.contextWindow && p.maxOutputTokens"> · </template>
-                  <template v-if="p.maxOutputTokens">输出 {{ formatNumber(p.maxOutputTokens) }}</template>
+                  <template v-if="p.maxOutputTokens">{{ t("common.maxOutput") }} {{ formatNumber(p.maxOutputTokens) }}</template>
                 </span>
               </div>
             </div>
@@ -529,20 +536,20 @@ onMounted(refresh);
             <!-- 模型子区 -->
             <div class="reasonix-models-section">
               <div class="reasonix-models-title">
-                <span>模型</span>
+                <span>{{ t("reasonix.config.modelsTitle") }}</span>
                 <Button size="small" variant="outline" @click="openAddModelDialog(p.name)">
-                  <template #icon><AddIcon /></template> 添加
+                  <template #icon><AddIcon /></template> {{ t("common.add") }}
                 </Button>
               </div>
-              <div v-if="p.models.length === 0" class="reasonix-models-empty">暂无模型</div>
+              <div v-if="p.models.length === 0" class="reasonix-models-empty">{{ t("reasonix.config.modelsEmpty") }}</div>
               <div class="reasonix-model-tags">
                 <span v-for="m in p.models" :key="m" class="reasonix-model-tag">
                   <span class="reasonix-model-tag-name">{{ m }}</span>
-                  <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">默认</Tag>
-                  <Tooltip v-if="!isDefaultModel(p, m)" content="设为默认模型" placement="top">
+                  <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">{{ t("common.default") }}</Tag>
+                  <Tooltip v-if="!isDefaultModel(p, m)" :content="t('reasonix.model.setDefaultTooltip')" placement="top">
                     <span class="reasonix-model-tag-star" @click="setDefaultModel(p.name, m)"><StarIcon size="12px" /></span>
                   </Tooltip>
-                  <Popconfirm content="删除模型？" theme="danger" @confirm="handleDeleteModel(p.name, m)">
+                  <Popconfirm :content="t('reasonix.model.deleteConfirm')" theme="danger" @confirm="handleDeleteModel(p.name, m)">
                     <span class="reasonix-model-tag-del"><DeleteIcon size="12px" /></span>
                   </Popconfirm>
                 </span>
@@ -558,17 +565,17 @@ onMounted(refresh);
       <div class="reasonix-env-section">
         <div class="reasonix-env-header">
           <Space size="8px" align="center">
-            <span class="reasonix-block-title">环境变量 / API Key</span>
+            <span class="reasonix-block-title">{{ t("reasonix.env.title") }}</span>
             <Tag size="small" variant="outline">{{ envEntries.length }}</Tag>
             <span class="reasonix-block-sub">~/.reasonix/.env</span>
           </Space>
           <Button size="small" variant="outline" @click="openAddEnvDialog">
-            <template #icon><AddIcon /></template> 添加变量
+            <template #icon><AddIcon /></template> {{ t("reasonix.env.add") }}
           </Button>
         </div>
 
         <div v-if="envEntries.length === 0" class="reasonix-env-empty">
-          .env 中暂无变量，可在供应商编辑弹窗中填写 API Key 自动写入
+          {{ t("reasonix.env.emptyHint") }}
         </div>
 
         <div v-else class="reasonix-env-list">
@@ -576,33 +583,33 @@ onMounted(refresh);
             <!-- 左：变量名 + 引用标记 -->
             <div class="reasonix-env-name-col">
               <span class="reasonix-env-name mono">{{ e.name }}</span>
-              <Tooltip v-if="envRefProviders(e.name).length" :content="`被 ${envRefProviders(e.name).join('、')} 引用`">
-                <Tag size="small" theme="warning" variant="light">{{ envRefProviders(e.name).length }} 引用</Tag>
+              <Tooltip v-if="envRefProviders(e.name).length" :content="t('reasonix.env.referencedBy', { providers: envRefProviders(e.name).join(t('common.listSeparator')) })">
+                <Tag size="small" theme="warning" variant="light">{{ t("reasonix.env.refCount", { count: envRefProviders(e.name).length }, envRefProviders(e.name).length) }}</Tag>
               </Tooltip>
             </div>
 
             <!-- 右：值展示/编辑 + 操作 -->
             <div class="reasonix-env-value-col">
               <template v-if="editingEnvName === e.name">
-                <ApiKeyInput v-model="editingEnvValue" placeholder="输入新值" class="reasonix-env-edit-input" />
-                <Button size="small" theme="primary" variant="base" @click="saveEnvEntry(e)">保存</Button>
-                <Button size="small" variant="text" @click="cancelEditEnv">取消</Button>
+                <ApiKeyInput v-model="editingEnvValue" :placeholder="t('reasonix.env.newValuePlaceholder')" class="reasonix-env-edit-input" />
+                <Button size="small" theme="primary" variant="base" @click="saveEnvEntry(e)">{{ t("common.save") }}</Button>
+                <Button size="small" variant="text" @click="cancelEditEnv">{{ t("common.cancel") }}</Button>
               </template>
               <template v-else>
                 <span class="reasonix-env-mask mono">
                   <LockOnIcon size="12px" class="reasonix-env-lock" />
                   {{ maskValue(e.value) }}
                 </span>
-                <Tooltip content="复制">
+                <Tooltip :content="t('common.copy')">
                   <Button size="small" variant="text" @click="copyEnvValue(e.value)">
                     <template #icon><CopyIcon /></template>
                   </Button>
                 </Tooltip>
-                <Button size="small" variant="text" @click="startEditEnv(e)">编辑</Button>
+                <Button size="small" variant="text" @click="startEditEnv(e)">{{ t("common.edit") }}</Button>
                 <Popconfirm
                   :content="envRefProviders(e.name).length
-                    ? `该变量被 ${envRefProviders(e.name).join('、')} 引用，删除后这些供应商将失效！`
-                    : '从 .env 删除该变量？'"
+                    ? t('reasonix.env.deleteConfirmReferenced', { providers: envRefProviders(e.name).join(t('common.listSeparator')) })
+                    : t('reasonix.env.deleteConfirm')"
                   theme="danger"
                   @confirm="handleDeleteEnv(e.name)"
                 >
@@ -618,44 +625,44 @@ onMounted(refresh);
     </template>
 
     <!-- 添加供应商弹窗 -->
-    <Dialog v-model:visible="addProviderDialog" header="添加供应商" width="520px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
+    <Dialog v-model:visible="addProviderDialog" :header="t('reasonix.provider.addTitle')" width="520px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddProvider">
       <div class="reasonix-edit-form">
-        <div class="reasonix-form-item"><label>名称 <span class="reasonix-form-required">*</span></label><Input v-model="addProviderForm.name" placeholder="deepseek" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.name") }} <span class="reasonix-form-required">*</span></label><Input v-model="addProviderForm.name" placeholder="deepseek" /></div>
         <div class="reasonix-form-item"><label>Kind</label><Select v-model="addProviderForm.kind" :options="kindOptions" creatable /></div>
         <div class="reasonix-form-item"><label>Base URL</label><Input v-model="addProviderForm.baseUrl" placeholder="https://api.deepseek.com" /></div>
         <div class="reasonix-form-row">
-          <div class="reasonix-form-item"><label>Chat URL（可选）</label><Input v-model="addProviderForm.chatUrl" placeholder="完整 chat/completions URL" /></div>
+          <div class="reasonix-form-item"><label>{{ t("reasonix.provider.chatUrlOptional") }}</label><Input v-model="addProviderForm.chatUrl" :placeholder="t('reasonix.provider.chatUrlPlaceholder')" /></div>
         </div>
-        <div class="reasonix-form-item"><label>Models URL（可选）</label><Input v-model="addProviderForm.modelsUrl" placeholder="模型发现 URL" /></div>
+        <div class="reasonix-form-item"><label>{{ t("reasonix.provider.modelsUrlOptional") }}</label><Input v-model="addProviderForm.modelsUrl" :placeholder="t('reasonix.provider.modelsUrlPlaceholder')" /></div>
         <div class="reasonix-form-item">
-          <label>Key 环境变量</label>
+          <label>{{ t("reasonix.provider.keyEnvLabel") }}</label>
           <Select
             v-model="addProviderForm.apiKeyEnv"
             :options="envKeyOptions"
             filterable
             creatable
             clearable
-            placeholder="选择已有变量或输入新名，留空自动生成"
+            :placeholder="t('reasonix.provider.keyEnvPlaceholder')"
             @change="onAddApiKeyEnvChange"
           />
           <div v-if="addApiKeyEnvHint" class="reasonix-form-hint">{{ addApiKeyEnvHint }}</div>
         </div>
-        <div class="reasonix-form-item"><label>API Key</label><ApiKeyInput v-model="addProviderForm.apiKey" placeholder="写入 ~/.reasonix/.env" /></div>
-        <div class="reasonix-form-item"><label>上下文窗口</label><InputNumber v-model="addProviderForm.contextWindow" :min="0" :step="1000" /></div>
-        <div class="reasonix-form-item"><label>最大输出</label><InputNumber v-model="addProviderForm.maxOutputTokens" :min="0" :step="1000" /></div>
+        <div class="reasonix-form-item"><label>API Key</label><ApiKeyInput v-model="addProviderForm.apiKey" :placeholder="t('reasonix.provider.apiKeyPlaceholder')" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.contextWindow") }}</label><InputNumber v-model="addProviderForm.contextWindow" :min="0" :step="1000" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.maxOutput") }}</label><InputNumber v-model="addProviderForm.maxOutputTokens" :min="0" :step="1000" /></div>
       </div>
     </Dialog>
 
     <!-- 编辑供应商弹窗 -->
-    <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="520px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
+    <Dialog v-model:visible="editDialog" :header="t('reasonix.provider.editTitle')" width="520px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="reasonix-edit-form">
-        <div class="reasonix-form-item"><label>名称 <span class="reasonix-form-required">*</span></label><Input v-model="editForm.name" placeholder="deepseek" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.name") }} <span class="reasonix-form-required">*</span></label><Input v-model="editForm.name" placeholder="deepseek" /></div>
         <div class="reasonix-form-item"><label>Kind</label><Select v-model="editForm.kind" :options="kindOptions" creatable /></div>
         <div class="reasonix-form-item"><label>Base URL</label><Input v-model="editForm.baseUrl" placeholder="https://api.deepseek.com" /></div>
-        <div class="reasonix-form-item"><label>Chat URL（可选）</label><Input v-model="editForm.chatUrl" /></div>
-        <div class="reasonix-form-item"><label>Models URL（可选）</label><Input v-model="editForm.modelsUrl" /></div>
+        <div class="reasonix-form-item"><label>{{ t("reasonix.provider.chatUrlOptional") }}</label><Input v-model="editForm.chatUrl" /></div>
+        <div class="reasonix-form-item"><label>{{ t("reasonix.provider.modelsUrlOptional") }}</label><Input v-model="editForm.modelsUrl" /></div>
         <div class="reasonix-form-item">
-          <label>Key 环境变量</label>
+          <label>{{ t("reasonix.provider.keyEnvLabel") }}</label>
           <Select
             v-model="editForm.apiKeyEnv"
             :options="envKeyOptions"
@@ -666,45 +673,45 @@ onMounted(refresh);
           />
           <div v-if="editEnvHint" class="reasonix-form-hint">{{ editEnvHint }}</div>
         </div>
-        <div class="reasonix-form-item"><label>API Key</label><ApiKeyInput v-model="editForm.apiKey" :placeholder="editForm.apiKeyEnv ? (originalApiKey ? '已保存，留空则删除；填写则覆盖' : '写入 ~/.reasonix/.env') : '写入 ~/.reasonix/.env'" /></div>
-        <div class="reasonix-form-item"><label>上下文窗口</label><InputNumber v-model="editForm.contextWindow" :min="0" :step="1000" /></div>
-        <div class="reasonix-form-item"><label>最大输出</label><InputNumber v-model="editForm.maxOutputTokens" :min="0" :step="1000" /></div>
+        <div class="reasonix-form-item"><label>API Key</label><ApiKeyInput v-model="editForm.apiKey" :placeholder="editForm.apiKeyEnv ? (originalApiKey ? t('reasonix.provider.apiKeyPlaceholderSaved') : t('reasonix.provider.apiKeyPlaceholder')) : t('reasonix.provider.apiKeyPlaceholder')" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.contextWindow") }}</label><InputNumber v-model="editForm.contextWindow" :min="0" :step="1000" /></div>
+        <div class="reasonix-form-item"><label>{{ t("common.maxOutput") }}</label><InputNumber v-model="editForm.maxOutputTokens" :min="0" :step="1000" /></div>
       </div>
     </Dialog>
 
     <!-- 添加模型弹窗 -->
-    <Dialog v-model:visible="addModelDialog" header="添加模型" width="420px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddModel">
+    <Dialog v-model:visible="addModelDialog" :header="t('model.addTitle')" width="420px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddModel">
       <div class="reasonix-edit-form">
         <div class="reasonix-form-item">
-          <label>模型 ID <span class="reasonix-form-required">*</span></label>
+          <label>{{ t("model.id") }} <span class="reasonix-form-required">*</span></label>
           <Input v-model="addModelId" placeholder="deepseek-v4-flash" @enter="handleAddModel" />
         </div>
-        <div class="reasonix-form-hint">供应商：{{ addModelProvider }}</div>
+        <div class="reasonix-form-hint">{{ t("reasonix.model.providerLabel", { provider: addModelProvider }) }}</div>
       </div>
     </Dialog>
 
     <!-- 删除已保存 Key 确认弹窗 -->
-    <Dialog v-model:visible="deleteKeyDialog" header="删除 API Key" width="480px" :confirm-btn="{ content: '删除', theme: 'danger' }" @confirm="confirmDeleteKey" @cancel="cancelDeleteKey" @close="cancelDeleteKey">
+    <Dialog v-model:visible="deleteKeyDialog" :header="t('reasonix.provider.deleteKeyTitle')" width="480px" :confirm-btn="{ content: t('common.delete'), theme: 'danger' }" @confirm="confirmDeleteKey" @cancel="cancelDeleteKey" @close="cancelDeleteKey">
       <div class="reasonix-edit-form">
-        <p>将从 ~/.reasonix/.env 删除该供应商已保存的 API Key（{{ pendingDeleteKeyEnv }}），该操作不可撤销。</p>
+        <p>{{ t("reasonix.provider.deleteKeyBody", { env: pendingDeleteKeyEnv }) }}</p>
         <p v-for="s in sharedEnvProviders" :key="s.env" class="reasonix-form-hint">
-          注意：变量 <span class="mono">{{ s.env }}</span> 也被供应商 {{ s.providers.join("、") }} 引用，删除后这些供应商将失效。
+          {{ t("reasonix.provider.deleteKeySharedPrefix") }}<span class="mono">{{ s.env }}</span>{{ t("reasonix.provider.deleteKeySharedSuffix", { providers: s.providers.join(t("common.listSeparator")) }) }}
         </p>
       </div>
     </Dialog>
 
     <!-- 添加环境变量弹窗 -->
-    <Dialog v-model:visible="envDialog" header="添加环境变量" width="440px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddEnv">
+    <Dialog v-model:visible="envDialog" :header="t('reasonix.env.addTitle')" width="440px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddEnv">
       <div class="reasonix-edit-form">
         <div class="reasonix-form-item">
-          <label>变量名 <span class="reasonix-form-required">*</span></label>
+          <label>{{ t("reasonix.env.nameLabel") }} <span class="reasonix-form-required">*</span></label>
           <Input v-model="envForm.name" placeholder="DEEPSEEK_API_KEY" />
         </div>
         <div class="reasonix-form-item">
-          <label>变量值 <span class="reasonix-form-required">*</span></label>
-          <ApiKeyInput v-model="envForm.value" placeholder="API Key 或任意值" />
+          <label>{{ t("reasonix.env.valueLabel") }} <span class="reasonix-form-required">*</span></label>
+          <ApiKeyInput v-model="envForm.value" :placeholder="t('reasonix.env.valuePlaceholder')" />
         </div>
-        <div class="reasonix-form-hint">写入 ~/.reasonix/.env，供 Reasonix CLI 与各供应商 api_key_env 引用</div>
+        <div class="reasonix-form-hint">{{ t("reasonix.env.addHint") }}</div>
       </div>
     </Dialog>
   </div>

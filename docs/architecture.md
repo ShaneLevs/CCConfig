@@ -10,16 +10,18 @@
 
 ```
 src/          # Vue 3 渲染层（两个发行版共用）
+shared/i18n/  # 中英文案 JSON（Vue / preload / Rust 共用）
 public/       # uTools 静态资源（plugin.json、各应用图标）+ preload
 desktop/      # 仅桌面版：sidecar 服务、utools shim、前端 bridge、引导页
 src-tauri/    # 仅桌面版：Tauri v2 外壳（Rust）
 docs/         # 架构文档
 ```
 
-- **`src/`** — 渲染层。`main.js`/`App.vue` 入口与主题；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、背景特效等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
-- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / commands / usage / crypto），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
-- **`desktop/`** — 仅桌面版。`sidecar/server.js` 把打包后的 preload 以回环 HTTP 服务暴露；`sidecar/utools-shim.js` 在 Node 里实现最小 uTools API 面；`bridge/window-shim.js` 构建时注入渲染层，提供 `window.utools` / `window.services`；`guide.html` 是找不到可用 Node 时的引导页。
-- **`src-tauri/`** — 仅桌面版的 Rust 外壳：Node 运行时探测、sidecar 生命周期、托盘、窗口主题。
+- **`src/`** — 渲染层。`main.js`/`App.vue` 入口；`i18n/` 语言解析与 vue-i18n 实例，`composables/useAppearance.js` 解析外观（跟随系统/浅色/深色），`composables/useLocale.js` 管理语言；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、外观设置等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
+- **`shared/i18n/`** — 中英文案单一事实来源（按域拆 JSON）。Vue 通过 `src/i18n/index.js` 的 `import.meta.glob` 合并；preload 通过 `services/i18n.js` 用 CJS require（esbuild 内联）；Rust 通过 `src-tauri/src/i18n.rs` 的 `include_str!` 读 `native.json`。
+- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / commands / usage / crypto / i18n），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
+- **`desktop/`** — 仅桌面版。`sidecar/server.js` 把打包后的 preload 以回环 HTTP 服务暴露；`sidecar/utools-shim.js` 在 Node 里实现最小 uTools API 面；`bridge/window-shim.js` 构建时注入渲染层，提供 `window.utools` / `window.services`；`guide.html` 是找不到可用 Node 时的引导页（中英文案由 Rust 注入 `window.__CC_GUIDE__`）。
+- **`src-tauri/`** — 仅桌面版的 Rust 外壳：Node 运行时探测、sidecar 生命周期、托盘、窗口主题；`i18n.rs` 负责托盘/引导页文案，语言偏好通过 sidecar RPC 先取 nativeId 再读 `ccswitch_locale_<nativeId>`（旧共享档作回退）。
 
 ## 数据流
 
@@ -210,3 +212,9 @@ DSH（DeepSeek Harness）:
 - 每配置可选 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`（互斥，切换时写一清一）。
 - 模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。
 - OpenCode Go：URL 精确等于 `https://opencode.ai/zen/go`（不带 /v1）时自动切 API_KEY 认证。
+
+## 语言与外观
+
+- **语言**：`src/composables/useLocale.js` 读取本机文档 `ccswitch_locale_<nativeId>`（`system` / `zh-CN` / `en-US`，旧共享 `ccswitch_locale` 仅作迁移种子），默认跟随系统（`navigator.languages`）。变更时同步 `i18n.global.locale`、`<html lang>`、DB，并调用 `window.services.setLocale()`；preload 用它更新 `service.json` 文案与 uTools 指令注册。桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId，再读本机语言档（读不到回退共享档 / 系统语言）。
+- **文案目录**：`shared/i18n/{zh-CN,en-US}/*.json`，Vue / preload / Rust 共用；`npm run i18n:check` 校验 key 与占位符。
+- **外观**：`src/composables/useAppearance.js` 读取 `ccswitch_dark_background_<nativeId>` 的 `theme`（`system|light|dark`），解析出 `isDark`。`<html theme-mode>` 显式写 `dark`/`light`；`effect-active` 由解析后的深色状态驱动。只有固定主题与系统外观不一致时加 `theme-mismatch`，`theme.css` 用 `::before` 在 WebGL canvas（z-index -1）之下铺 `--td-bg-color-page` 纯色底；一致时保留 uTools 亚克力 / 桌面版 vibrancy。

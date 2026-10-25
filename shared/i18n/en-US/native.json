@@ -1,0 +1,34 @@
+{
+  "native": {
+    "tray": {
+      "gatewayDisabled": "Gateway off · Enable it in Common → Gateway",
+      "gatewayPortBusy": "Gateway not running · Port {port} may be in use",
+      "gatewayRunning": "Gateway running · Port {port}",
+      "requests": "Requests {count}",
+      "successRate": "Success rate {value}",
+      "tokens": "Tokens {value}",
+      "cacheHitRate": "Cache hit rate {value}",
+      "showWindow": "Open main window",
+      "restartGateway": "Restart gateway",
+      "quit": "Quit"
+    },
+    "guide": {
+      "title": "CCConfig · Node.js required",
+      "heading": "Node.js is required",
+      "subtitle": "CCConfig for macOS reuses your installed Node.js to run its local service. It does not bundle a runtime.",
+      "installTitle": "Install",
+      "installBrewPrefix": "Using Homebrew: ",
+      "installDownloadPrefix": "Or download from the official site: ",
+      "installRequirement": "Requires <code>&gt;= 18</code>. After installing, <b>fully quit and reopen</b> CCConfig.",
+      "pathTitle": "Already installed Node.js but still seeing this page?",
+      "pathDesc": "Apps launched from Finder/Dock do not inherit your terminal PATH, so Node.js managed by nvm / fnm / volta is often not detected. You can point CCConfig at it explicitly:",
+      "pathComment1": "# 1. Find the node binary in your terminal",
+      "pathComment2": "# 2. Restart the app with the environment variable",
+      "pathLaunchctlDesc": "You can also set a global launchctl variable so Dock launches work:",
+      "troubleshootTitle": "Troubleshooting",
+      "troubleshootDesc": "Startup logs are written to <code>~/.ccconfig/logs/sidecar.log</code>, including every Node.js path that was tried.",
+      "footer": "CCConfig · Cross-agent configuration manager",
+      "nodeDownloadUrl": "https://nodejs.org/en/download"
+    }
+  }
+}

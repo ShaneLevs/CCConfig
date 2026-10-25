@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { AutoComplete, Checkbox, Tooltip } from "tdesign-vue-next";
 
 // claude 配置表单的模型输入行：AutoComplete 候选 + 「1m」百万上下文后缀复选框。
@@ -10,6 +11,8 @@ const props = defineProps({
   oneM: { type: Boolean, default: false },
 });
 const emit = defineEmits(["update:modelValue", "update:oneM"]);
+
+const { t } = useI18n();
 
 const onInput = (val) => emit("update:modelValue", val);
 const on1mChange = (checked) => emit("update:oneM", checked);
@@ -26,7 +29,7 @@ const on1mChange = (checked) => emit("update:oneM", checked);
       @change="onInput"
     >
       <template #suffix>
-        <Tooltip content="模型支持一百万个上下文时勾选">
+        <Tooltip :content="t('claude.modelField.oneMHint')">
           <Checkbox
             :checked="oneM"
             size="small"

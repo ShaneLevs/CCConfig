@@ -7,9 +7,10 @@ CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / o
 Vue 3 (`<script setup>`) + Vite + TDesign Vue Next + @lucide/vue；解析库 json5 / js-yaml / smol-toml；MCP SDK；ogl（深色背景特效）。
 
 ```bash
-npm run dev            # 开发（localhost:5173，watch public/preload/** 自动重打包）
+npm run dev            # 开发（localhost:5173，watch public/preload/** 与 shared/i18n/** 自动重打包）
 npm run build          # 生产构建（含 esbuild 打包 preload）
 npm run version:check  # 校验 5 处版本号是否一致（build / build:app 已内置）
+npm run i18n:check     # 校验中英文案 key / 占位符一致、英文无残留中文（build / build:app 已内置）
 npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / major 亦可）
 ```
 
@@ -31,7 +32,7 @@ npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / maj
 - **Fat Preload**：所有 Node 敏感操作（文件 I/O、网络、子进程）在 `public/preload/services/` 实现，经 `services.js` 暴露为 `window.services`；由 `vite.config.js` 的 `bundlePreloadPlugin`（esbuild：bundle/cjs/node18）打进 `dist/preload/services.js`。preload 依赖清单在 `public/preload/package.json`（dev 模式 uTools 直接 require 源码需要）。
 - **App Context 单例**：`useAppContext` 用模块级 ref（非 provide/inject）在 index.vue 与各子视图间共享状态。
 - **视图组织**：`src/Switch/<app>/ConfigView|McpView|SkillView|PluginView|UsageView.vue` + 同名 `styles/` CSS；跨应用共享组件在 `src/components/`，共享逻辑在 `src/composables/`（Agent 默认顺序与展示名元数据在 `composables/agentMeta.js`，纯数据、无副作用：切换器 / 设置弹窗 / 统计页 Agent 分组标题共用，不要在展示组件里引 `useAgentVisibility`）；单应用专属的弹窗/卡片等子组件放 `src/Switch/<app>/components/`（如 `common/components/BatchAddModelsDialog.vue`、`pi/components/PiPluginDetailDialog.vue`），沿用该视图 `styles/` 里的全局类，不重复定义样式。preload 各功能域模块也在 `public/preload/services/`（如 `skills.js`、`pi-common.js`、`claude-usage.js`），`services.js` 仅做装配（window.services 公开 API 面不可变）。
-- **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动网关、Env 额外字段、通用 MCP 本地启停 `ccswitch_mcp_local_state_<nativeId>`（disabled 名单，主档在 ccswitch_common_mcp）、使用统计 heatmap/usage_cache、MCP 停用、Agent 启停 `ccswitch_visible_agents_<nativeId>`、背景特效 `ccswitch_dark_background_<nativeId>`）用 `_<nativeId>` 后缀分文档，旧共享档仅作迁移种子只读。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccswitch_active_config_id`。
+- **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动网关、Env 额外字段、通用 MCP 本地启停 `ccswitch_mcp_local_state_<nativeId>`（disabled 名单，主档在 ccswitch_common_mcp）、使用统计 heatmap/usage_cache、MCP 停用、Agent 启停 `ccswitch_visible_agents_<nativeId>`、外观 `ccswitch_dark_background_<nativeId>`（字段 `theme`/`enabled`/`effect`）、界面语言 `ccswitch_locale_<nativeId>`（`{ locale: 'system'|'zh-CN'|'en-US' }`））用 `_<nativeId>` 后缀分文档，旧共享档仅作迁移种子只读；桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId 再读本机语言档。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccswitch_active_config_id`。
 - **Skill 启停**：`.disabled/` 目录机制（物理移动目录），Claude → `~/.claude/skills`，OpenCode → `~/.config/opencode/skills`，通用 → `~/.agents/skills`。
 - **自动网关**（`autoroute.js` + `autoroute-convert/`，UI 名为「网关」）：本地网关（默认 127.0.0.1:17877），入站 Anthropic Messages / OpenAI Chat / Responses 三协议，同协议透传、跨协议经 canonical 中间格式转换（含 SSE 流式）；随机 key 防滥用；请求日志存内存（最近 10 条，解析出目标模型即插「进行中」行、完成原地补全）；模型映射首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行）。转换层规则（推理强度/媒体降级/结构化输出/tool schema 修补）与上游容错（重试、被拒可选字段记忆、断连中止、协议头透传）见 README「数据流」网关小节；**修改转换行为时必须同步 canonical.js 头注释与 README**。
 
@@ -39,7 +40,15 @@ npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / maj
 
 ## Agent 启停 ↔ 启动指令
 
-plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent 指令由 `commands.js` 内置规范（`FEATURE_DEFINITIONS`）按启停状态动态注册/移除（`utools.setFeature/removeFeature`）。preload 顶层 + `onPluginEnter` 每次从 DB（`ccswitch_visible_agents`）重放同步，渲染进程勾选变化即时调 `syncAgentCommands`。**注意 uTools 没有 onPluginReady API**，误用会抛 TypeError 中断注册链路。
+plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent 指令由 `commands.js` 内置规范（`FEATURE_DEFINITIONS`）按启停状态动态注册/移除（`utools.setFeature/removeFeature`）。preload 顶层 + `onPluginEnter` 每次从 DB（`ccswitch_visible_agents`）重放同步，渲染进程勾选变化即时调 `syncAgentCommands`，语言切换时 `services.setLocale` 也会重放。explain / regex label 跟随当前语言，`cmds` 同时保留中英关键词。**注意 uTools 没有 onPluginReady API**，误用会抛 TypeError 中断注册链路。
+
+## 多语言（i18n）
+
+- 文案单一事实来源：`shared/i18n/{zh-CN,en-US}/*.json`，按域拆文件；根节点即命名空间。Vue 用 `src/i18n/index.js`（`import.meta.glob` 合并），preload 用 `public/preload/services/i18n.js`（CJS require，esbuild 内联），Rust 用 `src-tauri/src/i18n.rs`（`include_str!` 读 `native.json`）。
+- 所有用户可见文案走 `t()`；注释、`console.*`、品牌名、DB id、env key、provider/model id、写入外部配置的生成内容不翻译。完整约定与 key 清单见 [docs/i18n.md](docs/i18n.md)。
+- 新增文案必须同时写 `zh-CN` 与 `en-US`；`npm run i18n:check` 会校验 key / 占位符一致与英文残留中文。
+- 语言切换：`src/composables/useLocale.js`（按机器 `ccswitch_locale_<nativeId>`，旧共享 `ccswitch_locale` 仅作迁移种子；写 DB 要带 `_rev`），变更后调用 `window.services.setLocale()` 让 preload 与 uTools 指令同步换语言。
+- 外观：`src/composables/useAppearance.js` 解析 `system|light|dark`；只有固定主题与系统外观不一致时才给 `<html>` 加 `theme-mismatch`（`theme.css` 用 `::before` 铺纯色底），一致时保留原生毛玻璃。
 
 ## 样式规范
 
@@ -49,6 +58,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 
 ## 构建注意
 
+- `build` / `build:app` 会先跑 `version:check` 与 `i18n:check`。
 - 构建后清理 Vite 复制到 `dist/preload` 的 node_modules（js-yaml 的 .map 会导致 uTools 打包拒绝）及 .DS_Store。
 - `@modelcontextprotocol/sdk` 在 `mcp.js` try/catch 懒加载，缺失时工具发现自动降级。
 - Base path `./`（uTools file:// 加载）。
@@ -71,6 +81,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 | 目录 | 归属 |
 |---|---|
 | `src/**` | **共享**（两个发行版同一份源码） |
+| `shared/i18n/**` | **共享**（Vue / preload / Rust 三端共用的中英文案 JSON） |
 | `public/preload/services/**`、`services.js` | **共享**（esbuild 打成 `services.js`，uTools 当 preload、桌面版当 sidecar 主体） |
 | `public/plugin.json` | 仅 uTools |
 | `src-tauri/**` | 仅桌面版（Rust 壳、Node 探测、托盘、窗口） |

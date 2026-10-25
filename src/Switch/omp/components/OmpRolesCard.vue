@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { Card, Button, Tag, Space, Dropdown, Dialog, Select, MessagePlugin, Popconfirm } from "tdesign-vue-next";
 import { EditIcon, AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
 
@@ -10,20 +11,23 @@ const props = defineProps({
 });
 const emit = defineEmits(["load-error"]);
 
+const { t } = useI18n();
+
 // 模型角色场景（固定顺序）
 const ROLE_ORDER = ["default", "smol", "slow", "vision", "plan", "designer", "commit", "tiny", "task", "advisor"];
-const ROLE_LABELS = {
-  default: "默认",
-  smol: "快速",
-  slow: "深度",
-  vision: "视觉",
-  plan: "规划",
-  designer: "设计",
-  commit: "提交",
-  tiny: "微小",
-  task: "任务",
-  advisor: "顾问",
+const ROLE_LABEL_KEYS = {
+  default: "omp.roles.label.default",
+  smol: "omp.roles.label.smol",
+  slow: "omp.roles.label.slow",
+  vision: "omp.roles.label.vision",
+  plan: "omp.roles.label.plan",
+  designer: "omp.roles.label.designer",
+  commit: "omp.roles.label.commit",
+  tiny: "omp.roles.label.tiny",
+  task: "omp.roles.label.task",
+  advisor: "omp.roles.label.advisor",
 };
+const roleLabel = (role) => (ROLE_LABEL_KEYS[role] ? t(ROLE_LABEL_KEYS[role]) : role);
 // 思考级别顺序（小 → 大）
 const LEVEL_ORDER = ["low", "medium", "high", "xhigh", "max"];
 
@@ -40,7 +44,7 @@ const load = () => {
   } catch (e) {
     console.error("加载 omp 配置失败:", e);
     modelRoles.value = {};
-    emit("load-error", e.message || "加载失败");
+    emit("load-error", e.message || t("common.loadFailed"));
   }
 };
 
@@ -64,6 +68,9 @@ const findModelById = (providerName, modelId) => {
 // 只展示已配置的角色，未配置的通过「添加角色」入口配置
 const configuredRoles = computed(() => ROLE_ORDER.filter(r => modelRoles.value[r]));
 const unconfiguredRoles = computed(() => ROLE_ORDER.filter(r => !modelRoles.value[r]));
+const unconfiguredRoleOptions = computed(() =>
+  unconfiguredRoles.value.map((r) => ({ content: `${roleLabel(r)} (${r})`, value: r }))
+);
 
 // 解析角色引用为可展示信息（无前缀引用补全供应商）
 const getRoleDisplay = (role) => {
@@ -123,7 +130,7 @@ const roleModelOptions = computed(() => {
 const roleLevelOptions = computed(() => {
   const prov = props.providers.find(p => p.name === roleForm.value.provider);
   const model = prov?.models.find(m => m.id === roleForm.value.modelId);
-  const opts = [{ label: "默认（不指定）", value: "" }];
+  const opts = [{ label: t("omp.roles.levelDefault"), value: "" }];
   if (!model?.thinking?.minLevel || !model?.thinking?.maxLevel) return opts;
   const start = LEVEL_ORDER.indexOf(model.thinking.minLevel);
   const end = LEVEL_ORDER.indexOf(model.thinking.maxLevel);
@@ -142,15 +149,15 @@ const onRoleProviderChange = () => {
 const saveRole = () => {
   try {
     const { provider, modelId, level } = roleForm.value;
-    if (!provider || !modelId) { MessagePlugin.warning("请选择供应商和模型"); return; }
+    if (!provider || !modelId) { MessagePlugin.warning(t("omp.roles.selectRequired")); return; }
     const ref = `${provider}/${modelId}` + (level ? `:${level}` : "");
     const next = { ...modelRoles.value, [editingRole.value]: ref };
     window.services.writeOmpModelRoles(next);
     modelRoles.value = next;
-    MessagePlugin.success(`已设置 ${editingRole.value} = ${ref}`);
+    MessagePlugin.success(t("omp.roles.setSuccess", { role: editingRole.value, ref }));
     roleDialog.value = false;
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("omp.roles.saveFailed", { message: e.message }));
   }
 };
 
@@ -160,9 +167,9 @@ const handleDeleteRole = (role) => {
     delete next[role];
     window.services.writeOmpModelRoles(next);
     modelRoles.value = next;
-    MessagePlugin.success(`已删除角色 ${role}`);
+    MessagePlugin.success(t("omp.roles.deleted", { role }));
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("omp.roles.deleteFailed", { message: e.message }));
   }
 };
 
@@ -175,25 +182,25 @@ onMounted(load);
     <template #header>
       <div class="omp-roles-header">
         <Space size="12px" align="center">
-          <span class="omp-roles-title">模型角色</span>
+          <span class="omp-roles-title">{{ t("omp.roles.title") }}</span>
           <span class="omp-roles-sub">config.yml · modelRoles</span>
-          <Tag size="small" variant="outline">{{ configuredRoles.length }} 个已配置</Tag>
+          <Tag size="small" variant="outline">{{ t("omp.roles.configuredCount", { count: configuredRoles.length }) }}</Tag>
         </Space>
         <Dropdown
           v-if="unconfiguredRoles.length"
-          :options="unconfiguredRoles.map(r => ({ content: `${ROLE_LABELS[r] || r} (${r})`, value: r }))"
+          :options="unconfiguredRoleOptions"
           :min-column-width="140"
           @click="onAddRole"
         >
           <Button size="small" variant="outline">
-            <template #icon><AddIcon /></template> 添加角色
+            <template #icon><AddIcon /></template> {{ t("omp.roles.addRole") }}
           </Button>
         </Dropdown>
       </div>
     </template>
     <div v-for="role in configuredRoles" :key="role" class="omp-role-row">
       <Space size="8px" align="center" class="omp-role-name-wrap">
-        <span class="omp-role-name">{{ ROLE_LABELS[role] || role }}</span>
+        <span class="omp-role-name">{{ roleLabel(role) }}</span>
         <code class="omp-role-code">{{ role }}</code>
       </Space>
       <Space size="8px" align="center" class="omp-role-model">
@@ -206,7 +213,7 @@ onMounted(load);
           <Button size="small" variant="text" @click="openRoleDialog(role)">
             <template #icon><EditIcon /></template>
           </Button>
-          <Popconfirm content="确定删除此角色？删除后该场景将使用系统默认模型。" @confirm="handleDeleteRole(role)">
+          <Popconfirm :content="t('omp.roles.deleteConfirm')" @confirm="handleDeleteRole(role)">
             <Button size="small" variant="text" theme="danger">
               <template #icon><DeleteIcon /></template>
             </Button>
@@ -217,24 +224,24 @@ onMounted(load);
   </Card>
 
   <!-- 角色编辑弹窗 -->
-  <Dialog v-model:visible="roleDialog" :header="`选择模型角色 — ${ROLE_LABELS[editingRole] || editingRole}`" width="480px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="saveRole">
+  <Dialog v-model:visible="roleDialog" :header="t('omp.roles.dialogTitle', { role: roleLabel(editingRole) })" width="480px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="saveRole">
     <div class="omp-edit-form">
       <div class="omp-form-item">
-        <label>角色</label>
+        <label>{{ t("omp.roles.role") }}</label>
         <div class="omp-edit-role-name"><code>{{ editingRole }}</code></div>
       </div>
       <div class="omp-form-item">
-        <label>供应商</label>
-        <Select v-model="roleForm.provider" :options="providers.map(p => ({ label: p.name, value: p.name }))" filterable placeholder="选择供应商" @change="onRoleProviderChange" />
+        <label>{{ t("omp.roles.provider") }}</label>
+        <Select v-model="roleForm.provider" :options="providers.map(p => ({ label: p.name, value: p.name }))" filterable :placeholder="t('omp.roles.providerPlaceholder')" @change="onRoleProviderChange" />
       </div>
       <div class="omp-form-item">
-        <label>模型</label>
-        <Select v-model="roleForm.modelId" :options="roleModelOptions" filterable placeholder="选择模型" />
+        <label>{{ t("omp.roles.model") }}</label>
+        <Select v-model="roleForm.modelId" :options="roleModelOptions" filterable :placeholder="t('omp.roles.modelPlaceholder')" />
       </div>
       <div class="omp-form-item">
-        <label>思考级别</label>
-        <Select v-model="roleForm.level" :options="roleLevelOptions" placeholder="默认（不指定）" />
-        <div class="omp-form-hint">级别范围由所选模型的 thinking 配置决定</div>
+        <label>{{ t("omp.roles.level") }}</label>
+        <Select v-model="roleForm.level" :options="roleLevelOptions" :placeholder="t('omp.roles.levelDefault')" />
+        <div class="omp-form-hint">{{ t("omp.roles.levelHint") }}</div>
       </div>
     </div>
   </Dialog>

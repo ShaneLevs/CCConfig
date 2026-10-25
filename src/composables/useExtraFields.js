@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
+import { t } from "../i18n";
 import { managedFields, envPresets } from "../constants";
 
 const SAVED_FIELD_KEYS_ID = "extra_field_keys";
@@ -129,7 +130,7 @@ export function useExtraFields(loadCurrentConfig, savedConfigs, isCurrentConfig)
     // 检查自定义字段重复 key
     const keys = mergedFields.map(f => f.key?.trim()).filter(Boolean);
     const duplicateKey = keys.find((k, i) => keys.indexOf(k) !== i);
-    if (duplicateKey) return MessagePlugin.warning(`env字段 key 重复: ${duplicateKey}`);
+    if (duplicateKey) return MessagePlugin.warning(t('common.duplicateEnvKey', { key: duplicateKey }));
 
     // 1. 构建全局 extras 并存 DB
     const globalExtras = {};
@@ -171,11 +172,11 @@ export function useExtraFields(loadCurrentConfig, savedConfigs, isCurrentConfig)
     window.utools.db.put(mergedKeysDoc);
 
     if (window.services.writeClaudeSettings(settings)) {
-      MessagePlugin.success("全局设置已保存");
+      MessagePlugin.success(t('common.globalSettingsSaved'));
       showExtraFieldsDialog.value = false;
       loadCurrentConfig();
     } else {
-      MessagePlugin.error("保存失败");
+      MessagePlugin.error(t('common.saveFailed'));
     }
   };
 

@@ -35,6 +35,7 @@ global.window = {
   },
 }
 
+process.env.CCCONFIG_LOCALE = process.env.CCCONFIG_LOCALE || 'zh-CN'
 const usageAsync = require('../public/preload/services/usage-async')
 
 let passed = 0

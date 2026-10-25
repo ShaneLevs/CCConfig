@@ -4,7 +4,10 @@
 // 页面由 index.vue 的 isTabVisited + v-show 保活（首次进入后不再重复拉取），
 // 点「刷新」时重新读库；db 被清理后从落库历史回放，历史不归零。
 // 重统计走后台线程（readZcodeUsageAsync），不阻塞渲染层。
+import { useI18n } from "vue-i18n";
 import UsagePage from "../shared/UsagePage.vue";
+
+const { t } = useI18n();
 
 const fetcher = () => window.services.readZcodeUsageAsync();
 
@@ -22,11 +25,11 @@ const dbPath = (() => {
 
 <template>
   <UsagePage
-    tip="ZCode 使用统计（读取本地用量数据库，输入含缓存）"
+    :tip="t('zcode.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"
-    empty-description="暂无使用数据，使用 ZCode 对话后会在此处显示"
-    :empty-hint="`未找到用量数据库：${dbPath}；产生用量后重新进入本页或点刷新即可统计`"
-    model-hint="模型名与 ZCode 设置页口径一致"
+    :empty-description="t('zcode.usage.empty')"
+    :empty-hint="t('zcode.usage.emptyHint', { path: dbPath })"
+    :model-hint="t('zcode.usage.modelHint')"
   />
 </template>

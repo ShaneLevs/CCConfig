@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { Checkbox } from "tdesign-vue-next";
 import { GripVertical } from "@lucide/vue";
 import { useAppContext } from "../composables/useAppContext";
@@ -6,6 +7,7 @@ import { useAgentVisibility } from "../composables/useAgentVisibility";
 
 // 设置弹窗里的「Agent 显示」区块：勾选显示/隐藏 + 拖拽排序。
 // 样式自带（settings-* 基础类与 index.vue 内各自 scoped 一份，互不影响）。
+const { t } = useI18n();
 const { activeApp } = useAppContext();
 const {
   agentOrder,
@@ -19,12 +21,8 @@ const {
 
 <template>
   <div class="settings-section">
-    <div class="settings-title">Agent 显示</div>
-    <div class="settings-desc">
-      勾选 = 显示：顶部切换器里出现该 agent 的入口，同时注册它的 uTools 启动指令；
-      取消勾选 = 隐藏：移出切换器，并移除该 agent 的 uTools 启动指令（功能指令 + 匹配指令一并移除）；
-      「通用」始终显示；隐藏当前正在使用的 agent 会自动回到「通用」；拖动可排序
-    </div>
+    <div class="settings-title">{{ t('agents.visibility.title') }}</div>
+    <div class="settings-desc">{{ t('agents.visibility.desc') }}</div>
     <div class="agent-visibility-list">
       <div
         v-for="(app, idx) in agentOrder"
@@ -43,7 +41,7 @@ const {
         </span>
         <img :src="AGENT_META[app].icon" class="agent-visibility-icon" alt="" />
         <span class="agent-visibility-name">{{ AGENT_META[app].name }}</span>
-        <span v-if="app === activeApp" class="agent-visibility-tag">当前</span>
+        <span v-if="app === activeApp" class="agent-visibility-tag">{{ t('agents.visibility.current') }}</span>
         <Checkbox
           v-model="visibleAgents[app]"
           class="agent-visibility-checkbox"

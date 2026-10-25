@@ -1,0 +1,166 @@
+{
+  "serviceAgent": {
+    "common": {
+      "listSeparator": "、",
+      "etcSuffix": " 等",
+      "emptyValue": "(空)",
+      "tomlParseFailed": "config.toml 解析失败，已阻止修改（请先修复 TOML 语法）: {message}",
+      "yamlParseFailed": "config.yaml 解析失败，已阻止修改（请先修复 YAML 语法）: {message}",
+      "providerNameRequired": "供应商名不能为空",
+      "providerNameInvalidChars": "供应商名只能包含字母、数字、下划线、中划线、点、冒号、斜杠",
+      "providerDisplayNameRequired": "供应商名称不能为空",
+      "providerExists": "供应商 {name} 已存在",
+      "providerNotFound": "供应商 {name} 不存在",
+      "providerExistsLabel": "Provider {name} 已存在",
+      "providerNotFoundLabel": "Provider {name} 不存在",
+      "providerNotFoundNoName": "供应商不存在",
+      "providerIdRequired": "Provider ID 不能为空",
+      "providerIdInvalidChars": "Provider ID 只能包含字母、数字、下划线、中划线",
+      "providerRequired": "供应商不能为空",
+      "selectProviderFirst": "请先选择供应商",
+      "selectProvider": "请选择供应商",
+      "selectModel": "请选择模型",
+      "modelIdRequired": "模型 ID 不能为空",
+      "modelIdInvalidChars": "模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠",
+      "modelExists": "模型 {id} 已存在",
+      "modelNotFound": "模型 {id} 不存在",
+      "modelAliasRequired": "模型别名不能为空",
+      "modelAliasInvalidChars": "模型别名只能包含字母、数字、下划线、中划线、点、冒号、斜杠",
+      "baseUrlInvalid": "Base URL 必须以 http:// 或 https:// 开头"
+    },
+    "kimi": {
+      "unsupportedProviderType": "不支持的供应商类型 {type}",
+      "managedByLoginEdit": "供应商 {name} 由 /login 托管（含 OAuth 凭据），不可编辑",
+      "managedByLoginLogout": "供应商 {name} 由 /login 托管（含 OAuth 凭据），请使用 kimi /logout 管理",
+      "providerInUseByAliases": "供应商 {name} 被模型别名引用（{aliases}），请先删除相关模型",
+      "fieldOnlyAnthropic": "{field} 仅 anthropic 供应商支持（当前 {providerType}）",
+      "fieldOnlyOpenai": "{field} 仅 openai 协议供应商支持（当前 {providerType}）",
+      "fieldArrayRequired": "{field} 需为数组",
+      "fieldUnsupportedValue": "{field} 含不支持的值 {value}（可选：{options}）",
+      "fieldEffortInvalid": "{field} 需为 low/medium/high/xhigh/max/none",
+      "fieldPositiveInt": "{field} 需为 ≥1 的整数",
+      "displayNameAscii": "显示名仅允许 ASCII 字符",
+      "aliasExists": "模型别名 {alias} 已存在",
+      "aliasNotFound": "模型别名 {alias} 不存在",
+      "fields": {
+        "displayName": "显示名",
+        "maxInputSize": "最大输入",
+        "maxOutputSize": "最大输出",
+        "capabilities": "能力标签",
+        "supportEfforts": "Thinking 档位",
+        "defaultEffort": "默认档位",
+        "offEffort": "关闭时档位",
+        "reasoningKey": "推理字段名",
+        "adaptiveThinking": "Adaptive Thinking"
+      }
+    },
+    "dsh": {
+      "patchParseFailed": "cordis.patch.yml 解析失败，已阻止修改（请先在 dsh 中修复 YAML 语法）: {message} [{path}]",
+      "patchNotArray": "cordis.patch.yml 顶层不是 YAML 数组，已阻止修改 [{path}]",
+      "credentialsParseFailed": ".credentials.yaml 解析失败，已阻止修改（请先在 dsh 中修复）: {message} [{path}]",
+      "credentialsNotMapping": "顶层不是 YAML 映射",
+      "credentialNameRequired": "凭据引用名不能为空",
+      "credentialEnvRequired": "凭据引用名（apiKeyEnv）不能为空",
+      "unsupportedProtocol": "不支持的协议 {api}（可选：{options}）",
+      "providerBaseUrlRequired": "供应商「{name}」必须配置 Base URL",
+      "routeExists": "供应商路由 {route} 已存在",
+      "modelsRequired": "第三方供应商至少需要一个模型（pi-ai 手写路由要求非空 models）",
+      "routeRequired": "供应商路由不能为空",
+      "providerModelsRequired": "供应商「{name}」至少需要一个模型",
+      "selectRoute": "请选择供应商路由",
+      "officialNotConfigured": "DeepSeek 官方路由尚未配置，无法设为默认",
+      "routeNotFoundForDefault": "供应商路由 {route} 不存在，无法设为默认",
+      "modelNotInCatalog": "模型 {model} 不在供应商 {provider} 的目录内",
+      "upsertProtocolUnsupported": "供应商「{name}」协议为 {api}，dsh 仅支持 {protocols}",
+      "upsertMissingBaseUrl": "供应商 {name} 缺少 Base URL",
+      "upsertMissingApi": "供应商 {name} 缺少协议（api）"
+    },
+    "minimax": {
+      "invalidProviderKey": "Provider 键 {key} 不合法（仅限字母/数字/下划线/中划线）",
+      "unsupportedApiFormat": "不支持的 API 格式 {api}（可选：{options}）",
+      "builtinManagedEdit": "内置供应商由 mcode login 托管，不可编辑",
+      "builtinManagedModels": "内置供应商不可增删改模型",
+      "providerIsDefault": "Provider {id} 是当前默认模型所属供应商，请先切换默认模型",
+      "modelIdInvalidForDispatch": "模型 ID {id} 含非法字符，无法下发到 MiniMax Code",
+      "invalidModelRef": "模型引用格式无效：{ref}",
+      "modelNotFoundForDefault": "模型 {model} 不存在，无法设为默认"
+    },
+    "codex": {
+      "providerIdRequired": "供应商 ID 不能为空",
+      "providerIdInvalidChars": "供应商 ID 只能包含字母、数字、下划线、中划线",
+      "providerInUse": "供应商 {id} 是当前使用的供应商，请先切换到其他模型",
+      "saveModelListFailed": "保存模型列表失败",
+      "saveModelListFailedReason": "保存模型列表失败：{message}",
+      "modelsParseFailed": "models.json 解析失败，已阻止修改（请先修复 JSON 语法）: {message}"
+    },
+    "qoder": {
+      "readFailed": "{path} 解析失败，已阻止修改与同步（请先修复 JSON 语法）: {message}",
+      "notJsonObject": "{path} 顶层不是 JSON 对象，已阻止修改与同步",
+      "unsupportedProtocol": "不支持的协议 {protocol}（可选：{options}）",
+      "providerIdInvalid": "Provider ID {id} 不合法",
+      "modelNotFoundForDefault": "模型 {model} 不存在，无法设为默认",
+      "modelIdInvalidForDispatch": "模型 ID {id} 含非法字符，无法下发到 Qoder"
+    },
+    "zcode": {
+      "readFailed": "{path} 解析失败，已阻止修改（请先在 ZCode 中修复 JSON 语法）: {message}",
+      "notJsonObject": "{path} 顶层不是 JSON 对象，已阻止修改",
+      "unsupportedApiType": "不支持的 API 协议 {apiType}（可选：{options}）",
+      "modelNotFoundForDefault": "模型 {model} 不存在，无法设为首选",
+      "noUsableNode": "未找到可用的 node（>= 22.5）子进程：常见安装位置与 PATH 均探测失败（无 node 或版本过低）"
+    },
+    "reasonix": {
+      "invalidEnvKey": "Key 环境变量名 {key} 不合法",
+      "providerInUseByDefault": "供应商 {name} 被 default_model（{reference}）引用，请先修改默认模型",
+      "invalidSecretKeyName": "密钥名 {key} 不合法"
+    },
+    "hermes": {
+      "unsupportedApiMode": "不支持的 API 模式 {mode}（可选：{options}）",
+      "managedDelete": "Provider {name} 由 Hermes Web UI 托管（providers 节），不可在此删除",
+      "managedDispatch": "Provider {name} 由 Hermes Web UI 托管（providers 节），无法下发",
+      "modelNotFoundForDefault": "模型 {model} 不存在，无法设为默认",
+      "providerHasNoModels": "Provider {providerName} 没有模型，请先添加模型",
+      "providerNameRequired": "Provider name 不能为空",
+      "configParseFailed": "config.yaml 解析失败，已阻止修改（请先在 Hermes 中修复 YAML 语法）: {message}"
+    },
+    "omp": {
+      "invalidModelRoles": "modelRoles 数据格式不正确",
+      "providerReferenced": "供应商 {name} 有模型被模型角色引用（{roles}），请先修改模型角色",
+      "modelReferenced": "模型 {model} 被模型角色引用（{roles}），请先修改模型角色"
+    },
+    "pi": {
+      "invalidResponse": "响应格式错误",
+      "fetchModelsFailed": "获取模型列表失败"
+    },
+    "piPackage": {
+      "packageEntryNotFound": "未找到包条目: {source}",
+      "extensionAlreadyEnabled": "该扩展已处于启用状态",
+      "extensionAlreadyDisabled": "该扩展已处于禁用状态",
+      "enabledNextStart": "已启用，Pi 下次启动生效",
+      "disabledNextStart": "已禁用，Pi 下次启动生效",
+      "unsupportedResourceType": "不支持的资源类型: {type}",
+      "resourcePathEmpty": "资源路径为空",
+      "resourceAlreadyEnabled": "该资源已处于启用状态",
+      "resourceDisabledWithPackage": "该资源已随整包禁用"
+    },
+    "autoroute": {
+      "saveConfigFailedWithMessage": "保存自动网关配置失败: {message}",
+      "saveConfigFailed": "保存自动网关配置失败",
+      "saveConfigFailedReason": "保存自动网关配置失败：{message}",
+      "invalidUpstreamUrl": "无效的上游地址: {url}",
+      "upstreamRequestFailed": "上游请求失败",
+      "invalidApiKey": "无效的 API Key（请在 CCConfig 自动网关页复制正确的 key）",
+      "unknownEndpoint": "未知端点: {method} {path}",
+      "invalidJsonBody": "请求体不是有效的 JSON",
+      "modelNotMapped": "模型 {model} 不在模型映射中，请到 CCConfig 通用配置 · 网关添加映射",
+      "modelNotEnabled": "模型 {model} 未在自动网关中启用，请到 CCConfig 通用配置勾选或用「供应商/模型ID」消歧",
+      "providerProtocolUnsupported": "供应商「{name}」的协议 {api} 暂不支持自动网关",
+      "providerBaseUrlInvalid": "供应商「{name}」的 baseUrl 无效",
+      "clientDisconnected": "客户端提前断开（上游已中止）",
+      "upstreamStreamInterrupted": "上游流中断",
+      "invalidUpstreamResponse": "上游返回了无法解析的响应",
+      "internalError": "网关内部错误: {message}",
+      "internalErrorShort": "网关内部错误",
+      "portInUse": "端口 {port} 已被占用，请更换端口"
+    }
+  }
+}

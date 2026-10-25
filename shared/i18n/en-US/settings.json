@@ -1,0 +1,17 @@
+{
+  "settings": {
+    "title": "Settings",
+    "tab": {
+      "general": "General",
+      "agents": "Agents",
+      "appearance": "Appearance"
+    },
+    "language": {
+      "title": "Language",
+      "desc": "Interface language. Follow system picks Simplified Chinese or English based on your system language.",
+      "system": "Follow system",
+      "zhCN": "简体中文",
+      "enUS": "English"
+    }
+  }
+}

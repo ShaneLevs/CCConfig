@@ -248,7 +248,7 @@ function copyText(text) {
 
 // 同步返回 string[] | null，对齐 common.js 对返回值的期望
 function showOpenDialog(options = {}) {
-  const title = String(options.title || "请选择文件").replace(/["\\]/g, "");
+  const title = String(options.title || "Select file").replace(/["\\]/g, "");
   const script = `set f to choose file with prompt "${title}"\nPOSIX path of f`;
   try {
     const out = execFileSync("osascript", ["-e", script], {

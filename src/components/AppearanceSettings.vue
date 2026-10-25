@@ -1,62 +1,54 @@
 <script setup>
-import { Switch } from "tdesign-vue-next";
-import { useDarkBackground } from "../composables/useDarkBackground";
+import { useI18n } from 'vue-i18n'
+import { Switch } from 'tdesign-vue-next'
+import { useAppearance } from '../composables/useAppearance'
 
-// 设置弹窗「背景特效」页签内容：深色模式动态背景开关 + 特效卡片选择。
-// useDarkBackground 为模块级单例，App.vue 持续渲染背景，这里只负责改配置。
-const { darkBackgroundEnabled, setDarkBackground, darkEffect, setDarkEffect } =
-  useDarkBackground();
+// 设置弹窗「外观」页签：深色背景特效（主题模式已移到「通用」）
+const { t } = useI18n()
+const { darkBackgroundEnabled, setDarkBackground, darkEffect, setDarkEffect } = useAppearance()
 </script>
 
 <template>
   <div>
     <div class="settings-row">
       <div class="settings-label">
-        <div class="settings-title">黑暗模式背景特效</div>
-        <div class="settings-desc">
-          深色模式下的动态背景特效，开启后会覆盖毛玻璃背景，并可能导致电脑卡顿
-        </div>
+        <div class="settings-title">{{ t('appearance.effects.title') }}</div>
+        <div class="settings-desc">{{ t('appearance.effects.desc') }}</div>
       </div>
-      <Switch
-        :model-value="darkBackgroundEnabled"
-        @change="setDarkBackground"
-      />
+      <Switch :model-value="darkBackgroundEnabled" @change="setDarkBackground" />
     </div>
-    <div
-      class="effect-cards"
-      :class="{ 'effect-cards--disabled': !darkBackgroundEnabled }"
-    >
+    <div class="effect-cards" :class="{ 'effect-cards--disabled': !darkBackgroundEnabled }">
       <div
         class="effect-card"
         :class="{ 'effect-card--active': darkEffect === 'prismatic' }"
         @click="darkBackgroundEnabled && setDarkEffect('prismatic')"
       >
-        <div class="effect-card__name">Prismatic Burst</div>
-        <div class="effect-card__desc">棱镜光谱爆裂</div>
+        <div class="effect-card__name">{{ t('appearance.effects.prismatic.name') }}</div>
+        <div class="effect-card__desc">{{ t('appearance.effects.prismatic.desc') }}</div>
       </div>
       <div
         class="effect-card"
         :class="{ 'effect-card--active': darkEffect === 'pixel' }"
         @click="darkBackgroundEnabled && setDarkEffect('pixel')"
       >
-        <div class="effect-card__name">FaultyTerminal</div>
-        <div class="effect-card__desc">故障像素终端</div>
+        <div class="effect-card__name">{{ t('appearance.effects.pixel.name') }}</div>
+        <div class="effect-card__desc">{{ t('appearance.effects.pixel.desc') }}</div>
       </div>
       <div
         class="effect-card"
         :class="{ 'effect-card--active': darkEffect === 'aurora' }"
         @click="darkBackgroundEnabled && setDarkEffect('aurora')"
       >
-        <div class="effect-card__name">Aurora</div>
-        <div class="effect-card__desc">流动极光</div>
+        <div class="effect-card__name">{{ t('appearance.effects.aurora.name') }}</div>
+        <div class="effect-card__desc">{{ t('appearance.effects.aurora.desc') }}</div>
       </div>
       <div
         class="effect-card"
         :class="{ 'effect-card--active': darkEffect === 'galaxy' }"
         @click="darkBackgroundEnabled && setDarkEffect('galaxy')"
       >
-        <div class="effect-card__name">Galaxy</div>
-        <div class="effect-card__desc">星河漫游</div>
+        <div class="effect-card__name">{{ t('appearance.effects.galaxy.name') }}</div>
+        <div class="effect-card__desc">{{ t('appearance.effects.galaxy.desc') }}</div>
       </div>
     </div>
   </div>

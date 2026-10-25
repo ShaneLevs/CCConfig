@@ -1,0 +1,31 @@
+{
+  "appearance": {
+    "theme": {
+      "title": "主题模式",
+      "desc": "跟随系统时使用系统外观；固定浅色或深色时，如果与系统外观不一致会使用纯色背景。",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "effects": {
+      "title": "深色模式背景特效",
+      "desc": "深色模式下的动态背景特效，开启后会覆盖毛玻璃背景，并可能导致电脑卡顿",
+      "prismatic": {
+        "name": "Prismatic Burst",
+        "desc": "棱镜光谱爆裂"
+      },
+      "pixel": {
+        "name": "FaultyTerminal",
+        "desc": "故障像素终端"
+      },
+      "aurora": {
+        "name": "Aurora",
+        "desc": "流动极光"
+      },
+      "galaxy": {
+        "name": "Galaxy",
+        "desc": "星河漫游"
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@
 // 配置项与 ZCode 客户端「自定义模型」编辑界面一致；星标 = 设为首选模型（providerOrder / modelOrder 置顶）。
 // 风格与 Qoder 配置页一致：供应商手风琴 + 模型标签。
 import { ref, computed, onMounted, nextTick, reactive } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Dialog, Input, MessagePlugin,
   Select, Popconfirm, Alert as TAlert, Tooltip, Link, AutoComplete,
@@ -16,12 +17,17 @@ import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import "./styles/ConfigView.css";
 
+const { t } = useI18n();
+
 // API 协议与认证类型，与服务层 ZCODE_API_TYPES / ZCODE_ACCESS_TYPES 一致
 const apiTypeOptions = [
-  { label: "anthropic-messages（Anthropic Messages）", value: "anthropic-messages" },
-  { label: "openai-chat-completions（OpenAI Chat）", value: "openai-chat-completions" },
-  { label: "openai-responses（OpenAI Responses）", value: "openai-responses" },
+  { labelKey: "zcode.config.apiType.anthropicMessages", value: "anthropic-messages" },
+  { labelKey: "zcode.config.apiType.openaiChat", value: "openai-chat-completions" },
+  { labelKey: "zcode.config.apiType.openaiResponses", value: "openai-responses" },
 ];
+const apiTypeSelectOptions = computed(() =>
+  apiTypeOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+);
 
 const loading = ref(false);
 const warningMsg = ref("");
@@ -51,7 +57,7 @@ const refresh = () => {
     defaultKey.value = window.services.getZcodeDefaultModel() || null;
   } catch (e) {
     console.error("加载 ZCode 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -84,11 +90,11 @@ const handleAddProvider = () => {
       baseUrl: addProviderForm.value.baseUrl.trim(),
       apiKey: addProviderForm.value.apiKey.trim(),
     });
-    MessagePlugin.success("供应商已添加");
+    MessagePlugin.success(t("zcode.provider.added"));
     addProviderDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("zcode.provider.addFailed", { message: e.message }));
   }
 };
 
@@ -116,21 +122,21 @@ const handleSaveProvider = () => {
     if (!editForm.value.apiKey && originalApiKey.value) payload.clearApiKey = true;
     else if (editForm.value.apiKey !== originalApiKey.value) payload.apiKey = editForm.value.apiKey.trim();
     window.services.updateZcodeProvider(editingProvider.value, payload);
-    MessagePlugin.success("供应商配置已更新");
+    MessagePlugin.success(t("zcode.provider.updated"));
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("zcode.provider.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (providerId) => {
   try {
     window.services.deleteZcodeProvider(providerId);
-    MessagePlugin.success(`供应商 ${providerId} 已删除`);
+    MessagePlugin.success(t("zcode.provider.deleted", { id: providerId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("zcode.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -140,10 +146,10 @@ const handleDeleteProvider = (providerId) => {
 const setDefaultModel = (p, m) => {
   try {
     window.services.setZcodeDefaultModel(p.id, m.modelId);
-    MessagePlugin.success(`首选模型已设为 ${m.modelId}`);
+    MessagePlugin.success(t("zcode.model.preferredSet", { model: m.modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("zcode.model.saveFailed", { message: e.message }));
   }
 };
 
@@ -200,7 +206,7 @@ const fetchModelError = ref("");
 const handleFetchModels = async () => {
   const p = providers.value.find((x) => x.id === addModelProvider.value);
   if (!p || !p.baseUrl) {
-    fetchModelError.value = "该供应商未配置 Base URL，无法自动获取";
+    fetchModelError.value = t("common.noBaseUrl");
     return;
   }
   fetchingModels.value = true;
@@ -208,9 +214,9 @@ const handleFetchModels = async () => {
   try {
     const list = await window.services.fetchProviderModels(p.baseUrl, p.apiKey);
     fetchedModels.value = list || [];
-    if (!fetchedModels.value.length) fetchModelError.value = "未获取到模型";
+    if (!fetchedModels.value.length) fetchModelError.value = t("zcode.config.noModels");
   } catch (e) {
-    fetchModelError.value = e.message || "获取失败";
+    fetchModelError.value = e.message || t("common.fetchFailed");
   } finally {
     fetchingModels.value = false;
   }
@@ -235,7 +241,7 @@ const handleAddModel = () => {
   try {
     commitPendingLevel(addLevels, addModelForm.value);
     const modelId = addModelForm.value.model.trim();
-    if (!modelId) { MessagePlugin.warning("请输入模型 ID"); return; }
+    if (!modelId) { MessagePlugin.warning(t("model.idRequired")); return; }
     window.services.addZcodeModel(addModelProvider.value, {
       modelId,
       enabled: addModelForm.value.enabled,
@@ -250,11 +256,11 @@ const handleAddModel = () => {
       midSystem: addModelForm.value.midSystem,
       reasoningLevels: addModelForm.value.reasoningLevels,
     });
-    MessagePlugin.success(`模型 ${modelId} 已添加`);
+    MessagePlugin.success(t("zcode.model.added", { modelId }));
     addModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("zcode.model.addFailed", { message: e.message }));
   }
 };
 
@@ -297,21 +303,21 @@ const handleSaveModel = () => {
       midSystem: editModelForm.value.midSystem,
       reasoningLevels: editModelForm.value.reasoningLevels,
     });
-    MessagePlugin.success("模型配置已更新");
+    MessagePlugin.success(t("zcode.model.updated"));
     editModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("zcode.model.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteModel = (providerId, modelId) => {
   try {
     window.services.deleteZcodeModel(providerId, modelId);
-    MessagePlugin.success(`模型 ${modelId} 已删除`);
+    MessagePlugin.success(t("zcode.model.deleted", { modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("zcode.model.deleteFailed", { message: e.message }));
   }
 };
 
@@ -325,14 +331,14 @@ onMounted(refresh);
       <div class="zcode-toolbar-left">
         <span class="zcode-toolbar-tip">
           <Link theme="primary" :underline="true" @click="openConfigFile">~/.zcode/v2/provider_config.json</Link>
-          <span class="zcode-toolbar-sub">自定义供应商与模型（ZCode 修改后即时生效，无需重启）</span>
+          <span class="zcode-toolbar-sub">{{ t("zcode.config.toolbarSubtitle") }}</span>
         </span>
       </div>
       <div class="zcode-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddProviderDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("zcode.config.addProvider") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -346,7 +352,7 @@ onMounted(refresh);
 
     <template v-if="!loading">
       <div v-if="providers.length === 0" class="zcode-config-empty">
-        <Empty description="未检测到 ZCode 自定义供应商；可在 ZCode 内添加，或在此手动添加" />
+        <Empty :description="t('zcode.config.emptyProviders')" />
       </div>
 
       <div v-else class="zcode-provider-list">
@@ -356,18 +362,18 @@ onMounted(refresh);
                 <div class="zcode-provider-header-left">
                   <span class="zcode-provider-name">{{ p.name || p.id }}</span>
                   <Tag size="small" variant="outline">{{ p.apiType }}</Tag>
-                  <Tag v-if="defaultKey && defaultKey.providerId === p.id" size="small" theme="warning" variant="light">首选供应商</Tag>
-                  <span class="zcode-model-count">{{ p.models.length }} 个模型</span>
+                  <Tag v-if="defaultKey && defaultKey.providerId === p.id" size="small" theme="warning" variant="light">{{ t("zcode.config.preferredProvider") }}</Tag>
+                  <span class="zcode-model-count">{{ t("zcode.config.modelCount", { count: p.models.length }, p.models.length) }}</span>
                 </div>
               </template>
               <template #headerRightContent>
                 <div class="zcode-provider-header-right" @click.stop>
                   <Button size="small" theme="default" variant="text" @click="handleEdit(p)">
-                    <template #icon><EditIcon /></template> 编辑
+                    <template #icon><EditIcon /></template> {{ t("common.edit") }}
                   </Button>
-                  <Tooltip content="删除供应商（其模型一并删除）">
+                  <Tooltip :content="t('zcode.config.deleteProviderTooltip')">
                     <Popconfirm
-                      content="删除该供应商？其模型配置将一并从 provider_config.json 移除"
+                      :content="t('zcode.config.deleteProviderConfirm')"
                       theme="danger"
                       @confirm="handleDeleteProvider(p.id)"
                     >
@@ -389,34 +395,34 @@ onMounted(refresh);
                     </div>
                     <div class="zcode-detail-item">
                       <span class="zcode-detail-label">API Key</span>
-                      <span class="zcode-detail-value mono">{{ p.apiKey ? "已配置" : "未配置" }}</span>
+                      <span class="zcode-detail-value mono">{{ p.apiKey ? t("zcode.config.configured") : t("zcode.config.unconfigured") }}</span>
                     </div>
                   </div>
 
                   <div class="zcode-models-section">
                     <div class="zcode-models-title">
-                      <span>模型（选择器顺序 = modelOrder）</span>
+                      <span>{{ t("zcode.config.modelsTitle") }}</span>
                       <Button size="small" variant="outline" @click="openAddModelDialog(p.id)">
-                        <template #icon><AddIcon /></template> 添加
+                        <template #icon><AddIcon /></template> {{ t("common.add") }}
                       </Button>
                     </div>
                     <div v-if="p.models.length === 0" class="zcode-models-empty">
-                      暂无自定义模型，点击「添加」创建
+                      {{ t("zcode.config.modelsEmpty") }}
                     </div>
                     <div class="zcode-model-tags">
                       <span v-for="m in p.models" :key="m.modelId" class="zcode-model-tag" :class="{ 'zcode-model-tag--disabled': !m.enabled }">
                         <span class="zcode-model-tag-name">{{ m.modelId }}</span>
                         <span v-if="m.contextWindow" class="zcode-model-tag-sub">{{ formatNumber(m.contextWindow) }}</span>
-                        <span v-if="m.reasoningLevels.length" class="zcode-model-tag-sub">思考×{{ m.reasoningLevels.length }}</span>
-                        <Tag v-if="!m.enabled" size="small" theme="default" variant="light">已停用</Tag>
-                        <Tag v-else-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">首选</Tag>
-                        <Tooltip v-else content="设为首选模型（providerOrder / modelOrder 置顶）" placement="top">
+                        <span v-if="m.reasoningLevels.length" class="zcode-model-tag-sub">{{ t("zcode.config.reasoningCount", { count: m.reasoningLevels.length }) }}</span>
+                        <Tag v-if="!m.enabled" size="small" theme="default" variant="light">{{ t("common.disabled") }}</Tag>
+                        <Tag v-else-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">{{ t("zcode.config.preferred") }}</Tag>
+                        <Tooltip v-else :content="t('zcode.config.setPreferredTooltip')" placement="top">
                           <span class="zcode-model-tag-star" @click="setDefaultModel(p, m)"><StarIcon size="12px" /></span>
                         </Tooltip>
-                        <Tooltip content="编辑模型配置" placement="top">
+                        <Tooltip :content="t('zcode.config.editModelTooltip')" placement="top">
                           <span class="zcode-model-tag-edit" @click="openEditModelDialog(p, m)"><EditIcon size="12px" /></span>
                         </Tooltip>
-                        <Popconfirm content="删除该模型？" theme="danger" @confirm="handleDeleteModel(p.id, m.modelId)">
+                        <Popconfirm :content="t('zcode.config.deleteModelConfirm')" theme="danger" @confirm="handleDeleteModel(p.id, m.modelId)">
                           <span class="zcode-model-tag-del"><DeleteIcon size="12px" /></span>
                         </Popconfirm>
                       </span>
@@ -430,16 +436,16 @@ onMounted(refresh);
     </template>
 
     <!-- 添加供应商弹窗 -->
-    <Dialog v-model:visible="addProviderDialog" header="添加供应商" width="520px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
+    <Dialog v-model:visible="addProviderDialog" :header="t('zcode.config.addTitle')" width="520px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddProvider">
       <div class="zcode-edit-form">
         <div class="zcode-form-item">
-          <label>供应商名称 <span class="zcode-form-required">*</span></label>
+          <label>{{ t("zcode.config.providerName") }} <span class="zcode-form-required">*</span></label>
           <Input v-model="addProviderForm.name" placeholder="tiansu" />
-          <div class="zcode-form-hint">Provider ID 按名称自动生成（小写字母/数字/中划线，与 ZCode 规则一致）</div>
+          <div class="zcode-form-hint">{{ t("zcode.config.providerIdHint") }}</div>
         </div>
         <div class="zcode-form-item">
-          <label>API 协议（api.type）</label>
-          <Select v-model="addProviderForm.apiType" :options="apiTypeOptions" />
+          <label>{{ t("zcode.config.apiTypeLabel") }}</label>
+          <Select v-model="addProviderForm.apiType" :options="apiTypeSelectOptions" />
         </div>
         <div class="zcode-form-item">
           <label>Base URL <span class="zcode-form-required">*</span></label>
@@ -447,21 +453,21 @@ onMounted(refresh);
         </div>
         <div class="zcode-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="明文写入 provider_config.json" />
+          <ApiKeyInput v-model="addProviderForm.apiKey" :placeholder="t('zcode.config.apiKeyPlainPlaceholder')" />
         </div>
       </div>
     </Dialog>
 
     <!-- 编辑供应商弹窗 -->
-    <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="520px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
+    <Dialog v-model:visible="editDialog" :header="t('zcode.config.editTitle')" width="520px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="zcode-edit-form">
         <div class="zcode-form-item">
-          <label>供应商名称</label>
+          <label>{{ t("zcode.config.providerName") }}</label>
           <Input v-model="editForm.name" />
         </div>
         <div class="zcode-form-item">
-          <label>API 协议（api.type）</label>
-          <Select v-model="editForm.apiType" :options="apiTypeOptions" />
+          <label>{{ t("zcode.config.apiTypeLabel") }}</label>
+          <Select v-model="editForm.apiType" :options="apiTypeSelectOptions" />
         </div>
         <div class="zcode-form-item">
           <label>Base URL</label>
@@ -469,16 +475,16 @@ onMounted(refresh);
         </div>
         <div class="zcode-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? '已保存，清空并保存将删除；修改则覆盖' : '留空不写入'" />
+          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? t('zcode.config.apiKeySavedPlaceholder') : t('zcode.config.apiKeyEmptyPlaceholder')" />
         </div>
       </div>
     </Dialog>
 
     <!-- 添加模型弹窗 -->
-    <Dialog v-model:visible="addModelDialog" header="添加模型" width="600px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddModel">
+    <Dialog v-model:visible="addModelDialog" :header="t('model.addTitle')" width="600px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddModel">
       <div class="zcode-edit-form">
         <div class="zcode-form-item">
-          <label>模型 ID <span class="zcode-form-required">*</span></label>
+          <label>{{ t("model.id") }} <span class="zcode-form-required">*</span></label>
           <!-- 只绑 @change：TDesign 的 @input 未声明为组件事件，$event 是原生 InputEvent（不是输入值） -->
           <AutoComplete
             :value="addModelForm.model"
@@ -489,42 +495,42 @@ onMounted(refresh);
             placeholder="glm-5.3-flash"
             @change="addModelForm.model = $event"
           />
-          <div v-if="fetchingModels" class="zcode-form-hint">正在从该供应商拉取模型列表…</div>
+          <div v-if="fetchingModels" class="zcode-form-hint">{{ t("zcode.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="zcode-form-hint zcode-fetch-error">
-            自动获取失败：{{ fetchModelError }}
-            <span class="zcode-fetch-retry" @click="handleFetchModels">重试</span>
+            {{ t("model.fetchFailed", { message: fetchModelError }) }}
+            <span class="zcode-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
-          <div v-else class="zcode-form-hint">从供应商 Base URL 的 /models 接口获取，也可手动输入</div>
+          <div v-else class="zcode-form-hint">{{ t("zcode.config.modelFetchHint") }}</div>
         </div>
         <div class="zcode-form-item zcode-form-inline">
-          <label>启用（enabled）</label>
+          <label>{{ t("zcode.config.enabledLabel") }}</label>
           <Switch v-model="addModelForm.enabled" />
         </div>
         <ModelLimitsFields
           v-model:context="addModelForm.contextWindow"
           v-model:output="addModelForm.maxOutputTokens"
           item-class="zcode-form-item"
-          output-label="最大输出 Token（optionSpecs.maxOutputTokens.max）"
+          :output-label="t('zcode.config.outputLabel')"
         />
         <div class="zcode-form-item">
-          <label>输入类型（inputFormat，文本默认支持）</label>
+          <label>{{ t("zcode.config.inputTypes") }}</label>
           <div class="zcode-chk-row">
-            <Checkbox v-model="addModelForm.image">图片</Checkbox>
-            <Checkbox v-model="addModelForm.video">视频</Checkbox>
-            <Checkbox v-model="addModelForm.audio">音频</Checkbox>
+            <Checkbox v-model="addModelForm.image">{{ t("zcode.config.image") }}</Checkbox>
+            <Checkbox v-model="addModelForm.video">{{ t("zcode.config.video") }}</Checkbox>
+            <Checkbox v-model="addModelForm.audio">{{ t("zcode.config.audio") }}</Checkbox>
             <Checkbox v-model="addModelForm.pdf">PDF</Checkbox>
           </div>
         </div>
         <div class="zcode-form-item">
-          <label>模型能力（properties）</label>
+          <label>{{ t("zcode.config.capabilities") }}</label>
           <div class="zcode-chk-row">
-            <Checkbox v-model="addModelForm.jsonSchema">结构化输出</Checkbox>
-            <Checkbox v-model="addModelForm.webSearch">原生联网搜索</Checkbox>
-            <Checkbox v-model="addModelForm.midSystem">对话中系统消息</Checkbox>
+            <Checkbox v-model="addModelForm.jsonSchema">{{ t("zcode.config.structuredOutput") }}</Checkbox>
+            <Checkbox v-model="addModelForm.webSearch">{{ t("zcode.config.webSearch") }}</Checkbox>
+            <Checkbox v-model="addModelForm.midSystem">{{ t("zcode.config.midSystem") }}</Checkbox>
           </div>
         </div>
         <div class="zcode-form-item">
-          <label>思考等级（从低到高，optionSpecs.reasoningLevel.values）</label>
+          <label>{{ t("zcode.config.reasoningLevels") }}</label>
           <div class="zcode-level-editor">
             <span v-for="(lv, idx) in addModelForm.reasoningLevels" :key="lv" class="zcode-level-tag">
               {{ lv }}
@@ -536,59 +542,59 @@ onMounted(refresh);
               v-model="addLevels.text"
               size="small"
               class="zcode-level-input"
-              placeholder="如 low"
+              :placeholder="t('zcode.config.reasoningPlaceholder')"
               @enter="commitLevel(addLevels, addModelForm)"
               @blur="commitLevel(addLevels, addModelForm)"
             />
-            <Tooltip v-else content="添加思考等级" placement="top">
+            <Tooltip v-else :content="t('zcode.config.addReasoningLevel')" placement="top">
               <Button size="small" variant="outline" @click="startLevelEdit(addLevels, addLevelInput)">
                 <template #icon><AddIcon /></template>
               </Button>
             </Tooltip>
           </div>
-          <div class="zcode-form-hint">点「+」输入，回车确认成标签；按从低到高的顺序依次添加，如 low → high → max</div>
+          <div class="zcode-form-hint">{{ t("zcode.config.reasoningHint") }}</div>
         </div>
-        <div class="zcode-form-hint">供应商：{{ providers.find((x) => x.id === addModelProvider)?.baseUrl || addModelProvider }}</div>
+        <div class="zcode-form-hint">{{ t("zcode.config.providerLabel", { provider: providers.find((x) => x.id === addModelProvider)?.baseUrl || addModelProvider }) }}</div>
       </div>
     </Dialog>
 
     <!-- 编辑模型弹窗 -->
-    <Dialog v-model:visible="editModelDialog" header="编辑模型" width="600px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveModel">
+    <Dialog v-model:visible="editModelDialog" :header="t('model.editTitle')" width="600px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveModel">
       <div class="zcode-edit-form">
         <div class="zcode-form-item">
-          <label>模型 ID <span class="zcode-form-required">*</span></label>
+          <label>{{ t("model.id") }} <span class="zcode-form-required">*</span></label>
           <Input v-model="editModelForm.model" />
-          <div class="zcode-form-hint">改 ID 后两个顺序表（personalModelIds / modelOrder）自动同步</div>
+          <div class="zcode-form-hint">{{ t("zcode.config.editModelIdHint") }}</div>
         </div>
         <div class="zcode-form-item zcode-form-inline">
-          <label>启用（enabled）</label>
+          <label>{{ t("zcode.config.enabledLabel") }}</label>
           <Switch v-model="editModelForm.enabled" />
         </div>
         <ModelLimitsFields
           v-model:context="editModelForm.contextWindow"
           v-model:output="editModelForm.maxOutputTokens"
           item-class="zcode-form-item"
-          output-label="最大输出 Token（optionSpecs.maxOutputTokens.max）"
+          :output-label="t('zcode.config.outputLabel')"
         />
         <div class="zcode-form-item">
-          <label>输入类型（inputFormat，文本默认支持）</label>
+          <label>{{ t("zcode.config.inputTypes") }}</label>
           <div class="zcode-chk-row">
-            <Checkbox v-model="editModelForm.image">图片</Checkbox>
-            <Checkbox v-model="editModelForm.video">视频</Checkbox>
-            <Checkbox v-model="editModelForm.audio">音频</Checkbox>
+            <Checkbox v-model="editModelForm.image">{{ t("zcode.config.image") }}</Checkbox>
+            <Checkbox v-model="editModelForm.video">{{ t("zcode.config.video") }}</Checkbox>
+            <Checkbox v-model="editModelForm.audio">{{ t("zcode.config.audio") }}</Checkbox>
             <Checkbox v-model="editModelForm.pdf">PDF</Checkbox>
           </div>
         </div>
         <div class="zcode-form-item">
-          <label>模型能力（properties）</label>
+          <label>{{ t("zcode.config.capabilities") }}</label>
           <div class="zcode-chk-row">
-            <Checkbox v-model="editModelForm.jsonSchema">结构化输出</Checkbox>
-            <Checkbox v-model="editModelForm.webSearch">原生联网搜索</Checkbox>
-            <Checkbox v-model="editModelForm.midSystem">对话中系统消息</Checkbox>
+            <Checkbox v-model="editModelForm.jsonSchema">{{ t("zcode.config.structuredOutput") }}</Checkbox>
+            <Checkbox v-model="editModelForm.webSearch">{{ t("zcode.config.webSearch") }}</Checkbox>
+            <Checkbox v-model="editModelForm.midSystem">{{ t("zcode.config.midSystem") }}</Checkbox>
           </div>
         </div>
         <div class="zcode-form-item">
-          <label>思考等级（从低到高，optionSpecs.reasoningLevel.values）</label>
+          <label>{{ t("zcode.config.reasoningLevels") }}</label>
           <div class="zcode-level-editor">
             <span v-for="(lv, idx) in editModelForm.reasoningLevels" :key="lv" class="zcode-level-tag">
               {{ lv }}
@@ -600,17 +606,17 @@ onMounted(refresh);
               v-model="editLevels.text"
               size="small"
               class="zcode-level-input"
-              placeholder="如 low"
+              :placeholder="t('zcode.config.reasoningPlaceholder')"
               @enter="commitLevel(editLevels, editModelForm)"
               @blur="commitLevel(editLevels, editModelForm)"
             />
-            <Tooltip v-else content="添加思考等级" placement="top">
+            <Tooltip v-else :content="t('zcode.config.addReasoningLevel')" placement="top">
               <Button size="small" variant="outline" @click="startLevelEdit(editLevels, editLevelInput)">
                 <template #icon><AddIcon /></template>
               </Button>
             </Tooltip>
           </div>
-          <div class="zcode-form-hint">点「+」输入，回车确认成标签；按从低到高的顺序依次添加，如 low → high → max</div>
+          <div class="zcode-form-hint">{{ t("zcode.config.reasoningHint") }}</div>
         </div>
       </div>
     </Dialog>

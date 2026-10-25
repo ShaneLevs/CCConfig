@@ -1,4 +1,12 @@
 // claude 插件页共享的元数据/工具函数（视图与弹窗组件共用）。
+import { t } from '../../../i18n';
+
+const scopeLabelKeys = {
+  user: 'claude.scope.user',
+  project: 'claude.scope.project',
+  local: 'claude.scope.local',
+  managed: 'claude.scope.managed',
+};
 
 // 插件组件类型徽标（顺序即展示顺序）
 export const componentBadges = [
@@ -22,8 +30,8 @@ export const hasAnyComponent = (components) => {
 };
 
 export const getScopeLabel = (scope) => {
-  const map = { user: "用户", project: "项目", local: "本地", managed: "托管" };
-  return map[scope] || scope || "用户";
+  const key = scopeLabelKeys[scope];
+  return key ? t(key) : scope || t('claude.scope.user');
 };
 
 export const getScopeTheme = (scope) => {

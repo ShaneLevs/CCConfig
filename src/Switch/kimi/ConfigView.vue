@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Dialog, Input, InputNumber, MessagePlugin,
   Select, Popconfirm, Alert as TAlert, Tooltip, Link, AutoComplete,
@@ -10,6 +11,8 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import "./styles/ConfigView.css";
+
+const { t } = useI18n();
 
 // services 未加载时的兜底枚举（渲染早于 preload 挂载时不报错）；与服务层 OPENAI_FAMILY 一致
 const OPENAI_FAMILY = ["openai", "openai_responses"];
@@ -31,23 +34,35 @@ const expandedList = ref([]);
 const capabilityOptions = CAPABILITY_VALUES.map(v => ({ label: v, value: v }));
 const effortOptions = EFFORT_VALUES.map(v => ({ label: v, value: v }));
 const triStateOptions = [
-  { label: "自动（按模型名推断）", value: "" },
-  { label: "强制开启", value: "true" },
-  { label: "强制关闭", value: "false" },
+  { labelKey: "kimi.config.triState.auto", value: "" },
+  { labelKey: "kimi.config.triState.on", value: "true" },
+  { labelKey: "kimi.config.triState.off", value: "false" },
 ];
+const triStateSelectOptions = computed(() =>
+  triStateOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+);
 // effort 下拉：含"未设置"空项与 off_effort 专用的 none 编码
-const effortSelectOptions = [{ label: "未设置", value: "" }, ...EFFORT_VALUES.map(v => ({ label: v, value: v }))];
-const offEffortSelectOptions = [...effortSelectOptions.slice(0, -1), { label: "none", value: "none" }];
+const effortSelectOptions = computed(() => [
+  { label: t("kimi.config.effortNotSet"), value: "" },
+  ...EFFORT_VALUES.map(v => ({ label: v, value: v })),
+]);
+const offEffortSelectOptions = computed(() => [
+  ...effortSelectOptions.value.slice(0, -1),
+  { label: "none", value: "none" },
+]);
 
 // 官方供应商协议类型（docs configuration/providers.html）
 const typeOptions = [
-  { label: "kimi（OpenAI 兼容）", value: "kimi" },
-  { label: "anthropic（Claude）", value: "anthropic" },
-  { label: "openai（Chat Completions）", value: "openai" },
-  { label: "openai_responses（Responses）", value: "openai_responses" },
-  { label: "google-genai（Gemini）", value: "google-genai" },
-  { label: "vertexai（Vertex AI）", value: "vertexai" },
+  { labelKey: "kimi.config.type.kimi", value: "kimi" },
+  { labelKey: "kimi.config.type.anthropic", value: "anthropic" },
+  { labelKey: "kimi.config.type.openai", value: "openai" },
+  { labelKey: "kimi.config.type.openaiResponses", value: "openai_responses" },
+  { labelKey: "kimi.config.type.googleGenai", value: "google-genai" },
+  { labelKey: "kimi.config.type.vertexai", value: "vertexai" },
 ];
+const typeSelectOptions = computed(() =>
+  typeOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+);
 
 // 每个供应商下的模型别名列表（models 表以 provider 字段外键关联）
 const modelsByProvider = computed(() => {
@@ -109,7 +124,7 @@ const refresh = () => {
     defaultModel.value = window.services.getKimiDefaultModel() || "";
   } catch (e) {
     console.error("加载 Kimi Code 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -144,18 +159,18 @@ const openAddProviderDialog = () => {
 const handleAddProvider = () => {
   try {
     const name = addProviderForm.value.name.trim();
-    if (!name) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!name) { MessagePlugin.warning(t("kimi.provider.nameRequired")); return; }
     window.services.addKimiProvider({
       name,
       type: addProviderForm.value.type,
       baseUrl: addProviderForm.value.baseUrl.trim(),
       apiKey: addProviderForm.value.apiKey,
     });
-    MessagePlugin.success(`供应商 ${name} 已添加`);
+    MessagePlugin.success(t("kimi.provider.added", { name }));
     addProviderDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("kimi.provider.addFailed", { message: e.message }));
   }
 };
 
@@ -174,7 +189,7 @@ const handleEdit = (provider) => {
 const handleSaveProvider = () => {
   try {
     const newName = String(editForm.value.name || "").trim();
-    if (!newName) { MessagePlugin.warning("请输入供应商名称"); return; }
+    if (!newName) { MessagePlugin.warning(t("kimi.provider.nameRequired")); return; }
     const payload = {
       name: newName,
       type: editForm.value.type,
@@ -184,21 +199,25 @@ const handleSaveProvider = () => {
     if (!editForm.value.apiKey && originalApiKey.value) payload.clearApiKey = true;
     else if (editForm.value.apiKey !== originalApiKey.value) payload.apiKey = editForm.value.apiKey;
     window.services.updateKimiProvider(editingProvider.value, payload);
-    MessagePlugin.success(newName !== editingProvider.value ? `已更新并重命名为 ${newName}` : "供应商配置已更新");
+    MessagePlugin.success(
+      newName !== editingProvider.value
+        ? t("kimi.provider.updatedRenamed", { name: newName })
+        : t("kimi.provider.updated")
+    );
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("kimi.provider.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (providerName) => {
   try {
     window.services.deleteKimiProvider(providerName);
-    MessagePlugin.success(`供应商 ${providerName} 已删除`);
+    MessagePlugin.success(t("kimi.provider.deleted", { name: providerName }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("kimi.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -208,10 +227,10 @@ const handleDeleteProvider = (providerName) => {
 const setDefaultModel = (alias) => {
   try {
     window.services.setKimiDefaultModel(alias);
-    MessagePlugin.success(`默认模型已设为 ${alias}`);
+    MessagePlugin.success(t("kimi.model.defaultSet", { alias }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("kimi.model.saveFailed", { message: e.message }));
   }
 };
 
@@ -220,7 +239,7 @@ const setDefaultModel = (alias) => {
 const handleFetchModels = async () => {
   const p = providers.value.find((x) => x.name === addModelProvider.value);
   if (!p || !p.baseUrl) {
-    fetchModelError.value = "该供应商未配置 Base URL，无法自动获取";
+    fetchModelError.value = t("common.noBaseUrl");
     return;
   }
   fetchingModels.value = true;
@@ -228,9 +247,9 @@ const handleFetchModels = async () => {
   try {
     const list = await window.services.fetchProviderModels(p.baseUrl, p.apiKey);
     fetchedModels.value = list || [];
-    if (!fetchedModels.value.length) fetchModelError.value = "未获取到模型";
+    if (!fetchedModels.value.length) fetchModelError.value = t("kimi.config.noModels");
   } catch (e) {
-    fetchModelError.value = e.message || "获取失败";
+    fetchModelError.value = e.message || t("common.fetchFailed");
   } finally {
     fetchingModels.value = false;
   }
@@ -292,18 +311,18 @@ const handleAddModel = () => {
   try {
     const alias = addModelForm.value.alias.trim()
       || (addModelForm.value.model.trim() ? `${addModelProvider.value}/${addModelForm.value.model.trim()}` : "");
-    if (!alias) { MessagePlugin.warning("请输入模型 ID 或别名"); return; }
-    if (!addModelForm.value.model.trim()) { MessagePlugin.warning("请输入模型 ID"); return; }
+    if (!alias) { MessagePlugin.warning(t("kimi.model.idOrAliasRequired")); return; }
+    if (!addModelForm.value.model.trim()) { MessagePlugin.warning(t("kimi.model.idRequired")); return; }
     window.services.addKimiModel({
       ...buildModelPayload(addModelForm.value, null),
       alias,
       provider: addModelProvider.value,
     });
-    MessagePlugin.success(`模型别名 ${alias} 已添加`);
+    MessagePlugin.success(t("kimi.model.added", { alias }));
     addModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("kimi.model.addFailed", { message: e.message }));
   }
 };
 
@@ -336,21 +355,21 @@ const openEditModelDialog = (m) => {
 const handleSaveModel = () => {
   try {
     window.services.updateKimiModel(editingModel.value, buildModelPayload(editModelForm.value, editModelInitial.value));
-    MessagePlugin.success("模型配置已更新");
+    MessagePlugin.success(t("kimi.model.updated"));
     editModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("kimi.model.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteModel = (alias) => {
   try {
     window.services.deleteKimiModel(alias);
-    MessagePlugin.success(`模型别名 ${alias} 已删除`);
+    MessagePlugin.success(t("kimi.model.deleted", { alias }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("kimi.model.deleteFailed", { message: e.message }));
   }
 };
 
@@ -364,14 +383,14 @@ onMounted(refresh);
       <div class="kimi-toolbar-left">
         <span class="kimi-toolbar-tip">
           <Link theme="primary" :underline="true" @click="openKimiDir">~/.kimi-code/</Link>
-          <span class="kimi-toolbar-sub">config.toml（providers + models + default_model）</span>
+          <span class="kimi-toolbar-sub">{{ t("kimi.config.toolbarSubtitle") }}</span>
         </span>
       </div>
       <div class="kimi-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddProviderDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("kimi.config.addProvider") }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -385,7 +404,7 @@ onMounted(refresh);
 
     <template v-if="!loading">
       <div v-if="providers.length === 0" class="kimi-config-empty">
-        <Empty description="未检测到 Kimi Code 供应商配置；托管账号请先运行 kimi /login，或在此手动添加供应商" />
+        <Empty :description="t('kimi.config.emptyProviders')" />
       </div>
 
       <div v-else class="kimi-provider-list">
@@ -395,20 +414,20 @@ onMounted(refresh);
               <div class="kimi-provider-header-left">
                 <span class="kimi-provider-name">{{ p.name }}</span>
                 <Tag size="small" variant="outline">{{ p.type }}</Tag>
-                <Tag v-if="p.managed" size="small" theme="primary" variant="light">/login 托管</Tag>
-                <Tag v-if="isDefaultProvider(p)" size="small" theme="warning" variant="light">含默认模型</Tag>
-                <span class="kimi-model-count">{{ providerModels(p.name).length }} 个模型</span>
+                <Tag v-if="p.managed" size="small" theme="primary" variant="light">{{ t("kimi.config.loginManaged") }}</Tag>
+                <Tag v-if="isDefaultProvider(p)" size="small" theme="warning" variant="light">{{ t("kimi.config.hasDefaultModel") }}</Tag>
+                <span class="kimi-model-count">{{ t("kimi.config.modelCount", { count: providerModels(p.name).length }) }}</span>
               </div>
             </template>
             <template #headerRightContent>
               <div class="kimi-provider-header-right" @click.stop>
                 <template v-if="!p.managed">
                   <Button size="small" theme="default" variant="text" @click="handleEdit(p)">
-                    <template #icon><EditIcon /></template> 编辑
+                    <template #icon><EditIcon /></template> {{ t("common.edit") }}
                   </Button>
-                  <Tooltip content="删除供应商（其模型别名需先删除）">
+                  <Tooltip :content="t('kimi.config.deleteProviderTooltip')">
                     <Popconfirm
-                      :content="`删除供应商 ${p.name}？api_key 将一并从 config.toml 移除`"
+                      :content="t('kimi.config.deleteProviderConfirm', { name: p.name })"
                       theme="danger"
                       @confirm="handleDeleteProvider(p.name)"
                     >
@@ -427,23 +446,23 @@ onMounted(refresh);
                 <div class="kimi-provider-details">
                   <div class="kimi-detail-item">
                     <span class="kimi-detail-label">Base URL</span>
-                    <span class="kimi-detail-value">{{ p.baseUrl || "—（使用协议默认）" }}</span>
+                    <span class="kimi-detail-value">{{ p.baseUrl || t("kimi.config.baseUrlDefault") }}</span>
                   </div>
                   <div class="kimi-detail-item">
                     <span class="kimi-detail-label">API Key</span>
-                    <span class="kimi-detail-value mono">{{ p.apiKey ? "已配置" : (p.managed ? "OAuth 托管" : "未配置") }}</span>
+                    <span class="kimi-detail-value mono">{{ p.apiKey ? t("kimi.config.configured") : (p.managed ? t("kimi.config.oauthManaged") : t("kimi.config.unconfigured")) }}</span>
                   </div>
                 </div>
 
                 <div class="kimi-models-section">
                   <div class="kimi-models-title">
-                    <span>模型别名（[models."&lt;别名&gt;"]）</span>
+                    <span>{{ t("kimi.config.modelsTitle") }}</span>
                     <Button v-if="!p.managed" size="small" variant="outline" @click="openAddModelDialog(p.name)">
-                      <template #icon><AddIcon /></template> 添加
+                      <template #icon><AddIcon /></template> {{ t("common.add") }}
                     </Button>
                   </div>
                   <div v-if="providerModels(p.name).length === 0" class="kimi-models-empty">
-                    暂无模型别名，default_model 需引用此处定义的别名
+                    {{ t("kimi.config.modelsEmpty") }}
                   </div>
                   <div class="kimi-model-tags">
                     <span v-for="m in providerModels(p.name)" :key="m.alias" class="kimi-model-tag">
@@ -451,14 +470,14 @@ onMounted(refresh);
                       <span v-if="m.displayName" class="kimi-model-tag-sub">{{ m.displayName }}</span>
                       <span v-if="m.model && m.model !== m.alias" class="kimi-model-tag-sub">{{ m.model }}</span>
                       <span v-if="m.maxContextSize" class="kimi-model-tag-sub">{{ formatNumber(m.maxContextSize) }}</span>
-                      <Tag v-if="defaultModel === m.alias" size="small" theme="success" variant="light">默认</Tag>
-                      <Tooltip v-else-if="!p.managed" content="设为默认模型（default_model）" placement="top">
+                      <Tag v-if="defaultModel === m.alias" size="small" theme="success" variant="light">{{ t("common.default") }}</Tag>
+                      <Tooltip v-else-if="!p.managed" :content="t('kimi.config.setDefaultTooltip')" placement="top">
                         <span class="kimi-model-tag-star" @click="setDefaultModel(m.alias)"><StarIcon size="12px" /></span>
                       </Tooltip>
-                      <Tooltip v-if="!p.managed" content="编辑别名 / 模型 ID / 上下文" placement="top">
+                      <Tooltip v-if="!p.managed" :content="t('kimi.config.editModelTooltip')" placement="top">
                         <span class="kimi-model-tag-edit" @click="openEditModelDialog(m)"><EditIcon size="12px" /></span>
                       </Tooltip>
-                      <Popconfirm v-if="!p.managed" content="删除该模型别名？" theme="danger" @confirm="handleDeleteModel(m.alias)">
+                      <Popconfirm v-if="!p.managed" :content="t('kimi.config.deleteModelConfirm')" theme="danger" @confirm="handleDeleteModel(m.alias)">
                         <span class="kimi-model-tag-del"><DeleteIcon size="12px" /></span>
                       </Popconfirm>
                     </span>
@@ -472,39 +491,39 @@ onMounted(refresh);
     </template>
 
     <!-- 添加供应商弹窗 -->
-    <Dialog v-model:visible="addProviderDialog" header="添加供应商" width="520px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddProvider">
+    <Dialog v-model:visible="addProviderDialog" :header="t('kimi.config.addProvider')" width="520px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddProvider">
       <div class="kimi-edit-form">
         <div class="kimi-form-item">
-          <label>名称 <span class="kimi-form-required">*</span></label>
-          <Input v-model="addProviderForm.name" placeholder="deepseek（作为 [providers.<名称>] 表键）" />
+          <label>{{ t("common.name") }} <span class="kimi-form-required">*</span></label>
+          <Input v-model="addProviderForm.name" :placeholder="t('kimi.config.namePlaceholder')" />
         </div>
         <div class="kimi-form-item">
-          <label>协议类型 type</label>
-          <Select v-model="addProviderForm.type" :options="typeOptions" />
+          <label>{{ t("kimi.config.typeLabel") }}</label>
+          <Select v-model="addProviderForm.type" :options="typeSelectOptions" />
         </div>
         <div class="kimi-form-item">
           <label>Base URL</label>
-          <Input v-model="addProviderForm.baseUrl" placeholder="https://api.deepseek.com/v1（留空用协议默认）" />
+          <Input v-model="addProviderForm.baseUrl" :placeholder="t('kimi.config.baseUrlPlaceholder')" />
         </div>
         <div class="kimi-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="明文写入 config.toml api_key 字段" />
+          <ApiKeyInput v-model="addProviderForm.apiKey" :placeholder="t('kimi.config.apiKeyPlaceholder')" />
         </div>
-        <div class="kimi-form-hint">Kimi Code 不从 shell 环境变量取凭证，密钥必须显式写入配置文件</div>
+        <div class="kimi-form-hint">{{ t("kimi.config.apiKeyHint") }}</div>
       </div>
     </Dialog>
 
     <!-- 编辑供应商弹窗 -->
-    <Dialog v-model:visible="editDialog" header="编辑供应商配置" width="520px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveProvider">
+    <Dialog v-model:visible="editDialog" :header="t('kimi.config.editTitle')" width="520px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveProvider">
       <div class="kimi-edit-form">
         <div class="kimi-form-item">
-          <label>名称 <span class="kimi-form-required">*</span></label>
+          <label>{{ t("common.name") }} <span class="kimi-form-required">*</span></label>
           <Input v-model="editForm.name" placeholder="deepseek" />
-          <div class="kimi-form-hint">改名后引用该供应商的模型别名自动同步</div>
+          <div class="kimi-form-hint">{{ t("kimi.config.nameRenameHint") }}</div>
         </div>
         <div class="kimi-form-item">
-          <label>协议类型 type</label>
-          <Select v-model="editForm.type" :options="typeOptions" />
+          <label>{{ t("kimi.config.typeLabel") }}</label>
+          <Select v-model="editForm.type" :options="typeSelectOptions" />
         </div>
         <div class="kimi-form-item">
           <label>Base URL</label>
@@ -512,16 +531,16 @@ onMounted(refresh);
         </div>
         <div class="kimi-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? '已保存，清空并保存将删除；修改则覆盖' : '留空不写入'" />
+          <ApiKeyInput v-model="editForm.apiKey" :placeholder="originalApiKey ? t('kimi.config.apiKeySavedPlaceholder') : t('kimi.config.apiKeyEmptyPlaceholder')" />
         </div>
       </div>
     </Dialog>
 
     <!-- 添加模型弹窗 -->
-    <Dialog v-model:visible="addModelDialog" header="添加模型别名" width="620px" :confirm-btn="{ content: '添加', theme: 'primary' }" @confirm="handleAddModel">
+    <Dialog v-model:visible="addModelDialog" :header="t('kimi.config.addModelTitle')" width="620px" :confirm-btn="{ content: t('common.add'), theme: 'primary' }" @confirm="handleAddModel">
       <div class="kimi-edit-form">
         <div class="kimi-form-item">
-          <label>模型 ID <span class="kimi-form-required">*</span></label>
+          <label>{{ t("kimi.config.modelIdLabel") }} <span class="kimi-form-required">*</span></label>
           <!-- 只绑 @change：TDesign 的 @input 未声明为组件事件，$event 是原生 InputEvent（不是输入值） -->
           <AutoComplete
             :value="addModelForm.model"
@@ -532,120 +551,120 @@ onMounted(refresh);
             placeholder="deepseek-chat"
             @change="onModelIdInput"
           />
-          <div v-if="fetchingModels" class="kimi-form-hint">正在从该供应商拉取模型列表…</div>
+          <div v-if="fetchingModels" class="kimi-form-hint">{{ t("kimi.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="kimi-form-hint kimi-fetch-error">
-            自动获取失败：{{ fetchModelError }}
-            <span class="kimi-fetch-retry" @click="handleFetchModels">重试</span>
+            {{ t("model.fetchFailed", { message: fetchModelError }) }}
+            <span class="kimi-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
-          <div v-else class="kimi-form-hint">从供应商 Base URL 的 /models 接口获取，也可手动输入</div>
+          <div v-else class="kimi-form-hint">{{ t("kimi.config.fetchHint") }}</div>
         </div>
         <div class="kimi-form-item">
-          <label>别名（default_model 引用它）</label>
-          <Input v-model="addModelForm.alias" @change="aliasTouched = true" placeholder="留空自动用 供应商/模型ID" />
+          <label>{{ t("kimi.config.aliasLabel") }}</label>
+          <Input v-model="addModelForm.alias" @change="aliasTouched = true" :placeholder="t('kimi.config.aliasPlaceholder')" />
         </div>
         <div class="kimi-form-item">
-          <label>最大上下文（max_context_size）</label>
+          <label>{{ t("kimi.config.maxContextLabel") }}</label>
           <InputNumber v-model="addModelForm.maxContextSize" :min="1" :step="1000" />
         </div>
         <div class="kimi-form-item">
-          <label>显示名（display_name）</label>
-          <Input v-model="addModelForm.displayName" placeholder="DeepSeek V3（仅 ASCII，留空不写入）" />
+          <label>{{ t("kimi.config.displayNameLabel") }}</label>
+          <Input v-model="addModelForm.displayName" :placeholder="t('kimi.config.displayNamePlaceholder')" />
         </div>
         <Collapse v-model="addModelForm.advancedOpen" class="kimi-advanced-collapse">
-          <CollapsePanel header="高级选项" value="adv">
+          <CollapsePanel :header="t('kimi.config.advanced')" value="adv">
             <div class="kimi-edit-form kimi-advanced-grid">
               <div class="kimi-form-item">
-                <label>输入上限（max_input_size）</label>
-                <InputNumber v-model="addModelForm.maxInputSize" :min="0" :step="1000" placeholder="0=不写" />
+                <label>{{ t("kimi.config.maxInputLabel") }}</label>
+                <InputNumber v-model="addModelForm.maxInputSize" :min="0" :step="1000" :placeholder="t('kimi.config.zeroNotWrittenPlaceholder')" />
               </div>
               <div v-if="addProviderType === 'anthropic'" class="kimi-form-item">
-                <label>输出上限（max_output_size）</label>
-                <InputNumber v-model="addModelForm.maxOutputSize" :min="0" :step="1024" placeholder="仅 anthropic" />
+                <label>{{ t("kimi.config.maxOutputLabel") }}</label>
+                <InputNumber v-model="addModelForm.maxOutputSize" :min="0" :step="1024" :placeholder="t('kimi.config.anthropicOnlyPlaceholder')" />
               </div>
               <div v-if="addProviderType === 'anthropic'" class="kimi-form-item">
                 <label>Adaptive Thinking</label>
-                <Select v-model="addModelForm.adaptiveThinking" :options="triStateOptions" />
+                <Select v-model="addModelForm.adaptiveThinking" :options="triStateSelectOptions" />
               </div>
               <div v-if="OPENAI_FAMILY.includes(addProviderType)" class="kimi-form-item">
-                <label>推理字段名（reasoning_key）</label>
-                <Input v-model="addModelForm.reasoningKey" placeholder="默认自动识别" />
+                <label>{{ t("kimi.config.reasoningKeyLabel") }}</label>
+                <Input v-model="addModelForm.reasoningKey" :placeholder="t('kimi.config.reasoningKeyPlaceholder')" />
               </div>
               <div class="kimi-form-item kimi-form-item-wide">
-                <label>能力标签（capabilities，追加）</label>
-                <Select v-model="addModelForm.capabilities" multiple :options="capabilityOptions" placeholder="通常按模型名自动匹配，无需声明" />
+                <label>{{ t("kimi.config.capabilitiesLabel") }}</label>
+                <Select v-model="addModelForm.capabilities" multiple :options="capabilityOptions" :placeholder="t('kimi.config.capabilitiesPlaceholder')" />
               </div>
               <div class="kimi-form-item">
-                <label>Thinking 档位（support_efforts）</label>
+                <label>{{ t("kimi.config.supportEffortsLabel") }}</label>
                 <Select v-model="addModelForm.supportEfforts" multiple :options="effortOptions" />
               </div>
               <div class="kimi-form-item">
-                <label>默认档位（default_effort）</label>
+                <label>{{ t("kimi.config.defaultEffortLabel") }}</label>
                 <Select v-model="addModelForm.defaultEffort" clearable :options="effortSelectOptions" />
               </div>
               <div class="kimi-form-item">
-                <label>关闭时档位（off_effort）</label>
+                <label>{{ t("kimi.config.offEffortLabel") }}</label>
                 <Select v-model="addModelForm.offEffort" clearable :options="offEffortSelectOptions" />
               </div>
             </div>
           </CollapsePanel>
         </Collapse>
-        <div class="kimi-form-hint">供应商：{{ addModelProvider }}</div>
+        <div class="kimi-form-hint">{{ t("kimi.config.providerLabel", { name: addModelProvider }) }}</div>
       </div>
     </Dialog>
 
     <!-- 编辑模型弹窗 -->
-    <Dialog v-model:visible="editModelDialog" header="编辑模型别名" width="620px" :confirm-btn="{ content: '保存', theme: 'primary' }" @confirm="handleSaveModel">
+    <Dialog v-model:visible="editModelDialog" :header="t('kimi.config.editModelTitle')" width="620px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveModel">
       <div class="kimi-edit-form">
         <div class="kimi-form-item">
-          <label>别名 <span class="kimi-form-required">*</span></label>
+          <label>{{ t("kimi.config.aliasEditLabel") }} <span class="kimi-form-required">*</span></label>
           <Input v-model="editModelForm.alias" />
-          <div class="kimi-form-hint">改别名后 default_model 若指向它会同步</div>
+          <div class="kimi-form-hint">{{ t("kimi.config.aliasEditHint") }}</div>
         </div>
         <div class="kimi-form-item">
-          <label>模型 ID <span class="kimi-form-required">*</span></label>
+          <label>{{ t("kimi.config.modelIdLabel") }} <span class="kimi-form-required">*</span></label>
           <Input v-model="editModelForm.model" />
         </div>
         <div class="kimi-form-item">
-          <label>最大上下文（max_context_size）</label>
+          <label>{{ t("kimi.config.maxContextLabel") }}</label>
           <InputNumber v-model="editModelForm.maxContextSize" :min="1" :step="1000" />
         </div>
         <div class="kimi-form-item">
-          <label>显示名（display_name）</label>
-          <Input v-model="editModelForm.displayName" placeholder="留空 = 清除并回退到模型 ID" />
+          <label>{{ t("kimi.config.displayNameLabel") }}</label>
+          <Input v-model="editModelForm.displayName" :placeholder="t('kimi.config.displayNameEditPlaceholder')" />
         </div>
         <Collapse v-model="editModelForm.advancedOpen" class="kimi-advanced-collapse">
-          <CollapsePanel header="高级选项" value="adv">
+          <CollapsePanel :header="t('kimi.config.advanced')" value="adv">
             <div class="kimi-edit-form kimi-advanced-grid">
               <div class="kimi-form-item">
-                <label>输入上限（max_input_size）</label>
-                <InputNumber v-model="editModelForm.maxInputSize" :min="0" :step="1000" placeholder="0=清除" />
+                <label>{{ t("kimi.config.maxInputLabel") }}</label>
+                <InputNumber v-model="editModelForm.maxInputSize" :min="0" :step="1000" :placeholder="t('kimi.config.zeroClearPlaceholder')" />
               </div>
               <div v-if="editProviderType === 'anthropic'" class="kimi-form-item">
-                <label>输出上限（max_output_size）</label>
-                <InputNumber v-model="editModelForm.maxOutputSize" :min="0" :step="1024" placeholder="0=清除" />
+                <label>{{ t("kimi.config.maxOutputLabel") }}</label>
+                <InputNumber v-model="editModelForm.maxOutputSize" :min="0" :step="1024" :placeholder="t('kimi.config.zeroClearPlaceholder')" />
               </div>
               <div v-if="editProviderType === 'anthropic'" class="kimi-form-item">
                 <label>Adaptive Thinking</label>
-                <Select v-model="editModelForm.adaptiveThinking" :options="triStateOptions" />
+                <Select v-model="editModelForm.adaptiveThinking" :options="triStateSelectOptions" />
               </div>
               <div v-if="OPENAI_FAMILY.includes(editProviderType)" class="kimi-form-item">
-                <label>推理字段名（reasoning_key）</label>
-                <Input v-model="editModelForm.reasoningKey" placeholder="留空 = 恢复自动识别" />
+                <label>{{ t("kimi.config.reasoningKeyLabel") }}</label>
+                <Input v-model="editModelForm.reasoningKey" :placeholder="t('kimi.config.reasoningKeyEditPlaceholder')" />
               </div>
               <div class="kimi-form-item kimi-form-item-wide">
-                <label>能力标签（capabilities，追加）</label>
-                <Select v-model="editModelForm.capabilities" multiple :options="capabilityOptions" placeholder="清空 = 移除显式声明" />
+                <label>{{ t("kimi.config.capabilitiesLabel") }}</label>
+                <Select v-model="editModelForm.capabilities" multiple :options="capabilityOptions" :placeholder="t('kimi.config.capabilitiesEditPlaceholder')" />
               </div>
               <div class="kimi-form-item">
-                <label>Thinking 档位（support_efforts）</label>
+                <label>{{ t("kimi.config.supportEffortsLabel") }}</label>
                 <Select v-model="editModelForm.supportEfforts" multiple :options="effortOptions" />
               </div>
               <div class="kimi-form-item">
-                <label>默认档位（default_effort）</label>
+                <label>{{ t("kimi.config.defaultEffortLabel") }}</label>
                 <Select v-model="editModelForm.defaultEffort" clearable :options="effortSelectOptions" />
               </div>
               <div class="kimi-form-item">
-                <label>关闭时档位（off_effort）</label>
+                <label>{{ t("kimi.config.offEffortLabel") }}</label>
                 <Select v-model="editModelForm.offEffort" clearable :options="offEffortSelectOptions" />
               </div>
             </div>

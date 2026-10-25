@@ -1,6 +1,7 @@
 <script setup>
 
 import { ref, onMounted, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Dialog, Button, MessagePlugin, Switch, Popconfirm, Space, Tag, Tooltip,
 } from "tdesign-vue-next";
@@ -8,6 +9,8 @@ import { DownloadIcon, DeleteIcon, RefreshIcon, FolderOpen1Icon } from "tdesign-
 import SkillInstallDialog from "../../components/SkillInstallDialog.vue";
 import SkillCard from "../../components/SkillCard.vue";
 import "./styles/SkillView.css";
+
+const { t } = useI18n();
 
 // 通用 Skill：读取 ~/.agents/skills 目录下的 Skill（SKILL.md 元数据），
 // 支持从 SkillHub / 魔搭社区 通过链接安装（功能同 Claude Code，仅安装目录不同）。
@@ -101,20 +104,20 @@ const openDetail = (skill) => {
 const toggleSkill = (skill, enabled) => {
   const result = window.services.setCommonSkillEnabled(skill.dirName, enabled);
   if (result.success) {
-    MessagePlugin.success(enabled ? `已启用 "${skill.name}"` : `已禁用 "${skill.name}"`);
+    MessagePlugin.success(enabled ? t('commonApp.skill.enabledToast', { name: skill.name }) : t('commonApp.skill.disabledToast', { name: skill.name }));
     skill.enabled = enabled;
   } else {
-    MessagePlugin.error(result.error || (enabled ? "启用失败" : "禁用失败"));
+    MessagePlugin.error(result.error || (enabled ? t('commonApp.skill.enableFailed') : t('commonApp.skill.disableFailed')));
   }
 };
 
 const deleteSkill = (skill) => {
   const result = window.services.deleteCommonSkill(skill.dirName);
   if (result.success) {
-    MessagePlugin.success(`已删除 "${skill.name}"`);
+    MessagePlugin.success(t('commonApp.skill.deletedToast', { name: skill.name }));
     loadSkills();
   } else {
-    MessagePlugin.error(result.error || "删除失败");
+    MessagePlugin.error(result.error || t('common.deleteFailed'));
   }
 };
 
@@ -122,7 +125,7 @@ const openSkillDir = (skill) => {
   try {
     window.utools.shellOpenPath(skill.dir);
   } catch {
-    MessagePlugin.error("无法打开 Skill 文件夹");
+    MessagePlugin.error(t('commonApp.skill.openFolderFailed'));
   }
 };
 
@@ -130,7 +133,7 @@ const openCommonSkillsDir = () => {
   try {
     window.services.openCommonSkillsDir();
   } catch {
-    MessagePlugin.error("无法打开 Skill 目录");
+    MessagePlugin.error(t('commonApp.skill.openDirFailed'));
   }
 };
 
@@ -143,13 +146,13 @@ onMounted(loadSkills);
 <template>
   <div class="skill-container">
     <div class="section-header">
-      <span class="skill-tip">展示 <span class="hint-link" @click="openCommonSkillsDir">~/.agents/skills</span> 下的 Skill（跨 Agent 共享，禁用后移动到 .disabled 文件夹，同 Claude Code）</span>
+      <span class="skill-tip">{{ t('commonApp.skill.tipPrefix') }}<span class="hint-link" @click="openCommonSkillsDir">~/.agents/skills</span>{{ t('commonApp.skill.tipSuffix') }}</span>
       <Space size="small">
         <Button size="small" theme="primary" @click="installDialogRef?.open()">
-          <template #icon><DownloadIcon /></template> 安装 Skill
+          <template #icon><DownloadIcon /></template> {{ t('skill.install.title') }}
         </Button>
 
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
 
           <Button size="small" variant="outline" :loading="loading" @click="loadSkills">
           <template #icon><RefreshIcon /></template>
@@ -160,10 +163,10 @@ onMounted(loadSkills);
     </div>
 
     <div v-if="!skills.length" class="empty-state">
-      <Empty description="~/.agents/skills 下还没有 Skill">
+      <Empty :description="t('commonApp.skill.empty', { path: '~/.agents/skills' })">
         <template #action>
           <Button size="small" theme="primary" @click="openCommonSkillsDir">
-            <template #icon><FolderOpen1Icon /></template> 创建并打开目录
+            <template #icon><FolderOpen1Icon /></template> {{ t('commonApp.skill.createAndOpen') }}
           </Button>
         </template>
       </Empty>
@@ -178,31 +181,31 @@ onMounted(loadSkills);
         @detail="openDetail(skill)"
       >
         <template #header-extra>
-          <Tag size="small" variant="light" theme="success">已启用</Tag>
+          <Tag size="small" variant="light" theme="success">{{ t('common.enabled') }}</Tag>
         </template>
         <template #actions>
           <Space size="small">
             <Switch :value="true" @change="(val) => toggleSkill(skill, val)" />
-            <Tooltip content="打开 Skill 文件夹" placement="top">
+            <Tooltip :content="t('commonApp.skill.openFolder')" placement="top">
               <Button size="small" theme="default" variant="text" @click.stop="openSkillDir(skill)"><FolderOpen1Icon /></Button>
             </Tooltip>
-            <Popconfirm theme="danger" content="删除后不可恢复，确认删除？" @confirm="deleteSkill(skill)">
-              <Tooltip content="删除" placement="top">
+            <Popconfirm theme="danger" :content="t('commonApp.skill.deleteConfirm')" @confirm="deleteSkill(skill)">
+              <Tooltip :content="t('common.delete')" placement="top">
                 <Button size="small" theme="danger" variant="text"><DeleteIcon /></Button>
               </Tooltip>
             </Popconfirm>
           </Space>
         </template>
-        <template #description>{{ parseFrontmatter(skill.frontmatter).description || '暂无描述' }}</template>
+        <template #description>{{ parseFrontmatter(skill.frontmatter).description || t('skill.noDescription') }}</template>
         <template #meta>
-          <Tag size="small" variant="light" theme="primary">{{ skill.fileCount }} 个文件</Tag>
+          <Tag size="small" variant="light" theme="primary">{{ t('commonApp.skill.fileCount', { count: skill.fileCount }) }}</Tag>
           <span class="skill-dir-name">~/.agents/skills/{{ skill.dirName }}</span>
         </template>
       </SkillCard>
 
       <!-- 已禁用分组 -->      <template v-if="disabledSkills.length > 0">
         <div class="skill-section-divider">
-          <span class="skill-section-label">已禁用 ({{ disabledSkills.length }})</span>
+          <span class="skill-section-label">{{ t('commonApp.skill.disabledGroup', { count: disabledSkills.length }) }}</span>
         </div>
         <SkillCard
           v-for="skill in disabledSkills"
@@ -212,24 +215,24 @@ onMounted(loadSkills);
           @detail="openDetail(skill)"
         >
           <template #header-extra>
-            <Tag size="small" variant="light" theme="default">已禁用</Tag>
+            <Tag size="small" variant="light" theme="default">{{ t('common.disabled') }}</Tag>
           </template>
           <template #actions>
             <Space size="small">
               <Switch :value="false" @change="(val) => toggleSkill(skill, val)" />
-              <Tooltip content="打开 Skill 文件夹" placement="top">
+              <Tooltip :content="t('commonApp.skill.openFolder')" placement="top">
                 <Button size="small" theme="default" variant="text" @click.stop="openSkillDir(skill)"><FolderOpen1Icon /></Button>
               </Tooltip>
-              <Popconfirm theme="danger" content="删除后不可恢复，确认删除？" @confirm="deleteSkill(skill)">
-                <Tooltip content="删除" placement="top">
+              <Popconfirm theme="danger" :content="t('commonApp.skill.deleteConfirm')" @confirm="deleteSkill(skill)">
+                <Tooltip :content="t('common.delete')" placement="top">
                   <Button size="small" theme="danger" variant="text"><DeleteIcon /></Button>
                 </Tooltip>
               </Popconfirm>
             </Space>
           </template>
-          <template #description>{{ parseFrontmatter(skill.frontmatter).description || '暂无描述' }}</template>
+          <template #description>{{ parseFrontmatter(skill.frontmatter).description || t('skill.noDescription') }}</template>
           <template #meta>
-            <Tag size="small" variant="light" theme="primary">{{ skill.fileCount }} 个文件</Tag>
+            <Tag size="small" variant="light" theme="primary">{{ t('commonApp.skill.fileCount', { count: skill.fileCount }) }}</Tag>
             <span class="skill-dir-name">~/.agents/skills/.disabled/{{ skill.dirName }}</span>
           </template>
         </SkillCard>
@@ -240,28 +243,28 @@ onMounted(loadSkills);
     <Dialog v-model:visible="showDetailDialog" width="600px" :footer="false">
       <template #header>
         <div class="detail-dialog-header">
-          <span>{{ selectedSkill?.name || 'Skill 详情' }}</span>
-          <Tooltip content="打开 Skill 文件夹" placement="top">
+          <span>{{ selectedSkill?.name || t('commonApp.skill.detailTitle') }}</span>
+          <Tooltip :content="t('commonApp.skill.openFolder')" placement="top">
             <Button size="small" variant="outline" @click="openSkillDir(selectedSkill)">
-              <template #icon><FolderOpen1Icon style="font-size: 14px" /></template> 文件夹
+              <template #icon><FolderOpen1Icon style="font-size: 14px" /></template> {{ t('commonApp.skill.folder') }}
             </Button>
           </Tooltip>
         </div>
       </template>
       <div v-if="selectedSkill" class="skill-detail">
         <div class="detail-info-grid">
-          <div class="detail-info-item"><span class="detail-info-label">名称</span><span class="detail-info-value">{{ selectedSkill.name }}</span></div>
-          <div class="detail-info-item"><span class="detail-info-label">状态</span><Tag size="small" :theme="selectedSkill.enabled ? 'success' : 'default'" variant="light">{{ selectedSkill.enabled ? '已启用' : '已禁用' }}</Tag></div>
-          <div class="detail-info-item"><span class="detail-info-label">目录名</span><span class="detail-info-value">{{ selectedSkill.dirName }}</span></div>
-          <div class="detail-info-item"><span class="detail-info-label">文件数</span><span class="detail-info-value">{{ selectedSkill.fileCount }}</span></div>
-          <div class="detail-info-item detail-info-item--full"><span class="detail-info-label">路径</span><span class="detail-info-value mono" style="font-size:12px;word-break:break-all;">{{ selectedSkill.dir }}</span></div>
+          <div class="detail-info-item"><span class="detail-info-label">{{ t('common.name') }}</span><span class="detail-info-value">{{ selectedSkill.name }}</span></div>
+          <div class="detail-info-item"><span class="detail-info-label">{{ t('commonApp.skill.status') }}</span><Tag size="small" :theme="selectedSkill.enabled ? 'success' : 'default'" variant="light">{{ selectedSkill.enabled ? t('common.enabled') : t('common.disabled') }}</Tag></div>
+          <div class="detail-info-item"><span class="detail-info-label">{{ t('commonApp.skill.dirName') }}</span><span class="detail-info-value">{{ selectedSkill.dirName }}</span></div>
+          <div class="detail-info-item"><span class="detail-info-label">{{ t('commonApp.skill.fileCountLabel') }}</span><span class="detail-info-value">{{ selectedSkill.fileCount }}</span></div>
+          <div class="detail-info-item detail-info-item--full"><span class="detail-info-label">{{ t('commonApp.skill.path') }}</span><span class="detail-info-value mono" style="font-size:12px;word-break:break-all;">{{ selectedSkill.dir }}</span></div>
         </div>
         <div v-if="parseFrontmatter(selectedSkill.frontmatter).description" class="detail-section">
-          <div class="detail-section-title">描述</div>
+          <div class="detail-section-title">{{ t('commonApp.skill.description') }}</div>
           <div class="detail-desc">{{ parseFrontmatter(selectedSkill.frontmatter).description }}</div>
         </div>
         <div v-if="parseFrontmatter(selectedSkill.frontmatter).instructions" class="detail-section">
-          <div class="detail-section-title">指令</div>
+          <div class="detail-section-title">{{ t('commonApp.skill.instructions') }}</div>
           <div class="detail-desc">{{ parseFrontmatter(selectedSkill.frontmatter).instructions }}</div>
         </div>
       </div>

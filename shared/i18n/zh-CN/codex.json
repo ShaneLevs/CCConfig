@@ -1,0 +1,97 @@
+{
+  "codex": {
+    "config": {
+      "toolbarSubtitle": "config.toml + models.json（Desktop / CLI 共用）",
+      "addProvider": "添加供应商",
+      "catalogToggleTooltip": "模型目录（models.json）：Codex 桌面端模型列表的数据来源。开启即生成并启用，此后模型/供应商增删改自动同步；关闭后桌面端恢复内置模型列表（文件保留）",
+      "catalog": "模型目录",
+      "currentTitle": "当前生效配置",
+      "reset": "恢复默认配置",
+      "currentSubtitle": "仅管理模型相关字段，其余原样保留",
+      "effort": "思考强度",
+      "skipLogin": "跳过 ChatGPT 登录",
+      "skipLoginTooltip": "限定认证方式为 API key（写 preferred_auth_method + forced_login_method），配合自定义供应商可免 ChatGPT 登录。注意：它不提供凭证——若客户端曾登录失败留下无效的 ~/.codex/auth.json，删除后重启客户端即可",
+      "currentEmpty": "未设置，在下方供应商的模型上点星标即可切换",
+      "emptyProviders": "未检测到 Codex 自定义供应商，添加一个即可按 DeepSeek 官方接入方式使用第三方模型",
+      "currentTag": "当前",
+      "modelCount": "{count} 个模型",
+      "editProvider": "编辑配置",
+      "deleteProvider": "删除供应商",
+      "deleteProviderConfirm": "删除供应商 {id} 及其模型列表？config.toml 中的 API Key 将一并移除",
+      "protocol": "接口协议",
+      "modelsTitle": "模型列表",
+      "addModel": "添加模型",
+      "modelsEmpty": "暂无模型，添加后点星标即可切换为当前模型",
+      "setCurrentModel": "切换到此模型",
+      "deleteModelConfirm": "删除模型？",
+      "noModels": "未获取到模型",
+      "envVar": "环境变量 {name}",
+      "editTitle": "编辑供应商配置",
+      "providerIdHint": "对应 config.toml 的 [model_providers.<ID>]，字母/数字/下划线/中划线",
+      "nameOptional": "名称（可选）",
+      "namePlaceholder": "留空则同 ID",
+      "protocolLabel": "接口协议（wire_api）",
+      "apiKeyPlaceholder": "写入 experimental_bearer_token",
+      "apiKeyHint": "按 DeepSeek 官方接入方式明文写入 config.toml，请确保 ~/.codex/ 目录权限安全",
+      "editIdHint": "修改后自动同步 model_provider 引用与模型列表",
+      "apiKeySavedPlaceholder": "已保存，留空则保留原 Key",
+      "clearKey": "删除已保存的 Key",
+      "modelIdLabel": "模型 ID",
+      "fetchingModels": "正在从该供应商拉取模型列表…",
+      "fetchHint": "从该供应商 Base URL 的 /models 接口获取，也可手动输入",
+      "providerLabel": "供应商：{name}",
+      "resetWarning": "以下由 CCSwitch 写入的模型相关配置将被移除，操作不可恢复：",
+      "resetNote": "config.toml 其余配置（mcp_servers、profiles 等）不受影响。撤销后重启 Codex 客户端，即回到官方默认状态并重新登录账号。",
+      "confirmReset": "确认恢复",
+      "builtin": "内置",
+      "builtinProvider": "{name}（内置）",
+      "resetSummaryCurrent": "当前模型 {provider} / {model}（model / model_provider）",
+      "resetSummaryEffort": "思考强度 {effort}（model_reasoning_effort）",
+      "resetSummaryAuth": "跳过 ChatGPT 登录（preferred_auth_method / forced_login_method）",
+      "resetSummaryCatalog": "模型目录引用 model_catalog_json（models.json 文件保留在 ~/.codex/）",
+      "resetSummaryProviders": "全部自定义供应商（{count} 个，含已保存的 API Key）",
+      "resetSummaryLogin": "登录信息 ~/.codex/auth.json（下次打开 Codex 需重新登录 ChatGPT 账号）",
+      "wireApi": {
+        "responses": "responses（Codex 原生）",
+        "chat": "chat（OpenAI 兼容）"
+      }
+    },
+    "provider": {
+      "idRequired": "请输入供应商 ID",
+      "added": "供应商 {id} 已添加",
+      "addFailed": "添加失败: {message}",
+      "clearKeyConflict": "已勾选删除 Key，请清空 Key 输入框，或取消勾选",
+      "updated": "供应商配置已更新",
+      "updatedRenamed": "供应商配置已更新（重命名为 {id}）",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "供应商 {id} 已删除",
+      "deleteFailed": "删除失败: {message}"
+    },
+    "model": {
+      "idRequired": "请输入模型 ID",
+      "added": "模型 {id} 已添加",
+      "addFailed": "添加失败: {message}",
+      "deleted": "模型 {id} 已删除",
+      "deleteFailed": "删除失败: {message}",
+      "switched": "已切换到 {provider} / {model}",
+      "switchFailed": "切换失败: {message}"
+    },
+    "catalog": {
+      "enabled": "模型目录已启用（新增 {added}，升级 {updated}，共 {total} 条），此后模型增删改自动同步",
+      "disabled": "已停用模型目录，桌面端恢复内置模型列表（models.json 文件保留）",
+      "enableFailed": "启用失败: {message}",
+      "disableFailed": "停用失败: {message}"
+    },
+    "effort": {
+      "set": "思考强度已设为 {effort}",
+      "reset": "思考强度已恢复默认",
+      "authEnabled": "已启用 API Key 认证（跳过 ChatGPT 登录）",
+      "authDisabled": "已关闭 API Key 认证",
+      "saveFailed": "保存失败: {message}"
+    },
+    "reset": {
+      "done": "已恢复默认配置，重启 Codex 客户端后生效",
+      "failed": "恢复默认失败: {message}"
+    }
+  }
+}

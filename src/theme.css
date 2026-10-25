@@ -307,6 +307,18 @@
   background-color: #0a0a0f;
 }
 
+/* 手动固定浅色/深色且与系统外观不一致时，宿主毛玻璃仍是系统颜色，必须用纯色底盖住它。
+   固定模式与系统一致时继续透出亚克力/vibrancy（见 useAppearance 的 isThemeMismatch）。
+   z-index:-2 在 WebGL canvas（-1）之下、根背景之上，不遮挡内容与交互。 */
+:root.theme-mismatch::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--td-bg-color-page);
+  pointer-events: none;
+}
+
 :root {
   --td-font-family: pingfang sc, microsoft yahei, arial regular;
   --td-font-family-medium: pingfang sc, microsoft yahei, arial medium;

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Button,
   MessagePlugin,
@@ -23,6 +24,8 @@ import McpServerCard from "../../components/McpServerCard.vue";
 import { formatLastUsed } from "../../utils/time";
 import "./styles/McpView.css";
 
+const { t } = useI18n();
+
 const mcpServerList = ref([]);
 const mcpUsage = ref({});
 
@@ -35,7 +38,7 @@ const openCreateDialog = () => {
 };
 const openEditDialog = (server) => {
   if (!server.enabled) {
-    return MessagePlugin.warning("请先开启 MCP 后再编辑");
+    return MessagePlugin.warning(t("claude.mcpView.enableBeforeEdit"));
   }
   editingName.value = server.name;
   mcpDialogRef.value?.open('edit', server.name, server.config);
@@ -46,11 +49,11 @@ const handleSaveMcp = ({ mode, name, config }) => {
     window.services.deleteMcpServer(editingName.value);
   }
   if (window.services.upsertMcpServer(name, config)) {
-    MessagePlugin.success(mode === "create" ? "MCP 配置已添加" : "MCP 配置已更新");
+    MessagePlugin.success(t(mode === "create" ? "claude.mcpView.added" : "claude.mcpView.updated"));
     mcpDialogRef.value?.close();
     loadMcpServers();
   } else {
-    MessagePlugin.error("保存失败");
+    MessagePlugin.error(t("common.saveFailed"));
   }
 };
 
@@ -85,19 +88,19 @@ const toggleMcpStatus = (server) => {
     // 关闭
     const result = window.services.disableMcpServer(server.name);
     if (result.success) {
-      MessagePlugin.success("MCP 已关闭");
+      MessagePlugin.success(t("claude.mcpView.disabled"));
       loadMcpServers();
     } else {
-      MessagePlugin.error(result.error || "关闭失败");
+      MessagePlugin.error(result.error || t("claude.mcpView.disableFailed"));
     }
   } else {
     // 开启
     const result = window.services.enableMcpServer(server.name);
     if (result.success) {
-      MessagePlugin.success("MCP 已开启");
+      MessagePlugin.success(t("claude.mcpView.enabled"));
       loadMcpServers();
     } else {
-      MessagePlugin.error(result.error || "开启失败");
+      MessagePlugin.error(result.error || t("claude.mcpView.enableFailed"));
     }
   }
 };
@@ -136,10 +139,10 @@ const deleteMcpServer = (server) => {
     result = window.services.deleteDisabledMcpServer(server.name);
   }
   if (result.success) {
-    MessagePlugin.success("MCP 配置已删除");
+    MessagePlugin.success(t("claude.mcpView.deleted"));
     loadMcpServers();
   } else {
-    MessagePlugin.error(result.error || "删除失败");
+    MessagePlugin.error(result.error || t("common.deleteFailed"));
   }
 };
 
@@ -153,7 +156,7 @@ const getConfigSummary = (config) => {
     parts.push(`url: ${config.url}`);
   }
   if (config.args?.length) {
-    parts.push(`args: ${config.args.length} 个`);
+    parts.push(`args: ${t("common.countItems", { count: config.args.length })}`);
   }
   return parts.join(" | ");
 };
@@ -161,7 +164,7 @@ const getConfigSummary = (config) => {
 // 打开工具查看抽屉（探活与展示逻辑在通用组件 McpToolDrawer 内）
 const openToolDrawer = (server) => {
   if (!server.enabled) {
-    return MessagePlugin.warning("请先开启 MCP 后再查看工具");
+    return MessagePlugin.warning(t("claude.mcpView.enableBeforeTools"));
   }
   toolServerName.value = server.name;
   toolServerConfig.value = server.config;
@@ -177,12 +180,12 @@ onMounted(() => {
 <template>
   <div class="mcp-container">
     <div class="section-header">
-      <span class="mcp-tip">仅展示 <span class="hint-link" @click="openClaudeMcpFile">~/.claude.json</span> 内自定义的 MCP</span>
+      <span class="mcp-tip">{{ t('claude.mcpView.tipPrefix') }} <span class="hint-link" @click="openClaudeMcpFile">~/.claude.json</span> {{ t('claude.mcpView.tipSuffix') }}</span>
       <Space size="8px">
         <Button size="small" theme="primary" @click="openCreateDialog">
-          <template #icon><AddIcon /></template> 添加 MCP
+          <template #icon><AddIcon /></template> {{ t('claude.mcpView.add') }}
         </Button>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="mcpLoading" @click="handleRefresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -191,10 +194,10 @@ onMounted(() => {
     </div>
 
     <div v-if="!mcpServerList.length" class="empty-state">
-      <Empty description="暂无 MCP 服务器配置">
+      <Empty :description="t('claude.mcpView.empty')">
         <template #action>
           <Button theme="primary" @click="openCreateDialog">
-            <template #icon><AddIcon /></template> 添加第一个 MCP
+            <template #icon><AddIcon /></template> {{ t('claude.mcpView.addFirst') }}
           </Button>
         </template>
       </Empty>
@@ -216,7 +219,7 @@ onMounted(() => {
               @change="toggleMcpStatus(server)"
               size="small"
             />
-            <Tooltip content="查看工具" placement="top">
+            <Tooltip :content="t('mcp.viewTools')" placement="top">
               <Button
                 size="small"
                 theme="default"
@@ -227,7 +230,7 @@ onMounted(() => {
                 <ToolsIcon />
               </Button>
             </Tooltip>
-            <Tooltip content="编辑" placement="top">
+            <Tooltip :content="t('common.edit')" placement="top">
               <Button
                 size="small"
                 theme="default"
@@ -240,10 +243,10 @@ onMounted(() => {
             </Tooltip>
             <Popconfirm
               theme="danger"
-              content="确定要删除这个 MCP 配置吗？"
+              :content="t('claude.mcpView.deleteConfirm')"
               @confirm="deleteMcpServer(server)"
             >
-              <Tooltip content="删除" placement="top">
+              <Tooltip :content="t('common.delete')" placement="top">
                 <Button size="small" theme="danger" variant="text">
                   <DeleteIcon />
                 </Button>
@@ -255,10 +258,10 @@ onMounted(() => {
         <template #body>
           <div class="mcp-info-row">
             <div class="info-item config-summary">
-              {{ getConfigSummary(server.config) || '无详细配置' }}
+              {{ getConfigSummary(server.config) || t('claude.mcpView.noDetailConfig') }}
             </div>
             <div v-if="mcpUsage[server.name]" class="mcp-stats">
-              <Tag size="small" variant="light" theme="primary">使用 {{ mcpUsage[server.name].usageCount }} 次</Tag>
+              <Tag size="small" variant="light" theme="primary">{{ t('claude.usageCount', { count: mcpUsage[server.name].usageCount }) }}</Tag>
               <span class="mcp-last-used">{{ formatLastUsed(mcpUsage[server.name].lastUsedAt) }}</span>
             </div>
           </div>

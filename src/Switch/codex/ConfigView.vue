@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Dialog, Input, MessagePlugin,
   Select, Popconfirm, Alert as TAlert, Tooltip, Link, Checkbox,
@@ -11,6 +12,8 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import "./styles/ConfigView.css";
+
+const { t } = useI18n();
 
 // Codex 模型配置（Desktop / CLI 共用 ~/.codex/config.toml）。
 // 文件结构与 Pi Agent 的 models.json 同构：[model_providers.<id>] 多供应商注册表
@@ -34,25 +37,33 @@ const effortValue = ref("");
 const apiAuthValue = ref(false);
 
 const effortOptions = [
-  { label: "默认", value: "" },
+  { labelKey: "common.default", value: "" },
   { label: "low", value: "low" },
   { label: "medium", value: "medium" },
   { label: "high", value: "high" },
 ];
+const effortSelectOptions = computed(() =>
+  effortOptions.map((o) => ({ label: o.labelKey ? t(o.labelKey) : o.label, value: o.value }))
+);
 
 const wireApiOptions = [
-  { label: "responses（Codex 原生）", value: "responses" },
-  { label: "chat（OpenAI 兼容）", value: "chat" },
+  { labelKey: "codex.config.wireApi.responses", value: "responses" },
+  { labelKey: "codex.config.wireApi.chat", value: "chat" },
 ];
+const wireApiSelectOptions = computed(() =>
+  wireApiOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+);
 
-const WIRE_API_LABELS = {
-  responses: "responses（Codex 原生）",
-  chat: "chat（OpenAI 兼容）",
+const WIRE_API_LABEL_KEYS = {
+  responses: "codex.config.wireApi.responses",
+  chat: "codex.config.wireApi.chat",
 };
-const wireApiLabel = (v) => WIRE_API_LABELS[v] || v || "responses";
+const wireApiLabel = (v) =>
+  WIRE_API_LABEL_KEYS[v] ? t(WIRE_API_LABEL_KEYS[v]) : v || "responses";
 
 // 未写 model_provider 时 Codex 走内置 openai
-const currentProviderDisplay = () => current.value.provider || "openai（内置）";
+const currentProviderDisplay = () =>
+  current.value.provider || t("codex.config.builtinProvider", { name: "openai" });
 
 const isCurrentProvider = (p) => current.value.provider === p.id;
 const isCurrentModel = (providerId, m) =>
@@ -61,9 +72,9 @@ const isCurrentModel = (providerId, m) =>
 const handleEffortChange = (val) => {
   try {
     window.services.setCodexReasoningEffort(val || "");
-    MessagePlugin.success(val ? `思考强度已设为 ${val}` : "思考强度已恢复默认");
+    MessagePlugin.success(val ? t("codex.effort.set", { effort: val }) : t("codex.effort.reset"));
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("codex.effort.saveFailed", { message: e.message }));
   }
 };
 
@@ -71,9 +82,9 @@ const handleEffortChange = (val) => {
 const handleApiAuthChange = (val) => {
   try {
     window.services.setCodexApiAuth(!!val);
-    MessagePlugin.success(val ? "已启用 API Key 认证（跳过 ChatGPT 登录）" : "已关闭 API Key 认证");
+    MessagePlugin.success(val ? t("codex.effort.authEnabled") : t("codex.effort.authDisabled"));
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("codex.effort.saveFailed", { message: e.message }));
   }
 };
 
@@ -95,7 +106,7 @@ const refresh = () => {
     );
   } catch (e) {
     console.error("加载 Codex 配置失败:", e);
-    warningMsg.value = e.message || "加载失败";
+    warningMsg.value = e.message || t("common.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -122,15 +133,15 @@ const openAddProviderDialog = () => {
 const handleAddProvider = () => {
   try {
     const id = addProviderForm.value.id.trim();
-    if (!id) return MessagePlugin.warning("请输入供应商 ID");
+    if (!id) return MessagePlugin.warning(t("codex.provider.idRequired"));
     const form = { ...addProviderForm.value, id, name: addProviderForm.value.name.trim() };
     if (!form.name) form.name = id;
     window.services.addCodexProvider(form);
-    MessagePlugin.success(`供应商 ${id} 已添加`);
+    MessagePlugin.success(t("codex.provider.added", { id }));
     addProviderDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("codex.provider.addFailed", { message: e.message }));
   }
 };
 
@@ -151,9 +162,9 @@ const handleEdit = (p) => {
 const handleSaveProvider = () => {
   try {
     const newId = String(editForm.value.id || "").trim();
-    if (!newId) return MessagePlugin.warning("请输入供应商 ID");
+    if (!newId) return MessagePlugin.warning(t("codex.provider.idRequired"));
     if (originalApiKey.value && editClearKey.value && editForm.value.apiKey) {
-      return MessagePlugin.warning("已勾选删除 Key，请清空 Key 输入框，或取消勾选");
+      return MessagePlugin.warning(t("codex.provider.clearKeyConflict"));
     }
     const payload = {
       id: newId,
@@ -168,21 +179,25 @@ const handleSaveProvider = () => {
     if (originalApiKey.value && editClearKey.value) payload.clearApiKey = true;
     const renamed = newId !== editingProvider.value;
     window.services.updateCodexProvider(editingProvider.value, payload);
-    MessagePlugin.success(renamed ? `供应商配置已更新（重命名为 ${newId}）` : "供应商配置已更新");
+    MessagePlugin.success(
+      renamed
+        ? t("codex.provider.updatedRenamed", { id: newId })
+        : t("codex.provider.updated")
+    );
     editDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("保存失败: " + e.message);
+    MessagePlugin.error(t("codex.provider.saveFailed", { message: e.message }));
   }
 };
 
 const handleDeleteProvider = (id) => {
   try {
     window.services.deleteCodexProvider(id);
-    MessagePlugin.success(`供应商 ${id} 已删除`);
+    MessagePlugin.success(t("codex.provider.deleted", { id }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("codex.provider.deleteFailed", { message: e.message }));
   }
 };
 
@@ -212,7 +227,7 @@ const addModelOptions = computed(() =>
 const handleFetchModels = async () => {
   const p = providers.value.find((x) => x.id === addModelProvider.value);
   if (!p || !p.baseUrl) {
-    fetchModelError.value = "该供应商未配置 Base URL，无法自动获取";
+    fetchModelError.value = t("common.noBaseUrl");
     return;
   }
   fetchingModels.value = true;
@@ -220,9 +235,9 @@ const handleFetchModels = async () => {
   try {
     const list = await window.services.fetchProviderModels(p.baseUrl, p.apiKey);
     fetchedModels.value = list || [];
-    if (!fetchedModels.value.length) fetchModelError.value = "未获取到模型";
+    if (!fetchedModels.value.length) fetchModelError.value = t("codex.config.noModels");
   } catch (e) {
-    fetchModelError.value = e.message || "获取失败";
+    fetchModelError.value = e.message || t("common.fetchFailed");
   } finally {
     fetchingModels.value = false;
   }
@@ -231,23 +246,23 @@ const handleFetchModels = async () => {
 const handleAddModel = () => {
   try {
     const id = addModelId.value.trim();
-    if (!id) return MessagePlugin.warning("请输入模型 ID");
+    if (!id) return MessagePlugin.warning(t("codex.model.idRequired"));
     window.services.addCodexModel(addModelProvider.value, id);
-    MessagePlugin.success(`模型 ${id} 已添加`);
+    MessagePlugin.success(t("codex.model.added", { id }));
     addModelDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("添加失败: " + e.message);
+    MessagePlugin.error(t("codex.model.addFailed", { message: e.message }));
   }
 };
 
 const handleDeleteModel = (providerId, modelId) => {
   try {
     window.services.deleteCodexModel(providerId, modelId);
-    MessagePlugin.success(`模型 ${modelId} 已删除`);
+    MessagePlugin.success(t("codex.model.deleted", { id: modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("删除失败: " + e.message);
+    MessagePlugin.error(t("codex.model.deleteFailed", { message: e.message }));
   }
 };
 
@@ -255,10 +270,10 @@ const handleDeleteModel = (providerId, modelId) => {
 const setCurrentModel = (providerId, modelId) => {
   try {
     window.services.setCodexDefaultModel(providerId, modelId);
-    MessagePlugin.success(`已切换到 ${providerId} / ${modelId}`);
+    MessagePlugin.success(t("codex.model.switched", { provider: providerId, model: modelId }));
     refresh();
   } catch (e) {
-    MessagePlugin.error("切换失败: " + e.message);
+    MessagePlugin.error(t("codex.model.switchFailed", { message: e.message }));
   }
 };
 
@@ -273,15 +288,19 @@ const handleCatalogToggle = (val) => {
     if (val) {
       const { total, added, updated } = window.services.syncCodexModelCatalog();
       current.value.catalogPath = window.services.getCodexModelsJsonPath();
-      MessagePlugin.success(`模型目录已启用（新增 ${added}，升级 ${updated}，共 ${total} 条），此后模型增删改自动同步`);
+      MessagePlugin.success(t("codex.catalog.enabled", { added, updated, total }));
     } else {
       window.services.disableCodexCatalog();
       current.value.catalogPath = "";
-      MessagePlugin.success("已停用模型目录，桌面端恢复内置模型列表（models.json 文件保留）");
+      MessagePlugin.success(t("codex.catalog.disabled"));
     }
   } catch (e) {
     catalogEnabled.value = !val; // 失败回滚开关状态
-    MessagePlugin.error((val ? "启用失败: " : "停用失败: ") + e.message);
+    MessagePlugin.error(
+      val
+        ? t("codex.catalog.enableFailed", { message: e.message })
+        : t("codex.catalog.disableFailed", { message: e.message })
+    );
   }
 };
 
@@ -297,24 +316,31 @@ const hasCodexCustomization = computed(() =>
 const resetSummary = computed(() => {
   const items = [];
   if (current.value.model) {
-    items.push(`当前模型 ${current.value.provider || "内置"} / ${current.value.model}（model / model_provider）`);
+    items.push(
+      t("codex.config.resetSummaryCurrent", {
+        provider: current.value.provider || t("codex.config.builtin"),
+        model: current.value.model,
+      })
+    );
   }
-  if (current.value.reasoningEffort) items.push(`思考强度 ${current.value.reasoningEffort}（model_reasoning_effort）`);
-  if (current.value.apiAuth) items.push("跳过 ChatGPT 登录（preferred_auth_method / forced_login_method）");
-  if (current.value.catalogPath) items.push("模型目录引用 model_catalog_json（models.json 文件保留在 ~/.codex/）");
-  items.push(`全部自定义供应商（${providers.value.length} 个，含已保存的 API Key）`);
-  items.push("登录信息 ~/.codex/auth.json（下次打开 Codex 需重新登录 ChatGPT 账号）");
+  if (current.value.reasoningEffort) {
+    items.push(t("codex.config.resetSummaryEffort", { effort: current.value.reasoningEffort }));
+  }
+  if (current.value.apiAuth) items.push(t("codex.config.resetSummaryAuth"));
+  if (current.value.catalogPath) items.push(t("codex.config.resetSummaryCatalog"));
+  items.push(t("codex.config.resetSummaryProviders", { count: providers.value.length }));
+  items.push(t("codex.config.resetSummaryLogin"));
   return items.map((s, i) => `${i + 1}. ${s}`).join("\n");
 });
 
 const confirmReset = () => {
   try {
     window.services.resetCodexConfig();
-    MessagePlugin.success("已恢复默认配置，重启 Codex 客户端后生效");
+    MessagePlugin.success(t("codex.reset.done"));
     showResetDialog.value = false;
     refresh();
   } catch (e) {
-    MessagePlugin.error("恢复默认失败: " + e.message);
+    MessagePlugin.error(t("codex.reset.failed", { message: e.message }));
   }
 };
 
@@ -329,16 +355,16 @@ const maskValue = (val) => {
 
 const keyDisplay = (p) => {
   if (p.apiKey) return maskValue(p.apiKey);
-  if (p.envKey) return `环境变量 ${p.envKey}`;
+  if (p.envKey) return t("codex.config.envVar", { name: p.envKey });
   return "—";
 };
 
 const copyText = (val) => {
   try {
     window.utools.copyText(val);
-    MessagePlugin.success("已复制到剪贴板");
+    MessagePlugin.success(t("common.copiedToClipboard"));
   } catch {
-    MessagePlugin.error("复制失败");
+    MessagePlugin.error(t("common.copyFailed"));
   }
 };
 
@@ -356,23 +382,23 @@ onMounted(refresh);
       <div class="codex-toolbar-left">
         <span class="codex-toolbar-tip">
           <Link theme="primary" :underline="true" @click="openCodexDir">~/.codex/</Link>
-          <span class="codex-toolbar-sub">config.toml + models.json（Desktop / CLI 共用）</span>
+          <span class="codex-toolbar-sub">{{ t("codex.config.toolbarSubtitle") }}</span>
         </span>
       </div>
       <div class="codex-toolbar-right">
         <Button size="small" variant="outline" theme="primary" @click="openAddProviderDialog">
-          <template #icon><AddIcon /></template> 添加供应商
+          <template #icon><AddIcon /></template> {{ t("codex.config.addProvider") }}
         </Button>
         <Tooltip
-          content="模型目录（models.json）：Codex 桌面端模型列表的数据来源。开启即生成并启用，此后模型/供应商增删改自动同步；关闭后桌面端恢复内置模型列表（文件保留）"
+          :content="t('codex.config.catalogToggleTooltip')"
           placement="top"
         >
           <span class="codex-catalog-toggle">
-            模型目录
+            {{ t("codex.config.catalog") }}
             <Switch v-model="catalogEnabled" size="small" @change="handleCatalogToggle" />
           </span>
         </Tooltip>
-        <Tooltip content="刷新" placement="top">
+        <Tooltip :content="t('common.refresh')" placement="top">
           <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
@@ -389,28 +415,28 @@ onMounted(refresh);
       <div class="codex-current-card">
         <div class="codex-current-header">
           <div class="codex-current-header-left">
-            <span class="codex-current-title">当前生效配置</span>
+            <span class="codex-current-title">{{ t("codex.config.currentTitle") }}</span>
             <span
               class="codex-reset-btn"
               :class="{ disabled: !hasCodexCustomization }"
               @click="hasCodexCustomization && (showResetDialog = true)"
-            >恢复默认配置</span>
-            <span class="codex-current-sub">仅管理模型相关字段，其余原样保留</span>
+            >{{ t("codex.config.reset") }}</span>
+            <span class="codex-current-sub">{{ t("codex.config.currentSubtitle") }}</span>
           </div>
           <div class="codex-current-actions">
             <div class="codex-current-effort">
-              <span class="codex-current-effort-label">思考强度</span>
+              <span class="codex-current-effort-label">{{ t("codex.config.effort") }}</span>
               <Select
                 v-model="effortValue"
-                :options="effortOptions"
+                :options="effortSelectOptions"
                 size="small"
                 style="width: 96px"
                 @change="handleEffortChange"
               />
             </div>
-            <Tooltip content="限定认证方式为 API key（写 preferred_auth_method + forced_login_method），配合自定义供应商可免 ChatGPT 登录。注意：它不提供凭证——若客户端曾登录失败留下无效的 ~/.codex/auth.json，删除后重启客户端即可" placement="top">
+            <Tooltip :content="t('codex.config.skipLoginTooltip')" placement="top">
               <Checkbox v-model="apiAuthValue" class="codex-current-auth" @change="handleApiAuthChange">
-                跳过 ChatGPT 登录
+                {{ t("codex.config.skipLogin") }}
               </Checkbox>
             </Tooltip>
           </div>
@@ -421,13 +447,13 @@ onMounted(refresh);
             <span class="codex-current-arrow">→</span>
             <span class="codex-current-model">{{ current.model }}</span>
           </template>
-          <span v-else class="codex-current-empty">未设置，在下方供应商的模型上点星标即可切换</span>
+          <span v-else class="codex-current-empty">{{ t("codex.config.currentEmpty") }}</span>
         </div>
       </div>
 
       <!-- 供应商列表 -->
       <div v-if="providers.length === 0" class="codex-config-empty">
-        <Empty description="未检测到 Codex 自定义供应商，添加一个即可按 DeepSeek 官方接入方式使用第三方模型" />
+        <Empty :description="t('codex.config.emptyProviders')" />
       </div>
 
       <div v-else class="codex-provider-list">
@@ -437,22 +463,22 @@ onMounted(refresh);
             <template #header>
               <div class="codex-provider-header-left">
                 <span class="codex-provider-name">{{ p.id }}</span>
-                <Tag v-if="isCurrentProvider(p)" size="small" theme="warning" variant="light">当前</Tag>
+                <Tag v-if="isCurrentProvider(p)" size="small" theme="warning" variant="light">{{ t("codex.config.currentTag") }}</Tag>
                 <Tag size="small" variant="outline">{{ p.wireApi }}</Tag>
                 <span v-if="p.name && p.name !== p.id" class="codex-provider-display-name">{{ p.name }}</span>
               </div>
             </template>
             <template #headerRightContent>
               <div class="codex-provider-header-right" @click.stop>
-                <span class="codex-model-count">{{ (modelsMap[p.id] || []).length }} 个模型</span>
-                <Tooltip content="编辑配置" placement="top">
+                <span class="codex-model-count">{{ t("codex.config.modelCount", { count: (modelsMap[p.id] || []).length }) }}</span>
+                <Tooltip :content="t('codex.config.editProvider')" placement="top">
                   <Button size="small" theme="default" variant="text" @click="handleEdit(p)">
                     <template #icon><EditIcon /></template>
                   </Button>
                 </Tooltip>
-                <Tooltip content="删除供应商">
+                <Tooltip :content="t('codex.config.deleteProvider')">
                   <Popconfirm
-                    :content="`删除供应商 ${p.id} 及其模型列表？config.toml 中的 API Key 将一并移除`"
+                    :content="t('codex.config.deleteProviderConfirm', { id: p.id })"
                     theme="danger"
                     @confirm="handleDeleteProvider(p.id)"
                   >
@@ -473,7 +499,7 @@ onMounted(refresh);
                     <span class="codex-info-value mono">
                       <LockOnIcon v-if="p.apiKey" size="12px" class="codex-key-lock" />
                       {{ keyDisplay(p) }}
-                      <Tooltip v-if="p.apiKey" content="复制">
+                      <Tooltip v-if="p.apiKey" :content="t('common.copy')">
                         <span class="codex-key-copy" @click="copyText(p.apiKey)"><CopyIcon size="12px" /></span>
                       </Tooltip>
                     </span>
@@ -483,11 +509,11 @@ onMounted(refresh);
                     <span class="codex-info-value mono">{{ p.baseUrl || "—" }}</span>
                   </div>
                   <div class="codex-info-row">
-                    <span class="codex-info-label">接口协议</span>
+                    <span class="codex-info-label">{{ t("codex.config.protocol") }}</span>
                     <span class="codex-info-value">{{ wireApiLabel(p.wireApi) }}</span>
                   </div>
                   <div v-if="p._extra && p._extra.model_catalog_url" class="codex-info-row">
-                    <span class="codex-info-label">模型目录</span>
+                    <span class="codex-info-label">{{ t("codex.config.catalog") }}</span>
                     <span class="codex-info-value mono">{{ p._extra.model_catalog_url }}</span>
                   </div>
                 </div>
@@ -495,27 +521,27 @@ onMounted(refresh);
                 <!-- 模型子区 -->
                 <div class="codex-models-section">
                   <div class="codex-models-title">
-                    <span>模型列表</span>
+                    <span>{{ t("codex.config.modelsTitle") }}</span>
                     <Button size="small" variant="text" @click="openAddModelDialog(p.id)">
-                      <template #icon><AddIcon /></template> 添加模型
+                      <template #icon><AddIcon /></template> {{ t("codex.config.addModel") }}
                     </Button>
                   </div>
                   <div v-if="(modelsMap[p.id] || []).length === 0" class="codex-models-empty">
-                    暂无模型，添加后点星标即可切换为当前模型
+                    {{ t("codex.config.modelsEmpty") }}
                   </div>
                   <div v-else class="codex-model-list">
                     <div v-for="m in modelsMap[p.id]" :key="m" class="codex-model-item">
                       <div class="codex-model-info">
                         <span class="codex-model-name">{{ m }}</span>
-                        <Tag v-if="isCurrentModel(p.id, m)" size="small" theme="warning" variant="light">当前</Tag>
+                        <Tag v-if="isCurrentModel(p.id, m)" size="small" theme="warning" variant="light">{{ t("codex.config.currentTag") }}</Tag>
                       </div>
                       <div class="codex-model-actions" @click.stop>
-                        <Tooltip v-if="!isCurrentModel(p.id, m)" content="切换到此模型" placement="top">
+                        <Tooltip v-if="!isCurrentModel(p.id, m)" :content="t('codex.config.setCurrentModel')" placement="top">
                           <Button size="small" theme="default" variant="text" @click="setCurrentModel(p.id, m)">
                             <template #icon><StarIcon /></template>
                           </Button>
                         </Tooltip>
-                        <Popconfirm content="删除模型？" theme="danger" @confirm="handleDeleteModel(p.id, m)">
+                        <Popconfirm :content="t('codex.config.deleteModelConfirm')" theme="danger" @confirm="handleDeleteModel(p.id, m)">
                           <Button size="small" theme="danger" variant="text">
                             <template #icon><DeleteIcon /></template>
                           </Button>
@@ -534,27 +560,27 @@ onMounted(refresh);
     <!-- 添加供应商弹窗 -->
     <Dialog
       v-model:visible="addProviderDialog"
-      header="添加供应商"
+      :header="t('codex.config.addProvider')"
       width="520px"
-      :confirm-btn="{ content: '添加', theme: 'primary' }"
+      :confirm-btn="{ content: t('common.add'), theme: 'primary' }"
       @confirm="handleAddProvider"
     >
       <div class="codex-edit-form">
         <div class="codex-form-item">
           <label>ID <span class="codex-form-required">*</span></label>
           <Input v-model="addProviderForm.id" placeholder="deepseek" />
-          <div class="codex-form-hint">对应 config.toml 的 [model_providers.&lt;ID&gt;]，字母/数字/下划线/中划线</div>
+          <div class="codex-form-hint">{{ t("codex.config.providerIdHint") }}</div>
         </div>
-        <div class="codex-form-item"><label>名称（可选）</label><Input v-model="addProviderForm.name" placeholder="留空则同 ID" /></div>
+        <div class="codex-form-item"><label>{{ t("codex.config.nameOptional") }}</label><Input v-model="addProviderForm.name" :placeholder="t('codex.config.namePlaceholder')" /></div>
         <div class="codex-form-item"><label>Base URL</label><Input v-model="addProviderForm.baseUrl" placeholder="https://api.deepseek.com/" /></div>
         <div class="codex-form-item">
-          <label>接口协议（wire_api）</label>
-          <Select v-model="addProviderForm.wireApi" :options="wireApiOptions" />
+          <label>{{ t("codex.config.protocolLabel") }}</label>
+          <Select v-model="addProviderForm.wireApi" :options="wireApiSelectOptions" />
         </div>
         <div class="codex-form-item">
           <label>API Key</label>
-          <ApiKeyInput v-model="addProviderForm.apiKey" placeholder="写入 experimental_bearer_token" />
-          <div class="codex-form-hint">按 DeepSeek 官方接入方式明文写入 config.toml，请确保 ~/.codex/ 目录权限安全</div>
+          <ApiKeyInput v-model="addProviderForm.apiKey" :placeholder="t('codex.config.apiKeyPlaceholder')" />
+          <div class="codex-form-hint">{{ t("codex.config.apiKeyHint") }}</div>
         </div>
       </div>
     </Dialog>
@@ -562,31 +588,31 @@ onMounted(refresh);
     <!-- 编辑供应商弹窗 -->
     <Dialog
       v-model:visible="editDialog"
-      header="编辑供应商配置"
+      :header="t('codex.config.editTitle')"
       width="520px"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-btn="{ content: t('common.save'), theme: 'primary' }"
       @confirm="handleSaveProvider"
     >
       <div class="codex-edit-form">
         <div class="codex-form-item">
           <label>ID <span class="codex-form-required">*</span></label>
           <Input v-model="editForm.id" placeholder="deepseek" />
-          <div class="codex-form-hint">修改后自动同步 model_provider 引用与模型列表</div>
+          <div class="codex-form-hint">{{ t("codex.config.editIdHint") }}</div>
         </div>
-        <div class="codex-form-item"><label>名称（可选）</label><Input v-model="editForm.name" placeholder="留空则同 ID" /></div>
+        <div class="codex-form-item"><label>{{ t("codex.config.nameOptional") }}</label><Input v-model="editForm.name" :placeholder="t('codex.config.namePlaceholder')" /></div>
         <div class="codex-form-item"><label>Base URL</label><Input v-model="editForm.baseUrl" placeholder="https://api.deepseek.com/" /></div>
         <div class="codex-form-item">
-          <label>接口协议（wire_api）</label>
-          <Select v-model="editForm.wireApi" :options="wireApiOptions" />
+          <label>{{ t("codex.config.protocolLabel") }}</label>
+          <Select v-model="editForm.wireApi" :options="wireApiSelectOptions" />
         </div>
         <div class="codex-form-item">
           <label>API Key</label>
           <ApiKeyInput
             v-model="editForm.apiKey"
-            :placeholder="originalApiKey ? '已保存，留空则保留原 Key' : '写入 experimental_bearer_token'"
+            :placeholder="originalApiKey ? t('codex.config.apiKeySavedPlaceholder') : t('codex.config.apiKeyPlaceholder')"
           />
           <Checkbox v-if="originalApiKey" v-model="editClearKey" class="codex-clear-key-checkbox">
-            删除已保存的 Key
+            {{ t("codex.config.clearKey") }}
           </Checkbox>
         </div>
       </div>
@@ -595,14 +621,14 @@ onMounted(refresh);
     <!-- 添加模型弹窗 -->
     <Dialog
       v-model:visible="addModelDialog"
-      header="添加模型"
+      :header="t('codex.config.addModel')"
       width="460px"
-      :confirm-btn="{ content: '添加', theme: 'primary' }"
+      :confirm-btn="{ content: t('common.add'), theme: 'primary' }"
       @confirm="handleAddModel"
     >
       <div class="codex-edit-form">
         <div class="codex-form-item">
-          <label>模型 ID <span class="codex-form-required">*</span></label>
+          <label>{{ t("codex.config.modelIdLabel") }} <span class="codex-form-required">*</span></label>
           <AutoComplete
             v-model="addModelId"
             :options="addModelOptions"
@@ -611,27 +637,27 @@ onMounted(refresh);
             clearable
             placeholder="deepseek-v4-flash"
           />
-          <div v-if="fetchingModels" class="codex-form-hint">正在从该供应商拉取模型列表…</div>
+          <div v-if="fetchingModels" class="codex-form-hint">{{ t("codex.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="codex-form-hint codex-fetch-error">
-            自动获取失败：{{ fetchModelError }}
-            <span class="codex-fetch-retry" @click="handleFetchModels">重试</span>
+            {{ t("model.fetchFailed", { message: fetchModelError }) }}
+            <span class="codex-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
-          <div v-else class="codex-form-hint">从该供应商 Base URL 的 /models 接口获取，也可手动输入</div>
+          <div v-else class="codex-form-hint">{{ t("codex.config.fetchHint") }}</div>
         </div>
-        <div class="codex-form-hint">供应商：{{ addModelProvider }}</div>
+        <div class="codex-form-hint">{{ t("codex.config.providerLabel", { name: addModelProvider }) }}</div>
       </div>
     </Dialog>
 
     <!-- 恢复默认配置确认弹窗 -->
-    <Dialog v-model:visible="showResetDialog" header="恢复默认配置" width="520px" :footer="false">
+    <Dialog v-model:visible="showResetDialog" :header="t('codex.config.reset')" width="520px" :footer="false">
       <div class="codex-reset-body">
-        <p class="codex-reset-warning">以下由 CCSwitch 写入的模型相关配置将被移除，操作不可恢复：</p>
+        <p class="codex-reset-warning">{{ t("codex.config.resetWarning") }}</p>
         <pre class="codex-reset-list">{{ resetSummary }}</pre>
-        <p class="codex-reset-note">config.toml 其余配置（mcp_servers、profiles 等）不受影响。撤销后重启 Codex 客户端，即回到官方默认状态并重新登录账号。</p>
+        <p class="codex-reset-note">{{ t("codex.config.resetNote") }}</p>
       </div>
       <div class="codex-reset-footer">
-        <Button variant="outline" @click="showResetDialog = false">取消</Button>
-        <Button theme="danger" @click="confirmReset">确认恢复</Button>
+        <Button variant="outline" @click="showResetDialog = false">{{ t("common.cancel") }}</Button>
+        <Button theme="danger" @click="confirmReset">{{ t("codex.config.confirmReset") }}</Button>
       </div>
     </Dialog>
   </div>

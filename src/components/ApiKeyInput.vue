@@ -1,6 +1,9 @@
 <script setup>
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { Input } from "tdesign-vue-next";
+
+const { t } = useI18n();
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -23,7 +26,7 @@ const visible = ref(false);
         <span
           class="toggle-visibility"
           @click="visible = !visible"
-          :title="visible ? '隐藏' : '显示'"
+          :title="visible ? t('common.hide') : t('common.show')"
         >
           {{ visible ? '🙈' : '👁' }}
         </span>

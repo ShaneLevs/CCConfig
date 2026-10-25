@@ -1,4 +1,5 @@
 import { h, ref, computed, watch } from "vue";
+import { i18n } from "../i18n";
 import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META, COMMON_APP_META } from "./agentMeta";
 
 // Agent 显示管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
@@ -128,19 +129,22 @@ const onAgentDrop = (idx) => {
 const onAgentDragEnd = () => { dragAgentIndex = null; };
 
 // 切换器下拉项内容：图标 + 名称（TDesign Dropdown 的 content 支持 (h) => VNode）
-const dropdownOptionContent = (meta) => (createElement) =>
+const dropdownOptionContent = (meta, name) => (createElement) =>
   createElement("span", { class: "app-dropdown-option" }, [
     meta.icon
       ? createElement("img", { class: "app-dropdown-option__icon", src: meta.icon, alt: "" })
       : null,
-    createElement("span", null, meta.name),
+    createElement("span", null, name),
   ]);
 
 // 切换器下拉：通用恒显示 + 勾选的 agent，按拖拽排序后的顺序
 const appDropdownOptions = computed(() => {
+  // 读取 locale ref，确保切换语言时 computed 重新求值
+  i18n.global.locale.value;
+  const commonName = i18n.global.t(COMMON_APP_META.nameKey);
   // content 是渲染函数（TDesign Dropdown 用）；label 是纯文本名称（侧栏 AgentSideRail 用，勿取 content）
   const opts = [
-    { content: dropdownOptionContent(COMMON_APP_META), label: COMMON_APP_META.name, value: "common" },
+    { content: dropdownOptionContent(COMMON_APP_META, commonName), label: commonName, value: "common" },
   ];
   agentOrder.value.forEach((app) => {
     if (visibleAgents.value && visibleAgents.value[app]) {

@@ -1,0 +1,31 @@
+{
+  "appearance": {
+    "theme": {
+      "title": "Theme",
+      "desc": "Follow system uses your system appearance. If a fixed light or dark theme differs from the system, a solid background is used.",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "effects": {
+      "title": "Dark mode background effects",
+      "desc": "Animated backgrounds in dark mode. They cover the translucent background and may cause lag on slower machines.",
+      "prismatic": {
+        "name": "Prismatic Burst",
+        "desc": "Prismatic spectrum burst"
+      },
+      "pixel": {
+        "name": "FaultyTerminal",
+        "desc": "Glitchy pixel terminal"
+      },
+      "aurora": {
+        "name": "Aurora",
+        "desc": "Flowing aurora"
+      },
+      "galaxy": {
+        "name": "Galaxy",
+        "desc": "Drifting galaxy"
+      }
+    }
+  }
+}

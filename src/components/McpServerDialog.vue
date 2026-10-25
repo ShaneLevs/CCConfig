@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { Dialog, Input, Button, RadioGroup, Radio, RadioButton, CheckboxGroup, Checkbox, Textarea, MessagePlugin } from "tdesign-vue-next";
 import DynamicKvEditor from "./DynamicKvEditor.vue";
 
@@ -21,16 +22,18 @@ const props = defineProps({
   headerPrefix: { type: String, default: "" },
   nameDisabledOnEdit: { type: Boolean, default: false },
   showTarget: { type: Boolean, default: false },
-  targetOptions: {
-    type: Array,
-    default: () => [
-      { value: 'local', label: '本地' },
-      { value: 'cloud', label: '云端' },
-    ],
-  },
+  targetOptions: { type: Array, default: null },
 });
 
 const emit = defineEmits(["save"]);
+const { t } = useI18n();
+const resolvedTargetOptions = computed(
+  () =>
+    props.targetOptions || [
+      { value: 'local', label: t('mcp.local') },
+      { value: 'cloud', label: t('mcp.cloud') },
+    ]
+);
 
 const showDialog = ref(false);
 const dialogMode = ref('create'); // create | edit
@@ -102,8 +105,8 @@ const switchEditMode = (mode) => {
       jsonError.value = '';
       editMode.value = mode;
     } catch (e) {
-      jsonError.value = 'JSON 解析失败: ' + e.message;
-      MessagePlugin.error('JSON 解析失败，无法切回表单: ' + e.message);
+      jsonError.value = t('mcp.jsonParseFailed', { message: e.message });
+      MessagePlugin.error(t('mcp.jsonParseFailedSwitch', { message: e.message }));
     }
   }
 };
@@ -147,9 +150,9 @@ const useHttpTemplate = () => {
 
 const submit = () => {
   const name = mcpName.value.trim();
-  if (!name) { MessagePlugin.warning('请输入服务器名称'); return; }
+  if (!name) { MessagePlugin.warning(t('mcp.nameRequired')); return; }
   if (props.showTarget && !dialogTarget.value.length) {
-    MessagePlugin.warning('请至少勾选一个保存位置');
+    MessagePlugin.warning(t('mcp.targetRequired'));
     return;
   }
   let config;
@@ -157,18 +160,18 @@ const submit = () => {
     try {
       config = JSON.parse(jsonContent.value || '{}');
     } catch (e) {
-      jsonError.value = 'JSON 格式错误: ' + e.message;
-      MessagePlugin.error('JSON 格式错误: ' + e.message);
+      jsonError.value = t('mcp.jsonInvalid', { message: e.message });
+      MessagePlugin.error(t('mcp.jsonInvalid', { message: e.message }));
       return;
     }
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
-      MessagePlugin.warning('JSON 内容必须是对象');
+      MessagePlugin.warning(t('mcp.jsonMustBeObject'));
       return;
     }
   } else {
     config = buildConfigFromForm();
-    if (config.type === 'http' && !config.url) { MessagePlugin.warning('请输入 HTTP URL'); return; }
-    if (config.type === 'stdio' && !config.command) { MessagePlugin.warning('请输入启动命令'); return; }
+    if (config.type === 'http' && !config.url) { MessagePlugin.warning(t('mcp.urlRequired')); return; }
+    if (config.type === 'stdio' && !config.command) { MessagePlugin.warning(t('mcp.commandRequired')); return; }
   }
   emit('save', { mode: dialogMode.value, name, config, target: dialogTarget.value });
 };
@@ -179,15 +182,15 @@ defineExpose({ open, close });
 <template>
   <Dialog
     v-model:visible="showDialog"
-    :header="`${headerPrefix}${dialogMode === 'create' ? '添加' : '编辑'} MCP 服务器`"
+    :header="`${headerPrefix}${dialogMode === 'create' ? t('mcp.addTitle') : t('mcp.editTitle')}`"
     width="600px"
   >
     <div class="mcp-dialog-form">
       <div v-if="showTarget" class="mcp-dialog-form-item">
-        <label>保存到 <span class="mcp-dialog-required">*</span></label>
+        <label>{{ t('mcp.saveTo') }} <span class="mcp-dialog-required">*</span></label>
         <CheckboxGroup v-model="dialogTarget">
           <Checkbox
-            v-for="opt in targetOptions"
+            v-for="opt in resolvedTargetOptions"
             :key="opt.value"
             :value="opt.value"
           >{{ opt.label }}</Checkbox>
@@ -195,25 +198,25 @@ defineExpose({ open, close });
       </div>
 
       <div class="mcp-dialog-form-item">
-        <label>名称 <span class="mcp-dialog-required">*</span></label>
+        <label>{{ t('mcp.name') }} <span class="mcp-dialog-required">*</span></label>
         <Input
           v-model="mcpName"
-          placeholder="例如: my-mcp-server"
+          :placeholder="t('mcp.namePlaceholder')"
           :disabled="nameDisabledOnEdit && dialogMode === 'edit'"
         />
       </div>
 
       <div class="mcp-dialog-form-item">
-        <label>编辑模式</label>
+        <label>{{ t('mcp.editMode') }}</label>
         <RadioGroup :model-value="editMode" variant="default-filled" @change="(v) => switchEditMode(v)">
-          <RadioButton value="form">表单</RadioButton>
+          <RadioButton value="form">{{ t('mcp.form') }}</RadioButton>
           <RadioButton value="json">JSON</RadioButton>
         </RadioGroup>
       </div>
 
       <template v-if="editMode === 'form'">
         <div class="mcp-dialog-form-item">
-          <label>类型</label>
+          <label>{{ t('mcp.type') }}</label>
           <RadioGroup v-model="mcpType">
             <Radio value="stdio">STDIO</Radio>
             <Radio value="http">HTTP</Radio>
@@ -221,29 +224,29 @@ defineExpose({ open, close });
         </div>
 
         <div v-if="dialogMode === 'create'" class="mcp-dialog-template-buttons">
-          <Button size="small" variant="outline" @click="useStdioTemplate">STDIO 模板</Button>
-          <Button size="small" variant="outline" @click="useHttpTemplate">HTTP 模板</Button>
+          <Button size="small" variant="outline" @click="useStdioTemplate">{{ t('mcp.stdioTemplate') }}</Button>
+          <Button size="small" variant="outline" @click="useHttpTemplate">{{ t('mcp.httpTemplate') }}</Button>
         </div>
 
         <template v-if="mcpType === 'stdio'">
           <div class="mcp-dialog-form-item">
-            <label>启动命令 <span class="mcp-dialog-required">*</span></label>
-            <Input v-model="mcpCommand" placeholder="例如: npx" />
+            <label>{{ t('mcp.command') }} <span class="mcp-dialog-required">*</span></label>
+            <Input v-model="mcpCommand" :placeholder="t('mcp.commandPlaceholder')" />
           </div>
           <div class="mcp-dialog-form-item">
-            <label>参数 (args，空格分隔)</label>
+            <label>{{ t('mcp.args') }}</label>
             <Textarea
               v-model="mcpArgsText"
               :autosize="{ minRows: 2, maxRows: 4 }"
-              placeholder="例如: -y @modelcontextprotocol/server-filesystem /path/to/files"
+              :placeholder="t('mcp.argsPlaceholder')"
             />
           </div>
           <div class="mcp-dialog-form-item">
-            <label>环境变量 (env)</label>
+            <label>{{ t('mcp.env') }}</label>
             <DynamicKvEditor
               v-model="mcpEnv"
-              key-placeholder="变量名"
-              value-placeholder="变量值"
+              :key-placeholder="t('mcp.envKeyPlaceholder')"
+              :value-placeholder="t('mcp.envValuePlaceholder')"
             />
           </div>
         </template>
@@ -251,14 +254,14 @@ defineExpose({ open, close });
         <template v-else>
           <div class="mcp-dialog-form-item">
             <label>HTTP URL <span class="mcp-dialog-required">*</span></label>
-            <Input v-model="mcpUrl" placeholder="例如: http://localhost:3000/mcp" />
+            <Input v-model="mcpUrl" :placeholder="t('mcp.urlPlaceholder')" />
           </div>
           <div class="mcp-dialog-form-item">
-            <label>请求头 (headers)</label>
+            <label>{{ t('mcp.headers') }}</label>
             <DynamicKvEditor
               v-model="mcpHeaders"
-              key-placeholder="Header 名"
-              value-placeholder="Header 值"
+              :key-placeholder="t('mcp.headerKeyPlaceholder')"
+              :value-placeholder="t('mcp.headerValuePlaceholder')"
             />
           </div>
         </template>
@@ -266,7 +269,7 @@ defineExpose({ open, close });
 
       <template v-else>
         <div class="mcp-dialog-form-item">
-          <label>配置内容 (JSON)</label>
+          <label>{{ t('mcp.configJson') }}</label>
           <Textarea
             v-model="jsonContent"
             :autosize="{ minRows: 12, maxRows: 20 }"
@@ -281,9 +284,9 @@ defineExpose({ open, close });
 
     <template #footer>
       <div class="mcp-dialog-footer">
-        <Button variant="outline" @click="close">取消</Button>
+        <Button variant="outline" @click="close">{{ t('common.cancel') }}</Button>
         <Button theme="primary" @click="submit">
-          {{ dialogMode === 'create' ? '添加' : '保存' }}
+          {{ dialogMode === 'create' ? t('common.add') : t('common.save') }}
         </Button>
       </div>
     </template>

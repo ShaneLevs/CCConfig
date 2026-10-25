@@ -3,6 +3,7 @@
 const https = require("node:https");
 
 const { runPiCmd, PI_CMD_TIMEOUT } = require("./pi-common");
+const { t } = require("./i18n");
 
 // ==================== Extensions (Packages) ====================
 
@@ -142,7 +143,8 @@ const fetchPiDevPackage = (name = "", redirects = 0, useRaw = false) => {
   const clean = String(name || "")
     .trim()
     .replace(/^npm:/, "");
-  if (!clean) return Promise.reject(new Error("缺少包名"));
+  if (!clean)
+    return Promise.reject(new Error(t("service.pi.missingPackageName")));
   const url =
     "https://pi.dev/packages/" + (useRaw ? clean : encodeURIComponent(clean));
 

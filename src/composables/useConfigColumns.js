@@ -1,5 +1,6 @@
 import { ref, computed, watch } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
+import { t } from "../i18n";
 
 const GROUP_ORDER_ID = "ccswitch_group_order";
 
@@ -98,7 +99,7 @@ export function useConfigColumns(savedConfigs) {
     const rightH = calcH(rightColumn.value);
 
     if (Math.abs(leftH - rightH) < 40) {
-      MessagePlugin.info('已整理');
+      MessagePlugin.info(t('common.reorganized'));
       return;
     }
 
@@ -123,7 +124,7 @@ export function useConfigColumns(savedConfigs) {
 
     if (!moved) return;
     saveColumns();
-    MessagePlugin.info('已整理');
+    MessagePlugin.info(t('common.reorganized'));
   };
 
   const getColRef = (col) => col === 'left' ? leftColumn : rightColumn;

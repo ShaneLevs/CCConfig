@@ -1,11 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Card, Empty, Button, Dialog, Input, MessagePlugin, Tag, Popconfirm, Tooltip, Select, Alert, RadioGroup, RadioButton, Pagination, Switch,
 } from "tdesign-vue-next";
 import { AddIcon, DeleteIcon, RefreshIcon, LinkIcon, SearchIcon, DownloadIcon, CloudDownloadIcon } from "tdesign-icons-vue-next";
 import PiPluginDetailDialog from "./components/PiPluginDetailDialog.vue";
 import "./styles/PluginView.css";
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const plugins = ref([]);
@@ -37,7 +40,7 @@ const installing = ref(false);
 const handleAdd = async () => {
   const name = newPluginName.value.trim();
   if (!name) {
-    MessagePlugin.warning("请输入扩展包名");
+    MessagePlugin.warning(t("pi.plugin.extensionRequired"));
     return;
   }
   installing.value = true;
@@ -48,14 +51,14 @@ const handleAdd = async () => {
       : `npm:${raw}`;
     const result = await window.services.installPiExtension(source);
     if (result.success) {
-      MessagePlugin.success((result.message || '').trim() || '安装完成');
+      MessagePlugin.success((result.message || '').trim() || t("pi.plugin.installDone"));
       addDialog.value = false;
       loadPlugins();
     } else {
-      MessagePlugin.error("安装失败: " + (result.message || "未知错误"));
+      MessagePlugin.error(t("pi.plugin.installFailed", { message: result.message || t("pi.plugin.unknownError") }));
     }
   } catch (e) {
-    MessagePlugin.error("安装失败: " + (e.stderr || e.message || "未知错误"));
+    MessagePlugin.error(t("pi.plugin.installFailed", { message: e.stderr || e.message || t("pi.plugin.unknownError") }));
   } finally {
     installing.value = false;
   }
@@ -67,7 +70,7 @@ const handleRemove = async (source) => {
   let msg = null;
   try {
     msg = await MessagePlugin.loading({
-      content: `正在卸载 ${source.replace(/^npm:/, "")} ...`,
+      content: t("pi.plugin.uninstallProcessing", { name: source.replace(/^npm:/, "") }),
       duration: 0,
     });
     const result = await window.services.uninstallPiExtension(source);
@@ -77,10 +80,10 @@ const handleRemove = async (source) => {
       /* 消息可能已自动关闭 */
     }
     if (result.success) {
-      MessagePlugin.success((result.message || "").trim() || "扩展已卸载");
+      MessagePlugin.success((result.message || "").trim() || t("pi.plugin.uninstallSuccess"));
       loadPlugins();
     } else {
-      MessagePlugin.error("卸载失败: " + (result.message || "未知错误"));
+      MessagePlugin.error(t("pi.plugin.uninstallFailed", { message: result.message || t("pi.plugin.unknownError") }));
     }
   } catch (e) {
     try {
@@ -88,7 +91,7 @@ const handleRemove = async (source) => {
     } catch {
       /* ignore */
     }
-    MessagePlugin.error("卸载失败: " + (e.stderr || e.message || "未知错误"));
+    MessagePlugin.error(t("pi.plugin.uninstallFailed", { message: e.stderr || e.message || t("pi.plugin.unknownError") }));
   } finally {
     deletingSource.value = "";
   }
@@ -106,12 +109,12 @@ const handleToggleEnabled = (p) => {
   try {
     const result = window.services.setPiExtensionEnabled(p.source, !(p.enabled !== false));
     if (result.success) {
-      MessagePlugin.success(`${p.enabled !== false ? "已禁用" : "已启用"} "${p.name}"，Pi 下次启动生效`);
+      MessagePlugin.success(p.enabled !== false ? t("pi.plugin.disabledToast", { name: p.name }) : t("pi.plugin.enabledToast", { name: p.name }));
     } else {
-      MessagePlugin.error("操作失败: " + (result.message || "未知错误"));
+      MessagePlugin.error(t("pi.plugin.operationFailed", { message: result.message || t("pi.plugin.unknownError") }));
     }
   } catch (e) {
-    MessagePlugin.error("操作失败: " + (e && e.message ? e.message : String(e)));
+    MessagePlugin.error(t("pi.plugin.operationFailed", { message: e && e.message ? e.message : String(e) }));
   } finally {
     togglingSource.value = "";
     loadPlugins();
@@ -125,18 +128,18 @@ const handleUpdateAll = async () => {
   updating.value = true;
   let msg = null;
   try {
-    msg = await MessagePlugin.loading({ content: "正在更新全部扩展（pi update --extensions）...", duration: 0 });
+    msg = await MessagePlugin.loading({ content: t("pi.plugin.updatingAll"), duration: 0 });
     const result = await window.services.updatePiExtensions();
     try { msg.close(); } catch { /* 消息可能已自动关闭 */ }
     if (result.success) {
-      MessagePlugin.success((result.message || "").trim() || "扩展已更新");
+      MessagePlugin.success((result.message || "").trim() || t("pi.plugin.updateSuccess"));
       loadPlugins();
     } else {
-      MessagePlugin.error("更新失败: " + (result.message || "未知错误"));
+      MessagePlugin.error(t("pi.plugin.updateFailed", { message: result.message || t("pi.plugin.unknownError") }));
     }
   } catch (e) {
     try { msg && msg.close(); } catch { /* ignore */ }
-    MessagePlugin.error("更新失败: " + (e.stderr || e.message || "未知错误"));
+    MessagePlugin.error(t("pi.plugin.updateFailed", { message: e.stderr || e.message || t("pi.plugin.unknownError") }));
   } finally {
     updating.value = false;
   }
@@ -160,18 +163,22 @@ const installingName = ref("");
 const deletingSource = ref("");
 
 const MARKET_SORT_OPTIONS = [
-  { label: "下载量最多", value: "downloads" },
-  { label: "最近发布", value: "recent" },
-  { label: "名称 A-Z", value: "name" },
+  { labelKey: "pi.plugin.sort.downloads", value: "downloads" },
+  { labelKey: "pi.plugin.sort.recent", value: "recent" },
+  { labelKey: "pi.plugin.sort.name", value: "name" },
 ];
+const marketSortOptions = computed(() => MARKET_SORT_OPTIONS.map((o) => ({ ...o, label: t(o.labelKey) })));
 
 const MARKET_TYPE_OPTIONS = [
-  { label: "全部类型", value: "" },
+  { labelKey: "pi.plugin.type.all", value: "" },
   { label: "extension", value: "extension" },
   { label: "skill", value: "skill" },
   { label: "theme", value: "theme" },
   { label: "prompt", value: "prompt" },
 ];
+const marketTypeOptions = computed(() =>
+  MARKET_TYPE_OPTIONS.map((o) => (o.labelKey ? { ...o, label: t(o.labelKey) } : o)),
+);
 
 const refreshInstalledNames = () => {
   try {
@@ -198,7 +205,7 @@ const loadMarket = async (page = marketPage.value) => {
     marketLastPage.value = Math.max(data.lastPage || 1, 1);
     marketPage.value = page;
   } catch (e) {
-    marketError.value = (e && (e.message || e.stack || String(e))) || "加载市场失败";
+    marketError.value = (e && (e.message || e.stack || String(e))) || t("pi.plugin.marketError");
     marketItems.value = [];
   } finally {
     marketLoading.value = false;
@@ -232,11 +239,11 @@ const marketDateText = (ts) => {
   if (!ts) return "";
   const diff = Date.now() - ts;
   const days = Math.floor(diff / 86400000);
-  if (days <= 0) return "今天";
-  if (days === 1) return "1 天前";
-  if (days < 30) return `${days} 天前`;
-  if (days < 365) return `${Math.floor(days / 30)} 个月前`;
-  return `${Math.floor(days / 365)} 年前`;
+  if (days <= 0) return t("pi.plugin.today");
+  if (days === 1) return t("pi.plugin.daysAgo", { count: 1 });
+  if (days < 30) return t("pi.plugin.daysAgo", { count: days });
+  if (days < 365) return t("pi.plugin.monthsAgo", { count: Math.floor(days / 30) });
+  return t("pi.plugin.yearsAgo", { count: Math.floor(days / 365) });
 };
 
 // 安装 npm 源扩展（市场列表 / 详情弹窗共用流程）
@@ -247,14 +254,14 @@ const installSource = async (source) => {
   try {
     const result = await window.services.installPiExtension(source);
     if (result.success) {
-      MessagePlugin.success(`${name} 安装完成`);
+      MessagePlugin.success(t("pi.plugin.installSuccess", { name }));
       refreshInstalledNames();
       loadPlugins();
     } else {
-      MessagePlugin.error("安装失败: " + (result.message || "未知错误"));
+      MessagePlugin.error(t("pi.plugin.installFailed", { message: result.message || t("pi.plugin.unknownError") }));
     }
   } catch (e) {
-    MessagePlugin.error("安装失败: " + (e.stderr || e.message || "未知错误"));
+    MessagePlugin.error(t("pi.plugin.installFailed", { message: e.stderr || e.message || t("pi.plugin.unknownError") }));
   } finally {
     installingName.value = "";
   }
@@ -279,9 +286,9 @@ const handleDetailChanged = () => {
 };
 
 const resourceBadges = [
-  { key: "extensions", label: "扩展", color: "#1890ff" },
-  { key: "skills", label: "Skills", color: "#f5222d" },
-  { key: "mcpServers", label: "MCP", color: "#13c2c2" },
+  { key: "extensions", labelKey: "pi.plugin.resources.extensions", color: "#1890ff" },
+  { key: "skills", labelKey: "pi.plugin.resources.skills", color: "#f5222d" },
+  { key: "mcpServers", labelKey: "pi.plugin.resources.mcp", color: "#13c2c2" },
 ];
 
 onMounted(() => {
@@ -302,23 +309,23 @@ defineExpose({ installFromUrl });
     <div class="pi-plugin-tabs">
       <div class="pi-plugin-tabs-left">
         <RadioGroup v-model="activeTab" size="small" variant="default-filled">
-          <RadioButton value="installed">已安装</RadioButton>
-          <RadioButton value="browse" @click="openMarket">浏览市场</RadioButton>
+          <RadioButton value="installed">{{ t("pi.plugin.installedTab") }}</RadioButton>
+          <RadioButton value="browse" @click="openMarket">{{ t("pi.plugin.browseTab") }}</RadioButton>
         </RadioGroup>
-        <span v-if="activeTab === 'installed'" class="pi-section-count">共 {{ plugins.length }} 个扩展</span>
-        <span v-if="activeTab === 'browse'" class="pi-section-count">共 {{ marketTotal }} 个包</span>
+        <span v-if="activeTab === 'installed'" class="pi-section-count">{{ t("pi.plugin.extensionCount", { count: plugins.length }) }}</span>
+        <span v-if="activeTab === 'browse'" class="pi-section-count">{{ t("pi.plugin.packageCount", { count: marketTotal }) }}</span>
       </div>
       <div class="pi-plugin-tabs-right">
         <template v-if="activeTab === 'installed'">
-          <Tooltip content="更新全部已安装扩展（pi update --extensions）" placement="top">
+          <Tooltip :content="t('pi.plugin.updateAllTooltip')" placement="top">
             <Button size="small" variant="outline" :loading="updating" :disabled="updating || !!deletingSource" @click="handleUpdateAll">
-              <template #icon><CloudDownloadIcon /></template> 一键更新
+              <template #icon><CloudDownloadIcon /></template> {{ t("pi.plugin.updateAll") }}
             </Button>
           </Tooltip>
           <Button size="small" variant="outline" @click="openAddDialog">
-            <template #icon><AddIcon /></template> 添加扩展
+            <template #icon><AddIcon /></template> {{ t("pi.plugin.addExtension") }}
           </Button>
-          <Tooltip content="刷新" placement="top">
+          <Tooltip :content="t('common.refresh')" placement="top">
             <Button size="small" variant="outline" :loading="loading" @click="refresh">
               <template #icon><RefreshIcon /></template>
             </Button>
@@ -327,7 +334,7 @@ defineExpose({ installFromUrl });
         <template v-else>
           <Input
             v-model="marketName"
-            placeholder="搜索包名 / 描述 / 作者..."
+            :placeholder="t('pi.plugin.searchPlaceholder')"
             clearable
             size="small"
             class="pi-market-search"
@@ -336,9 +343,9 @@ defineExpose({ installFromUrl });
           >
             <template #prefixIcon><SearchIcon /></template>
           </Input>
-          <Select v-model="marketType" :options="MARKET_TYPE_OPTIONS" size="small" class="pi-market-select" @change="marketSearch" />
-          <Select v-model="marketSort" :options="MARKET_SORT_OPTIONS" size="small" class="pi-market-select" @change="marketSearch" />
-          <Tooltip content="刷新" placement="top">
+          <Select v-model="marketType" :options="marketTypeOptions" size="small" class="pi-market-select" @change="marketSearch" />
+          <Select v-model="marketSort" :options="marketSortOptions" size="small" class="pi-market-select" @change="marketSearch" />
+          <Tooltip :content="t('common.refresh')" placement="top">
             <Button size="small" variant="outline" :loading="marketLoading" @click="marketSearch" class="pi-market-refresh-btn">
               <template #icon><RefreshIcon /></template>
             </Button>
@@ -353,20 +360,20 @@ defineExpose({ installFromUrl });
       <Alert
         v-if="!piInstalled"
         theme="warning"
-        message="未检测到 pi 命令，可能未安装 Pi Agent。仅可浏览市场，无法安装扩展。"
+        :message="t('pi.plugin.piNotInstalled')"
       />
 
       <!-- 工具栏已并入上方子标签栏右侧：搜索 + 类型筛选 + 排序 + 刷新 -->
 
       <div v-if="marketError" class="pi-market-error">
         {{ marketError }}
-        <Button size="small" variant="outline" @click="marketSearch">重试</Button>
+        <Button size="small" variant="outline" @click="marketSearch">{{ t("common.retry") }}</Button>
       </div>
 
-      <div v-else-if="marketLoading" class="pi-market-loading">加载中...</div>
+      <div v-else-if="marketLoading" class="pi-market-loading">{{ t("common.loading") }}</div>
 
       <div v-else-if="!marketItems.length" class="pi-market-empty">
-        <Empty description="无匹配的包" />
+        <Empty :description="t('pi.plugin.noMatch')" />
       </div>
 
       <div v-else class="pi-market-list">
@@ -379,7 +386,7 @@ defineExpose({ installFromUrl });
           <div class="pi-market-item-main">
             <div class="pi-market-item-head">
               <span class="pi-market-name mono">{{ pkg.name }}</span>
-              <Tag v-for="t in pkg.types" :key="t" size="small" variant="light" class="pi-market-type">{{ t }}</Tag>
+              <Tag v-for="pkgType in pkg.types" :key="pkgType" size="small" variant="light" class="pi-market-type">{{ pkgType }}</Tag>
             </div>
             <p v-if="pkg.description" class="pi-market-desc">{{ pkg.description }}</p>
             <div class="pi-market-meta">
@@ -397,9 +404,9 @@ defineExpose({ installFromUrl });
               :disabled="!piInstalled || !!installingName"
               @click.stop="installFromMarket(pkg)"
             >
-              <template #icon><DownloadIcon /></template> 安装
+              <template #icon><DownloadIcon /></template> {{ t("pi.plugin.install") }}
             </Button>
-            <Button v-else size="small" variant="outline" disabled @click.stop>已安装</Button>
+            <Button v-else size="small" variant="outline" disabled @click.stop>{{ t("pi.plugin.installed") }}</Button>
           </div>
         </div>
       </div>
@@ -422,10 +429,10 @@ defineExpose({ installFromUrl });
     <!-- ==================== 已安装 ==================== -->
     <template v-else>
       <div v-if="plugins.length === 0" class="pi-plugin-empty">
-        <Empty description="暂无已安装的 Pi 扩展">
+        <Empty :description="t('pi.plugin.installedEmpty')">
           <template #action>
             <Button size="small" theme="primary" @click="openAddDialog">
-              <template #icon><AddIcon /></template> 添加扩展
+              <template #icon><AddIcon /></template> {{ t("pi.plugin.addExtension") }}
             </Button>
           </template>
         </Empty>
@@ -438,17 +445,17 @@ defineExpose({ installFromUrl });
             <div class="pi-plugin-card-header">
               <span class="pi-plugin-name mono">{{ p.name }}</span>
               <Tag v-if="p.version" size="small" variant="light">{{ p.version }}</Tag>
-              <Tag v-if="p.enabled === false" size="small" theme="warning" variant="light">已禁用</Tag>
+              <Tag v-if="p.enabled === false" size="small" theme="warning" variant="light">{{ t("common.disabled") }}</Tag>
               <Tag v-for="badge in resourceBadges" :key="badge.key"
                 v-show="p.resources && p.resources[badge.key] && p.resources[badge.key].length"
                 size="small"
                 :style="{ background: badge.color + '18', color: badge.color, borderColor: badge.color + '40' }"
-              >{{ badge.label }} {{ p.resources[badge.key].length }}</Tag>
+              >{{ t(badge.labelKey) }} {{ p.resources[badge.key].length }}</Tag>
             </div>
             <p v-if="p.description" class="pi-plugin-desc">{{ p.description }}</p>
           </div>
           <div class="pi-plugin-card-side" @click.stop>
-            <Tooltip :content="p.enabled !== false ? '禁用此扩展（Pi 下次启动生效）' : '启用此扩展（Pi 下次启动生效）'" placement="top">
+            <Tooltip :content="p.enabled !== false ? t('pi.plugin.disableExtension') : t('pi.plugin.enableExtension')" placement="top">
               <Switch
                 :value="p.enabled !== false"
                 size="small"
@@ -457,7 +464,7 @@ defineExpose({ installFromUrl });
                 @click.stop
               />
             </Tooltip>
-            <Popconfirm content="确定卸载此扩展？" @confirm="handleRemove(p.source)">
+            <Popconfirm :content="t('pi.plugin.uninstallConfirm')" @confirm="handleRemove(p.source)">
               <Button
                 size="small"
                 variant="text"
@@ -476,7 +483,7 @@ defineExpose({ installFromUrl });
 
     <Dialog
       v-model:visible="addDialog"
-      header="安装 Pi 扩展"
+      :header="t('pi.plugin.installTitle')"
       width="520px"
       :confirm-btn="null"
       :cancel-btn="null"
@@ -484,21 +491,21 @@ defineExpose({ installFromUrl });
     >
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
-          <label style="font-size:13px;color:var(--td-text-color-secondary);">扩展包名或来源</label>
+          <label style="font-size:13px;color:var(--td-text-color-secondary);">{{ t("pi.plugin.extensionSource") }}</label>
           <Button size="small" variant="text" theme="primary" @click="openPiDevPackages">
             <template #icon><LinkIcon /></template> pi.dev/packages
           </Button>
         </div>
-        <Input v-model="newPluginName" placeholder='例如：@hypabolic/pi-hypa 或 npm:@hypabolic/pi-hypa' :disabled="installing" />
+        <Input v-model="newPluginName" :placeholder="t('pi.plugin.extensionSourcePlaceholder')" :disabled="installing" />
 
         <div style="font-size:12px;color:var(--td-text-color-placeholder);margin-top:4px;">
-          支持格式：<code>npm:package</code>、<code>git:github.com/user/repo</code>、<code>https://...</code>
+          {{ t("pi.plugin.supportedFormats") }}<code>npm:package</code>、<code>git:github.com/user/repo</code>、<code>https://...</code>
         </div>
       </div>
       <template #footer>
         <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <Button variant="outline" :disabled="installing" @click="addDialog = false">取消</Button>
-          <Button theme="primary" :loading="installing" @click="handleAdd">{{ installing ? '安装中...' : '安装' }}</Button>
+          <Button variant="outline" :disabled="installing" @click="addDialog = false">{{ t("common.cancel") }}</Button>
+          <Button theme="primary" :loading="installing" @click="handleAdd">{{ installing ? t('pi.plugin.installing') : t('pi.plugin.install') }}</Button>
         </div>
       </template>
     </Dialog>

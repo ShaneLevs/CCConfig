@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { Drawer, Tag, Skeleton, Empty, MessagePlugin, Button, Tooltip } from "tdesign-vue-next";
 import { CopyIcon } from "tdesign-icons-vue-next";
 
@@ -14,6 +15,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:visible"]);
+const { t } = useI18n();
 
 const toolList = ref([]);
 const toolLoading = ref(false);
@@ -29,15 +31,15 @@ const loadTools = async () => {
     if (result.success) {
       toolList.value = result.tools;
       if (result.tools.length === 0) {
-        MessagePlugin.info("该 MCP 服务器未提供任何工具");
+        MessagePlugin.info(t("mcp.noTools"));
       }
     } else {
       toolError.value = result.error;
-      MessagePlugin.error("获取工具列表失败: " + result.error);
+      MessagePlugin.error(t("mcp.fetchToolsFailed", { message: result.error }));
     }
   } catch (e) {
     toolError.value = e.message;
-    MessagePlugin.error("获取工具列表失败: " + e.message);
+    MessagePlugin.error(t("mcp.fetchToolsFailed", { message: e.message }));
   } finally {
     toolLoading.value = false;
   }
@@ -57,9 +59,9 @@ watch(() => props.config, () => {
 const copyText = (text) => {
   try {
     window.utools.copyText(text);
-    MessagePlugin.success("已复制");
+    MessagePlugin.success(t("common.copied"));
   } catch {
-    MessagePlugin.error("复制失败");
+    MessagePlugin.error(t("common.copyFailed"));
   }
 };
 
@@ -96,12 +98,12 @@ const formatSchema = (schema) => {
     </div>
 
     <div v-else-if="toolError" class="tool-error">
-      <Tag theme="danger" variant="light">连接失败</Tag>
+      <Tag theme="danger" variant="light">{{ t('mcp.connectionFailed') }}</Tag>
       <span class="tool-error-msg">{{ toolError }}</span>
     </div>
 
     <div v-else-if="!toolList.length && !toolLoading" class="tool-empty">
-      <Empty description="暂无工具" />
+      <Empty :description="t('mcp.noToolData')" />
     </div>
 
     <div v-else class="tool-list">
@@ -110,7 +112,7 @@ const formatSchema = (schema) => {
         <div class="tool-meta-row">
           <div class="tool-meta">
             <span class="tool-meta-label">Tool name:</span> {{ tool.name }}
-            <Tooltip content="复制 Tool name" placement="top">
+            <Tooltip :content="t('mcp.copyToolName')" placement="top">
               <Button size="small" variant="text" @click="copyText(tool.name)">
                 <CopyIcon style="font-size: 14px" />
               </Button>
@@ -120,7 +122,7 @@ const formatSchema = (schema) => {
         <div class="tool-meta-row">
           <div class="tool-meta">
             <span class="tool-meta-label">Full name:</span> mcp__{{ serverName }}__{{ tool.name }}
-            <Tooltip content="复制 Full name" placement="top">
+            <Tooltip :content="t('mcp.copyFullName')" placement="top">
               <Button size="small" variant="text" @click="copyText('mcp__' + serverName + '__' + tool.name)">
                 <CopyIcon style="font-size: 14px" />
               </Button>
@@ -130,7 +132,7 @@ const formatSchema = (schema) => {
 
         <div class="tool-section">
           <div class="tool-section-title">Description:</div>
-          <div class="tool-desc">{{ tool.description || '无描述' }}</div>
+          <div class="tool-desc">{{ tool.description || t('mcp.noDescription') }}</div>
         </div>
 
         <div v-if="formatSchema(tool.inputSchema)" class="tool-section">

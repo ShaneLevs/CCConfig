@@ -26,6 +26,7 @@ global.window = {
   },
 }
 
+process.env.CCCONFIG_LOCALE = process.env.CCCONFIG_LOCALE || 'zh-CN'
 const dshUsage = require('../public/preload/services/dsh-usage')
 
 let passed = 0

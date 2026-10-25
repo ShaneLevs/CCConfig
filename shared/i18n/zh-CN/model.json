@@ -1,0 +1,33 @@
+{
+  "model": {
+    "addTitle": "添加模型",
+    "editTitle": "编辑模型",
+    "add": "添加",
+    "save": "保存",
+    "provider": "所属供应商",
+    "id": "模型 ID",
+    "idRequired": "请输入模型 ID",
+    "idPlaceholder": "模型 ID",
+    "selectOrEnter": "输入或从下拉选择模型",
+    "fetching": "正在自动拉取模型列表…",
+    "fetchFailed": "自动获取失败：{message}",
+    "retry": "重试",
+    "fetchedCount": "已自动获取 {count} 个模型，选中后自动填充名称/上下文等",
+    "displayName": "显示名称",
+    "displayNamePlaceholder": "留空则使用模型 ID",
+    "displayNameEditPlaceholder": "显示名称",
+    "inputType": "输入类型",
+    "text": "文本 (text)",
+    "image": "图像 (image)",
+    "reasoning": "推理模型",
+    "advanced": "高级配置（费用 / 兼容性）",
+    "cost": "费用 (cost) — 每百万 Token",
+    "input": "输入",
+    "output": "输出",
+    "cacheRead": "缓存读取",
+    "cacheWrite": "缓存写入",
+    "compat": "兼容性 (compat)",
+    "compatKeyPlaceholder": "compat 字段名",
+    "compatValuePlaceholder": "compat 值"
+  }
+}

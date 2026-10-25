@@ -42,12 +42,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run version:check && vite build",
-    "build:app": "npm run version:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
+    "build": "npm run version:check && npm run i18n:check && vite build",
+    "build:app": "npm run version:check && npm run i18n:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
     "tauri:dev": "npm run build:app && cargo tauri dev",
     "tauri:build": "npm run build:app && cargo tauri build",
     "bump": "node scripts/bump-version.mjs",
-    "version:check": "node scripts/check-versions.mjs"
+    "version:check": "node scripts/check-versions.mjs",
+    "i18n:check": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.47.0",
@@ -55,7 +56,8 @@
     "js-yaml": "^5.4.2",
     "ogl": "^1.0.11",
     "tdesign-vue-next": "^1.20.8",
-    "vue": "^3.5.43"
+    "vue": "^3.5.43",
+    "vue-i18n": "^11.4.16"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.9",

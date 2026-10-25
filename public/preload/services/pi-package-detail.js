@@ -2,6 +2,7 @@
 // 过滤数组；单资源启停对齐 pi config TUI 的过滤语义（applyPatterns）。
 const fs = require("node:fs");
 const path = require("node:path");
+const { t } = require("./i18n");
 
 const { PI_NPM_DIR, readJson, readPiSettings, writePiSettings } = require("./pi-common");
 
@@ -134,12 +135,12 @@ const setPiExtensionEnabled = (source, enabled) => {
       (e) => (typeof e === "string" ? e : (e && e.source) || "") === source,
     );
     if (idx === -1) {
-      return { success: false, message: `未找到包条目: ${source}` };
+      return { success: false, message: t("serviceAgent.piPackage.packageEntryNotFound", { source }) };
     }
     const entry = packages[idx];
     if (enabled) {
       if (typeof entry === "string") {
-        return { success: true, message: "该扩展已处于启用状态" };
+        return { success: true, message: t("serviceAgent.piPackage.extensionAlreadyEnabled") };
       }
       const next = { ...entry };
       for (const k of PI_FILTER_KEYS) delete next[k];
@@ -147,7 +148,7 @@ const setPiExtensionEnabled = (source, enabled) => {
       packages[idx] = hasFilters ? next : next.source;
     } else {
       if (isPiPackageEntryDisabled(entry)) {
-        return { success: true, message: "该扩展已处于禁用状态" };
+        return { success: true, message: t("serviceAgent.piPackage.extensionAlreadyDisabled") };
       }
       const next = typeof entry === "string" ? { source: entry } : { ...entry };
       for (const k of PI_FILTER_KEYS) next[k] = [];
@@ -157,7 +158,9 @@ const setPiExtensionEnabled = (source, enabled) => {
     writePiSettings(settings);
     return {
       success: true,
-      message: enabled ? "已启用，Pi 下次启动生效" : "已禁用，Pi 下次启动生效",
+      message: enabled
+        ? t("serviceAgent.piPackage.enabledNextStart")
+        : t("serviceAgent.piPackage.disabledNextStart"),
     };
   } catch (e) {
     return { success: false, message: e && e.message ? e.message : String(e) };
@@ -290,7 +293,7 @@ const getPiExtensionDetail = (source) => {
     const entry = (Array.isArray(settings.packages) ? settings.packages : []).find(
       (e) => (typeof e === "string" ? e : (e && e.source) || "") === source,
     );
-    if (!entry) return { success: false, message: `未找到包条目: ${source}` };
+    if (!entry) return { success: false, message: t("serviceAgent.piPackage.packageEntryNotFound", { source }) };
     const name = String(source).replace(/^npm:/, "");
     const pkgDir = path.join(PI_NPM_DIR(), ...String(source).replace("npm:", "").split("/"));
     const exists = fs.existsSync(pkgDir);
@@ -352,16 +355,16 @@ const getPiExtensionDetail = (source) => {
 const setPiPackageResourceEnabled = (source, type, relPath, enabled) => {
   try {
     if (!PI_RES_TYPES.includes(type)) {
-      return { success: false, message: `不支持的资源类型: ${type}` };
+      return { success: false, message: t("serviceAgent.piPackage.unsupportedResourceType", { type }) };
     }
     const rel = toPosixPath(relPath).replace(/^\.\//, "");
-    if (!rel) return { success: false, message: "资源路径为空" };
+    if (!rel) return { success: false, message: t("serviceAgent.piPackage.resourcePathEmpty") };
     const settings = readPiSettings();
     const packages = Array.isArray(settings.packages) ? [...settings.packages] : [];
     const idx = packages.findIndex(
       (e) => (typeof e === "string" ? e : (e && e.source) || "") === source,
     );
-    if (idx === -1) return { success: false, message: `未找到包条目: ${source}` };
+    if (idx === -1) return { success: false, message: t("serviceAgent.piPackage.packageEntryNotFound", { source }) };
     const entry = packages[idx];
     const obj = typeof entry === "string" ? { source: entry } : { ...entry };
     const current = Array.isArray(obj[type]) ? obj[type].map(String) : undefined;
@@ -369,7 +372,7 @@ const setPiPackageResourceEnabled = (source, type, relPath, enabled) => {
     let arr;
     if (enabled) {
       if (current === undefined) {
-        return { success: true, message: "该资源已处于启用状态" };
+        return { success: true, message: t("serviceAgent.piPackage.resourceAlreadyEnabled") };
       }
       if (current.length === 0) {
         arr = ["!*", `+${rel}`];
@@ -382,7 +385,7 @@ const setPiPackageResourceEnabled = (source, type, relPath, enabled) => {
       }
     } else {
       if (current !== undefined && current.length === 0) {
-        return { success: true, message: "该资源已随整包禁用" };
+        return { success: true, message: t("serviceAgent.piPackage.resourceDisabledWithPackage") };
       }
       arr = (current || []).filter(
         (p) => p !== `-${rel}` && !(hits(p) && !p.startsWith("-") && !p.startsWith("!")),
@@ -397,7 +400,9 @@ const setPiPackageResourceEnabled = (source, type, relPath, enabled) => {
     writePiSettings(settings);
     return {
       success: true,
-      message: enabled ? "已启用，Pi 下次启动生效" : "已禁用，Pi 下次启动生效",
+      message: enabled
+        ? t("serviceAgent.piPackage.enabledNextStart")
+        : t("serviceAgent.piPackage.disabledNextStart"),
     };
   } catch (e) {
     return { success: false, message: e && e.message ? e.message : String(e) };

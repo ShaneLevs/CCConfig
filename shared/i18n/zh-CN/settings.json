@@ -1,0 +1,17 @@
+{
+  "settings": {
+    "title": "设置",
+    "tab": {
+      "general": "通用",
+      "agents": "Agent 显示",
+      "appearance": "外观"
+    },
+    "language": {
+      "title": "语言",
+      "desc": "界面语言。跟随系统时会根据系统语言自动选择简体中文或 English。",
+      "system": "跟随系统",
+      "zhCN": "简体中文",
+      "enUS": "English"
+    }
+  }
+}

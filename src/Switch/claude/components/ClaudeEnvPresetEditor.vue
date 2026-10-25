@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from "vue-i18n";
 import { Checkbox, RadioGroup, RadioButton } from "tdesign-vue-next";
 
 // claude env「常用设置」预设块：三个布尔预设复选框 + 思考强度 RadioGroup。
@@ -9,18 +10,20 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
 });
 
+const { t } = useI18n();
+
 const effortLevelClass = (level) => (level ? `effort-${level}` : "");
 </script>
 
 <template>
   <div class="env-preset-list" :class="{ 'global-preset-list': disabled }">
     <div class="env-preset-row preset-checkboxes">
-      <Checkbox v-model="values['CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS']" :disabled="disabled">Teammates 模式</Checkbox>
-      <Checkbox v-model="values['ENABLE_TOOL_SEARCH']" :disabled="disabled">启用工具搜索</Checkbox>
-      <Checkbox v-model="values['CLAUDE_CODE_NO_FLICKER']" :disabled="disabled">关闭终端闪烁</Checkbox>
+      <Checkbox v-model="values['CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS']" :disabled="disabled">{{ t('claude.env.teammates') }}</Checkbox>
+      <Checkbox v-model="values['ENABLE_TOOL_SEARCH']" :disabled="disabled">{{ t('claude.env.toolSearch') }}</Checkbox>
+      <Checkbox v-model="values['CLAUDE_CODE_NO_FLICKER']" :disabled="disabled">{{ t('claude.env.noFlicker') }}</Checkbox>
     </div>
     <div class="env-preset-row env-preset-row-effort">
-      <span class="env-preset-label">思考强度</span>
+      <span class="env-preset-label">{{ t('claude.env.effort') }}</span>
       <RadioGroup
         :model-value="values['CLAUDE_CODE_EFFORT_LEVEL'] || ''"
         variant="default-filled"

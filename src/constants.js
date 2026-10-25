@@ -13,14 +13,14 @@ export const managedFields = [
 // 模型「上下文窗口 / 最大输出」预设档位，各应用配置页共用。
 // value 0 = 默认（不写入该字段，回退 CLI 自带默认）；数值统一按十进制 K 计。
 export const CTX_OPTIONS = [
-  { label: "默认", value: 0 },
+  { labelKey: "common.default", value: 0 },
   { label: "200K", value: 200000 },
   { label: "400K", value: 400000 },
   { label: "600K", value: 600000 },
   { label: "1M", value: 1000000 },
 ];
 export const TOKENS_OPTIONS = [
-  { label: "默认", value: 0 },
+  { labelKey: "common.default", value: 0 },
   { label: "64K", value: 64000 },
   { label: "128K", value: 128000 },
   { label: "256K", value: 256000 },
@@ -33,13 +33,14 @@ export const MODEL_LIMIT_PRESETS = {
   output: { options: TOKENS_OPTIONS, step: 1000, defaultCustom: 64000 },
 };
 
+// labelKey 只用于展示；key / trueValue / options[].value 会写入配置，永不翻译。
 export const envPresets = [
-  { key: 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', label: 'Teammates 模式', type: 'boolean', trueValue: '1' },
-  { key: 'ENABLE_TOOL_SEARCH', label: '启用工具搜索', type: 'boolean', trueValue: 'true' },
+  { key: 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', labelKey: 'claude.env.teammates', type: 'boolean', trueValue: '1' },
+  { key: 'ENABLE_TOOL_SEARCH', labelKey: 'claude.env.toolSearch', type: 'boolean', trueValue: 'true' },
   {
-    key: 'CLAUDE_CODE_EFFORT_LEVEL', label: '思考强度', type: 'select',
+    key: 'CLAUDE_CODE_EFFORT_LEVEL', labelKey: 'claude.env.effort', type: 'select',
     options: [
-      { label: 'default', value: '' },
+      { labelKey: 'common.default', value: '' },
       { label: 'low', value: 'low' },
       { label: 'medium', value: 'medium' },
       { label: 'high', value: 'high' },
@@ -47,5 +48,5 @@ export const envPresets = [
       { label: 'max', value: 'max' },
     ],
   },
-  { key: 'CLAUDE_CODE_NO_FLICKER', label: '关闭终端闪烁', type: 'boolean', trueValue: '1' },
+  { key: 'CLAUDE_CODE_NO_FLICKER', labelKey: 'claude.env.noFlicker', type: 'boolean', trueValue: '1' },
 ];

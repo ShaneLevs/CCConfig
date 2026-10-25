@@ -7,6 +7,7 @@ const http = require("node:http");
 const https = require("node:https");
 const { execSync } = require("node:child_process");
 const usage = require("./usage");
+const { t } = require("./i18n");
 const {
   PI_DIR,
   PI_NPM_DIR,
@@ -96,7 +97,7 @@ const fetchProviderModels = async (baseUrl, apiKey, timeout = 10_000) => {
               const parsed = JSON.parse(data);
               const list = parsed.data || parsed.models || parsed;
               if (!Array.isArray(list))
-                return reject(new Error("响应格式错误"));
+                return reject(new Error(t("serviceAgent.pi.invalidResponse")));
               resolve(
                 list
                   .map((m) => {
@@ -145,7 +146,7 @@ const fetchProviderModels = async (baseUrl, apiKey, timeout = 10_000) => {
       lastErr = e;
     }
   }
-  throw lastErr || new Error("获取模型列表失败");
+  throw lastErr || new Error(t("serviceAgent.pi.fetchModelsFailed"));
 };
 
 const getPiProviderList = () => {
@@ -210,11 +211,11 @@ const normalizeCost = (cost) => {
 const updatePiModel = (providerName, modelId, updates) => {
   const models = readPiModels();
   if (!models.providers?.[providerName])
-    throw new Error(`供应商 ${providerName} 不存在`);
+    throw new Error(t("serviceAgent.common.providerNotFound", { name: providerName }));
   const prov = models.providers[providerName];
   if (!prov.models) return;
   const idx = prov.models.findIndex((m) => m.id === modelId);
-  if (idx === -1) throw new Error(`模型 ${modelId} 不存在`);
+  if (idx === -1) throw new Error(t("serviceAgent.common.modelNotFound", { id: modelId }));
   // 不允许通过编辑改 id（id 是唯一标识）
   const next = { ...prov.models[idx] };
   if (updates.name !== undefined) next.name = updates.name;
@@ -245,11 +246,11 @@ const updatePiProvider = (providerName, updates) => {
 
 const addPiProvider = (providerName, cfg = {}) => {
   if (!providerName || typeof providerName !== "string")
-    throw new Error("供应商名不能为空");
+    throw new Error(t("serviceAgent.common.providerNameRequired"));
   const models = readPiModels();
   if (!models.providers) models.providers = {};
   if (models.providers[providerName])
-    throw new Error(`供应商 ${providerName} 已存在`);
+    throw new Error(t("serviceAgent.common.providerExists", { name: providerName }));
   models.providers[providerName] = {
     apiKey: cfg.apiKey || "",
     baseUrl: cfg.baseUrl || "",
@@ -263,7 +264,7 @@ const addPiProvider = (providerName, cfg = {}) => {
 
 const deletePiProvider = (providerName) => {
   const models = readPiModels();
-  if (!models.providers?.[providerName]) throw new Error("供应商不存在");
+  if (!models.providers?.[providerName]) throw new Error(t("serviceAgent.common.providerNotFoundNoName"));
   delete models.providers[providerName];
   writePiModels(models);
   // 清理 settings 中的 defaultProvider 指向
@@ -275,15 +276,15 @@ const deletePiProvider = (providerName) => {
 };
 
 const addPiModel = (providerName, model) => {
-  if (!providerName) throw new Error("供应商名不能为空");
-  if (!model?.id) throw new Error("模型 ID 不能为空");
+  if (!providerName) throw new Error(t("serviceAgent.common.providerNameRequired"));
+  if (!model?.id) throw new Error(t("serviceAgent.common.modelIdRequired"));
   const models = readPiModels();
   if (!models.providers?.[providerName])
-    throw new Error(`供应商 ${providerName} 不存在`);
+    throw new Error(t("serviceAgent.common.providerNotFound", { name: providerName }));
   const prov = models.providers[providerName];
   if (!prov.models) prov.models = [];
   if (prov.models.some((m) => m.id === model.id))
-    throw new Error(`模型 ${model.id} 已存在`);
+    throw new Error(t("serviceAgent.common.modelExists", { id: model.id }));
   const cost = normalizeCost(model.cost);
   prov.models.push({
     id: model.id,
@@ -301,7 +302,7 @@ const addPiModel = (providerName, model) => {
 const deletePiModel = (providerName, modelId) => {
   const models = readPiModels();
   if (!models.providers?.[providerName])
-    throw new Error(`供应商 ${providerName} 不存在`);
+    throw new Error(t("serviceAgent.common.providerNotFound", { name: providerName }));
   const prov = models.providers[providerName];
   if (!prov.models) return;
   prov.models = prov.models.filter((m) => m.id !== modelId);
