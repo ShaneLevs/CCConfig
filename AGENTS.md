@@ -7,9 +7,20 @@ CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / o
 Vue 3 (`<script setup>`) + Vite + TDesign Vue Next + @lucide/vue；解析库 json5 / js-yaml / smol-toml；MCP SDK；ogl（深色背景特效）。
 
 ```bash
-npm run dev     # 开发（localhost:5173，watch public/preload/** 自动重打包）
-npm run build   # 生产构建（含 esbuild 打包 preload）
+npm run dev            # 开发（localhost:5173，watch public/preload/** 自动重打包）
+npm run build          # 生产构建（含 esbuild 打包 preload）
+npm run version:check  # 校验 5 处版本号是否一致（build / build:app 已内置）
+npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / major 亦可）
 ```
+
+## 版本号
+
+版本号手写在 5 处，分两条发行线：**app**（`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`）与 **utools**（`public/plugin.json`）；默认同号，两条线一起发。
+
+- 改版本只走 `npm run bump -- <版本|patch|minor|major>`（`scripts/bump-version.mjs`），它会就地替换 5 个文件的版本行；`--app` / `--utools` 可只改一条线。**不要手改单个文件**：v1.0.1 曾出现 dmg 文件名 / 应用内关于 / git tag 各说各话。
+- `npm run version:check`（`scripts/check-versions.mjs`）已挂在 `build` / `build:app` 前面，不一致直接拦下并列出该改哪几个文件。
+- 落点清单与读写规则集中在 `scripts/version-files.mjs`（新增发行目标时只改这里）。
+- 发布顺序：`bump` → 提交 → `git tag vX.Y.Z` → `npm run tauri:build` → `gh release create vX.Y.Z <dmg>`；tag 用小写 `v` 前缀（历史遗留的 `V2.2.0` 不再沿用）。
 
 ## Git
 
