@@ -338,7 +338,9 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     };
 
     let mut items: Vec<Box<dyn IsMenuItem<tauri::Wry>>> = Vec::new();
-    items.push(Box::new(MenuItem::with_id(app, "stat-status", status_text, false, None::<&str>)?));
+    // 信息行必须是 enabled=true：macOS 会把 disabled 菜单项自动画成灰色，暗色菜单下几乎看不清。
+    // 这些 id 没有对应的 on_menu_event 分支，点击不会触发任何动作。
+    items.push(Box::new(MenuItem::with_id(app, "stat-status", status_text, true, None::<&str>)?));
 
     if enabled && running {
         // 一行一项：标签与主窗口「网关」页的四项统计保持一致
@@ -364,7 +366,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                     .replace("{value}", &fmt_pct(cached, prompt)),
             ),
         ] {
-            items.push(Box::new(MenuItem::with_id(app, id, text, false, None::<&str>)?));
+            items.push(Box::new(MenuItem::with_id(app, id, text, true, None::<&str>)?));
         }
     }
 
