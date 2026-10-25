@@ -8,6 +8,12 @@
 //   3. 只监听 127.0.0.1，用启动参数传入的随机 token 校验，防止同机其他进程调用。
 //   4. sidecar 启动后立即 fireEnter 一次，等价 uTools 的「插件进入」，
 //      以便 autoroute 按用户配置自启动（桌面版网关需常驻）。
+//   5. 异步任务通道：services 方法返回 Promise 时（外部网络请求等慢操作），
+//      /rpc 立即回 {ok:true, async:true, taskId}，结果就绪后经 /rpc-poll 长轮询取回。
+//      WebView 的同步 XHR 只等「函数调用 + 判定 thenable」这一小段，主线程不再被慢网络卡死；
+//      bridge 侧对这类调用返回真 Promise，await / .then 语义与 uTools 版一致。
+//      注意：这只覆盖「返回 Promise」的方法；函数体内的同步慢操作（execSync 等）
+//      仍会同时阻塞 WebView 与 sidecar 事件循环，禁止新增。
 //
 // 参数：--port <n>（0 = 由系统分配） --token <str> --parent-pid <n> --data-dir <path>
 
@@ -84,6 +90,65 @@ const utoolsHandlers = {
   },
 };
 
+// ==================== 异步任务通道 ====================
+
+const asyncTasks = new Map(); // taskId -> task；插入序即 id 序，淘汰从最旧开始
+let asyncTaskSeq = 0;
+const ASYNC_TASK_KEEP = 256; // 已注册任务上限（含未完成），防止内存无限增长
+const RPC_POLL_MAX_WAIT = 25_000; // 长轮询等待上限，到点回 pending 让客户端重连
+
+function registerAsyncTask(method, promise) {
+  const taskId = `task-${++asyncTaskSeq}`;
+  const task = {
+    method,
+    createdAt: Date.now(),
+    settled: false,
+    ok: false,
+    value: null,
+    error: "",
+    waiters: [],
+  };
+  asyncTasks.set(taskId, task);
+  while (asyncTasks.size > ASYNC_TASK_KEEP) {
+    const oldest = asyncTasks.keys().next().value;
+    asyncTasks.delete(oldest); // 未完成任务被淘汰时，轮询方会收到 gone
+  }
+  Promise.resolve(promise).then(
+    (v) => settleAsyncTask(task, true, v),
+    (e) => settleAsyncTask(task, false, e),
+  );
+  return taskId;
+}
+
+function settleAsyncTask(task, ok, payload) {
+  if (task.settled) return;
+  task.settled = true;
+  task.ok = ok;
+  if (ok) {
+    const value = payload === undefined ? null : payload;
+    try {
+      // 提前校验可序列化性：坏值按失败落库，避免 /rpc-poll 序列化时挂死响应
+      JSON.stringify(value);
+      task.value = value;
+    } catch (e) {
+      task.ok = false;
+      task.error = `返回值无法序列化为 JSON: ${e.message}`;
+    }
+  } else {
+    task.error = String((payload && payload.message) || payload);
+  }
+  const cost = Date.now() - task.createdAt;
+  if (!task.ok) console.error(`[sidecar] ${task.method} (异步) 失败: ${task.error}`);
+  else if (cost > 300) console.error(`[sidecar] ${task.method} (异步) 耗时 ${cost}ms`);
+  for (const wake of task.waiters.splice(0)) wake();
+}
+
+function sendPollResult(res, task) {
+  if (!task.settled) return sendJson(res, 200, { status: "pending" });
+  if (task.ok) return sendJson(res, 200, { status: "done", value: task.value });
+  return sendJson(res, 200, { status: "error", error: task.error });
+}
+
 // ==================== HTTP ====================
 
 function sendJson(res, status, payload) {
@@ -121,7 +186,7 @@ function readBody(req) {
   });
 }
 
-async function dispatch(method, args) {
+function dispatch(method, args) {
   if (method.startsWith("__utools.")) {
     const key = method.slice("__utools.".length);
     const handler = utoolsHandlers[key];
@@ -131,7 +196,8 @@ async function dispatch(method, args) {
   if (bootError) throw new Error(`services 未就绪: ${bootError.message}`);
   const fn = services[method];
   if (typeof fn !== "function") throw new Error(`未知的 services 方法: ${method}`);
-  return await Promise.resolve(fn(...args));
+  // 故意不 await：thenable 交给异步任务通道，由 /rpc-poll 取结果
+  return fn(...args);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -185,7 +251,10 @@ const server = http.createServer(async (req, res) => {
   if (url === "/rpc" && req.method === "POST") {
     const startedAt = Date.now();
     const warnTimer = setTimeout(() => {
-      console.error(`[sidecar] 慢调用告警：已执行 ${SLOW_CALL_WARN_MS}ms 仍未返回，WebView 主线程处于阻塞状态`);
+      console.error(
+        `[sidecar] 慢调用告警：同步段已执行 ${SLOW_CALL_WARN_MS}ms 仍未返回` +
+          `（函数体内的同步慢操作会同时阻塞 WebView 与 sidecar）`,
+      );
     }, SLOW_CALL_WARN_MS);
 
     let method = "?";
@@ -195,7 +264,14 @@ const server = http.createServer(async (req, res) => {
       method = String(payload.method || "");
       const args = Array.isArray(payload.args) ? payload.args : [];
       if (VERBOSE) console.error(`[rpc] ${method}`);
-      const value = await dispatch(method, args);
+      const value = dispatch(method, args);
+      if (value && typeof value.then === "function") {
+        // 异步任务通道：先回 taskId 解除 WebView 阻塞，结果经 /rpc-poll 取回
+        const taskId = registerAsyncTask(method, value);
+        clearTimeout(warnTimer);
+        sendJson(res, 200, { ok: true, async: true, taskId });
+        return;
+      }
       clearTimeout(warnTimer);
       const cost = Date.now() - startedAt;
       if (cost > 300) console.error(`[sidecar] ${method} 耗时 ${cost}ms`);
@@ -206,6 +282,37 @@ const server = http.createServer(async (req, res) => {
       console.error(`[sidecar] ${method} 失败: ${message}`);
       sendJson(res, 200, { ok: false, error: message });
     }
+    return;
+  }
+
+  if (url === "/rpc-poll" && req.method === "POST") {
+    let taskId = "";
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      taskId = String(payload.taskId || "");
+    } catch (e) {
+      sendJson(res, 400, { ok: false, error: "请求体不是合法 JSON" });
+      return;
+    }
+    const task = asyncTasks.get(taskId);
+    if (!task) {
+      sendJson(res, 200, { status: "gone" });
+      return;
+    }
+    if (!task.settled) {
+      // 长轮询：结果就绪即回复；RPC_POLL_MAX_WAIT 内仍未就绪则回 pending，客户端无缝重连
+      let replied = false;
+      const reply = () => {
+        if (replied) return;
+        replied = true;
+        sendPollResult(res, task);
+      };
+      task.waiters.push(reply);
+      setTimeout(reply, RPC_POLL_MAX_WAIT);
+      return;
+    }
+    sendPollResult(res, task);
     return;
   }
 

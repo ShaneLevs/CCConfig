@@ -4,14 +4,13 @@ import { GripVertical } from "@lucide/vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
 
-// 设置弹窗里的「Agent 启停管理」区块：勾选启停 + 拖拽排序。
+// 设置弹窗里的「Agent 显示」区块：勾选显示/隐藏 + 拖拽排序。
 // 样式自带（settings-* 基础类与 index.vue 内各自 scoped 一份，互不影响）。
 const { activeApp } = useAppContext();
 const {
   agentOrder,
   AGENT_META,
   visibleAgents,
-  onAgentToggle,
   onAgentDragStart,
   onAgentDrop,
   onAgentDragEnd,
@@ -20,11 +19,11 @@ const {
 
 <template>
   <div class="settings-section">
-    <div class="settings-title">Agent 启停管理</div>
+    <div class="settings-title">Agent 显示</div>
     <div class="settings-desc">
-      勾选 = 启用：显示在顶部切换器，并保留 uTools 启动指令；取消勾选 = 停用：从切换器隐藏，
-      并移除该 agent 的 uTools 启动指令（功能指令 + 匹配指令一并移除）；「通用」始终启用；
-      当前正在使用的 agent 不可停用；拖动可排序
+      勾选 = 显示：顶部切换器里出现该 agent 的入口，同时注册它的 uTools 启动指令；
+      取消勾选 = 隐藏：移出切换器，并移除该 agent 的 uTools 启动指令（功能指令 + 匹配指令一并移除）；
+      「通用」始终显示；隐藏当前正在使用的 agent 会自动回到「通用」；拖动可排序
     </div>
     <div class="agent-visibility-list">
       <div
@@ -47,9 +46,7 @@ const {
         <span v-if="app === activeApp" class="agent-visibility-tag">当前</span>
         <Checkbox
           v-model="visibleAgents[app]"
-          :disabled="app === activeApp"
           class="agent-visibility-checkbox"
-          @change="(val) => onAgentToggle(app, val)"
         />
       </div>
     </div>
@@ -117,5 +114,5 @@ const {
   padding: 1px 6px;
   border-radius: 4px;
 }
-/* agent 启停复选框绿色由 main.css 全局规则统一处理 */
+/* agent 显示复选框绿色由 main.css 全局规则统一处理 */
 </style>

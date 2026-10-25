@@ -147,15 +147,31 @@ const addOpencodePlugin = (pluginName) => {
   return writeOpencodeConfig(config)
 }
 
-const installOpencodePlugin = (pluginName) => {
-  const { execSync } = require('node:child_process')
+// npm 安装/卸载改异步 exec（原 execSync 会阻塞 UI；桌面版 sidecar 还会连带阻塞所有 RPC）。
+// 保留 shell 语义保证 Windows（npm.cmd）兼容；插件名做白名单校验防 shell 注入。
+const runNpmAsync = (cmd, timeout) =>
+  new Promise((resolve, reject) => {
+    require('node:child_process').exec(
+      cmd,
+      { cwd: OPENCODE_DIR, timeout, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (err) reject(new Error(`${err.message}\n${stderr || stdout || ''}`.trim()))
+        else resolve(stdout)
+      }
+    )
+  })
+
+const isValidPluginName = (name) => /^[@a-zA-Z0-9._/-]+$/.test(name)
+
+const installOpencodePlugin = async (pluginName) => {
+  if (!isValidPluginName(pluginName)) throw new Error(`非法插件名: ${pluginName}`)
   if (!fs.existsSync(OPENCODE_DIR)) fs.mkdirSync(OPENCODE_DIR, { recursive: true })
   // 确保有 package.json，否则 npm install 会失败
   const pkgPath = path.join(OPENCODE_DIR, 'package.json')
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({ private: true }, null, 2))
   }
-  execSync(`npm install "${pluginName}"`, { cwd: OPENCODE_DIR, stdio: 'pipe', timeout: 120_000 })
+  await runNpmAsync(`npm install "${pluginName}"`, 120_000)
   // 安装成功后写入配置
   const config = readOpencodeConfig()
   if (!config.plugin) config.plugin = []
@@ -171,12 +187,12 @@ const removeOpencodePlugin = (pluginName) => {
   return writeOpencodeConfig(config)
 }
 
-const uninstallOpencodePlugin = (pluginName) => {
-  const { execSync } = require('node:child_process')
+const uninstallOpencodePlugin = async (pluginName) => {
+  if (!isValidPluginName(pluginName)) throw new Error(`非法插件名: ${pluginName}`)
   // 先从配置移除
   removeOpencodePlugin(pluginName)
   // 卸载 npm 包
-  execSync(`npm uninstall "${pluginName}"`, { cwd: OPENCODE_DIR, stdio: 'pipe', timeout: 60_000 })
+  await runNpmAsync(`npm uninstall "${pluginName}"`, 60_000)
   return true
 }
 

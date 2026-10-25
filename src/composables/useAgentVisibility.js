@@ -1,8 +1,7 @@
 import { h, ref, computed, watch } from "vue";
-import { useAppContext } from "./useAppContext";
 import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META, COMMON_APP_META } from "./agentMeta";
 
-// Agent 启停管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
+// Agent 显示管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
 // Agent 顺序与展示名（含图标）见 ./agentMeta.js（纯数据，统计页的 Agent 分组标题也用它）。
 
@@ -19,9 +18,7 @@ const LEGACY_VISIBLE_AGENTS_DB = VISIBLE_AGENTS_DB_BASE;
 // 兼容既有调用方：顺序/元数据从本模块取（实际定义在 ./agentMeta.js）
 export { AGENT_ORDER, AGENT_META };
 
-const { activeApp } = useAppContext();
-
-// 可见 agent：有记录用记录（缺键默认启用，兼容未来新增 agent），无记录默认全部启用并写库；检测结果只在首次参与，之后不覆盖用户选择
+// 可见 agent：有记录用记录（缺键默认显示，兼容未来新增 agent），无记录默认全部显示并写库；检测结果只在首次参与，之后不覆盖用户选择
 const visibleAgents = ref(null);
 // agent 显示顺序（可拖拽排序），默认 AGENT_ORDER
 const agentOrder = ref([...AGENT_ORDER]);
@@ -78,7 +75,7 @@ const initVisibleAgents = () => {
       try { saveVisibleAgents(); } catch (e) { console.error("保存可见 agent 失败", e); }
     }
   } else {
-    // 无记录：默认全部启用（与「Agent 启停管理」语义一致：默认开启，由用户自行停用），写库
+    // 无记录：默认全部启用（与「Agent 显示」语义一致：默认显示，由用户自行隐藏），写库
     const result = {};
     AGENT_ORDER.forEach((app) => { result[app] = true; });
     visibleAgents.value = result;
@@ -87,7 +84,7 @@ const initVisibleAgents = () => {
 };
 initVisibleAgents();
 
-// 同步 uTools 启动指令：停用 → 移除该 agent 的功能指令 + 匹配指令；启用 → 恢复（幂等）
+// 同步 uTools 启动指令：隐藏 → 移除该 agent 的功能指令 + 匹配指令；显示 → 恢复（幂等）
 const syncAgentCommands = () => {
   try {
     if (visibleAgents.value && window.services.syncAgentCommands) {
@@ -111,14 +108,9 @@ watch(agentOrder, () => {
   saveVisibleAgents();
 }, { deep: true });
 
-// checkbox 点击：只做禁用兜底，勾选状态由 v-model 更新，watch 自动持久化
-const onAgentToggle = (app, val) => {
-  if (!val && app === activeApp.value) {
-    visibleAgents.value[app] = true; // 禁止取消当前活跃，恢复勾选
-  }
-};
-
 // 程序调用（入口路由进入隐藏 agent 时自动显示），watch 自动持久化
+// 勾选状态由 Checkbox 的 v-model 直接写 visibleAgents，watch 自动持久化；
+// 隐藏当前正在使用的 agent 由 index.vue 的 watch 兜底切回「通用」。
 const toggleAgentVisibility = (app, val) => {
   visibleAgents.value[app] = val;
 };
@@ -166,7 +158,6 @@ export function useAgentVisibility() {
     visibleAgents,
     agentOrder,
     appDropdownOptions,
-    onAgentToggle,
     toggleAgentVisibility,
     onAgentDragStart,
     onAgentDrop,

@@ -2,9 +2,20 @@ html,
 body {
   margin: 0;
   padding: 0;
-  /* uTools 8 亚克力玻璃背景：页面根节点保持透明，透出宿主窗口原生模糊材质 */
+  /* 玻璃背景：页面根节点保持透明，透出宿主窗口原生模糊材质。
+     uTools = 宿主亚克力；桌面应用 = 窗口 transparent + NSVisualEffectView 原生毛玻璃。 */
   background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* 桌面版顶栏是 overlay 透明标题栏（红绿灯浮在页面上，见 src-tauri/src/main.rs）：
+   .is-desktop 由 desktop/bridge/window-shim.js 打在 <html> 上，这里只暴露一个高度变量，
+   由 index.vue（内容区顶部内边距）与 AgentSideRail.vue（侧栏起始位置）共用。 */
+:root {
+  --cc-desktop-titlebar: 0px;
+}
+:root.is-desktop {
+  --cc-desktop-titlebar: 34px;
 }
 
 #app {

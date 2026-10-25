@@ -297,11 +297,13 @@
   --cc-stat-pink-dark: rgba(235, 47, 150, 0.12);
 }
 
-/* 深色模式不涂底色，透出 uTools 8 原生亚克力；开启 WebGL 背景特效时恢复深色实底供 canvas 合成 */
+/* 深色模式不涂底色，透出宿主原生亚克力；开启 WebGL 背景特效时在根节点铺深色实底供 canvas 合成。
+   实底必须给 :root 而不是 body：特效 canvas 是 position:fixed; z-index:-1，负 z-index 层绘制在
+   根背景之上、body 背景之下，铺在 body 上会把 canvas 整个盖住（uTools/桌面版共性要求）。 */
 :root[theme-mode="dark"] body {
   background-color: transparent;
 }
-:root[theme-mode="dark"].effect-active body {
+:root[theme-mode="dark"].effect-active {
   background-color: #0a0a0f;
 }
 

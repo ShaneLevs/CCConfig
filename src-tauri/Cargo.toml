@@ -1,6 +1,6 @@
 [package]
 name = "ccconfig"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex and more"
 
@@ -9,6 +9,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# macOS 原生毛玻璃（NSVisualEffectView）：桌面版用它还原 uTools 亚克力观感。
+# 透明窗口本身在 tauri >= 2.12.1 已无需 macos-private-api feature（该 feature 已成 no-op）。
+window-vibrancy = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

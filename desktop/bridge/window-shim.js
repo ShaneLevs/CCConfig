@@ -4,12 +4,14 @@
 //
 // 设计要点：
 //   1. window.services 用 Proxy 兜住全部 327 个方法，新增 service 无需改本文件。
-//   2. 走同步 XHR（Phase 0 已实测 WKWebView 支持，含跨域 preflight），
+//   2. 同步方法走同步 XHR（Phase 0 已实测 WKWebView 支持，含跨域 preflight），
 //      保持现有 275 处同步调用的语义不变，前端零改动。
-//   3. 慢操作（fetchProviderModels 等 28 个已在源码里 await 的方法）同样走同步 XHR，
-//      await 对非 Promise 值等效直取，行为兼容。
-//   4. 同步 XHR 无法设置 timeout（规范禁止），因此不设 timeout；
-//      卡死防护由 sidecar 慢调用告警 + Rust watchdog 负责（见方案文档 §10.1）。
+//   3. 返回 Promise 的方法走「异步任务通道」：/rpc 立即回 taskId（同步 XHR 只等
+//      函数调用的同步前缀，毫秒级），本文件再用异步 XHR 长轮询 /rpc-poll 取结果，
+//      返回真 Promise —— 主线程不再被外部网络等慢操作卡死，await / .then / .catch
+//      语义与 uTools 版一致（fetchPiDevPackages / fetchProviderModels 等受益）。
+//   4. 同步 XHR 无法设置 timeout（规范禁止），因此不设 timeout；卡死防护由
+//      sidecar 慢调用告警 + Rust watchdog 负责（见方案文档 §10.1）。
 //   5. onPluginEnter 只在首帧触发一次，避免窗口重新聚焦时把用户当前视图重置掉。
 
 (function () {
@@ -20,31 +22,73 @@
 
   let broken = false;
 
-  function call(method, args) {
+  function rpcSync(path, body) {
     const port = window.__CCCONFIG_PORT__;
     const token = window.__CCCONFIG_TOKEN__ || "";
     if (!port) {
       throw new Error("CCConfig: sidecar 端口未注入（window.__CCCONFIG_PORT__ 缺失）");
     }
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `http://127.0.0.1:${port}/rpc`, false); // 同步，保持既有调用语义
+    xhr.open("POST", `http://127.0.0.1:${port}${path}`, false); // 同步，保持既有调用语义
     xhr.setRequestHeader("Content-Type", "application/json");
     if (token) xhr.setRequestHeader("X-CCConfig-Token", token);
-    xhr.send(JSON.stringify({ method, args: Array.isArray(args) ? args : [] }));
+    xhr.send(JSON.stringify(body));
 
     if (xhr.status !== 200) {
-      throw new Error(`CCConfig: ${method} HTTP ${xhr.status}`);
+      throw new Error(`CCConfig: ${path} HTTP ${xhr.status}`);
     }
-    let payload;
     try {
-      payload = JSON.parse(xhr.responseText);
+      return JSON.parse(xhr.responseText);
     } catch (e) {
-      throw new Error(`CCConfig: ${method} 响应不是合法 JSON: ${xhr.responseText.slice(0, 120)}`);
+      throw new Error(`CCConfig: ${path} 响应不是合法 JSON: ${xhr.responseText.slice(0, 120)}`);
+    }
+  }
+
+  function call(method, args) {
+    const payload = rpcSync("/rpc", { method, args: Array.isArray(args) ? args : [] });
+    if (payload.ok && payload.async) {
+      return pollAsyncTask(method, payload.taskId);
     }
     if (!payload.ok) {
       throw new Error(`CCConfig: ${method} 失败: ${payload.error}`);
     }
     return payload.value;
+  }
+
+  // 异步任务通道的结果轮询：全程异步 XHR，不占主线程。
+  // 服务端长轮询上限 25s（到点回 pending），客户端收到 pending 立即重连；
+  // 35s 网络超时兜底 sidecar 无响应的情况。
+  function pollAsyncTask(method, taskId) {
+    const port = window.__CCCONFIG_PORT__;
+    const token = window.__CCCONFIG_TOKEN__ || "";
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `http://127.0.0.1:${port}/rpc-poll`, true); // 异步
+      xhr.timeout = 35000;
+      xhr.setRequestHeader("Content-Type", "application/json");
+      if (token) xhr.setRequestHeader("X-CCConfig-Token", token);
+      xhr.onload = () => {
+        if (xhr.status !== 200) {
+          reject(new Error(`CCConfig: ${method} 轮询 HTTP ${xhr.status}`));
+          return;
+        }
+        let payload;
+        try {
+          payload = JSON.parse(xhr.responseText);
+        } catch (e) {
+          reject(new Error(`CCConfig: ${method} 轮询响应不是合法 JSON`));
+          return;
+        }
+        if (payload.status === "done") resolve(payload.value);
+        else if (payload.status === "pending") resolve(pollAsyncTask(method, taskId));
+        else if (payload.status === "error")
+          reject(new Error(`CCConfig: ${method} 失败: ${payload.error}`));
+        else reject(new Error(`CCConfig: ${method} 任务结果丢失（${payload.status}）`));
+      };
+      xhr.onerror = () => reject(new Error(`CCConfig: ${method} 轮询网络错误（sidecar 不可达？）`));
+      xhr.ontimeout = () => reject(new Error(`CCConfig: ${method} 轮询超时`));
+      xhr.send(JSON.stringify({ taskId }));
+    });
   }
 
   // 不让 sidecar 单点故障把整个 UI 打崩：失败时告警并返回 null（现有调用点多数有 `|| {}` 兜底）
@@ -60,19 +104,14 @@
     }
   }
 
-  // ==================== 背景色修正 ====================
-  // src/main.css 把 html/body 设成 transparent，是为了让 uTools 8 的原生亚克力材质透上来。
-  // 独立应用里没有这层宿主材质，透明会直接露出 WebView 的默认白底，导致暗色模式下背景仍为白。
-  // 因此仅在桌面版补一层主题色实底；uTools 版不受影响。
-  (function injectBackground() {
-    const style = document.createElement("style");
-    style.setAttribute("data-ccconfig", "desktop-background");
-    style.textContent = `
-      html, body { background-color: var(--td-bg-color-page, #f3f3f3) !important; }
-      /* 开启 WebGL 背景特效时保持原有的深色实底语义（theme.css 中的同名规则优先级不够） */
-      :root[theme-mode="dark"].effect-active body { background-color: #0a0a0f !important; }
-    `;
-    (document.head || document.documentElement).appendChild(style);
+  // ==================== 桌面版外观标记 ====================
+  // src/main.css 把 html/body 设成 transparent，是为了让 uTools 8 的原生亚克力材质透上来；
+  // 桌面版现在同样走透明路线：窗口 transparent + NSVisualEffectView 原生毛玻璃（见 src-tauri/src/main.rs）。
+  // 所以这里只打一个 is-desktop 标记（前端据此留出 overlay 标题栏的顶部高度），**不得再注入不透明底色**：
+  // WebGL 背景特效的 canvas 是 `position: fixed; z-index: -1`，负 z-index 层绘制在 body 背景之下，
+  // 给 body 铺不透明色会把特效整个盖掉（桌面版「特效不生效」的根因）。
+  (function markDesktop() {
+    document.documentElement.classList.add("is-desktop");
   })();
 
   // ==================== 诊断上报 ====================

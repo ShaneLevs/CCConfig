@@ -83,19 +83,6 @@ const targetsDialogVisible = ref(false);
 const targetsSelected = ref([]); // 选中的绝对路径集合（预置 + 自定义）
 const targetsInfo = ref({ presets: [], custom: [] });
 const customInput = ref("");
-const targetsSummary = ref("");
-
-const refreshTargetsSummary = () => {
-  try {
-    const paths = window.services.getLocalMcpTargetPaths() || [];
-    targetsSummary.value = paths.length === 1
-      ? window.services.toDisplayMcpPath(paths[0])
-      : `${paths.length} 个本地文件`;
-  } catch (e) {
-    targetsSummary.value = "~/.mcp.json";
-  }
-};
-refreshTargetsSummary();
 
 const openTargetsDialog = () => {
   try {
@@ -167,7 +154,6 @@ const saveTargets = () => {
       msg += `，已从 ${removedList.length} 个取消位置删除本库配置`;
     MessagePlugin.success(msg);
     targetsDialogVisible.value = false;
-    refreshTargetsSummary();
     loadServers();
   } catch (e) {
     MessagePlugin.error('保存失败: ' + e.message);
@@ -225,7 +211,6 @@ const openToolDrawer = (item) => {
 
 onMounted(() => {
   loadServers();
-  refreshTargetsSummary();
 });
 </script>
 
@@ -233,7 +218,6 @@ onMounted(() => {
   <div class="common-mcp-container">
     <div class="common-mcp-header">
       <div class="common-mcp-tip">
-        <span>通用 MCP 服务器库 — 云端 (DB) 统一保管，开启的服务器镜像写入本地（{{ targetsSummary }}）</span>
         <span class="common-mcp-count">{{ servers.length }} 个</span>
       </div>
       <div class="common-mcp-actions">

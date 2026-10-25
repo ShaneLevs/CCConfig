@@ -66,6 +66,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 | `desktop/sidecar/**` | 仅桌面版（`server.js` HTTP 服务 + `utools-shim.js`） |
 | `desktop/bridge/window-shim.js` | 仅桌面版（构建时注入前端，提供 `window.utools` / `window.services`） |
 | `desktop/guide.html` | 仅桌面版（未装 Node 时的引导页） |
+| `src-tauri/capabilities/default.json` | 仅桌面版（授权 `data-tauri-drag-region` 拖窗口 / 双击最大化用的两个 window 命令） |
 
 唯一的构建期分叉点是 `vite.config.js` 的 `IS_APP`（切 outDir + 注入 bridge）。
 
@@ -75,7 +76,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
    bridge 目前只覆盖：`db.*`、`getPath`、`getNativeId`、`shellOpenPath`、`shellOpenExternal`、`copyText`、`showOpenDialog`、`onPluginEnter/Out`、`setFeature/removeFeature/getFeatures`、`isWindows/isMacOS/isLinux`。
    用了这之外（如 `showNotification`、`getUser`、`db.promises`、`getAppVersion`）→ uTools 版正常，桌面版 `undefined` 直接抛错。
 2. **services 方法的返回值必须能 JSON 往返。** 桌面版走 HTTP JSON，uTools 版是共享内存对象。`Buffer` 会变成 `{type:'Buffer',data:[…]}`、`Date` 变字符串、`undefined` 变 `null`、函数/循环引用直接抛错。
-3. **慢操作必须 `async`。** 桌面版 bridge 用**同步 XHR**（Phase 0 实测 WKWebView 支持，含跨域 preflight），同步调用会阻塞 WebView 主线程。
+3. **慢操作必须返回 Promise。** 桌面版 bridge：同步方法走同步 XHR（Phase 0 实测 WKWebView 支持，含跨域 preflight）；返回 Promise 的方法走**异步任务通道**——sidecar `/rpc` 立即回 taskId，bridge 用异步 XHR 长轮询 `/rpc-poll`（服务端 25s 上限、客户端 35s 超时）取结果并返回真 Promise，主线程不被外部网络等慢操作卡死，await / .then / .catch 语义与 uTools 版一致。注意通道只覆盖「函数返回 Promise」；函数体内的同步慢操作（execSync、同步大文件 IO）仍会同时阻塞 WebView 与 sidecar 事件循环，禁止新增。
 
 ### 桌面版特有约定
 
@@ -84,6 +85,12 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 - `setFeature` / `removeFeature` / `getFeatures` 在桌面版是 no-op（不迁移 uTools 搜索框指令）。
 - `onPluginEnter` 在桌面版只在首帧触发一次，`action.code` 固定 `commonConfig`（桌面版没有「重新进入」的概念，重复触发会重置用户当前视图）。
 - 桌面版 bridge 带诊断通道：前端 `console.error` / `window.onerror` / `unhandledrejection` 会转发到 `~/.ccconfig/logs/sidecar.log`（`[webview:*]` 前缀）。排查桌面版问题先看这个日志。
+- **窗口外观与 uTools 版共用一套透明 CSS**：主窗口 `transparent(true)` + `window-vibrancy` 的 `NSVisualEffectView`（`UnderWindowBackground`，见 `main.rs` 的 `build_main_window`），页面根节点保持透明（与 uTools 的宿主亚克力同一语义）。因此：
+  - **禁止再给 `html` / `body` 注入不透明底色**（旧版 bridge 的 `injectBackground` 已删除）。透明是必需的：WebGL 背景特效的 canvas 是 `position: fixed; z-index: -1`，不透明 `body` 背景会把它整个盖住（桌面版「特效不生效」的历史根因）。同理 `theme.css` 里 `effect-active` 的深色实底给的是 `:root` 而不是 `body`。
+  - 顶栏是 **overlay 透明标题栏**（`TitleBarStyle::Overlay` + `hidden_title(true)`）：红绿灯浮在页面上，顶栏区就是页面自己的底色/特效。bridge 在 `<html>` 上打 `.is-desktop`，`main.css` 据此暴露 `--cc-desktop-titlebar`（uTools 版为 0），`index.vue` 的 `.container` 顶部内边距与 `AgentSideRail` 的起始位置都吃这个变量 —— 新增顶部固定元素时同样要用它让开红绿灯。
+  - 窗口在应用 vibrancy 后才 `show()`（`visible(false)` 起步），避免首帧白闪；`apply_vibrancy` 失败只退化告警，不影响启动。
+  - overlay 标题栏下红绿灯不再自带拖区，拖动靠 **`data-tauri-drag-region`**（Tauri 内置 `drag.js`）：顶部 34px 拖拽带在 `index.vue` 的 `.window-drag-strip`，`.header` 整行也可拖，且带 `="false"` 的可点击元素（如切换器 `.app-selector`）会剥掉拖区。**新增顶部交互元素时必验拖动不吞点击**；对应权限在 `capabilities/default.json`。
+- **菜单栏图标 = 原生菜单**（`main.rs` 的 `build_tray_menu`）：左/右键都弹同一个 NSMenu，内容为「网关状态 + 累计调用/成功率/Token/缓存命中率」几行只读项，加「打开主窗口 / 重启网关 / 退出」。统计由 `sidecar_rpc` 手写最小 HTTP/1.1 请求拉取（不值得为此引 HTTP 库）。菜单只在 `TrayIconEvent::Enter` 时重建 —— **不要在 `Click` 里 `set_menu`**，那时 AppKit 已把菜单弹出，替换会让它立刻消失（表现为「一点就没」）。
 - sidecar 的资源目录里（`src-tauri/resources/sidecar/`） `server.js`、`services.js`、`usage-worker.js`、`utools-shim.js`、`package.json` **必须同级**（`usage-async.js` 用 `__dirname` 拼 worker 路径；`package.json` 声明 `type: commonjs` 抵消根目录的 `type: module`）。
 - 各应用配置文件位置、字段语义与读写规则、网关转换细节统一维护在 `docs/architecture.md`（README 只保留概览，新增/修改数据流规则时改这里）。
 

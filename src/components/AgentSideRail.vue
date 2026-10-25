@@ -32,12 +32,14 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 
 <style scoped>
 .agent-rail {
-  /* 水平位置由父级 .page（flex 行，gap 12px）安排；sticky 保证页面滚动时贴住视口顶部 */
+  /* 水平位置由父级 .page（flex 行，gap 12px）安排；sticky 保证页面滚动时贴住视口顶部。
+     桌面版顶部还要让出 overlay 标题栏高度（uTools 版该变量为 0），与内容区顶部对齐。 */
   position: sticky;
-  top: 10px;
+  top: calc(10px + var(--cc-desktop-titlebar, 0px));
+  margin-top: var(--cc-desktop-titlebar, 0px);
   flex-shrink: 0;
   width: 152px;
-  max-height: calc(100vh - 20px);
+  max-height: calc(100vh - 20px - var(--cc-desktop-titlebar, 0px));
   overflow-y: auto;
   display: flex;
   flex-direction: column;

@@ -285,12 +285,13 @@ dependencies = [
 
 [[package]]
 name = "ccconfig"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "window-vibrancy",
 ]
 
 [[package]]

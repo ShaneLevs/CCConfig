@@ -53,7 +53,7 @@ const { AGENT_META, appDropdownOptions, toggleAgentVisibility, visibleAgents } =
 // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
 const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
-// 设置弹窗页签：agents = Agent 启停管理，background = 深色背景特效
+// 设置弹窗页签：agents = Agent 显示，background = 深色背景特效
 const settingsTab = ref("agents");
 const showSettings = ref(false);
 
@@ -127,6 +127,16 @@ const switchApp = (app) => {
   }
 };
 
+// 当前 agent 被隐藏（设置弹窗里取消勾选）→ 自动回到「通用」，不滞留在已隐藏的页面
+watch(
+  visibleAgents,
+  (val) => {
+    if (!val) return;
+    if (activeApp.value !== "common" && !val[activeApp.value]) switchApp("common");
+  },
+  { deep: true }
+);
+
 const handleAppSelect = (data) => {
   const app = typeof data === "object" ? data.value : data;
   switchApp(app);
@@ -185,12 +195,16 @@ onUnmounted(() => {
 
 <template>
   <div class="page">
+    <!-- 桌面版 overlay 标题栏：顶部这条带子是页面自己的背景，原生标题栏不再管拖动，
+         交给 Tauri 内置的 drag.js（data-tauri-drag-region）驱动窗口拖动 / 双击最大化。
+         uTools 版 --cc-desktop-titlebar 为 0，元素高度 0，不拦截任何事件。 -->
+    <div class="window-drag-strip" data-tauri-drag-region />
     <!-- 侧栏与内容同级组成 flex 行整体居中；进出场动画见样式 .rail-* -->
     <Transition name="rail">
       <AgentSideRail v-if="showAgentRail" @select="switchApp" />
     </Transition>
     <div class="container">
-      <div class="header">
+      <div class="header" data-tauri-drag-region="deep">
         <div class="header-left">
           <img
             :src="activeApp === 'common' ? `${ASSET_BASE}gen.svg` : AGENT_META[activeApp]?.icon"
@@ -204,7 +218,8 @@ onUnmounted(() => {
               :min-column-width="160"
               @click="handleAppSelect"
             >
-              <span class="app-selector">
+              <!-- 可点击元素内部禁掉拖拽区域，否则点击会被拖动吞掉 -->
+              <span class="app-selector" data-tauri-drag-region="false">
                 {{ appLabel }} <ChevronDownIcon size="16px" />
               </span>
             </Dropdown>
@@ -375,7 +390,7 @@ onUnmounted(() => {
       >
         <div class="settings-body">
           <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
-            <RadioButton value="agents">Agent 启停</RadioButton>
+            <RadioButton value="agents">Agent 显示</RadioButton>
             <RadioButton value="background">背景特效</RadioButton>
           </RadioGroup>
 
@@ -404,7 +419,8 @@ onUnmounted(() => {
   --content-max: 800px;
   width: 100%;
   max-width: var(--content-max);
-  padding: 10px 20px 10px;
+  /* 顶部内边距里含桌面版 overlay 标题栏高度（uTools 版为 0），见 main.css 的 --cc-desktop-titlebar */
+  padding: calc(10px + var(--cc-desktop-titlebar, 0px)) 20px 10px;
   min-height: 100vh;
   box-sizing: border-box;
   /* 玻璃背景：不涂色，透出 uTools 8 宿主窗口的原生亚克力模糊（与底栏同源） */
@@ -415,6 +431,16 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+/* 桌面版 overlay 标题栏拖拽区（Tauri 内置 drag.js 识别 data-tauri-drag-region）：
+   高度吃 --cc-desktop-titlebar，uTools 版为 0 → 不占位、不拦截事件。 */
+.window-drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--cc-desktop-titlebar, 0px);
+  z-index: 900;
 }
 .header-left {
   display: flex;
