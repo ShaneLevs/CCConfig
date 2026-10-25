@@ -49,17 +49,27 @@ pub fn from_preference(value: Option<&str>) -> Option<Locale> {
     }
 }
 
-/// 取 native.json 里的子树（引导页整块文案注入用）
+/// 取 native.json 里的子树（引导页整块文案注入用）。
+/// 文件根节点是命名空间 "native"（与前端 i18n 的约定一致），因此路径直接写
+/// ["tray", "quit"] / ["guide"]，不必再带上根节点名。
 pub fn native_value(locale: Locale, path: &[&str]) -> Value {
     let raw = match locale {
         Locale::Zh => ZH_NATIVE,
         Locale::En => EN_NATIVE,
     };
-    let mut node: Value = serde_json::from_str(raw).unwrap_or(Value::Null);
+    let root: Value = serde_json::from_str(raw).unwrap_or(Value::Null);
+    let mut node = match root.get("native") {
+        Some(next) => next.clone(),
+        None => return Value::Null,
+    };
     for key in path {
         node = match node.get(*key) {
             Some(next) => next.clone(),
-            None => return Value::Null,
+            None => {
+                // 缺失 key 曾导致托盘菜单全空（菜单被压成一条缝），这里留声便于排查
+                eprintln!("[i18n] native.json 缺少 key: {}", path.join("."));
+                return Value::Null;
+            }
         };
     }
     node
@@ -71,4 +81,36 @@ pub fn native(locale: Locale, path: &[&str]) -> String {
         .as_str()
         .unwrap_or("")
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 托盘菜单逐项取文案，缺一个该行就会变成空字符串（菜单会被压到看不见）
+    const TRAY_KEYS: &[&str] = &[
+        "gatewayDisabled",
+        "gatewayPortBusy",
+        "gatewayRunning",
+        "requests",
+        "successRate",
+        "tokens",
+        "cacheHitRate",
+        "showWindow",
+        "restartGateway",
+        "quit",
+    ];
+
+    #[test]
+    fn native_keys_exist_in_both_locales() {
+        for locale in [Locale::Zh, Locale::En] {
+            for key in TRAY_KEYS {
+                assert!(
+                    !native(locale, &["tray", key]).is_empty(),
+                    "native.json 缺少 tray.{key}（{locale:?}）"
+                );
+            }
+            assert!(!native(locale, &["guide", "title"]).is_empty(), "缺少 guide.title");
+        }
+    }
 }
