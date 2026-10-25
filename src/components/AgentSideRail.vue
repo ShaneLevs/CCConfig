@@ -65,10 +65,20 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 .agent-rail-item:hover {
   background: var(--td-bg-color-container-hover);
 }
-.agent-rail-item--active {
+/* 选中项：theme.css 把整条 brand 色阶换成了灰阶，纯填色在暗色下几乎等于容器底色
+   （brand-color-light = #343434 叠在 #303133 上），单靠颜色分不出选中。
+   这里补一圈 1px 内描边（暗色近白 / 浅色近黑，均由灰阶 brand-color 提供），
+   与「通用 → 外观 → 特效」卡片的选中态同款；用 inset 阴影而不是 border，避免布局跳动。 */
+.agent-rail-item--active,
+.agent-rail-item--active:hover {
   background: var(--td-brand-color-light);
-  color: var(--td-brand-color);
+  color: var(--td-text-color-primary);
   font-weight: 500;
+  box-shadow: 0 0 0 1px var(--td-brand-color) inset;
+}
+/* 选中项 hover 不退回灰色 hover 底，只略微提亮，避免「一碰就失去选中感」 */
+.agent-rail-item--active:hover {
+  background: var(--td-brand-color-light-hover);
 }
 .agent-rail-icon {
   width: 20px;
