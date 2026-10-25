@@ -129,7 +129,8 @@ const onAgentDrop = (idx) => {
 const onAgentDragEnd = () => { dragAgentIndex = null; };
 
 // 切换器下拉项内容：图标 + 名称（TDesign Dropdown 的 content 支持 (h) => VNode）
-const dropdownOptionContent = (meta, name) => (createElement) =>
+// name 省略时退回 meta.name（agent 用固定展示名，只有「通用」需要外部传翻译后的名字）
+const dropdownOptionContent = (meta, name = meta.name) => (createElement) =>
   createElement("span", { class: "app-dropdown-option" }, [
     meta.icon
       ? createElement("img", { class: "app-dropdown-option__icon", src: meta.icon, alt: "" })
