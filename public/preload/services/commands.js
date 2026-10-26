@@ -178,8 +178,8 @@ const AGENT_FEATURES = {
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：
 // 各机器性能/安装的 agent 不同，启停只对单机有意义；但数据层仍全量同步到其他机器供参考。
-// 旧版共享文档 ccswitch_visible_agents 作为回退只读（首次在新设备上是拷）。
-const VISIBLE_AGENTS_DB_BASE = "ccswitch_visible_agents";
+// 旧版共享文档 ccconfig_visible_agents 作为回退只读（首次在新设备上是拷）。
+const VISIBLE_AGENTS_DB_BASE = "ccconfig_visible_agents";
 
 function getNativeId() {
   try {

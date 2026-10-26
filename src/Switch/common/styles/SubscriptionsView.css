@@ -1,0 +1,273 @@
+.subs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 0;
+}
+
+.subs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.subs-tip {
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}
+
+.subs-empty {
+  padding: 60px 0;
+}
+
+.subs-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.subs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-stroke);
+}
+
+.subs-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.subs-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.subs-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.subs-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}
+
+.subs-warn {
+  color: var(--td-warning-color);
+}
+
+.subs-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subs-window {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.subs-window-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.subs-window-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--td-text-color-secondary);
+}
+
+.subs-window-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--td-success-color);
+}
+
+.subs-window-pct.is-warning {
+  color: var(--td-warning-color);
+}
+
+.subs-window-pct.is-danger {
+  color: var(--td-error-color);
+}
+
+/* 进度条用纯 CSS：TDesign 的 Progress 会把 brand 色盖成主题蓝，这里要按用量分级上色 */
+.subs-bar {
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--td-bg-color-component);
+}
+
+.subs-bar-inner {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--td-success-color);
+  transition: width 0.3s ease;
+}
+
+.subs-bar-inner.is-warning {
+  background: var(--td-warning-color);
+}
+
+.subs-bar-inner.is-danger {
+  background: var(--td-error-color);
+}
+
+.subs-window-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+}
+
+.subs-nodata {
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}
+
+.subs-error {
+  font-size: 12px;
+  color: var(--td-error-color);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subs-error-hint {
+  color: var(--td-text-color-placeholder);
+}
+
+/* 表单 */
+.subs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.subs-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subs-form-label {
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+}
+
+.subs-login-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--td-bg-color-container-hover);
+}
+
+.subs-login-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+}
+
+.subs-login-line.is-ok {
+  color: var(--td-success-color);
+}
+
+.subs-login-line.is-miss {
+  color: var(--td-warning-color);
+}
+
+.subs-login-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.subs-login-hint {
+  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+  line-height: 1.5;
+}
+
+/* ===== 登录态：未命中的具体原因 ===== */
+.subs-login-reason {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--td-warning-color);
+}
+
+/* ===== 手选的浏览器数据目录 ===== */
+.subs-dirs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--td-component-stroke);
+}
+
+.subs-dirs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+}
+
+.subs-dirs-hint {
+  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+}
+
+.subs-dirs-hint.is-block {
+  line-height: 1.5;
+}
+
+.subs-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subs-dir-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font-size: 11px;
+  font-family: var(--td-font-family);
+  color: var(--td-text-color-primary);
+}
+
+:root[theme-mode="dark"] .subs-dir-path {
+  color: var(--td-text-color-primary);
+}

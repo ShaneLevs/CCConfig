@@ -17,24 +17,77 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::{
+    LogicalSize, Manager, PhysicalPosition, Position, RunEvent, Size, WebviewUrl,
+    WebviewWindow, WebviewWindowBuilder, WindowEvent,
+};
 
 use node_runtime::NodeRuntime;
 use sidecar::Sidecar;
 
 const MAIN_WINDOW: &str = "main";
 const GUIDE_WINDOW: &str = "guide";
-/// 托盘图标 id（重建原生菜单时要按 id 取回）
+/// 托盘图标 id
 const TRAY_ID: &str = "ccconfig-tray";
+/// 托盘弹窗（WebView 面板，不是原生 NSMenu）
+const TRAY_POPUP: &str = "tray-popup";
+/// 弹窗宽度（逻辑像素）
+const POPUP_WIDTH: f64 = 360.0;
+const POPUP_MIN_HEIGHT: f64 = 120.0;
+const POPUP_MAX_HEIGHT: f64 = 560.0;
+/// 弹窗与托盘图标之间的间距
+const POPUP_GAP: f64 = 8.0;
+/// 托盘点击与「失焦收起」的最小间隔：macOS 点托盘时弹窗会先失焦，
+/// 紧接着的 Click 若被当成「打开」就会关不掉，用这个窗口期把同一次点击识别为「收起」。
+const POPUP_TOGGLE_GRACE_MS: u64 = 350;
+
+// ==================== 改名（ccswitch → ccconfig）遗留常量 ====================
+// 这些字面量已经在用户磁盘上存在，**不能跟着改名**，否则老数据读不到/不迁移。
+// 仅用于迁移与只读回退，新写入一律用 ccconfig 命名（JS 侧同类清单见 public/preload/services/legacy.js）。
+
+/// 改名前的「应用数据」目录名（数据从这里迁到 ~/.ccconfig）
+const LEGACY_APP_SUPPORT_DIR: &str = "Library/Application Support/CCSwitch";
+/// 改名前的日志目录名
+const LEGACY_LOG_DIR: &str = "Library/Logs/CCSwitch";
+/// 改名前的语言文档（本机档前缀 + 旧共享档），仅在迁移尚未跑完时作只读回退
+const LEGACY_LOCALE_DOC_PREFIX: &str = "ccswitch_locale";
+const LEGACY_LOCALE_DOC: &str = "ccswitch_locale";
 
 struct AppState {
     sidecar: Mutex<Option<Sidecar>>,
     node: Option<NodeRuntime>,
     sidecar_dir: PathBuf,
+}
+
+/// 托盘图标在屏幕上的物理坐标（TrayIconEvent 给的 rect 可能是逻辑单位，统一换算后存这里）
+#[derive(Clone, Copy, Debug)]
+struct TrayAnchor {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+#[derive(Default)]
+struct TrayPopupState {
+    /// 最近一次点击的托盘图标位置；弹窗每次展开都按它重新定位
+    anchor: Mutex<Option<TrayAnchor>>,
+    /// 页面量出来的内容高度（逻辑像素）；resize 命令写入，展开时按它设窗口尺寸
+    height: Mutex<f64>,
+    /// 上一次「因失焦而收起」的时间，用于区分「点托盘收起」与「点托盘打开」
+    hidden_by_blur: Mutex<Option<Instant>>,
+}
+
+/// 背景外观（外观切换 / 托盘点击时都要用）
+fn theme_of(dark: bool) -> tauri::Theme {
+    if dark {
+        tauri::Theme::Dark
+    } else {
+        tauri::Theme::Light
+    }
 }
 
 fn home_dir() -> PathBuf {
@@ -56,7 +109,7 @@ fn log_dir() -> PathBuf {
 fn migrate_legacy_data() {
     let home = home_dir();
     let new_dir = data_dir();
-    let legacy_dir = home.join("Library/Application Support/CCSwitch");
+    let legacy_dir = home.join(LEGACY_APP_SUPPORT_DIR);
 
     if new_dir.join("db.json").is_file() {
         return;
@@ -79,7 +132,7 @@ fn migrate_legacy_data() {
         }
     }
     // 旧日志一并搬过来，保留排查线索
-    let old_log = home.join("Library/Logs/CCSwitch/sidecar.log");
+    let old_log = home.join(LEGACY_LOG_DIR).join("sidecar.log");
     if old_log.is_file() {
         let _ = std::fs::create_dir_all(log_dir());
         let _ = std::fs::copy(&old_log, log_dir().join("sidecar.log"));
@@ -97,13 +150,34 @@ fn resolve_sidecar_dir(app: &tauri::AppHandle) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/sidecar")
 }
 
-/// 读 macOS 系统外观（AppHandle 无 theme() 取值接口，窗口创建前只能问系统）
+/// 读系统外观（AppHandle 无 theme() 取值接口，窗口创建前只能问系统）。
+/// macOS 走 defaults；Windows 读注册表 AppsUseLightTheme（0 = 深色）。
+#[cfg(target_os = "macos")]
 fn system_is_dark() -> bool {
     std::process::Command::new("defaults")
         .args(["read", "-g", "AppleInterfaceStyle"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().eq_ignore_ascii_case("Dark"))
         .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+fn system_is_dark() -> bool {
+    std::process::Command::new("reg")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "/v",
+            "AppsUseLightTheme",
+        ])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().contains("0x0"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn system_is_dark() -> bool {
+    false
 }
 
 /// 注入 sidecar 端口/token（bridge 每次调用时动态读取这两个全局，重启 sidecar 后用 eval 刷新）
@@ -179,7 +253,316 @@ fn apply_glass(
     }
 }
 
-fn build_guide_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+/// 托盘弹窗的背景：macOS 用 NSVisualEffectView（Popover 材质，和系统弹出面板同源），
+/// Windows 用亚克力（失败退化为旧版模糊）。页面自己只负责内容与淡色叠层。
+fn apply_popup_background(win: &WebviewWindow, dark: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        apply_glass(
+            win,
+            Some(14.0),
+            "托盘弹窗",
+            window_vibrancy::NSVisualEffectMaterial::Popover,
+        );
+        let _ = dark;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let tint = if dark {
+            (24u8, 24u8, 28u8, 150u8)
+        } else {
+            (250u8, 250u8, 252u8, 130u8)
+        };
+        match window_vibrancy::apply_acrylic(win, Some(tint)) {
+            Ok(_) => eprintln!("[ccconfig] 已应用亚克力背景（托盘弹窗）"),
+            Err(e) => {
+                eprintln!("[ccconfig] 亚克力失败（托盘弹窗），退化为模糊: {e}");
+                let _ = window_vibrancy::apply_blur(win, Some(tint));
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (win, dark);
+    }
+}
+
+/// 找包含指定物理坐标的显示器。
+/// 不用 `monitor_from_point`：macOS 上 tao 把 CGDisplayBounds（点）直接当输入，
+/// 而托盘事件给的是「点 × scale」的物理坐标，Retina 屏右边/底部的图标会查不到显示器。
+fn monitor_at(app: &tauri::AppHandle, x: f64, y: f64) -> Option<tauri::Monitor> {
+    let monitors = app.available_monitors().ok()?;
+    let mut fallback = None;
+    for monitor in monitors {
+        let pos = monitor.position();
+        let size = monitor.size();
+        let left = pos.x as f64;
+        let top = pos.y as f64;
+        if x >= left
+            && x < left + size.width as f64
+            && y >= top
+            && y < top + size.height as f64
+        {
+            return Some(monitor);
+        }
+        fallback.get_or_insert(monitor);
+    }
+    fallback
+}
+
+/// 托盘点击时 rect 可能给的是逻辑单位：按点击位置所在显示器换算成物理像素
+fn anchor_from_rect(app: &tauri::AppHandle, position: PhysicalPosition<f64>, rect: tauri::Rect) -> TrayAnchor {
+    let scale = monitor_at(app, position.x, position.y)
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+    let pos = rect.position.to_physical::<f64>(scale);
+    let size = rect.size.to_physical::<f64>(scale);
+    TrayAnchor {
+        x: pos.x,
+        y: pos.y,
+        width: size.width,
+        height: size.height,
+    }
+}
+
+/// 弹窗创建（常驻隐藏）：首次展开零等待，页面在后台先把数据与尺寸量好。
+/// 注入 sidecar 端口/token + 当前语言的 native.json「tray」文案；语言切换后每次展开会重新注入。
+fn build_tray_popup(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Result<WebviewWindow> {
+    let dark = system_is_dark();
+    let locale = current_locale(app);
+    let locale_code = match locale {
+        i18n::Locale::Zh => "zh-CN",
+        i18n::Locale::En => "en-US",
+    };
+    let script = format!(
+        "{} window.__CC_LOCALE__ = {}; window.__CC_TRAY_I18N__ = {};",
+        port_script(port, token),
+        serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        i18n::native_value(locale, &["tray"])
+    );
+
+    let win = WebviewWindowBuilder::new(app, TRAY_POPUP, WebviewUrl::App("tray.html".into()))
+        .title("CCConfig")
+        .inner_size(POPUP_WIDTH, 420.0)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .decorations(false)
+        // 与主窗口同一套透明语义：玻璃来自原生视图，页面根节点保持透明
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(true)
+        .visible(false)
+        .theme(Some(theme_of(dark)))
+        .initialization_script(&script)
+        .build()?;
+
+    apply_popup_background(&win, dark);
+
+    // 失焦即收起（和系统菜单一致）。点托盘图标时窗口也会先失焦，
+    // 这里记下时间，交给 toggle 判断「这次点击是收起还是打开」。
+    let handle = app.clone();
+    let win_for_event = win.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::Focused(false) = event {
+            if win_for_event.is_visible().unwrap_or(false) {
+                let _ = win_for_event.hide();
+                if let Some(state) = handle.try_state::<TrayPopupState>() {
+                    if let Ok(mut t) = state.hidden_by_blur.lock() {
+                        *t = Some(Instant::now());
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(win)
+}
+
+fn stored_popup_height(app: &tauri::AppHandle) -> f64 {
+    app.try_state::<TrayPopupState>()
+        .and_then(|state| state.height.lock().ok().map(|h| *h))
+        .filter(|h| *h > 0.0)
+        .unwrap_or(420.0)
+        .clamp(POPUP_MIN_HEIGHT, POPUP_MAX_HEIGHT)
+}
+
+/// 按托盘图标位置摆弹窗：默认右对齐图标、向下展开；图标在下半屏（Windows 任务栏、
+/// 底部状态栏）时改为向上展开，并保证整个弹窗落在这块屏幕的工作区内。
+fn reposition_popup(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
+        return;
+    };
+    let Some(state) = app.try_state::<TrayPopupState>() else {
+        return;
+    };
+    let Some(anchor) = state.anchor.lock().ok().and_then(|a| *a) else {
+        return;
+    };
+
+    let height = stored_popup_height(app);
+    let monitor = monitor_at(app, anchor.x, anchor.y);
+    let scale = monitor.as_ref().map(|m| m.scale_factor()).unwrap_or(1.0);
+    let (work_x, work_y, work_w, work_h) = monitor
+        .as_ref()
+        .map(|m| {
+            let area = m.work_area();
+            (
+                area.position.x as f64,
+                area.position.y as f64,
+                area.size.width as f64,
+                area.size.height as f64,
+            )
+        })
+        .unwrap_or((0.0, 0.0, 1920.0, 1080.0));
+
+    let width_px = (POPUP_WIDTH * scale).round().max(1.0);
+    let height_px = (height * scale).round().max(1.0);
+    let gap = POPUP_GAP * scale;
+    let margin = 8.0 * scale;
+
+    let icon_mid = anchor.y + anchor.height / 2.0;
+    let open_down = icon_mid < work_y + work_h / 2.0;
+    let y = if open_down {
+        anchor.y + anchor.height + gap
+    } else {
+        anchor.y - height_px - gap
+    };
+    let x = anchor.x + anchor.width - width_px;
+    let x = x.min(work_x + work_w - width_px - margin).max(work_x + margin);
+    let y = y.min(work_y + work_h - height_px - margin).max(work_y + margin);
+
+    // 先移动再设尺寸：跨显示器（不同 scale）时，窗口要先落到目标屏，
+    // 逻辑尺寸才会按目标屏的 scale 换算，右对齐才不会偏。
+    let _ = win.set_position(Position::Physical(PhysicalPosition::new(
+        x.round() as i32,
+        y.round() as i32,
+    )));
+    let _ = win.set_size(Size::Logical(LogicalSize::new(POPUP_WIDTH, height)));
+}
+
+/// 每次展开都重新注入语言（主窗口里可能刚改过），再让页面重载数据。
+fn show_tray_popup(app: &tauri::AppHandle, anchor: TrayAnchor) {
+    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
+        show_main(app);
+        return;
+    };
+
+    let Some(state) = app.try_state::<TrayPopupState>() else {
+        return;
+    };
+    if let Ok(mut a) = state.anchor.lock() {
+        *a = Some(anchor);
+    }
+    if let Ok(mut t) = state.hidden_by_blur.lock() {
+        *t = None;
+    }
+
+    let locale = current_locale(app);
+    let locale_code = match locale {
+        i18n::Locale::Zh => "zh-CN",
+        i18n::Locale::En => "en-US",
+    };
+    let script = format!(
+        "window.__CC_LOCALE__ = {}; window.__CC_TRAY_I18N__ = {}; window.__ccTrayReload && window.__ccTrayReload();",
+        serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        i18n::native_value(locale, &["tray"])
+    );
+    let _ = win.eval(&script);
+
+    // Windows 的亚克力色调跟外观走，展开前按当前系统外观刷新一次
+    #[cfg(target_os = "windows")]
+    apply_popup_background(&win, system_is_dark());
+
+    reposition_popup(app);
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
+fn hide_popup_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window(TRAY_POPUP) {
+        let _ = win.hide();
+    }
+}
+
+/// 左键切换弹窗。点托盘时窗口可能已经因失焦隐藏，用 hidden_by_blur 的时间窗
+/// 判断这次点击是不是「关掉它」的那一下。
+fn toggle_tray_popup(app: &tauri::AppHandle, position: PhysicalPosition<f64>, rect: tauri::Rect) {
+    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
+        show_main(app);
+        return;
+    };
+    if win.is_visible().unwrap_or(false) {
+        let _ = win.hide();
+        return;
+    }
+    if let Some(state) = app.try_state::<TrayPopupState>() {
+        if let Ok(t) = state.hidden_by_blur.lock() {
+            if let Some(ts) = *t {
+                if ts.elapsed() < Duration::from_millis(POPUP_TOGGLE_GRACE_MS) {
+                    return;
+                }
+            }
+        }
+    }
+    show_tray_popup(app, anchor_from_rect(app, position, rect));
+}
+
+// ==================== 弹窗 → Rust 的命令 ====================
+
+/// 弹窗底部的三个动作。重启网关会阻塞几百毫秒（sidecar RPC），放后台线程避免卡住页面。
+#[tauri::command]
+fn tray_popup_action(app: tauri::AppHandle, action: String) {
+    match action.as_str() {
+        "show-main" => {
+            hide_popup_window(&app);
+            show_main(&app);
+        }
+        "restart-gateway" => {
+            hide_popup_window(&app);
+            let handle = app.clone();
+            std::thread::spawn(move || restart_gateway(&handle));
+        }
+        "hide" => hide_popup_window(&app),
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+/// 页面渲染完内容后上报自身高度（逻辑像素），窗口随之变高/变矮。
+/// 固定高度会在没有订阅时留一大块空白，原生菜单不会这样。
+#[tauri::command]
+fn tray_popup_resize(app: tauri::AppHandle, height: f64) {
+    let h = height.clamp(POPUP_MIN_HEIGHT, POPUP_MAX_HEIGHT);
+    if let Some(state) = app.try_state::<TrayPopupState>() {
+        if let Ok(mut stored) = state.height.lock() {
+            if (*stored - h).abs() < 0.5 {
+                return;
+            }
+            *stored = h;
+        }
+    }
+    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
+        return;
+    };
+    let _ = win.set_size(Size::Logical(LogicalSize::new(POPUP_WIDTH, h)));
+    if win.is_visible().unwrap_or(false) {
+        reposition_popup(&app);
+    }
+}
+
+#[tauri::command]
+fn tray_popup_hide(app: tauri::AppHandle) {
+    hide_popup_window(&app);
+}
+
+/// 引导页展示的失败原因：`kind` 决定标题（node = 没找到 Node，sidecar = 起不来），
+/// `reason` / `tried` 让用户不必翻日志就能看到实际原因。
+fn build_guide_window(
+    app: &tauri::AppHandle,
+    fail: serde_json::Value,
+) -> tauri::Result<()> {
     let dark = system_is_dark();
     let locale = current_locale(app);
     let locale_code = match locale {
@@ -197,50 +580,75 @@ fn build_guide_window(app: &tauri::AppHandle) -> tauri::Result<()> {
             tauri::Theme::Light
         }))
         .initialization_script(&format!(
-            "window.__CC_LOCALE__ = {}; window.__CC_GUIDE__ = {};",
+            "window.__CC_LOCALE__ = {}; window.__CC_GUIDE__ = {}; window.__CC_FAIL__ = {};",
             serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
-            i18n::native_value(locale, &["guide"])
+            i18n::native_value(locale, &["guide"]),
+            fail
         ))
         .build()?;
     Ok(())
 }
 
-/// 当前界面语言：优先读本机文档 ccswitch_locale_<nativeId>，再回退旧共享档 / 系统语言。
+/// 启动失败时把原因追加到 sidecar.log（Finder 启动时 eprintln 用户看不到），
+/// 引导页也指到这个文件，出问题时至少能对着看。
+fn log_startup_failure(line: &str) {
+    eprintln!("[ccconfig] {line}");
+    let dir = log_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("sidecar.log"))
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "[app] {line}");
+    }
+}
+
+/// 当前界面语言：优先读本机文档 ccconfig_locale_<nativeId>，再回退旧共享档 / 系统语言。
 /// 走 /rpc 而不是直接读 db.json：sidecar 的落盘有 200ms 防抖，窗口长期开着时文件可能滞后。
 fn current_locale(app: &tauri::AppHandle) -> i18n::Locale {
     let native_id = sidecar_rpc(app, "__utools.getNativeId")
         .and_then(|v| v.get("value").and_then(|x| x.as_str()).map(str::to_string))
         .filter(|id| !id.is_empty());
     let doc_id = match &native_id {
-        Some(id) => format!("ccswitch_locale_{id}"),
-        None => "ccswitch_locale".to_string(),
+        Some(id) => format!("ccconfig_locale_{id}"),
+        None => "ccconfig_locale".to_string(),
     };
 
-    let doc = sidecar_rpc_args(app, "__utools.db.get", serde_json::json!([doc_id.clone()]));
-    let preference = json_at(&doc, &["locale"]).and_then(|v| v.as_str());
-    if let Some(locale) = i18n::from_preference(preference) {
+    if let Some(locale) = read_locale_doc(app, &doc_id) {
         return locale;
     }
 
-    // 本机尚无记录：回退旧共享档（只作迁移种子）
-    if doc_id != "ccswitch_locale" {
-        let legacy = sidecar_rpc_args(
-            app,
-            "__utools.db.get",
-            serde_json::json!(["ccswitch_locale"]),
-        );
-        let legacy_preference = json_at(&legacy, &["locale"]).and_then(|v| v.as_str());
-        if let Some(locale) = i18n::from_preference(legacy_preference) {
+    // 本机尚无记录：回退改名前的本机档，再回退旧共享档（只作迁移种子）
+    if let Some(id) = &native_id {
+        if let Some(locale) = read_locale_doc(app, &format!("{LEGACY_LOCALE_DOC_PREFIX}_{id}")) {
             return locale;
         }
+    }
+    if doc_id != "ccconfig_locale" {
+        if let Some(locale) = read_locale_doc(app, "ccconfig_locale") {
+            return locale;
+        }
+    }
+    if let Some(locale) = read_locale_doc(app, LEGACY_LOCALE_DOC) {
+        return locale;
     }
 
     i18n::system_locale()
 }
 
-// ==================== 网关状态（菜单栏展示用） ====================
-// 只读几个数字，不值得为此引入 HTTP 库：本地 127.0.0.1 短连接 + 手写最小 HTTP/1.1 请求，
+/// 读一条语言文档；没有记录 / 值未知（'system'）时返回 None
+fn read_locale_doc(app: &tauri::AppHandle, doc_id: &str) -> Option<i18n::Locale> {
+    let doc = sidecar_rpc_args(app, "__utools.db.get", serde_json::json!([doc_id]));
+    let preference = json_at(&doc, &["locale"]).and_then(|v| v.as_str());
+    i18n::from_preference(preference)
+}
+
+// ==================== sidecar 同步 RPC（语言档 / 重启网关） ====================
+// 只读几个值，不值得为此引入 HTTP 库：本地 127.0.0.1 短连接 + 手写最小 HTTP/1.1 请求，
 // 响应体用 serde_json 解析（services 的同步方法直接回 {ok:true,value:...}）。
+// 托盘弹窗的数据不走这里 —— 页面自己用 fetch 调 /rpc，异步方法走 /rpc-poll。
 fn sidecar_rpc(app: &tauri::AppHandle, method: &str) -> Option<serde_json::Value> {
     sidecar_rpc_args(app, method, serde_json::json!([]))
 }
@@ -277,124 +685,12 @@ fn json_bool(v: &Option<serde_json::Value>, path: &[&str]) -> bool {
     json_at(v, path).and_then(|x| x.as_bool()).unwrap_or(false)
 }
 
-fn json_u64(v: &Option<serde_json::Value>, path: &[&str]) -> u64 {
-    json_at(v, path).and_then(|x| x.as_u64()).unwrap_or(0)
-}
-
 fn json_at<'a>(v: &'a Option<serde_json::Value>, path: &[&str]) -> Option<&'a serde_json::Value> {
     let mut cur = v.as_ref()?.get("value")?;
     for key in path {
         cur = cur.get(*key)?;
     }
     Some(cur)
-}
-
-fn fmt_tokens(n: u64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}k", n as f64 / 1_000.0)
-    } else {
-        n.to_string()
-    }
-}
-
-fn fmt_pct(part: u64, total: u64) -> String {
-    if total == 0 {
-        return "—".to_string();
-    }
-    let scaled = ((part as f64) * 1000.0 / (total as f64)).round() / 10.0;
-    if scaled.fract().abs() < f64::EPSILON {
-        format!("{}%", scaled as u64)
-    } else {
-        format!("{scaled:.1}%")
-    }
-}
-
-/// 托盘菜单：几行只读统计（禁用项 = 纯展示）+ 三个动作项。
-/// 每次鼠标移入图标时重建，所以打开时看到的就是此刻的数字。
-fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    use tauri::menu::{IsMenuItem, PredefinedMenuItem};
-
-    let status = sidecar_rpc(app, "getAutoRouteStatus");
-    let config = sidecar_rpc(app, "readAutoRouteConfig");
-    let enabled = json_bool(&config, &["enabled"]);
-    let running = json_bool(&status, &["running"]);
-    let port = json_u64(&status, &["port"]);
-
-    let requests = json_u64(&status, &["stats", "requests"]);
-    let successes = json_u64(&status, &["stats", "successes"]);
-    let prompt = json_u64(&status, &["stats", "promptTokens"]);
-    let cached = json_u64(&status, &["stats", "cachedTokens"]);
-    let output = json_u64(&status, &["stats", "outputTokens"]);
-
-    let locale = current_locale(app);
-    let status_text = if !enabled {
-        i18n::native(locale, &["tray", "gatewayDisabled"])
-    } else if !running {
-        i18n::native(locale, &["tray", "gatewayPortBusy"]).replace("{port}", &port.to_string())
-    } else {
-        i18n::native(locale, &["tray", "gatewayRunning"]).replace("{port}", &port.to_string())
-    };
-
-    let mut items: Vec<Box<dyn IsMenuItem<tauri::Wry>>> = Vec::new();
-    // 信息行必须是 enabled=true：macOS 会把 disabled 菜单项自动画成灰色，暗色菜单下几乎看不清。
-    // 这些 id 没有对应的 on_menu_event 分支，点击不会触发任何动作。
-    items.push(Box::new(MenuItem::with_id(app, "stat-status", status_text, true, None::<&str>)?));
-
-    if enabled && running {
-        // 一行一项：标签与主窗口「网关」页的四项统计保持一致
-        for (id, text) in [
-            (
-                "stat-requests",
-                i18n::native(locale, &["tray", "requests"])
-                    .replace("{count}", &requests.to_string()),
-            ),
-            (
-                "stat-success",
-                i18n::native(locale, &["tray", "successRate"])
-                    .replace("{value}", &fmt_pct(successes, requests)),
-            ),
-            (
-                "stat-tokens",
-                i18n::native(locale, &["tray", "tokens"])
-                    .replace("{value}", &fmt_tokens(prompt + output)),
-            ),
-            (
-                "stat-cache",
-                i18n::native(locale, &["tray", "cacheHitRate"])
-                    .replace("{value}", &fmt_pct(cached, prompt)),
-            ),
-        ] {
-            items.push(Box::new(MenuItem::with_id(app, id, text, true, None::<&str>)?));
-        }
-    }
-
-    items.push(Box::new(PredefinedMenuItem::separator(app)?));
-    items.push(Box::new(MenuItem::with_id(
-        app,
-        "show",
-        i18n::native(locale, &["tray", "showWindow"]),
-        true,
-        None::<&str>,
-    )?));
-    items.push(Box::new(MenuItem::with_id(
-        app,
-        "restart-gateway",
-        i18n::native(locale, &["tray", "restartGateway"]),
-        enabled,
-        None::<&str>,
-    )?));
-    items.push(Box::new(MenuItem::with_id(
-        app,
-        "quit",
-        i18n::native(locale, &["tray", "quit"]),
-        true,
-        None::<&str>,
-    )?));
-
-    let refs: Vec<&dyn IsMenuItem<tauri::Wry>> = items.iter().map(|b| b.as_ref()).collect();
-    Menu::with_items(app, &refs)
 }
 
 /// 「重启网关」：停掉网关服务再起来（不重启 sidecar 进程）；未开启时直接带用户去主窗口
@@ -404,18 +700,31 @@ fn restart_gateway(app: &tauri::AppHandle) {
         show_main(app);
         return;
     }
-    // stopAutoRoute 同步；startAutoRoute 返回 Promise（sidecar 走异步通道），这里不等结果，
-    // 下次鼠标移入图标重建菜单时就能看到新状态
+    // stopAutoRoute 同步；startAutoRoute 返回 Promise（sidecar 走异步通道），这里不等结果
     let _ = sidecar_rpc(app, "stopAutoRoute");
     let _ = sidecar_rpc(app, "startAutoRoute");
 }
 
-fn refresh_tray_menu(tray: &TrayIcon) {
-    match build_tray_menu(tray.app_handle()) {
-        Ok(menu) => {
-            let _ = tray.set_menu(Some(menu));
+/// 托盘图标事件分发：左键切换自定义弹窗，右键直接开主窗口。
+fn handle_tray_event(tray: &TrayIcon, event: TrayIconEvent) {
+    match event {
+        TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            position,
+            rect,
+            ..
+        } => toggle_tray_popup(tray.app_handle(), position, rect),
+        // 右键：直接打开主窗口（不进弹窗）
+        TrayIconEvent::Click {
+            button: MouseButton::Right,
+            button_state: MouseButtonState::Up,
+            ..
+        } => {
+            hide_popup_window(tray.app_handle());
+            show_main(tray.app_handle());
         }
-        Err(e) => eprintln!("[ccconfig] 刷新托盘菜单失败: {e}"),
+        _ => {}
     }
 }
 
@@ -433,6 +742,27 @@ fn show_main(app: &tauri::AppHandle) {
 }
 
 /// 重建 sidecar 并用 eval 更新页面里的端口/token（bridge 每次调用动态读取这两个全局）
+/// 启动 sidecar，失败重试一次。
+/// 启动阶段偶发的一次失败（旧实例还在收尾、端口/健康检查抢跑）不该直接弹引导页。
+fn start_sidecar_with_retry(node: &std::path::Path, dir: &PathBuf) -> Result<Sidecar, String> {
+    let mut last = String::new();
+    for attempt in 1..=2 {
+        match Sidecar::start(node, dir, Some(&data_dir())) {
+            Ok(s) => return Ok(s),
+            Err(e) => {
+                last = e;
+                if attempt < 2 {
+                    log_startup_failure(&format!(
+                        "sidecar 启动失败（第 {attempt} 次，1s 后重试）: {last}"
+                    ));
+                    std::thread::sleep(Duration::from_millis(1000));
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
 fn restart_sidecar(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
@@ -458,6 +788,19 @@ fn restart_sidecar(app: &tauri::AppHandle) {
             }
             if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
                 let _ = win.eval(&port_script(port, &token));
+            } else {
+                // 上次启动只剩引导页：重建主窗口并关掉引导页，不用让用户重开应用
+                if build_main_window(app, port, &token).is_ok() {
+                    if let Some(guide) = app.get_webview_window(GUIDE_WINDOW) {
+                        let _ = guide.close();
+                    }
+                }
+            }
+            // 弹窗页面同样拿着旧端口/token，重启后要刷新；首次启动失败时弹窗可能还没建
+            if let Some(popup) = app.get_webview_window(TRAY_POPUP) {
+                let _ = popup.eval(&port_script(port, &token));
+            } else if let Err(e) = build_tray_popup(app, port, &token) {
+                eprintln!("[ccconfig] 托盘弹窗创建失败: {e}");
             }
             eprintln!("[ccconfig] sidecar 已重启，端口 {port}");
         }
@@ -466,33 +809,20 @@ fn restart_sidecar(app: &tauri::AppHandle) {
 }
 
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let menu = build_tray_menu(app)?;
     // 菜单栏沿用原来的彩色主体图（透明底、不做模板染色）；
     // 应用图标是白底圆角方块，不能拿来当菜单栏图标
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
 
+    // 不挂原生菜单：点击事件全部交给 handle_tray_event（左键弹自定义弹窗）
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .menu(&menu)
-        // 左右键都弹同一个原生菜单（macOS 状态栏标准行为），内容由 refresh_tray_menu 现拉现拼
-        .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_main(app),
-            "restart-gateway" => restart_gateway(app),
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            // 只在「指针移入图标」时重建菜单：此时菜单还没展示，替换是安全的。
-            // 绝不能在 Click 里重建 —— 点击时 AppKit 已经把菜单弹出来了，
-            // set_menu 会把正在展示的菜单立刻关掉（表现为「一点就消失」）。
-            if let TrayIconEvent::Enter { .. } = event {
-                refresh_tray_menu(tray);
-            }
-        })
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| handle_tray_event(tray, event))
         .build(app)?;
 
-    eprintln!("[ccconfig] 托盘交互已配置：原生菜单（网关状态 + 请求统计 + 打开主窗口/重启网关/退出）");
+    eprintln!(
+        "[ccconfig] 托盘交互已配置：左键切换自定义弹窗（网关统计 + 订阅用量 + 动作），右键直接打开主窗口"
+    );
 
     Ok(())
 }
@@ -505,17 +835,15 @@ fn spawn_watchdog(app: tauri::AppHandle) {
         loop {
             std::thread::sleep(Duration::from_secs(5));
 
-            // 系统外观变更后同步窗口 theme，WKWebView 的 prefers-color-scheme 才会重算
+            // 系统外观变更后同步窗口 theme，WKWebView/WebView2 的 prefers-color-scheme 才会重算
             let dark = system_is_dark();
             if dark != last_dark {
                 last_dark = dark;
-                let t = if dark {
-                    tauri::Theme::Dark
-                } else {
-                    tauri::Theme::Light
-                };
-                if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
-                    let _ = win.set_theme(Some(t));
+                let t = theme_of(dark);
+                for label in [MAIN_WINDOW, TRAY_POPUP] {
+                    if let Some(win) = app.get_webview_window(label) {
+                        let _ = win.set_theme(Some(t));
+                    }
                 }
             }
 
@@ -547,6 +875,11 @@ fn spawn_watchdog(app: tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            tray_popup_action,
+            tray_popup_resize,
+            tray_popup_hide
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             migrate_legacy_data();
@@ -571,6 +904,7 @@ fn main() {
                 node: node.clone(),
                 sidecar_dir: sidecar_dir.clone(),
             });
+            app.manage(TrayPopupState::default());
 
             // 托盘先建，保证即使 sidecar 起不来用户也有入口
             if let Err(e) = setup_tray(&handle) {
@@ -578,11 +912,22 @@ fn main() {
             }
 
             let Some(rt) = node else {
-                build_guide_window(&handle)?;
+                log_startup_failure(&format!(
+                    "未找到可用的 Node（>=18），已尝试：{}",
+                    tried.join(" / ")
+                ));
+                build_guide_window(
+                    &handle,
+                    serde_json::json!({
+                        "kind": "node",
+                        "reason": format!("未找到可用的 Node（>=18）"),
+                        "tried": tried,
+                    }),
+                )?;
                 return Ok(());
             };
 
-            match Sidecar::start(&rt.path, &sidecar_dir, Some(&data_dir())) {
+            match start_sidecar_with_retry(&rt.path, &sidecar_dir) {
                 Ok(started) => {
                     let port = started.port;
                     let token = started.token.clone();
@@ -594,16 +939,23 @@ fn main() {
                         *guard = Some(started);
                     }
                     build_main_window(&handle, port, &token)?;
-                    // 托盘在 sidecar 之前就建好了（保证起不来也有入口），这里补一次刷新，
-                    // 避免首次展开菜单时看到「未开启」的初始文案
-                    if let Some(tray) = handle.tray_by_id(TRAY_ID) {
-                        refresh_tray_menu(&tray);
+                    // 弹窗常驻隐藏：页面在后台加载、量高度，首次点托盘零等待。
+                    // 失败不致命：左键回落到直接打开主窗口。
+                    if let Err(e) = build_tray_popup(&handle, port, &token) {
+                        eprintln!("[ccconfig] 托盘弹窗创建失败（左键将打开主窗口）: {e}");
                     }
                     spawn_watchdog(handle.clone());
                 }
                 Err(e) => {
-                    eprintln!("[ccconfig] sidecar 启动失败: {e}");
-                    build_guide_window(&handle)?;
+                    log_startup_failure(&format!("sidecar 启动失败: {e}"));
+                    build_guide_window(
+                        &handle,
+                        serde_json::json!({
+                            "kind": "sidecar",
+                            "reason": e,
+                            "tried": tried,
+                        }),
+                    )?;
                 }
             }
 

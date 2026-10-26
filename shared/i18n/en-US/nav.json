@@ -6,7 +6,8 @@
       "skill": "Skill",
       "plugin": "Plugin",
       "usage": "Usage",
-      "gateway": "Gateway"
+      "gateway": "Gateway",
+      "subscription": "Subscriptions"
     },
     "title": {
       "configSwitch": "Config Switcher",
@@ -18,7 +19,8 @@
       "pluginManage": "Plugins",
       "extensionManage": "Extensions",
       "usage": "Usage",
-      "gateway": "Gateway"
+      "gateway": "Gateway",
+      "subscription": "Subscriptions"
     }
   }
 }

@@ -100,11 +100,14 @@ function injectAppShimPlugin() {
     },
     closeBundle() {
       if (!IS_APP) return
-      // Node 探测失败的引导页：作为静态资源放进 dist-app，由 Rust 用 WebviewUrl::App 打开
-      fs.copyFileSync(
-        path.resolve(__dirname, 'desktop/guide.html'),
-        path.resolve(__dirname, OUT_DIR, 'guide.html')
-      )
+      // 独立的静态页面（不经过 Vue/Vite）：引导页 + 托盘弹窗，
+      // 由 Rust 用 WebviewUrl::App 打开，构建时原样放进 dist-app
+      for (const name of ['guide.html', 'tray.html']) {
+        fs.copyFileSync(
+          path.resolve(__dirname, `desktop/${name}`),
+          path.resolve(__dirname, OUT_DIR, name)
+        )
+      }
     },
   }
 }

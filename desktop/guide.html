@@ -70,6 +70,15 @@
   <h1 data-i18n="heading">需要 Node.js 才能启动</h1>
   <p class="sub" data-i18n="subtitle">CCConfig 桌面版直接复用你已安装的 Node.js 运行本地服务，不内置运行时。</p>
 
+  <div class="card" id="fail-card" style="display:none">
+    <h2 data-i18n="failTitle">启动失败详情</h2>
+    <p style="margin:0" id="fail-reason"></p>
+    <details id="fail-tried-wrap" style="margin-top:10px;display:none">
+      <summary style="cursor:pointer" data-i18n="failTriedTitle">已尝试的路径 / 步骤</summary>
+      <pre id="fail-tried" style="margin:8px 0 0;white-space:pre-wrap;word-break:break-all"></pre>
+    </details>
+  </div>
+
   <div class="card">
     <h2 data-i18n="installTitle">安装方式</h2>
     <ol>
@@ -114,6 +123,39 @@ CCCONFIG_NODE=$(which node) open -a CCConfig</pre>
     if (guide.title) document.title = guide.title;
     var link = document.getElementById('node-download');
     if (link && guide.nodeDownloadUrl) link.href = guide.nodeDownloadUrl;
+
+    // 启动失败原因（Rust 注入）：sidecar 起不来时也复用这张引导页，
+    // 否则用户会误以为是没装 Node。
+    var fail = window.__CC_FAIL__;
+    if (fail && fail.reason) {
+      if (fail.kind === 'sidecar') {
+        if (typeof guide.headingStartupFailed === 'string') {
+          var h1 = document.querySelector('h1');
+          if (h1) h1.innerHTML = guide.headingStartupFailed;
+        }
+        if (typeof guide.subtitleStartupFailed === 'string') {
+          var sub = document.querySelector('.sub');
+          if (sub) sub.innerHTML = guide.subtitleStartupFailed;
+        }
+        if (typeof guide.titleStartupFailed === 'string') {
+          document.title = guide.titleStartupFailed;
+        }
+      }
+      var card = document.getElementById('fail-card');
+      var reasonEl = document.getElementById('fail-reason');
+      if (card && reasonEl) {
+        reasonEl.textContent = fail.reason;
+        card.style.display = '';
+      }
+      if (fail.tried && fail.tried.length) {
+        var triedWrap = document.getElementById('fail-tried-wrap');
+        var triedEl = document.getElementById('fail-tried');
+        if (triedWrap && triedEl) {
+          triedEl.textContent = fail.tried.join('\n');
+          triedWrap.style.display = '';
+        }
+      }
+    }
   })();
 </script>
 </body>

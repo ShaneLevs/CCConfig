@@ -2,7 +2,7 @@ import { ref, computed, watch } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
 import { t } from "../i18n";
 
-const GROUP_ORDER_ID = "ccswitch_group_order";
+const GROUP_ORDER_ID = "ccconfig_group_order";
 
 export function useConfigColumns(savedConfigs) {
   const groupOrder = ref([]);

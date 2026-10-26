@@ -5,6 +5,7 @@ import {
   AppIcon,
   ChartIcon,
   MapRoutePlanningIcon,
+  CardmembershipIcon,
 } from "tdesign-icons-vue-next";
 
 // 各应用的页签配置（顺序即展示顺序）：labelKey 为按钮文案，titleKey 为页标题后缀。
@@ -15,6 +16,7 @@ export const APP_TABS = {
     { key: "autoroute", labelKey: "nav.tab.gateway", titleKey: "nav.title.gateway", icon: MapRoutePlanningIcon, gatewayDot: true },
     { key: "mcp", labelKey: "nav.tab.mcp", titleKey: "nav.tab.mcp", icon: ServerIcon },
     { key: "skill", labelKey: "nav.tab.skill", titleKey: "nav.tab.skill", icon: BookIcon },
+    { key: "subscription", labelKey: "nav.tab.subscription", titleKey: "nav.title.subscription", icon: CardmembershipIcon },
     { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
   ],
   claude: [

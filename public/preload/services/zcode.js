@@ -577,7 +577,7 @@ const upsertZcodeModel = (providerId, modelId, opts = {}) => {
 // 模型名只取 model_id（不带 provider 前缀，同 ZCode 设置页口径）。
 // 只读打开（readOnly + WAL 快照），ZCode 持续写入互不阻塞；库不存在 / 表不存在返回空统计。
 // 模型名只取 model_id（不带 provider 前缀，同 ZCode 设置页口径）。
-// 历史落库：每日聚合落 ccswitch_agent_usage_zcode_<nativeId>（usage.js），同一天取较大值合并——
+// 历史落库：每日聚合落 ccconfig_agent_usage_zcode_<nativeId>（usage.js），同一天取较大值合并——
 // db 被清理或换机后历史不缩水，库整个没了就直接回放历史档。
 
 // status='completed' 才计用量（cancelled 行全 0，error 行无完成用量）

@@ -12,7 +12,7 @@
       "code": "commonConfig",
       "explain": "通用配置（跨 agent 主数据） / Common configuration (cross-agent master data)",
       "icon": "gen.svg",
-      "cmds": ["通用配置", "Common Config", "common config"]
+      "cmds": ["CCConfig", "通用配置", "Common Config", "common config"]
     },
     {
       "code": "installCommonSkill",

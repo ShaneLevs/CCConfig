@@ -33,6 +33,7 @@ import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
 import CommonAutoRouteView from "./common/AutoRouteView.vue";
+import CommonSubscriptionsView from "./common/SubscriptionsView.vue";
 import CommonUsageView from "./common/UsageView.vue";
 import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
@@ -260,6 +261,10 @@ onUnmounted(() => {
         <CommonAutoRouteView
           v-if="isTabVisited('common', 'autoroute')"
           v-show="activeApp === 'common' && activeTab === 'autoroute'"
+        />
+        <CommonSubscriptionsView
+          v-if="isTabVisited('common', 'subscription')"
+          v-show="activeApp === 'common' && activeTab === 'subscription'"
         />
         <CommonUsageView
           v-if="isTabVisited('common', 'usage')"

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CCSwitch（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH（DeepSeek Harness）十二应用的 API 配置切换（Qoder / Hermes 仅模型配置，ZCode / DSH 另含使用统计）、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动网关、模型下发）。
+CCConfig（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH（DeepSeek Harness）十二应用的 API 配置切换（Qoder / Hermes 仅模型配置，ZCode / DSH 另含使用统计）、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动网关、模型下发、订阅用量）。
 
 ## 技术栈与命令
 
@@ -21,33 +21,40 @@ npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / maj
 - 改版本只走 `npm run bump -- <版本|patch|minor|major>`（`scripts/bump-version.mjs`），它会就地替换 5 个文件的版本行；`--app` / `--utools` 可只改一条线。**不要手改单个文件**：v1.0.1 曾出现 dmg 文件名 / 应用内关于 / git tag 各说各话。
 - `npm run version:check`（`scripts/check-versions.mjs`）已挂在 `build` / `build:app` 前面，不一致直接拦下并列出该改哪几个文件。
 - 落点清单与读写规则集中在 `scripts/version-files.mjs`（新增发行目标时只改这里）。
-- 发布顺序：`bump` → 提交 → `git tag vX.Y.Z` → `npm run tauri:build` → `gh release create vX.Y.Z <dmg>`；tag 用小写 `v` 前缀（历史遗留的 `V2.2.0` 不再沿用）。
+- 发布顺序：`bump` → 提交 → `git tag vX.Y.Z` → `npm run tauri:build`（dmg 在 `release/`）→ `gh release create vX.Y.Z release/<dmg>`；tag 用小写 `v` 前缀（历史遗留的 `V2.2.0` 不再沿用）。
 
 ## Git
 
-`origin` = ShaneLevs/CCSwitch，直接在 `main` 提交推送。提交信息用 `feat:` / `fix:` / `style:` / `docs:` / `refactor:` 前缀 + 中文描述。
+`origin` = ShaneLevs/CCConfig，直接在 `main` 提交推送。提交信息用 `feat:` / `fix:` / `style:` / `docs:` / `refactor:` 前缀 + 中文描述。
 
 ## 核心架构
 
 - **Fat Preload**：所有 Node 敏感操作（文件 I/O、网络、子进程）在 `public/preload/services/` 实现，经 `services.js` 暴露为 `window.services`；由 `vite.config.js` 的 `bundlePreloadPlugin`（esbuild：bundle/cjs/node18）打进 `dist/preload/services.js`。preload 依赖清单在 `public/preload/package.json`（dev 模式 uTools 直接 require 源码需要）。
 - **App Context 单例**：`useAppContext` 用模块级 ref（非 provide/inject）在 index.vue 与各子视图间共享状态。
 - **视图组织**：`src/Switch/<app>/ConfigView|McpView|SkillView|PluginView|UsageView.vue` + 同名 `styles/` CSS；跨应用共享组件在 `src/components/`，共享逻辑在 `src/composables/`（Agent 默认顺序与展示名元数据在 `composables/agentMeta.js`，纯数据、无副作用：切换器 / 设置弹窗 / 统计页 Agent 分组标题共用，不要在展示组件里引 `useAgentVisibility`）；单应用专属的弹窗/卡片等子组件放 `src/Switch/<app>/components/`（如 `common/components/BatchAddModelsDialog.vue`、`pi/components/PiPluginDetailDialog.vue`），沿用该视图 `styles/` 里的全局类，不重复定义样式。preload 各功能域模块也在 `public/preload/services/`（如 `skills.js`、`pi-common.js`、`claude-usage.js`），`services.js` 仅做装配（window.services 公开 API 面不可变）。
-- **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动网关、Env 额外字段、通用 MCP 本地启停 `ccswitch_mcp_local_state_<nativeId>`（disabled 名单，主档在 ccswitch_common_mcp）、使用统计 heatmap/usage_cache、MCP 停用、Agent 启停 `ccswitch_visible_agents_<nativeId>`、外观 `ccswitch_dark_background_<nativeId>`（字段 `theme`/`enabled`/`effect`）、界面语言 `ccswitch_locale_<nativeId>`（`{ locale: 'system'|'zh-CN'|'en-US' }`））用 `_<nativeId>` 后缀分文档，旧共享档仅作迁移种子只读；桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId 再读本机语言档。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccswitch_active_config_id`。
+- **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动网关、Env 额外字段、通用 MCP 本地启停 `ccconfig_mcp_local_state_<nativeId>`（disabled 名单，主档在 ccconfig_common_mcp）、使用统计 heatmap/usage_cache、MCP 停用、Agent 启停 `ccconfig_visible_agents_<nativeId>`、外观 `ccconfig_dark_background_<nativeId>`（字段 `theme`/`enabled`/`effect`）、界面语言 `ccconfig_locale_<nativeId>`（`{ locale: 'system'|'zh-CN'|'en-US' }`））用 `_<nativeId>` 后缀分文档，旧共享档仅作迁移种子只读；桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId 再读本机语言档。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccconfig_active_config_id`。
+- **命名迁移（ccswitch → ccconfig）**：项目历史上叫 CCSwitch，已全面统一为 CCConfig。旧名只允许作为**数据兼容常量**存在，不能直接删：
+  - JS 侧唯一落点 `public/preload/services/legacy.js`（旧文档 ID 前缀、旧加密盐、旧 codex 条目标记、旧导出 `app` 字段、旧网关响应头），其余 preload 源码不应出现旧名。
+  - `public/preload/services/db-migrate.js` 在 preload 装载期（`services.js` 的 `syncLifecycle()` 第一步）一次性把 `ccswitch_*` 文档改名为 `ccconfig_*`，并把旧格式密文（`<iv>:<ct>`）换盐重加密为 `v2:<iv>:<ct>`。幂等、失败不删旧档、下次启动重试。
+  - Rust 侧同类常量集中在 `src-tauri/src/main.rs` 顶部与 `node_runtime.rs`（旧数据/日志目录、旧语言档、旧 `CCSWITCH_NODE`）；`desktop/sidecar/utools-shim.js` 保留旧 `CCSWITCH_DATA_DIR`、旧设备 ID 哈希种子与旧 nativeId 缓存文档回退。
+  - **设备 ID 哈希种子与旧文档 ID 永远不要改**：变了会让所有 `_<nativeId>` 文档孤儿化。
 - **Skill 启停**：`.disabled/` 目录机制（物理移动目录），Claude → `~/.claude/skills`，OpenCode → `~/.config/opencode/skills`，通用 → `~/.agents/skills`。
 - **自动网关**（`autoroute.js` + `autoroute-convert/`，UI 名为「网关」）：本地网关（默认 127.0.0.1:17877），入站 Anthropic Messages / OpenAI Chat / Responses 三协议，同协议透传、跨协议经 canonical 中间格式转换（含 SSE 流式）；随机 key 防滥用；请求日志存内存（最近 10 条，解析出目标模型即插「进行中」行、完成原地补全）；模型映射首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行）。转换层规则（推理强度/媒体降级/结构化输出/tool schema 修补）与上游容错（重试、被拒可选字段记忆、断连中止、协议头透传）见 README「数据流」网关小节；**修改转换行为时必须同步 canonical.js 头注释与 README**。
+
+- **订阅用量**（`subscriptions.js` + `browser-cookies.js` + `sqlite-query.js`，UI 在「通用 → 订阅」）：用户手动添加自己订阅的第三方服务，插件读**本机浏览器的会话 Cookie**（Chromium SQLite + 钥匙串/DPAPI、Firefox `moz_cookies`、Safari binarycookies）代他请求官方没有公开的用量接口；Cookie 加密后存 `ccconfig_subscriptions_<nativeId>`，对外结构只留 `hasCookie`。刷新有 5 分钟节流 + 并发守卫；**桌面版托盘弹窗先渲染 `getSubscriptionsTray` 的缓存快照，再在页面里走异步 `/rpc-poll` 触发 `refreshSubscriptions` 后原地更新**（不阻塞 Rust 主线程）。新增站点只需在 `ADAPTERS` 加一条（`{id,cookieHosts,cookieNames,loginUrl,apiBase,fetchUsage}`），UI/存储/托盘都不用改；具体字段与踩过的坑见 [docs/architecture.md](docs/architecture.md)「订阅用量」。
 
 各应用配置文件的具体读写规则与字段约定见 [README.md](README.md)「数据流」与「认证与模型选择细节」两节。
 
 ## Agent 启停 ↔ 启动指令
 
-plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent 指令由 `commands.js` 内置规范（`FEATURE_DEFINITIONS`）按启停状态动态注册/移除（`utools.setFeature/removeFeature`）。preload 顶层 + `onPluginEnter` 每次从 DB（`ccswitch_visible_agents`）重放同步，渲染进程勾选变化即时调 `syncAgentCommands`，语言切换时 `services.setLocale` 也会重放。explain / regex label 跟随当前语言，`cmds` 同时保留中英关键词。**注意 uTools 没有 onPluginReady API**，误用会抛 TypeError 中断注册链路。
+plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent 指令由 `commands.js` 内置规范（`FEATURE_DEFINITIONS`）按启停状态动态注册/移除（`utools.setFeature/removeFeature`）。preload 顶层 + `onPluginEnter` 每次从 DB（`ccconfig_visible_agents`）重放同步，渲染进程勾选变化即时调 `syncAgentCommands`，语言切换时 `services.setLocale` 也会重放。explain / regex label 跟随当前语言，`cmds` 同时保留中英关键词。**注意 uTools 没有 onPluginReady API**，误用会抛 TypeError 中断注册链路。
 
 ## 多语言（i18n）
 
 - 文案单一事实来源：`shared/i18n/{zh-CN,en-US}/*.json`，按域拆文件；根节点即命名空间。Vue 用 `src/i18n/index.js`（`import.meta.glob` 合并），preload 用 `public/preload/services/i18n.js`（CJS require，esbuild 内联），Rust 用 `src-tauri/src/i18n.rs`（`include_str!` 读 `native.json`）。
 - 所有用户可见文案走 `t()`；注释、`console.*`、品牌名、DB id、env key、provider/model id、写入外部配置的生成内容不翻译。完整约定与 key 清单见 [docs/i18n.md](docs/i18n.md)。
 - 新增文案必须同时写 `zh-CN` 与 `en-US`；`npm run i18n:check` 会校验 key / 占位符一致与英文残留中文。
-- 语言切换：`src/composables/useLocale.js`（按机器 `ccswitch_locale_<nativeId>`，旧共享 `ccswitch_locale` 仅作迁移种子；写 DB 要带 `_rev`），变更后调用 `window.services.setLocale()` 让 preload 与 uTools 指令同步换语言。
+- 语言切换：`src/composables/useLocale.js`（按机器 `ccconfig_locale_<nativeId>`，旧共享 `ccconfig_locale` 仅作迁移种子；写 DB 要带 `_rev`），变更后调用 `window.services.setLocale()` 让 preload 与 uTools 指令同步换语言。
 - 外观：`src/composables/useAppearance.js` 解析 `system|light|dark`；只有固定主题与系统外观不一致时才给 `<html>` 加 `theme-mismatch`（`theme.css` 用 `::before` 铺纯色底），一致时保留原生毛玻璃。
 
 ## 样式规范
@@ -71,10 +78,11 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 | 发行版 | 壳 | 构建命令 | 产物 |
 |---|---|---|---|
 | uTools 插件 | uTools 宿主 | `npm run build` | `dist/`（加载 `plugin.json`） |
-| macOS 桌面版 | Tauri v2 | `npm run tauri:build` | `.dmg` |
+| macOS 桌面版 | Tauri v2 | `npm run tauri:build` | `.dmg` → `release/`（原始产物在 `src-tauri/target/release/bundle/dmg/`） |
 | 桌面版开发 | Tauri v2 | `npm run tauri:dev` | 自动串起 `build:app` + `cargo tauri dev` |
 
 `npm run build:app` = `CCCONFIG_TARGET=app vite build`（产出 `dist-app/`）+ `scripts/prepare-sidecar.mjs`（组装 `src-tauri/resources/sidecar/`）。
+`npm run tauri:build` = `build:app` + `cargo tauri build` + `scripts/collect-release.mjs`（把当次版本的 dmg 复制到仓库根 `release/`，已 gitignore）。
 
 ### 目录职责
 
@@ -87,7 +95,8 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 | `src-tauri/**` | 仅桌面版（Rust 壳、Node 探测、托盘、窗口） |
 | `desktop/sidecar/**` | 仅桌面版（`server.js` HTTP 服务 + `utools-shim.js`） |
 | `desktop/bridge/window-shim.js` | 仅桌面版（构建时注入前端，提供 `window.utools` / `window.services`） |
-| `desktop/guide.html` | 仅桌面版（未装 Node 时的引导页） |
+| `desktop/guide.html` | 仅桌面版（启动失败引导页：未装 Node / sidecar 起不来，会显示实际原因） |
+| `desktop/tray.html` | 仅桌面版（托盘弹窗静态页：网关卡片 + 订阅进度条 + 动作；构建时原样复制进 `dist-app`） |
 | `src-tauri/capabilities/default.json` | 仅桌面版（授权 `data-tauri-drag-region` 拖窗口 / 双击最大化用的两个 window 命令） |
 
 唯一的构建期分叉点是 `vite.config.js` 的 `IS_APP`（切 outDir + 注入 bridge）。
@@ -102,8 +111,8 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 
 ### 桌面版特有约定
 
-- 数据目录 `~/.ccconfig/`（`db.json` / `runtime.json` / `logs/sidecar.log`），权限 600；旧位置 `~/Library/Application Support/CCSwitch` 在启动时一次性迁移。
-- **db 文档 ID 前缀 `ccswitch_*`、导出文件的 `app: "ccswitch"`、网关提示头 `x-ccswitch-left-out` 都不改**：属于数据 schema，改了会破坏与 uTools 版的导入兼容。
+- 数据目录 `~/.ccconfig/`（`db.json` / `runtime.json` / `logs/sidecar.log`），权限 600；旧位置 `~/Library/Application Support/CCSwitch` 在启动时一次性迁移（`main.rs` 的 `migrate_legacy_data`）。
+- **旧命名兼容清单**（改名前的字面量，已成数据在用户磁盘上，**不可随手改**）：db 文档 ID 前缀、导出文件 `app` 字段、网关响应头、AES 加密盐、`~/.codex/models.json` 里的条目标记、旧数据/日志目录、旧环境变量、设备 ID 哈希种子。落点见上文「命名迁移」小节；新增兼容项请加到 `legacy.js` / `main.rs` 常量区并注明用途与「何时可删」。
 - `setFeature` / `removeFeature` / `getFeatures` 在桌面版是 no-op（不迁移 uTools 搜索框指令）。
 - `onPluginEnter` 在桌面版只在首帧触发一次，`action.code` 固定 `commonConfig`（桌面版没有「重新进入」的概念，重复触发会重置用户当前视图）。
 - 桌面版 bridge 带诊断通道：前端 `console.error` / `window.onerror` / `unhandledrejection` 会转发到 `~/.ccconfig/logs/sidecar.log`（`[webview:*]` 前缀）。排查桌面版问题先看这个日志。
@@ -112,7 +121,13 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
   - 顶栏是 **overlay 透明标题栏**（`TitleBarStyle::Overlay` + `hidden_title(true)`）：红绿灯浮在页面上，顶栏区就是页面自己的底色/特效。bridge 在 `<html>` 上打 `.is-desktop`，`main.css` 据此暴露 `--cc-desktop-titlebar`（uTools 版为 0），`index.vue` 的 `.container` 顶部内边距与 `AgentSideRail` 的起始位置都吃这个变量 —— 新增顶部固定元素时同样要用它让开红绿灯。
   - 窗口在应用 vibrancy 后才 `show()`（`visible(false)` 起步），避免首帧白闪；`apply_vibrancy` 失败只退化告警，不影响启动。
   - overlay 标题栏下红绿灯不再自带拖区，拖动靠 **`data-tauri-drag-region`**（Tauri 内置 `drag.js`）：顶部 34px 拖拽带在 `index.vue` 的 `.window-drag-strip`，`.header` 整行也可拖，且带 `="false"` 的可点击元素（如切换器 `.app-selector`）会剥掉拖区。**新增顶部交互元素时必验拖动不吞点击**；对应权限在 `capabilities/default.json`。
-- **菜单栏图标 = 原生菜单**（`main.rs` 的 `build_tray_menu`）：左/右键都弹同一个 NSMenu，内容为「网关状态 + 累计调用/成功率/Token/缓存命中率」几行只读项，加「打开主窗口 / 重启网关 / 退出」。统计由 `sidecar_rpc` 手写最小 HTTP/1.1 请求拉取（不值得为此引 HTTP 库）。菜单只在 `TrayIconEvent::Enter` 时重建 —— **不要在 `Click` 里 `set_menu`**，那时 AppKit 已把菜单弹出，替换会让它立刻消失（表现为「一点就没」）。
+- **菜单栏图标 = 自定义弹窗**（`main.rs` 的 `build_tray_popup` + `desktop/tray.html`）：**左键切换弹窗**（网关状态 + 2×2 统计卡片 + 订阅剩余额度进度条 + 「打开主窗口 / 重启网关 / 退出」），**右键直接打开主窗口**。不再使用原生 NSMenu —— 原生菜单的纯展示行要么发灰、要么可点击，做不出卡片/进度条观感。
+  - 弹窗是常驻隐藏的独立 WebView 窗口（`TRAY_POPUP`），启动时创建，页面在后台加载并量好高度；首次点击零等待。窗口 `transparent + always_on_top + skip_taskbar + decorations(false)`，背景与主窗口同源：macOS 用 `window-vibrancy` 的 `NSVisualEffectView`（`Popover` 材质、radius 14），Windows 用 `apply_acrylic`（失败退化 `apply_blur`，色调跟随 `AppsUseLightTheme`）。
+  - **页面根节点保持透明**（`html`/`body` 不铺底色），只在 `#panel` 上叠一层淡色保证可读性；否则原生玻璃被盖住。
+  - 数据由 `desktop/tray.html` 自己走 sidecar HTTP `/rpc` 拉（同步方法直取；`refreshSubscriptions` 这类返回 Promise 的走 `/rpc-poll` 异步通道）。Rust 只注入 `__CCCONFIG_PORT__` / `__CCCONFIG_TOKEN__` 与 `native.json` 的 `tray` 子树（`__CC_TRAY_I18N__`）——**展开时重新注入语言并调用 `window.__ccTrayReload()`**，所以主窗口里改语言后下次展开即生效。只读缓存快照先渲染，随后后台刷新，节流在 service 层。
+  - 高度自适应：页面渲染后用 `tray_popup_resize` 上报 `#panel` 高度（逻辑像素，上限 560），Rust `set_size` 后在托盘图标旁重新定位；图标在屏幕下半部分时向上展开，并夹在工作区内。
+  - 失焦即收起（`WindowEvent::Focused(false)`）；点托盘图标时窗口会先失焦，`hidden_by_blur` 的 350ms 时间窗把紧随其后的 Click 识别为「收起」而不是「重新打开」。
+  - 动作走应用命令 `tray_popup_action` / `tray_popup_resize` / `tray_popup_hide`（`invoke_handler`），**不新增 `utools.xxx` 调用**；`tray.html` 是静态页，不经过 Vue 与 desktop bridge，构建时由 `vite.config.js` 的 `closeBundle` 原样复制进 `dist-app`。新增顶部/交互元素不涉及主窗口 `data-tauri-drag-region`。
 - sidecar 的资源目录里（`src-tauri/resources/sidecar/`） `server.js`、`services.js`、`usage-worker.js`、`utools-shim.js`、`package.json` **必须同级**（`usage-async.js` 用 `__dirname` 拼 worker 路径；`package.json` 声明 `type: commonjs` 抵消根目录的 `type: module`）。
 - 各应用配置文件位置、字段语义与读写规则、网关转换细节统一维护在 `docs/architecture.md`（README 只保留概览，新增/修改数据流规则时改这里）。
 

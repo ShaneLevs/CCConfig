@@ -124,6 +124,23 @@
         "installOpencodeSkill": "Install OpenCode Skill",
         "installPiExtension": "Install Pi Agent Extension"
       }
+    },
+    "subscription": {
+      "trayTitle": "Subscription usage",
+      "trayNoData": "No data yet — open the plugin to refresh",
+      "trayExpired": "Session expired — sign in again in the plugin",
+      "trayEmpty": "No subscriptions added",
+      "resetSoon": "resets soon",
+      "resetInMinutes": "resets in {n} min",
+      "resetInHours": "resets in {n} h",
+      "resetInDays": "resets in {n} d",
+      "window": {
+        "session": "5-hour",
+        "week": "Weekly"
+      },
+      "pickDirTitle": "Choose browser data folder",
+      "pickDirConfirm": "Use this folder",
+      "remaining": "{window} {percent}% left"
     }
   }
 }

@@ -5,14 +5,14 @@ const { t } = require("./i18n");
 
 // ==================== 通用配置 ====================
 // 设计约定：
-//   - 模型/供应商主数据：存 uTools DB（ccswitch_common_providers）
-//   - MCP：存 uTools DB（ccswitch_common_mcp，格式与 ~/.mcp.json 一致 { mcpServers: {...} }）
+//   - 模型/供应商主数据：存 uTools DB（ccconfig_common_providers）
+//   - MCP：存 uTools DB（ccconfig_common_mcp，格式与 ~/.mcp.json 一致 { mcpServers: {...} }）
 //   - Skill：只读扫描 ~/.agents/skills 目录下的 SKILL.md
 
 const AGENTS_DIR = () => path.join(window.utools.getPath("home"), ".agents");
 const COMMON_SKILLS_DIR = () => path.join(AGENTS_DIR(), "skills");
 
-const DOC_PROVIDERS = "ccswitch_common_providers";
+const DOC_PROVIDERS = "ccconfig_common_providers";
 
 const readDoc = (docId, fallback) => {
   try {
@@ -201,15 +201,15 @@ const deleteCommonModel = (providerName, modelId) => {
 };
 
 // ==================== MCP（云端主档 + 本地启用开关） ====================
-// 云端（uTools DB 单 doc：ccswitch_common_mcp -> { mcpServers: { name: config } }）是唯一主档，
+// 云端（uTools DB 单 doc：ccconfig_common_mcp -> { mcpServers: { name: config } }）是唯一主档，
 // 所有 MCP 服务器都存一份；本地 = 写入多个 JSON 文件（预置常见路径 + 用户自定义，按机器隔离存
-//   ccswitch_mcp_local_targets_<nativeId>）的镜像，位置设置与多文件镜像逻辑不变。
-// 每台机器一个启用开关（ccswitch_mcp_local_state_<nativeId> 记 disabled 名单，不在名单 = 启用）：
+//   ccconfig_mcp_local_targets_<nativeId>）的镜像，位置设置与多文件镜像逻辑不变。
+// 每台机器一个启用开关（ccconfig_mcp_local_state_<nativeId> 记 disabled 名单，不在名单 = 启用）：
 //   开启 → 写入全部选中文件；关闭 → 从全部文件移除。写文件只替换 mcpServers 字段，
 //   保留其他字段（如 $schema）。首次进入按「本地文件中存在 → 启用」初始化开关状态。
-const DOC_MCP = "ccswitch_common_mcp";
-const DOC_MCP_TARGETS = "ccswitch_mcp_local_targets";
-const DOC_MCP_STATE = "ccswitch_mcp_local_state";
+const DOC_MCP = "ccconfig_common_mcp";
+const DOC_MCP_TARGETS = "ccconfig_mcp_local_targets";
+const DOC_MCP_STATE = "ccconfig_mcp_local_state";
 
 const mcpHomePath = () => window.utools.getPath("home");
 

@@ -92,8 +92,8 @@ ok(modelX.inputTokens === 1500, `model-x 含缓存输入=1500（got=${modelX.inp
 ok(stats.summary.sessionCount === 1, `sessionCount=1（got=${stats.summary.sessionCount}）`)
 
 // 落库验证
-const doc = savedDocs.get('ccswitch_agent_usage_zcode_test-native')
-ok(!!doc && doc.days['2026-01-05']?.tokens === 1530, '每日聚合落库 ccswitch_agent_usage_zcode_<nativeId>')
+const doc = savedDocs.get('ccconfig_agent_usage_zcode_test-native')
+ok(!!doc && doc.days['2026-01-05']?.tokens === 1530, '每日聚合落库 ccconfig_agent_usage_zcode_<nativeId>')
 
 // ==================== db 消失 → 历史回放 ====================
 fs.rmSync(path.join(zcodeDir, 'db.sqlite'))
@@ -114,13 +114,13 @@ ok(day1c && day1c.tokens === 1530, `同一天历史取较大值（got=${day1c &&
 
 // ==================== 无库 + 无历史 → 空统计 ====================
 fs.rmSync(path.join(zcodeDir, 'db.sqlite'))
-savedDocs.delete('ccswitch_agent_usage_zcode_test-native')
+savedDocs.delete('ccconfig_agent_usage_zcode_test-native')
 const stats4 = zcode.readZcodeUsage()
 ok(stats4.summary.totalTokens === 0 && stats4.contributions.length === 365, '无库无历史返回空统计（365 天骨架）')
 
 // ==================== 旧落库带 provider 前缀 → 读历史时剥前缀（同名合并） ====================
-savedDocs.set('ccswitch_agent_usage_zcode_test-native', {
-  _id: 'ccswitch_agent_usage_zcode_test-native',
+savedDocs.set('ccconfig_agent_usage_zcode_test-native', {
+  _id: 'ccconfig_agent_usage_zcode_test-native',
   days: {
     '2026-01-07': {
       tokens: 2000, inputTokens: 1900, outputTokens: 100,

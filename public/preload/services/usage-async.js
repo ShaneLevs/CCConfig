@@ -11,10 +11,10 @@ const path = require("node:path");
 
 // 与 usage.js 的 AGENT_USAGE_IDS 对应的种子文档前缀
 const AGENT_SEED_PREFIXES = [
-  "ccswitch_agent_usage_",
-  "ccswitch_heatmap_",
-  "ccswitch_usage_cache_",
-  "ccswitch_dsh_usage_cache_",
+  "ccconfig_agent_usage_",
+  "ccconfig_heatmap_",
+  "ccconfig_usage_cache_",
+  "ccconfig_dsh_usage_cache_",
 ];
 
 // worker 单任务超时：SQLite 子进程回退 + 大 JSONL 全量解析的最坏情况

@@ -40,7 +40,7 @@
       "fetchingModels": "Fetching models from this provider…",
       "fetchHint": "Fetched from the provider's Base URL /models endpoint; you can also type one manually",
       "providerLabel": "Provider: {name}",
-      "resetWarning": "The following model-related settings written by CCSwitch will be removed. This cannot be undone:",
+      "resetWarning": "The following model-related settings written by CCConfig will be removed. This cannot be undone:",
       "resetNote": "Other config.toml settings (mcp_servers, profiles, etc.) are unaffected. Restart the Codex client afterward to return to the official defaults and sign in again.",
       "confirmReset": "Restore",
       "builtin": "built-in",

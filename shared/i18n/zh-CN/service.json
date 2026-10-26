@@ -124,6 +124,23 @@
         "installOpencodeSkill": "安装 OpenCode Skill",
         "installPiExtension": "安装 Pi Agent 扩展"
       }
+    },
+    "subscription": {
+      "trayTitle": "订阅用量",
+      "trayNoData": "暂无数据，打开插件刷新",
+      "trayExpired": "登录已过期，请在插件里重新登录",
+      "trayEmpty": "未添加订阅",
+      "resetSoon": "即将重置",
+      "resetInMinutes": "{n} 分钟后重置",
+      "resetInHours": "{n} 小时后重置",
+      "resetInDays": "{n} 天后重置",
+      "window": {
+        "session": "5 小时",
+        "week": "本周"
+      },
+      "pickDirTitle": "选择浏览器数据目录",
+      "pickDirConfirm": "使用此目录",
+      "remaining": "{window}剩余 {percent}%"
     }
   }
 }

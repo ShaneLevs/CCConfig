@@ -83,12 +83,12 @@ const upsertDispatchModel = (list, model) => {
   return 'updated'
 }
 
-// Claude Code：下发 = 在 uTools DB 保存一份「以 provider 命名」的配置（ccswitch_config_dispatch_<provider>），
+// Claude Code：下发 = 在 uTools DB 保存一份「以 provider 命名」的配置（ccconfig_config_dispatch_<provider>），
 // 与 Claude 配置页的配置列表互通（切换时由 useConfigSwitch 写入 settings.json）。
 // 一个 provider 一份配置；模型自动填入空闲槽位（默认 → Haiku → Sonnet → Opus → Subagent），
 // 已有同模型跳过，5 个槽位全满时报错提示（不覆盖已有模型）。
 // 仅接受 anthropic-messages 协议的供应商（激活后写入 ANTHROPIC_* env，其余协议不可用）。
-const DB_PREFIX = 'ccswitch_config_'
+const DB_PREFIX = 'ccconfig_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
 const CLAUDE_MODEL_SLOTS = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel']
 const CLAUDE_SLOT_LABELS = { model: 'service.dispatch.slotDefault', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
@@ -629,7 +629,7 @@ const cleanupLegacyAutoRoute = (app) => {
       const doc = window.utools.db.get(docId);
       if (!doc) return;
       let active = null;
-      try { active = window.utools.db.get("ccswitch_active_config_id"); } catch (e) { /* ignore */ }
+      try { active = window.utools.db.get("ccconfig_active_config_id"); } catch (e) { /* ignore */ }
       if (active && active.configId === docId) return; // 是当前启用的 Claude 配置，不清理
       window.utools.db.remove(docId);
     } else if (app === "opencode") {

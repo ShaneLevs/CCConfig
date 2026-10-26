@@ -34,7 +34,7 @@ const installUtoolsStub = () => {
   window.utools = {
     getPath: (name) => {
       // 统计路径只用 'home'；stub 直接返回主线程传来的 HOME
-      if (name === "home") return global.__CCSWITCH_HOME__ || "/";
+      if (name === "home") return global.__CCCONFIG_HOME__ || "/";
       return "/";
     },
     getNativeId: () => nativeId,
@@ -70,7 +70,7 @@ parentPort.on("message", (msg) => {
   pendingWrites = [];
   seedDocs = seed || {};
   nativeId = nid || "worker";
-  global.__CCSWITCH_HOME__ = home;
+  global.__CCCONFIG_HOME__ = home;
 
   try {
     installUtoolsStub();

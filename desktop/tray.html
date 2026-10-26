@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<!--
+  桌面版托盘弹窗（左键点托盘图标弹出）。
+
+  不是 Vue 页面：构建时原样复制进 dist-app，由 Rust 用 WebviewUrl::App("tray.html") 加载。
+  Rust 通过 initialization_script 注入：
+    window.__CCCONFIG_PORT__ / __CCCONFIG_TOKEN__  sidecar 地址（重启 sidecar 后会被 eval 刷新）
+    window.__CC_LOCALE__                           zh-CN / en-US
+    window.__CC_TRAY_I18N__                        native.json 的 tray 子树
+  数据由页面自己走 sidecar HTTP /rpc 拉（含异步任务的 /rpc-poll 通道），
+  因此刷新、错误处理都在这一层完成，Rust 只负责窗口与背景。
+
+  背景不在这里画：macOS 是 NSVisualEffectView（Popover 材质），Windows 是亚克力。
+  页面只铺一层很淡的叠层保证可读性，所以 html/body 必须保持透明。
+-->
+<meta name="color-scheme" content="light dark" />
+<title>CCConfig</title>
+<style>
+  :root {
+    --surface: rgba(255, 255, 255, 0.48);
+    --edge: rgba(255, 255, 255, 0.55);
+    --edge-outer: rgba(0, 0, 0, 0.12);
+    --text: #1d1d1f;
+    --muted: rgba(60, 60, 67, 0.62);
+    --faint: rgba(60, 60, 67, 0.4);
+    --card: rgba(255, 255, 255, 0.55);
+    --card-edge: rgba(0, 0, 0, 0.05);
+    --track: rgba(0, 0, 0, 0.1);
+    --hover: rgba(0, 0, 0, 0.06);
+    --press: rgba(0, 0, 0, 0.1);
+    --divider: rgba(0, 0, 0, 0.08);
+    --good: #34c759;
+    --warn: #ff9f0a;
+    --bad: #ff3b30;
+    --off: #8e8e93;
+    --good-ring: rgba(52, 199, 89, 0.18);
+    --warn-ring: rgba(255, 159, 10, 0.18);
+    --bad-ring: rgba(255, 59, 48, 0.18);
+    --off-ring: rgba(142, 142, 147, 0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: rgba(28, 28, 30, 0.46);
+      --edge: rgba(255, 255, 255, 0.12);
+      --edge-outer: rgba(0, 0, 0, 0.45);
+      --text: #f5f5f7;
+      --muted: rgba(235, 235, 245, 0.6);
+      --faint: rgba(235, 235, 245, 0.36);
+      --card: rgba(255, 255, 255, 0.07);
+      --card-edge: rgba(255, 255, 255, 0.06);
+      --track: rgba(255, 255, 255, 0.12);
+      --hover: rgba(255, 255, 255, 0.09);
+      --press: rgba(255, 255, 255, 0.14);
+      --divider: rgba(255, 255, 255, 0.1);
+      --good: #30d158;
+      --warn: #ff9f0a;
+      --bad: #ff453a;
+      --off: #98989d;
+      --good-ring: rgba(48, 209, 88, 0.2);
+      --warn-ring: rgba(255, 159, 10, 0.2);
+      --bad-ring: rgba(255, 69, 58, 0.2);
+      --off-ring: rgba(152, 152, 157, 0.2);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text);
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+      "Microsoft YaHei UI", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* 边框用 inset 阴影/outline 画（不占布局），窗口高度才能和量出来的高度完全一致 */
+  #panel {
+    position: relative;
+    width: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 0.5px var(--edge);
+    outline: 0.5px solid var(--edge-outer);
+    outline-offset: -0.5px;
+  }
+
+  /* 动作条固定在底部，订阅很多时只让内容区滚动（原生菜单也不会把「退出」藏起来） */
+  #scroll {
+    max-height: 430px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 14px 14px 8px;
+  }
+  #scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* ---------- 网关状态 ---------- */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 20px;
+    padding: 0 2px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--off);
+    box-shadow: 0 0 0 3px var(--off-ring);
+  }
+  .dot.ok {
+    background: var(--good);
+    box-shadow: 0 0 0 3px var(--good-ring);
+  }
+  .dot.warn {
+    background: var(--warn);
+    box-shadow: 0 0 0 3px var(--warn-ring);
+  }
+  .dot.bad {
+    background: var(--bad);
+    box-shadow: 0 0 0 3px var(--bad-ring);
+  }
+  .status-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---------- 统计卡片 ---------- */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 12px;
+  }
+  .stats[hidden] { display: none; }
+  .stat {
+    background: var(--card);
+    border: 0.5px solid var(--card-edge);
+    border-radius: 10px;
+    padding: 9px 11px 8px;
+    min-width: 0;
+  }
+  .stat-label {
+    font-size: 10.5px;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+  .stat-value {
+    margin-top: 3px;
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---------- 订阅 ---------- */
+  .section { margin-top: 14px; }
+  .section[hidden] { display: none; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 2px;
+    margin-bottom: 7px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  .sub {
+    background: var(--card);
+    border: 0.5px solid var(--card-edge);
+    border-radius: 10px;
+    padding: 10px 11px;
+    margin-top: 7px;
+  }
+  .sub:first-child { margin-top: 0; }
+  .sub-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sub-email {
+    margin-top: 1px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sub-note {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .meter { margin-top: 9px; }
+  .meter-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .meter-head .meter-left { color: var(--text); }
+  .track {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--track);
+    margin-top: 5px;
+    overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--good);
+    transition: width 0.35s cubic-bezier(0.22, 0.8, 0.3, 1);
+  }
+  .fill.warn { background: var(--warn); }
+  .fill.bad { background: var(--bad); }
+  .empty {
+    padding: 2px 2px 3px;
+    font-size: 11.5px;
+    color: var(--faint);
+  }
+
+  /* ---------- 动作 ---------- */
+  .footer {
+    padding: 7px 14px 10px;
+    border-top: 0.5px solid var(--divider);
+  }
+  .action {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .action:hover { background: var(--hover); }
+  .action:active { background: var(--press); }
+  .action[disabled] { color: var(--faint); pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div id="scroll">
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span class="status-text" id="status-text"></span>
+    </div>
+
+    <div class="stats" id="stats" hidden></div>
+
+    <div class="section" id="subs-section" hidden>
+      <div class="section-head"><span id="subs-title"></span></div>
+      <div id="subs"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="action" type="button" data-action="show-main"></button>
+    <button class="action" type="button" data-action="restart-gateway"></button>
+    <button class="action" type="button" data-action="quit"></button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict'
+
+  const $ = (id) => document.getElementById(id)
+  const panel = $('panel')
+  const dotEl = $('dot')
+  const statusEl = $('status-text')
+  const statsEl = $('stats')
+  const subsSection = $('subs-section')
+  const subsTitle = $('subs-title')
+  const subsEl = $('subs')
+  const buttons = Array.from(document.querySelectorAll('[data-action]'))
+  const restartButton = buttons.find((button) => button.dataset.action === 'restart-gateway')
+
+  // 每次展开 Rust 都会重新注入，所以不能缓存成常量
+  const port = () => window.__CCCONFIG_PORT__
+  const token = () => window.__CCCONFIG_TOKEN__ || ''
+  const i18n = () => window.__CC_TRAY_I18N__ || {}
+
+  function t(key, vars) {
+    const dict = i18n()
+    let text = typeof dict[key] === 'string' ? dict[key] : key
+    for (const [name, value] of Object.entries(vars || {})) {
+      text = text.split('{' + name + '}').join(String(value))
+    }
+    return text
+  }
+
+  const esc = (value) => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+  function invoke(cmd, args) {
+    const internals = window.__TAURI_INTERNALS__
+    if (!internals || typeof internals.invoke !== 'function') {
+      return Promise.reject(new Error('tauri bridge unavailable'))
+    }
+    return internals.invoke(cmd, args || {})
+  }
+
+  // ---------- sidecar HTTP（与 desktop/bridge 同一套协议） ----------
+  async function rpc(method, args = []) {
+    const p = port()
+    if (!p) throw new Error('sidecar port missing')
+    const res = await fetch('http://127.0.0.1:' + p + '/rpc', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CCConfig-Token': token(),
+      },
+      body: JSON.stringify({ method, args }),
+    })
+    const data = await res.json()
+    if (!data || !data.ok) throw new Error((data && data.error) || method)
+    // Promise 方法立刻回 taskId，真正的结果走 /rpc-poll 长轮询
+    if (data.async) return pollTask(data.taskId)
+    return data.value
+  }
+
+  async function pollTask(taskId) {
+    for (;;) {
+      const p = port()
+      const res = await fetch('http://127.0.0.1:' + p + '/rpc-poll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CCConfig-Token': token(),
+        },
+        body: JSON.stringify({ taskId }),
+      })
+      const data = await res.json()
+      if (data.status === 'done') return data.value
+      if (data.status === 'error') throw new Error(data.error || 'rpc failed')
+      if (data.status === 'gone') throw new Error('rpc task gone')
+      // pending（服务端 25s 长轮询到点）：继续等
+    }
+  }
+
+  // 桌面版没有常驻 devtools，异常写进 ~/.ccconfig/logs/sidecar.log
+  function diag(kind, error) {
+    const text = error && error.stack ? error.stack : String(error)
+    rpc('__utools.diag.log', [kind, text.slice(0, 4000)]).catch(() => {})
+  }
+
+  // ---------- 格式化 ----------
+  const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
+  function fmtTokens(n) {
+    n = Number(n || 0)
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'
+    return String(n)
+  }
+  function fmtPct(part, total) {
+    if (!total) return '—'
+    const value = Math.round((Number(part || 0) * 1000) / total) / 10
+    return (Number.isInteger(value) ? String(value) : value.toFixed(1)) + '%'
+  }
+  const toneOf = (percent) => (percent <= 10 ? 'bad' : percent <= 30 ? 'warn' : 'good')
+  const clampPct = (n) => Math.max(0, Math.min(100, Number(n) || 0))
+
+  // ---------- 渲染 ----------
+  function setStatus(text, tone) {
+    statusEl.textContent = text
+    dotEl.className = 'dot' + (tone ? ' ' + tone : '')
+  }
+
+  function renderStats(visible, stats) {
+    statsEl.hidden = !visible
+    if (!visible) {
+      statsEl.innerHTML = ''
+      return
+    }
+    const requests = Number(stats.requests || 0)
+    const successes = Number(stats.successes || 0)
+    const prompt = Number(stats.promptTokens || 0)
+    const cached = Number(stats.cachedTokens || 0)
+    const output = Number(stats.outputTokens || 0)
+    const cards = [
+      [t('requests'), fmtInt(requests)],
+      [t('successRate'), fmtPct(successes, requests)],
+      [t('tokens'), fmtTokens(prompt + output)],
+      [t('cacheHitRate'), fmtPct(cached, prompt)],
+    ]
+    statsEl.innerHTML = cards.map(([label, value]) => (
+      '<div class="stat"><div class="stat-label">' + esc(label) + '</div>' +
+      '<div class="stat-value">' + esc(value) + '</div></div>'
+    )).join('')
+  }
+
+  function renderSubs(list) {
+    subsSection.hidden = false
+    subsTitle.textContent = t('subscription')
+    if (!list || !list.length) {
+      subsEl.innerHTML = '<div class="empty">' + esc(t('subscriptionEmpty')) + '</div>'
+      return
+    }
+    subsEl.innerHTML = list.map((sub) => {
+      const title = esc(sub && sub.title)
+      const email = sub && sub.email
+        ? '<div class="sub-email">' + esc(sub.email) + '</div>'
+        : ''
+      let body = ''
+      if (sub && sub.state === 'ok' && Array.isArray(sub.windows) && sub.windows.length) {
+        body = sub.windows.map((w) => {
+          const percent = clampPct(w.percent)
+          return (
+            '<div class="meter">' +
+              '<div class="meter-head">' +
+                '<span class="meter-left">' + esc(w.label) + '</span>' +
+                '<span>' + esc(t('remaining', { percent })) + '</span>' +
+              '</div>' +
+              '<div class="track"><div class="fill ' + toneOf(percent) + '" style="width:' + percent + '%"></div></div>' +
+            '</div>'
+          )
+        }).join('')
+      } else if (sub && sub.message) {
+        body = '<div class="sub-note">' + esc(sub.message) + '</div>'
+      }
+      return '<div class="sub"><div class="sub-title">' + title + '</div>' + email + body + '</div>'
+    }).join('')
+  }
+
+  function renderOffline() {
+    setStatus(t('localServiceOffline'), 'bad')
+    renderStats(false, {})
+    subsSection.hidden = true
+    subsEl.innerHTML = ''
+    restartButton.disabled = true
+    reportHeight()
+  }
+
+  function renderActionLabels() {
+    const labels = {
+      'show-main': t('showWindow'),
+      'restart-gateway': t('restartGateway'),
+      quit: t('quit'),
+    }
+    for (const button of buttons) {
+      button.textContent = labels[button.dataset.action] || ''
+    }
+  }
+
+  let heightRaf = 0
+  function reportHeight() {
+    cancelAnimationFrame(heightRaf)
+    heightRaf = requestAnimationFrame(() => {
+      const height = Math.ceil(panel.getBoundingClientRect().height)
+      if (height > 0) invoke('tray_popup_resize', { height }).catch(() => {})
+    })
+  }
+
+  // ---------- 数据 ----------
+  let renderSeq = 0
+  let refreshing = false
+
+  async function reload(options) {
+    const shouldRefresh = !options || options.refresh !== false
+    const seq = ++renderSeq
+    renderActionLabels()
+    let status
+    let config
+    let subs
+    try {
+      const results = await Promise.all([
+        rpc('getAutoRouteStatus'),
+        rpc('readAutoRouteConfig'),
+        rpc('getSubscriptionsTray'),
+      ])
+      status = results[0] || {}
+      config = results[1] || {}
+      subs = Array.isArray(results[2]) ? results[2] : []
+    } catch (error) {
+      if (seq === renderSeq) renderOffline()
+      return
+    }
+    if (seq !== renderSeq) return
+
+    const enabled = !!config.enabled
+    const running = !!status.running
+    const gatewayPort = Number(status.port || config.port || 0)
+    restartButton.disabled = !enabled
+    if (!enabled) {
+      setStatus(t('gatewayDisabled'), '')
+    } else if (!running) {
+      setStatus(t('gatewayPortBusy', { port: gatewayPort }), 'warn')
+    } else {
+      setStatus(t('gatewayRunning', { port: gatewayPort }), 'ok')
+    }
+    renderStats(enabled && running, status.stats || {})
+    renderSubs(subs)
+    reportHeight()
+
+    if (shouldRefresh) refreshSubscriptions(seq)
+  }
+
+  // 先展示缓存快照，再后台请求一次（service 层有 5 分钟节流）。
+  // 结果回来时只重画订阅区，不动统计（避免整体闪一下）。
+  async function refreshSubscriptions(seq) {
+    if (refreshing) return
+    refreshing = true
+    try {
+      await rpc('refreshSubscriptions', [{ force: false }])
+      const subs = await rpc('getSubscriptionsTray')
+      if (seq === renderSeq && Array.isArray(subs)) {
+        renderSubs(subs)
+        reportHeight()
+      }
+    } catch (error) {
+      // 刷新失败保留缓存数据，不打扰用户
+    } finally {
+      refreshing = false
+    }
+  }
+
+  // Rust 在每次展开时调用；首次加载（窗口隐藏）只渲染缓存，不联网
+  window.__ccTrayReload = () => reload({ refresh: true })
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      invoke('tray_popup_action', { action: button.dataset.action }).catch((error) => diag('tray-action', error))
+    })
+  })
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') invoke('tray_popup_hide').catch(() => {})
+  })
+
+  window.addEventListener('error', (event) => diag('tray-error', event.error || event.message))
+  window.addEventListener('unhandledrejection', (event) => diag('tray-rejection', event.reason))
+
+  reload({ refresh: false })
+})()
+</script>
+</body>
+</html>

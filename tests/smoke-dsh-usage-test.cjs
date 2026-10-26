@@ -66,7 +66,7 @@ const SMALL_SAME_DAY = [
 ].join('\n') + '\n'
 
 const sessionsRoot = path.join(tmp, 'sessions')
-const HISTORY_DOC = 'ccswitch_agent_usage_dsh_test-native'
+const HISTORY_DOC = 'ccconfig_agent_usage_dsh_test-native'
 const writeLog = (relDir, name, chunks) => {
   const dir = path.join(sessionsRoot, relDir)
   fs.mkdirSync(dir, { recursive: true })
@@ -159,7 +159,7 @@ writeLog(path.join('proj-a', 'session-aaa'), 'session.v4.jsonl.zstd', [FRAME_A])
 const first = dshUsage.readDshUsage()
 const second = dshUsage.readDshUsage()
 ok(first === second, '签名未变时命中缓存（返回同一对象，未重新解析）')
-ok(savedDocs.has('ccswitch_dsh_usage_cache_test-native'), '缓存写入 ccswitch_dsh_usage_cache_<nativeId>')
+ok(savedDocs.has('ccconfig_dsh_usage_cache_test-native'), '缓存写入 ccconfig_dsh_usage_cache_<nativeId>')
 const forced = dshUsage.readDshUsage(true)
 ok(forced !== first, 'force 刷新跳过缓存')
 
@@ -181,7 +181,7 @@ rmSessions()
 writeLog(path.join('proj-a', 'session-aaa'), 'session.v4.jsonl.zstd', [FRAME_A])
 dshUsage.readDshUsage(true)
 const histDoc = savedDocs.get(HISTORY_DOC)
-ok(!!histDoc, '每日聚合落库到 ccswitch_agent_usage_dsh_<nativeId>')
+ok(!!histDoc, '每日聚合落库到 ccconfig_agent_usage_dsh_<nativeId>')
 eq(Object.keys(histDoc.days), ['2026-01-05'], '只落库有量的日期')
 eq(histDoc.days['2026-01-05'].tokens, 1070, '落库当天 tokens')
 eq(histDoc.days['2026-01-05'].inputTokens, 1050, '落库当天输入（含缓存）')
@@ -204,8 +204,8 @@ eq(groupedDay.agentModels.dsh.tokens, 1070, 'agent 分组保留该 agent 当天 
 eq(groupedDay.agentModels.dsh.models['deepseek-flash'].cacheReadTokens, 900, 'agent 分组保留模型缓存明细')
 
 // 再塞一个假 claude 落库文档：多 agent 各自一个分组，模型不串组
-savedDocs.set('ccswitch_agent_usage_claude_test-native', {
-  _id: 'ccswitch_agent_usage_claude_test-native',
+savedDocs.set('ccconfig_agent_usage_claude_test-native', {
+  _id: 'ccconfig_agent_usage_claude_test-native',
   agent: 'claude',
   updatedAt: Date.now(),
   days: {

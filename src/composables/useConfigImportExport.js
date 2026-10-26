@@ -53,7 +53,7 @@ export function useConfigImportExport(savedConfigs, loadSavedConfigs) {
       });
     });
 
-    const DB_PREFIX = "ccswitch_config_";
+    const DB_PREFIX = "ccconfig_config_";
     let ok = 0, fail = 0;
     for (const c of configs) {
       if (!c.name || !c.key) { fail++; continue; }

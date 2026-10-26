@@ -37,7 +37,7 @@ import "./styles/ConfigView.css";
 
 const { t } = useI18n();
 
-const DB_PREFIX = "ccswitch_config_";
+const DB_PREFIX = "ccconfig_config_";
 
 const currentConfig = ref({
   key: "",
@@ -269,13 +269,13 @@ const saveBatchEdit = () => {
 
 // 首次打开检测：新设备上自动将当前配置入库
 const checkFirstOpen = () => {
-  const marker = window.utools.db.get('ccswitch_first_open_done');
+  const marker = window.utools.db.get('ccconfig_first_open_done');
   if (marker) return;
 
   // 已经有过配置（老用户升级），跳过首次入库
   const existingConfigs = window.utools.db.allDocs().filter(d => d._id.startsWith(DB_PREFIX));
   if (existingConfigs.length > 0) {
-    window.utools.db.put({ _id: 'ccswitch_first_open_done', done: true });
+    window.utools.db.put({ _id: 'ccconfig_first_open_done', done: true });
     return;
   }
 
@@ -304,7 +304,7 @@ const checkFirstOpen = () => {
     window.utools.db.put(doc);
   }
 
-  window.utools.db.put({ _id: 'ccswitch_first_open_done', done: true });
+  window.utools.db.put({ _id: 'ccconfig_first_open_done', done: true });
 };
 
 // 清除敏感配置

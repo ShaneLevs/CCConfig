@@ -6,7 +6,7 @@ import { computed, ref, watch } from 'vue'
 // - main.js 在 mount 前调用 installAppearance()，避免首帧主题闪变。
 //
 // 按设备区分同步（_<nativeId> 后缀）：各机器性能/外观偏好不同。
-// 文档 ID 沿用旧的 ccswitch_dark_background（schema 不迁移），新增 theme 字段。
+// 文档 ID 沿用旧的 ccconfig_dark_background（schema 不迁移），新增 theme 字段。
 const getNativeId = () => {
   try {
     return window.utools?.getNativeId?.() || ''
@@ -15,7 +15,7 @@ const getNativeId = () => {
   }
 }
 
-const LEGACY_DOC_ID = 'ccswitch_dark_background'
+const LEGACY_DOC_ID = 'ccconfig_dark_background'
 const id = getNativeId()
 const DOC_ID = id ? `${LEGACY_DOC_ID}_${id}` : LEGACY_DOC_ID
 

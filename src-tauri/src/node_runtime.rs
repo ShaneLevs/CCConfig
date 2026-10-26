@@ -197,12 +197,15 @@ fn write_cache(path: &Path) {
     let _ = fs::write(target, payload.to_string());
 }
 
+/// 改名前的 Node 路径环境变量（CCCONFIG_NODE 未设时作回退）
+const LEGACY_NODE_ENV: &str = "CCSWITCH_NODE";
+
 /// 按探测链找到可用的 Node。返回探测过程中尝试过的路径，供失败页展示。
 pub fn detect() -> (Option<NodeRuntime>, Vec<String>) {
     let mut tried: Vec<String> = Vec::new();
 
-    // 1. 环境变量（CCCONFIG_NODE 优先，兼容改名前的 CCSWITCH_NODE）
-    let env_node = std::env::var_os("CCCONFIG_NODE").or_else(|| std::env::var_os("CCSWITCH_NODE"));
+    // 1. 环境变量（CCCONFIG_NODE 优先，兼容改名前的旧变量名）
+    let env_node = std::env::var_os("CCCONFIG_NODE").or_else(|| std::env::var_os(LEGACY_NODE_ENV));
     if let Some(p) = env_node {
         let path = PathBuf::from(p);
         tried.push(format!("$CCCONFIG_NODE = {}", path.display()));

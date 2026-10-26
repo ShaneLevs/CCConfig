@@ -123,7 +123,7 @@ function _findSkillMd(dir, depth = 0) {
 // ==================== 安装公共流程 ====================
 
 function _tempInstallDir() {
-  return path.join(window.utools.getPath("temp"), "ccswitch-skill-install");
+  return path.join(window.utools.getPath("temp"), "ccconfig-skill-install");
 }
 
 function _extractZip(zipPath, extractDir) {

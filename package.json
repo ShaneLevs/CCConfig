@@ -45,10 +45,11 @@
     "build": "npm run version:check && npm run i18n:check && vite build",
     "build:app": "npm run version:check && npm run i18n:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
     "tauri:dev": "npm run build:app && cargo tauri dev",
-    "tauri:build": "npm run build:app && cargo tauri build",
+    "tauri:build": "npm run build:app && cargo tauri build && node scripts/collect-release.mjs",
     "bump": "node scripts/bump-version.mjs",
     "version:check": "node scripts/check-versions.mjs",
-    "i18n:check": "node scripts/check-i18n.mjs"
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "release:collect": "node scripts/collect-release.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.47.0",

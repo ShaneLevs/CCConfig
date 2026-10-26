@@ -1,7 +1,7 @@
 // 语言常量与解析（不依赖 vue / vue-i18n，避免 useLocale ↔ i18n 循环 import）
 export const SUPPORTED_LOCALES = ['zh-CN', 'en-US']
 export const DEFAULT_LOCALE = 'zh-CN'
-export const LOCALE_DOC_ID = 'ccswitch_locale'
+export const LOCALE_DOC_ID = 'ccconfig_locale'
 
 export function normalizeLocale(value) {
   if (!value) return null

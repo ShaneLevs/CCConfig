@@ -205,7 +205,7 @@ const searchOpencodePlugins = (query = 'opencode-plugin') => {
   return new Promise((resolve, reject) => {
     const url = `https://registry.npmjs.org/-/v1/search?text=keywords:${encodeURIComponent(query)}&size=30`
     https.get(url, {
-      headers: { 'user-agent': 'CCSwitch/1.0', 'accept': 'application/json' },
+      headers: { 'user-agent': 'CCConfig/1.0', 'accept': 'application/json' },
       timeout: 10000,
     }, (res) => {
       let data = ''

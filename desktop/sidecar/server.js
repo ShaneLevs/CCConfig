@@ -339,16 +339,29 @@ server.listen(PORT, "127.0.0.1", () => {
   }
 });
 
-// 父进程（Tauri）消失时自杀，避免孤儿进程占端口
+// 父进程（Tauri）消失时自杀，避免孤儿进程占端口。
+// 常见的一次失败不能算死：启动阶段（尤其 macOS 刚 CHECKIN 时）偶尔会拿到 ESRCH，
+// 直接退会让应用误弹「需要 Node.js」引导页，所以要求连续 2 次探测失败才退出。
 if (PARENT_PID > 0) {
+  let missCount = 0;
   const guard = setInterval(() => {
+    let alive = false;
     try {
       process.kill(PARENT_PID, 0);
+      alive = true;
     } catch (e) {
-      console.error("[sidecar] 父进程已退出，sidecar 自行结束");
-      shim.flushNow();
-      process.exit(0);
+      // EPERM = 进程还在，只是没权限发信号
+      alive = e && e.code === "EPERM";
     }
+    if (alive) {
+      missCount = 0;
+      return;
+    }
+    missCount += 1;
+    if (missCount < 2) return;
+    console.error("[sidecar] 父进程已退出，sidecar 自行结束");
+    shim.flushNow();
+    process.exit(0);
   }, 3000);
   if (guard.unref) guard.unref();
 }

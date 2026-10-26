@@ -33,7 +33,7 @@ const _getShellEnv = () => {
 
 const getDisabledMcpServers = () => {
   try {
-    const prefix = `ccswitch_mcp_disabled_${getNativeId()}_`
+    const prefix = `ccconfig_mcp_disabled_${getNativeId()}_`
     return window.utools.db.allDocs()
       .filter(d => d._id.startsWith(prefix))
       .map(d => ({ name: d.name, config: d.config, updatedAt: d.updatedAt }))
@@ -50,7 +50,7 @@ const disableMcpServer = (name) => {
     if (!config[name]) return { success: false, error: t('service.mcp.notFound') }
 
     const nativeId = getNativeId()
-    const docId = `ccswitch_mcp_disabled_${nativeId}_${name}`
+    const docId = `ccconfig_mcp_disabled_${nativeId}_${name}`
     const existingDoc = window.utools.db.get(docId)
     const doc = { _id: docId, name, config: config[name], nativeId, updatedAt: Date.now() }
     if (existingDoc) doc._rev = existingDoc._rev
@@ -68,7 +68,7 @@ const disableMcpServer = (name) => {
 
 const enableMcpServer = (name) => {
   try {
-    const docId = `ccswitch_mcp_disabled_${getNativeId()}_${name}`
+    const docId = `ccconfig_mcp_disabled_${getNativeId()}_${name}`
     const doc = window.utools.db.get(docId)
     if (!doc) return { success: false, error: t('service.mcp.dbNotFound') }
 
@@ -85,7 +85,7 @@ const enableMcpServer = (name) => {
 
 const deleteDisabledMcpServer = (name) => {
   try {
-    const docId = `ccswitch_mcp_disabled_${getNativeId()}_${name}`
+    const docId = `ccconfig_mcp_disabled_${getNativeId()}_${name}`
     const doc = window.utools.db.get(docId)
     if (!doc) return { success: false, error: t('service.mcp.configNotFound') }
     const result = window.utools.db.remove(docId)
@@ -144,7 +144,7 @@ const getMcpServerTools = async (config) => {
   let client = null
   try {
     const { Client } = _mcpClient
-    client = new Client({ name: 'ccswitch', version: '1.0.0' })
+    client = new Client({ name: 'ccconfig', version: '1.0.0' })
 
     if (config.type === 'http') {
       // 先尝试 Streamable HTTP，失败后降级到 SSE
@@ -152,7 +152,7 @@ const getMcpServerTools = async (config) => {
         await _tryConnectHttp(client, config)
       } catch (httpError) {
         try {
-          client = new Client({ name: 'ccswitch', version: '1.0.0' })
+          client = new Client({ name: 'ccconfig', version: '1.0.0' })
           await _tryConnectSSE(client, config)
         } catch (sseError) {
           throw new Error(t('service.mcp.connectFailed'))

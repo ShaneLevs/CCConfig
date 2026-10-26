@@ -19,9 +19,27 @@ docs/         # 架构文档
 
 - **`src/`** — 渲染层。`main.js`/`App.vue` 入口；`i18n/` 语言解析与 vue-i18n 实例，`composables/useAppearance.js` 解析外观（跟随系统/浅色/深色），`composables/useLocale.js` 管理语言；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、外观设置等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
 - **`shared/i18n/`** — 中英文案单一事实来源（按域拆 JSON）。Vue 通过 `src/i18n/index.js` 的 `import.meta.glob` 合并；preload 通过 `services/i18n.js` 用 CJS require（esbuild 内联）；Rust 通过 `src-tauri/src/i18n.rs` 的 `include_str!` 读 `native.json`。
-- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / commands / usage / crypto / i18n），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
-- **`desktop/`** — 仅桌面版。`sidecar/server.js` 把打包后的 preload 以回环 HTTP 服务暴露；`sidecar/utools-shim.js` 在 Node 里实现最小 uTools API 面；`bridge/window-shim.js` 构建时注入渲染层，提供 `window.utools` / `window.services`；`guide.html` 是找不到可用 Node 时的引导页（中英文案由 Rust 注入 `window.__CC_GUIDE__`）。
-- **`src-tauri/`** — 仅桌面版的 Rust 外壳：Node 运行时探测、sidecar 生命周期、托盘、窗口主题；`i18n.rs` 负责托盘/引导页文案，语言偏好通过 sidecar RPC 先取 nativeId 再读 `ccswitch_locale_<nativeId>`（旧共享档作回退）。
+- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / subscriptions / browser-cookies / sqlite-query / commands / usage / crypto / db-migrate / legacy / i18n），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
+- **`desktop/`** — 仅桌面版。`sidecar/server.js` 把打包后的 preload 以回环 HTTP 服务暴露；`sidecar/utools-shim.js` 在 Node 里实现最小 uTools API 面；`bridge/window-shim.js` 构建时注入渲染层，提供 `window.utools` / `window.services`；`guide.html` 是启动失败引导页（提示没找到 Node，或 sidecar 起不来——原因由 Rust 注入 `window.__CC_GUIDE__` / `window.__CC_FAIL__`）。
+- **`src-tauri/`** — 仅桌面版的 Rust 外壳：Node 运行时探测、sidecar 生命周期、托盘、窗口主题；`i18n.rs` 负责托盘/引导页文案，语言偏好通过 sidecar RPC 先取 nativeId 再读 `ccconfig_locale_<nativeId>`（旧共享档作回退）。
+
+### 命名迁移（ccswitch → ccconfig）
+
+项目原名 CCSwitch，已统一为 CCConfig。大部分标识符是纯代码命名，随手改即可；但**已经落到用户磁盘 / DB 里的字面量不能直接换**，否则老数据读不到、老用户丢配置。这些旧名以「数据兼容常量」的形式保留，只在读取/迁移旧数据时使用，新写入一律用 ccconfig 命名：
+
+| 旧名字面量 | 位置 | 为什么要留着 |
+|---|---|---|
+| DB 文档 ID 前缀 `ccswitch_*` | `public/preload/services/legacy.js` | 由 `db-migrate.js` 启动时整批改名为 `ccconfig_*`，常量仅用于扫描 |
+| AES 加密盐 `ccswitch-encryption-key` | 同上（`crypto.js` 使用） | 旧密文必须用旧盐才能解开 |
+| `由 CCSwitch 生成`（codex 条目标记） | 同上（`codex.js` 使用） | 识别改名前的 `~/.codex/models.json` 条目 |
+| 导出文件 `app: 'ccswitch'` | 同上（`config.js` 使用） | 导入旧导出文件时归一为新值 |
+| 网关响应头 `x-ccswitch-left-out` | 同上（`autoroute.js` 使用） | 新旧头同时补发，外部脚本不断 |
+| `~/Library/Application Support/CCSwitch`、`~/Library/Logs/CCSwitch` | `src-tauri/src/main.rs` 常量区 | 启动时把老数据/旧日志搬到 `~/.ccconfig` |
+| `CCSWITCH_NODE` | `src-tauri/src/node_runtime.rs` | 旧环境变量作回退 |
+| `CCSWITCH_DATA_DIR` | `desktop/sidecar/utools-shim.js` | 同上 |
+| nativeId 哈希种子 `ccswitch-desktop`、旧文档 `ccswitch_runtime_id` | `desktop/sidecar/utools-shim.js` | **绝不能改**：变了会重算出新的 nativeId，`_<nativeId>` 文档全部孤儿化 |
+
+迁移只做两件事：文档 ID 前缀改名 + 旧格式密文换盐重加密（`<iv>:<ct>` → `v2:<iv>:<ct>`）。密文带版本前缀而不是「先试新盐、失败再试旧盐」：AES-CBC 用错钥匙解密有约 1/256 概率填充合法，会静默返回乱码。幂等、失败保留旧档下次重试。冒烟测试：`node tests/smoke-db-migrate-test.cjs`。
 
 ## 数据流
 
@@ -32,15 +50,15 @@ Claude:
   ~/.claude/skills/（全局）+ 项目级 .claude/skills/ + .disabled 目录
   ~/.claude/projects/**/*.jsonl  →  使用统计：
       signature = file_count:max_mtime 校验 → DB 缓存命中秒开
-      热力图历史持久化（ccswitch_heatmap_*），全量解析后与历史按日期合并
+      热力图历史持久化（ccconfig_heatmap_*），全量解析后与历史按日期合并
       JSONL 读取失败时 readPersistedUsage 从历史兜底重建统计
 
 通用配置（跨 agent 主数据）:
-  供应商/模型主数据 → 本地数据库（ccswitch_common_providers，API Key 加密）
-  通用 MCP → 云端为唯一主档存全量服务器（ccswitch_common_mcp）；本机启停名单存 ccswitch_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccswitch_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
+  供应商/模型主数据 → 本地数据库（ccconfig_common_providers，API Key 加密）
+  通用 MCP → 云端为唯一主档存全量服务器（ccconfig_common_mcp）；本机启停名单存 ccconfig_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccconfig_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
-  汇总统计 → 各 agent 统计页计算后落库 ccswitch_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
+  汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
     通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
@@ -66,7 +84,7 @@ Claude:
       错误体：按状态码归一为协议原生 type（429 rate_limit_error / 5xx·529 overloaded·api_error），上游 Retry-After 透传
     上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发；客户端断开（流式）立即中止上游并记 499
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
-    配置存本地数据库（ccswitch_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
+    配置存本地数据库（ccconfig_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
 
 OpenCode:
   ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  本地数据库
@@ -161,7 +179,7 @@ ZCode:
       total = input + output（= computed_total_tokens，reasoning 含在 output 内）；模型名只取 model_id（不带 provider 前缀，
       同名模型跨供应商用量合并；旧落库的带前缀键读历史时自动剥前缀合并）
       day.inputTokens 含缓存（= tokens - output），day.models[].inputTokens 为未缓存输入（同 DSH 双口径）
-    历史落库：ccswitch_agent_usage_zcode_<nativeId>，同一天取较大值合并，db 被清理/换机后回放历史不归零
+    历史落库：ccconfig_agent_usage_zcode_<nativeId>，同一天取较大值合并，db 被清理/换机后回放历史不归零
 
 DSH（DeepSeek Harness）:
   <DSH_HOME>/profiles/<profile>/cordis.patch.yml（DSH_HOME 默认 ~/.dsh，DSH_PROFILE 默认 desktop）→ js-yaml 读写（解析失败抛错阻断写回）
@@ -199,11 +217,102 @@ DSH（DeepSeek Harness）:
       口径：输入 = inputTokens + cacheReadTokens + cacheWriteTokens（含缓存），输出 = outputTokens；
       day.inputTokens 含缓存（页面日期筛选直接取该字段），day.models[].inputTokens 为未缓存输入（页面在模型维度
       自行叠加 cacheRead/cacheCreation），summary.inputTokens = 总 - 输出
-      缓存：signature = 日志数:总字节:最新 mtime → 本地数据库（ccswitch_dsh_usage_cache_<nativeId>），
+      缓存：signature = 日志数:总字节:最新 mtime → 本地数据库（ccconfig_dsh_usage_cache_<nativeId>），
       页面保活（isTabVisited + v-show）不重复拉取，点刷新也走签名校验、日志有变化才重新全量解析
-      历史落库：每日聚合落 ccswitch_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
+      历史落库：每日聚合落 ccconfig_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
       读取时按「同一天取较大值」合并历史（日志被清理/压缩后历史不缩水），日志全没了则直接回放历史档
 ```
+
+### 订阅用量（通用 → 订阅）
+
+用户手动添加自己订阅的第三方服务，插件用**本机浏览器的登录态**代他查用量，结果同时显示在订阅页与桌面版托盘面板。
+官方没有公开的用量接口，也不发 token，只能用浏览器里那份会话 Cookie 去请求它自家前端调的接口。
+
+```
+Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清单**不是白名单**，只是加速表：
+  查找顺序（命中即止，越靠前越可信）：
+    1) 用户手选的目录 customDirs（订阅弹窗里的「选择目录」，存在 item.cookieDirs）
+    2) CHROMIUM_SOURCES 已知清单（chrome/edge/brave/chromium/vivaldi/arc/ego lite/quark/qqbrowser）
+    3) 自动发现 discoverChromiumRoots()：从 ~/Library/Application Support（win: AppData 的 Local/Roaming）
+       起扫 depth≤3，判据是「目录里有 Local State 且真有 Cookie 库」，实测 330ms 扫完 1500+ 目录
+    4) Firefox   5) Safari(macOS)
+  Chromium 库路径：<root>/Cookies、<root>/Network/Cookies，profile 目录名先按
+      Default / Default Profile / Profile N / Person N 匹配，再对任意子目录兜底（跳过 Cache 等 SKIP_DIRS）
+      macOS：磁盘库加密 v10 → 钥匙串 “<Browser> Safe Storage” → PBKDF2-SHA1(salt=saltysalt,1003 轮,16B)
+             → AES-128-CBC(IV = 16 个 0x20) → 去 "v10" 前缀 → 剥掉开头 32 字节 SHA256(host_key)
+             钥匙串条目名要猜：ego lite 注册的 service 是 “ego safe storage”（全小写、短名），
+             所以 guessKeychainServices() 试 <name> Safe Storage / 小写 / 首词变体，再按
+             `security dump-keychain` 里的 /safe storage$/i 前缀模糊匹配
+      Windows：Local State 的 os_crypt.encrypted_key（去 DPAPI 前缀 → DPAPI 解出 32B key）
+             → v10/v11 + AES-256-GCM → 同样剥 32 字节 host hash；v20（App-Bound）目前不支持
+             **每个应用的 os_crypt 密钥独立**，必须按 root 分别取（winKey 按 root 缓存），
+             不能拿 Chrome 的密钥解 Edge 的库
+  Firefox → profiles.ini 指向的 moz_cookies（明文；手选目录时直接找 cookies.sqlite）
+  Safari  → ~/Library/Cookies/Cookies.binarycookies 或 ~/Library/Containers/com.apple.Safari/.../Cookies.binarycookies
+  查询（sqlite-query.js）：先把库文件 copyFileSync 到临时目录再查（浏览器持锁），
+      node:sqlite 优先（Node ≥22.5），否则回退子进程 node --experimental-sqlite
+  expires_utc 是 WebKit 时间（~1.34e16，超 JS 安全整数）→ SQL 里必须 CAST(expires_utc AS TEXT)
+
+  两个「别把界面卡死」的硬约束（都实测踩过）：
+  1) **先查明文列、后碰钥匙串**：readChromium 先用 host_key/name 筛出这个库里到底有没有目标 Cookie，
+     有才去取解密密钥。否则每个装了的 Chromium 应用都会弹一次钥匙串授权框、没点就各等超时，
+     实测本机 Chromium + ego lite + Quark 三个刚好都装了 → 未优化前 15s 起，优化后 342ms。
+  2) **钥匙串授权没被允许就立刻收手**：`security find-generic-password -w -s <svc>` 在没人点弹窗时会
+     一直挂着 → 首次超时 15s / 重试 5s，超时（SIGKILL）即记 keychainBlocked 并让 findCookies 的
+     stop() 立即终止后续所有浏览器；失败结果只缓存 60s（用户这次点「拒绝」，下次点「允许」不该要重启插件）。
+     不带 -w 的 `find-generic-password -s <svc>` 是 10ms 且不弹窗，用来廉价判断条目是否存在。
+  keychainBlocked 会随 captureCookie 返回给渲染进程 → UI 显示「去 macOS 弹窗里点允许」而不是干巴巴「没找到」。
+
+适配器（public/preload/services/subscriptions.js 的 ADAPTERS）:
+  { id, cookieHosts, cookieNames, loginUrl, apiBase, fetchUsage(cookie) }
+  open-design：amr-api.open-design.ai，Cookie __Secure-better-auth.session_token（只发 Cookie + Accept，
+      不需 UA/Origin/Referer）
+      /api/auth/get-session            → 登录态校验（失效时返回 200 null）
+      /api/v1/workspaces/current       → workspaceId（免硬编码）
+      /api/v1/billing/summary?timeZone=… → 套餐档位 / 订阅周期 / creditsPerUsd(10000)
+      /api/v1/workspaces/<ws>/billing/coding-plan-usage → windows[]：
+          durationSeconds 18000 = 5 小时窗口，604800 = 周窗口；usedCredits/limitCredits 是**字符串**
+          credits ÷ 10000 = USD
+  新增站点：加一个 ADAPTERS 条目即可，UI/存储/托盘都不用改
+
+  自定义目录兜底：captureCookie(provider, {customDirs}) 把用户手选的目录传给 findCookies；
+  pickCookieDir() 走 window.utools.showOpenDialog({properties:['openDirectory']}) → inspectDir() 校验
+  （返回 {ok, dir, kind:'chromium'|'firefox'|'safari', name, dbCount}，没 Cookie 库则 ok:false + no_cookie_db）。
+  注意桌面版 desktop/sidecar/utools-shim.js 的 showOpenDialog 原本只实现 `choose file`，
+  必须按 properties 里的 openDirectory 切到 AppleScript 的 `choose folder`，否则选目录框选不到目录。
+
+存储:
+  ccconfig_subscriptions_<nativeId> → [{ id, provider, label, cookie(加密 v2:<iv>:<ct>), cookieSource,
+      cookieDirs(手选的浏览器数据目录，非敏感，对外原样返回), workspaceId, snapshot, lastError,
+      lastErrorAt, cookieExpired, updatedAt }]
+  对外（getSubscriptions）剥掉 cookie 原文，只留 hasCookie；失效 Cookie 不删（换回登录态就能救活）
+  刷新：单个 refreshSubscription / 批量 refreshSubscriptions（只刷超过 5 分钟或已过期的，带并发守卫）
+  添加：先读本机 Cookie → 先请求一次接口验活 → 通过才入库（不留永远登不上的死记录）
+
+展示:
+  语义：全站一律用「剩余」——用户关心的是还剩多少（进度条越长 = 越充裕，阈值也随之反转：≤30% 橙、≤10% 红）
+  订阅页 src/Switch/common/SubscriptionsView.vue：每个窗口一行（名称 + 「剩余 96%」+ 进度条），不显金额与重置时间
+  桌面版托盘弹窗（desktop/tray.html）：getSubscriptionsTray() 返回结构化数据，页面直接画进度条
+      title = 「站点品牌 · 套餐」（如 `Open Design · go`）；email = 账号邮箱；
+      state = 'ok' | 'expired' | 'nodata'；windows = [{ key, label, percent }]（label 已本地化，percent 是**剩余**百分比）；
+      message = 过期 / 无数据时的提示文案（已本地化）
+      页面先渲染这份缓存快照（绝不在首帧等网络），再用异步 /rpc-poll 调 refreshSubscriptions 原地更新；
+      刷新失败保留缓存，不打扰用户
+  冒烟测试：node tests/smoke-subscriptions.cjs（不联网，覆盖存储脱敏/托盘数据/窗口与倒计时换算）
+```
+
+### 启动失败与引导页（桌面版）
+
+- 引导页 `desktop/guide.html` 两个入口：① 探测不到 Node（>=18）；② sidecar 起不来。Rust 通过
+  `window.__CC_FAIL__ = {kind, reason, tried}` 注入原因，`kind === "sidecar"` 时标题换成「本地服务没能启动」，
+  否则用户会误以为是没装 Node。
+- 失败原因同时追加到 `~/.ccconfig/logs/sidecar.log` 的 `[app] ...` 行（Finder 启动时 eprintln 用户看不到），
+  引导页的「排查」卡片就指这个文件。
+- `Sidecar::start` 失败会**自动重试一次**（`start_sidecar_with_retry`，间隔 1s）：启动瞬间的抢跑（旧实例收尾、健康检查）
+  不该直接把用户丢到引导页。
+- `desktop/sidecar/server.js` 的父进程守护要求**连续 2 次**探测失败（间隔 3s）才自杀，且 `EPERM`（无权限发信号）
+  视为存活；单次 `ESRCH` 就 `process.exit(0)` 会让正常启动的应用掉到引导页。
+- 托盘「重启网关」现在也会在主窗口缺失时重建主窗口并关掉引导页（`restart_sidecar`），不必重开应用。
 
 ## 认证与模型选择细节
 
@@ -215,6 +324,6 @@ DSH（DeepSeek Harness）:
 
 ## 语言与外观
 
-- **语言**：`src/composables/useLocale.js` 读取本机文档 `ccswitch_locale_<nativeId>`（`system` / `zh-CN` / `en-US`，旧共享 `ccswitch_locale` 仅作迁移种子），默认跟随系统（`navigator.languages`）。变更时同步 `i18n.global.locale`、`<html lang>`、DB，并调用 `window.services.setLocale()`；preload 用它更新 `service.json` 文案与 uTools 指令注册。桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId，再读本机语言档（读不到回退共享档 / 系统语言）。
+- **语言**：`src/composables/useLocale.js` 读取本机文档 `ccconfig_locale_<nativeId>`（`system` / `zh-CN` / `en-US`，旧共享 `ccconfig_locale` 仅作迁移种子），默认跟随系统（`navigator.languages`）。变更时同步 `i18n.global.locale`、`<html lang>`、DB，并调用 `window.services.setLocale()`；preload 用它更新 `service.json` 文案与 uTools 指令注册。桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId，再读本机语言档（读不到回退共享档 / 系统语言）。
 - **文案目录**：`shared/i18n/{zh-CN,en-US}/*.json`，Vue / preload / Rust 共用；`npm run i18n:check` 校验 key 与占位符。
-- **外观**：`src/composables/useAppearance.js` 读取 `ccswitch_dark_background_<nativeId>` 的 `theme`（`system|light|dark`），解析出 `isDark`。`<html theme-mode>` 显式写 `dark`/`light`；`effect-active` 由解析后的深色状态驱动。只有固定主题与系统外观不一致时加 `theme-mismatch`，`theme.css` 用 `::before` 在 WebGL canvas（z-index -1）之下铺 `--td-bg-color-page` 纯色底；一致时保留 uTools 亚克力 / 桌面版 vibrancy。
+- **外观**：`src/composables/useAppearance.js` 读取 `ccconfig_dark_background_<nativeId>` 的 `theme`（`system|light|dark`），解析出 `isDark`。`<html theme-mode>` 显式写 `dark`/`light`；`effect-active` 由解析后的深色状态驱动。只有固定主题与系统外观不一致时加 `theme-mismatch`，`theme.css` 用 `::before` 在 WebGL canvas（z-index -1）之下铺 `--td-bg-color-page` 纯色底；一致时保留 uTools 亚克力 / 桌面版 vibrancy。

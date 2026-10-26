@@ -16,6 +16,7 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const { t } = require("./i18n");
+const legacy = require("./legacy");
 const { readCommonProviders } = require("./common");
 const codexCatalog = require("./codex");
 const { getSource } = require("./autoroute-convert/source");
@@ -24,11 +25,11 @@ const { pipeStream, collectBody } = require("./autoroute-convert/stream");
 const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText, retryAfterMs, isRetryableStatus, refusedOptionalFields, refusedBetaHeader } = require("./autoroute-convert/canonical");
 
 // 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
-// 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccswitch_overridden_env_<nativeId> 先例）。
-// 旧版共用文档 ccswitch_autoroute_config 作为升级回退：机器首次读取尚无本机文档时继承旧配置作为起点，
+// 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccconfig_overridden_env_<nativeId> 先例）。
+// 旧版共用文档 ccconfig_autoroute_config 作为升级回退：机器首次读取尚无本机文档时继承旧配置作为起点，
 // 之后各自独立演进；旧文档保留不删（其他机器可能还没迁移过）。
-const LEGACY_DOC_ID = "ccswitch_autoroute_config";
-const getDocId = () => `ccswitch_autoroute_config_${window.utools.getNativeId()}`;
+const LEGACY_DOC_ID = "ccconfig_autoroute_config";
+const getDocId = () => `ccconfig_autoroute_config_${window.utools.getNativeId()}`;
 
 const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], mappingSeeded: false };
 const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
@@ -418,7 +419,7 @@ const handleRequest = async (req, res) => {
 
     // 健康检查无需鉴权
     if (method === "GET" && (path === "/" || path === "/health")) {
-      sendJson(res, 200, { status: "ok", service: "ccswitch-autoroute" });
+      sendJson(res, 200, { status: "ok", service: "ccconfig-autoroute" });
       return;
     }
 
@@ -460,7 +461,11 @@ const handleRequest = async (req, res) => {
         bytes += size;
         models.push(entryWithoutBase);
       }
-      if (leftOut) res.setHeader("x-ccswitch-left-out", String(leftOut));
+      if (leftOut) {
+        res.setHeader("x-ccconfig-left-out", String(leftOut));
+        // 改名前的旧头一并补发，避免外部脚本/日志解析失效
+        res.setHeader(legacy.GATEWAY_LEFT_OUT_HEADER, String(leftOut));
+      }
       sendJson(res, 200, { models });
       finish({ protocol: "models", model: "", status: 200 });
       return;

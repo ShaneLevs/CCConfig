@@ -173,7 +173,7 @@ const PATH_RESOLVERS = {
   videos: () => path.join(os.homedir(), "Movies"),
   userData: () => APP_SUPPORT(),
   appData: () => APP_SUPPORT(),
-  logs: () => path.join(os.homedir(), "Library", "Logs", "CCSwitch"),
+  logs: () => path.join(os.homedir(), "Library", "Logs", "CCConfig"),
 };
 
 function getPath(name) {
@@ -182,7 +182,12 @@ function getPath(name) {
   return resolver();
 }
 
-const NATIVE_ID_DOC = "ccswitch_runtime_id";
+const NATIVE_ID_DOC = "ccconfig_runtime_id";
+// 改名前的同名文档：迁移前若先被读到，必须认旧的，否则会从新种子重新算出一个设备 ID，
+// 让所有 `_<nativeId>` 文档（外观 / Agent 启停 / 网关配置 / 统计）全部孤儿化。
+const LEGACY_NATIVE_ID_DOC = "ccswitch_runtime_id";
+// 设备 ID 的哈希种子。**永远不要改**：一旦改动，没命中缓存的机器会算出不同的 nativeId。
+const NATIVE_ID_SEED_SUFFIX = "ccswitch-desktop";
 
 function firstMacAddress() {
   const ifaces = os.networkInterfaces();
@@ -199,10 +204,11 @@ function firstMacAddress() {
 // 与 uTools 的「按插件独立哈希的设备 ID」语义对齐：稳定、不可逆、不含明文主机信息
 function getNativeId() {
   loadDb();
-  const cached = _docs.get(NATIVE_ID_DOC);
+  const cached =
+    _docs.get(NATIVE_ID_DOC) || _docs.get(LEGACY_NATIVE_ID_DOC);
   if (cached && typeof cached.value === "string" && cached.value) return cached.value;
 
-  const seed = `${os.hostname()}|${firstMacAddress()}|ccswitch-desktop`;
+  const seed = `${os.hostname()}|${firstMacAddress()}|${NATIVE_ID_SEED_SUFFIX}`;
   const value = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 32);
 
   const doc = { _id: NATIVE_ID_DOC, value, createdAt: Date.now() };
@@ -249,7 +255,11 @@ function copyText(text) {
 // 同步返回 string[] | null，对齐 common.js 对返回值的期望
 function showOpenDialog(options = {}) {
   const title = String(options.title || "Select file").replace(/["\\]/g, "");
-  const script = `set f to choose file with prompt "${title}"\nPOSIX path of f`;
+  // properties 里的 openDirectory 要映射到 AppleScript 的 choose folder，
+  // 否则挑浏览器数据目录时只能挑到文件（订阅功能用它让用户指定 profile 目录）。
+  const wantsDir = Array.isArray(options.properties) && options.properties.includes("openDirectory");
+  const verb = wantsDir ? "choose folder" : "choose file";
+  const script = `set f to ${verb} with prompt "${title}"\nPOSIX path of f`;
   try {
     const out = execFileSync("osascript", ["-e", script], {
       encoding: "utf8",

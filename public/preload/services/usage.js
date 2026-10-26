@@ -66,7 +66,7 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
 // ==================== 跨 agent 统一落库（「通用」统计页数据源） ====================
 // 设计：各 agent 统计页计算完成后按 agent 落库（读源文件由 agent 自己的统计页负责，
 // 本层只负责存 + 纯 DB 读取聚合，「通用」统计页不重新解析任何源文件）。
-// 文档 ID 按机器隔离：ccswitch_agent_usage_<agent>_<nativeId>（同 heatmap/usage_cache 先例，
+// 文档 ID 按机器隔离：ccconfig_agent_usage_<agent>_<nativeId>（同 heatmap/usage_cache 先例，
 // 统计派生自本机文件，跨设备同步互相覆盖无意义）。
 // days 形状与 heatmap 一致：{ 'YYYY-MM-DD': { tokens, inputTokens, outputTokens, models } }
 // 各 agent 统计页打开时在「计算完成」处落库（Claude 另有自己的热力图历史档），
@@ -76,7 +76,7 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
 // dsh / zcode 另用它做历史合并（源数据被清理后回放历史，不归零）
 const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh', 'zcode']
 
-const agentUsageDocId = (agent) => `ccswitch_agent_usage_${agent}_${getNativeId()}`
+const agentUsageDocId = (agent) => `ccconfig_agent_usage_${agent}_${getNativeId()}`
 
 // 全零结果跳过写入：OpenCode/Pi 读取失败兜底会返回空统计，避免误清历史数据
 const saveAgentUsage = (agent, contributions) => {

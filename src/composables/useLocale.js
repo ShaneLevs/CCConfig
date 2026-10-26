@@ -8,7 +8,7 @@ import {
 } from '../i18n/locales'
 
 // 语言偏好：'system' | 'zh-CN' | 'en-US'。
-// 按机器隔离（_<nativeId> 后缀，同外观/Agent 启停），旧共享档 ccswitch_locale 仅作迁移种子。
+// 按机器隔离（_<nativeId> 后缀，同外观/Agent 启停），旧共享档 ccconfig_locale 仅作迁移种子。
 const getNativeId = () => {
   try {
     return window.utools?.getNativeId?.() || ''

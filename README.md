@@ -22,6 +22,7 @@ It gives twelve AI coding CLIs a single place to manage API providers, models, M
 - **MCP management** — per-app MCP server config plus a live tool-discovery canvas; shared MCP servers in Common Config mirror into local JSON files with a per-machine enable switch
 - **Skill & plugin management** — install skills from SkillHub / ModelScope, toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
 - **Usage analytics** — token usage, model distribution and GitHub-style contribution heatmaps, aggregated across agents in one view
+- **Subscription quota** — manually add services you subscribe to (open-design today), read their 5-hour / weekly quota with your local browser's sign-in and mirror it into the desktop menu bar
 - **Batch edit, import/export, appearance** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and a three-mode appearance setting (follow system / light / dark) with optional dark-mode animated backgrounds
 - **Bilingual UI** — Simplified Chinese and English, follows the system language by default and can be switched in Settings → General
 
@@ -53,10 +54,11 @@ Field-level rules for every app are documented in [docs/architecture.md](docs/ar
 ```bash
 npm install
 npm run tauri:build
-# → src-tauri/target/release/bundle/dmg/CCConfig_*.dmg
+# → release/CCConfig_<version>_<arch>.dmg (Tauri's own output stays in
+#   src-tauri/target/release/bundle/dmg/; scripts/collect-release.mjs copies it to release/)
 ```
 
-App data lives in `~/.ccconfig/`. Closing the window keeps the app in the menu bar so the local gateway keeps serving: left-click the tray icon for the menu, right-click to reopen.
+App data lives in `~/.ccconfig/`. Closing the window keeps the app in the menu bar so the local gateway keeps serving: left-click the tray icon for the status panel (gateway stats, subscription usage, actions), right-click to reopen the main window.
 
 If Node was installed via nvm/fnm/volta and the app cannot find it when launched from the Dock, point it explicitly:
 
@@ -66,7 +68,7 @@ CCCONFIG_NODE=$(which node) open -a CCConfig
 
 ## Usage
 
-In uTools, type a keyword to open the matching app — `通用配置` (Common Config), `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link opens Skill install; `pi install <package>` opens Pi extension install.
+In uTools, type a keyword to open the matching app — `CCConfig` / `通用配置` (Common Config), `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link opens Skill install; `pi install <package>` opens Pi extension install.
 
 The macOS app has no search box: it opens on Common Config and you switch apps from the left rail.
 
@@ -78,7 +80,7 @@ npm run dev          # uTools plugin dev server (localhost:5173)
 npm run build        # uTools plugin → dist/
 npm run build:app    # desktop renderer → dist-app/ + sidecar resources
 npm run tauri:dev    # desktop app in dev mode
-npm run tauri:build  # desktop app → .dmg
+npm run tauri:build  # desktop app → release/*.dmg
 ```
 
 Both builds share `src/` and `public/preload/`; only the shell differs. Architecture notes and the constraints that keep this true are in [AGENTS.md](AGENTS.md) and [docs/architecture.md](docs/architecture.md).

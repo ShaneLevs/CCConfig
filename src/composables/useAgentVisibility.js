@@ -6,11 +6,11 @@ import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META, COMMON_APP_META } from "./
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
 // Agent 顺序与展示名（含图标）见 ./agentMeta.js（纯数据，统计页的 Agent 分组标题也用它）。
 
-// 启停状态按设备区分：主档 ccswitch_visible_agents_<nativeId>，旧共享档作首次迁移种子（只读）
+// 启停状态按设备区分：主档 ccconfig_visible_agents_<nativeId>，旧共享档作首次迁移种子（只读）
 function getNativeId() {
   try { return window.utools.getNativeId() || ""; } catch (e) { return ""; }
 }
-const VISIBLE_AGENTS_DB_BASE = "ccswitch_visible_agents";
+const VISIBLE_AGENTS_DB_BASE = "ccconfig_visible_agents";
 const VISIBLE_AGENTS_DB = (() => {
   const id = getNativeId();
   return id ? `${VISIBLE_AGENTS_DB_BASE}_${id}` : VISIBLE_AGENTS_DB_BASE;

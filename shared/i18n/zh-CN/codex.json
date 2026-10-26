@@ -40,7 +40,7 @@
       "fetchingModels": "正在从该供应商拉取模型列表…",
       "fetchHint": "从该供应商 Base URL 的 /models 接口获取，也可手动输入",
       "providerLabel": "供应商：{name}",
-      "resetWarning": "以下由 CCSwitch 写入的模型相关配置将被移除，操作不可恢复：",
+      "resetWarning": "以下由 CCConfig 写入的模型相关配置将被移除，操作不可恢复：",
       "resetNote": "config.toml 其余配置（mcp_servers、profiles 等）不受影响。撤销后重启 Codex 客户端，即回到官方默认状态并重新登录账号。",
       "confirmReset": "确认恢复",
       "builtin": "内置",

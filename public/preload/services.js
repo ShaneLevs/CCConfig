@@ -24,6 +24,8 @@ const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
 const i18n = require("./services/i18n");
 const autoroute = require("./services/autoroute");
+const subscriptions = require("./services/subscriptions");
+const dbMigrate = require("./services/db-migrate");
 
 const {
   readClaudeSettings,
@@ -83,6 +85,8 @@ const {
 
 window.services = {
   getNativeId,
+  // 一次性数据迁移（旧命名 ccswitch → ccconfig）：装载期已自动跑过，暴露出来供调试/测试手动触发
+  migrateLegacyData: dbMigrate.migrateLegacyData,
   getLocale: i18n.getLocale,
   setLocale: (locale) => {
     const next = i18n.setLocale(locale);
@@ -499,7 +503,7 @@ window.services = {
       if (!hasData.claude) {
         hasData.claude = window.utools.db
           .allDocs()
-          .some((d) => d._id.startsWith("ccswitch_config_"));
+          .some((d) => d._id.startsWith("ccconfig_config_"));
       }
     } catch (e) {
       /* ignore */
@@ -588,6 +592,22 @@ window.services = {
     }
     return hasData;
   },
+
+  // ==================== 订阅用量（读本机浏览器登录态查第三方套餐用量） ====================
+  getSubscriptionProviders: subscriptions.getProviders,
+  getSubscriptions: subscriptions.getSubscriptions,
+  addSubscription: subscriptions.addSubscription,
+  updateSubscription: subscriptions.updateSubscription,
+  deleteSubscription: subscriptions.deleteSubscription,
+  refreshSubscription: subscriptions.refreshSubscription,
+  refreshSubscriptions: subscriptions.refreshAll,
+  reloginSubscription: subscriptions.reloginSubscription,
+  captureSubscriptionCookie: subscriptions.captureCookie,
+  // 浏览器清单之外的兜底：让用户手选浏览器数据目录（返回校验结果，UI 存进 cookieDirs）
+  pickSubscriptionCookieDir: subscriptions.pickCookieDir,
+  openSubscriptionLogin: subscriptions.openLogin,
+  // 桌面版托盘菜单用：只读缓存快照（不联网），文案已在 sidecar 侧本地化
+  getSubscriptionsTray: subscriptions.getSubscriptionsTray,
 };
 
 // ==================== 智能体启停指令同步：生命周期自愈 ====================
@@ -597,6 +617,8 @@ window.services = {
 // 覆盖 uTools 重启 / 插件更新 / 开发者工具重新导入后静态指令（plugin.json
 // features）回归的场景：停用的 agent 命令在插件装载/进入后即被移除。
 const syncLifecycle = () => {
+  // 必须最先跑：把旧命名（ccswitch）的文档 ID / 密文迁移完，后面所有读库才是新 ID
+  try { dbMigrate.migrateLegacyData(); } catch (e) { console.error("[db-migrate] 迁移失败", e); }
   try { commands.initFromDb(); } catch (e) { console.error("[commands] 启停指令同步失败", e); }
   try { autoroute.startAutoRouteIfEnabled(); } catch (e) { console.error("[autoroute] 网关自启失败", e); }
 };

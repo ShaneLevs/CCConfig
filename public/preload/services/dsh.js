@@ -121,7 +121,7 @@ const DSH_THINKING = ['enabled', 'disabled']
 
 // 写入用户配置文件的稳定头注释：不随界面语言变化
 const PATCH_HEADER = [
-  '# dsh profile patch layer maintained by CCConfig (CCSwitch); applied after each bundle layer:',
+  '# dsh profile patch layer maintained by CCConfig; applied after each bundle layer:',
   '# Top-level YAML array of loader patch entries (id-targeted overrides / disables / inserts).',
   '# Plugins not listed here keep their bundle defaults; CCConfig manages the model routes below.',
 ].join('\n')

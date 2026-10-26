@@ -18,7 +18,7 @@ const usage = require('./usage')
 //   单日 tokens = 输入 + 输出；day.models[name] 存「未缓存输入 / 输出 / 缓存读 / 缓存写」，
 //   day.inputTokens 存含缓存输入（OpenCode 同口径，页面日期筛选直接取该字段）。
 //   summary.inputTokens = 总 tokens - 输出（含缓存），modelStats 同样按含缓存口径重算。
-// 历史落库：每日聚合落 ccswitch_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
+// 历史落库：每日聚合落 ccconfig_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
 //   读取时按「同一天取较大值」合并历史：会话日志被清理后历史不缩水，日志全没了就直接回放历史。
 // 只统计 assistant/message，因为它同时带用量与模型归属。assistant/attempt（失败重试）只有
 // 输入、没有模型字段，compaction/summary、会话标题、web search 等辅助请求也不属于对话用量，
@@ -318,7 +318,7 @@ const aggregate = (contributions, messageCount, sessionCount, avgTokensPerSessio
 
 // ==================== 历史合并 ====================
 // DSH 会清理 / 压缩旧会话日志，这里用「通用」统计页共用的落库文档当历史档
-// （ccswitch_agent_usage_dsh_<nativeId>，days = { 'YYYY-MM-DD': { tokens, inputTokens, outputTokens, models } }）：
+// （ccconfig_agent_usage_dsh_<nativeId>，days = { 'YYYY-MM-DD': { tokens, inputTokens, outputTokens, models } }）：
 // 同一天取较大值——日志被删或被压缩后，历史档里更完整的数字不会被缩水覆盖。
 // 注：readAllAgentUsage 只消费 tokens / outputTokens / models，本页写回的 day.inputTokens（含缓存）
 // 不会被它当成未缓存输入再叠加一次缓存。
@@ -391,7 +391,7 @@ const buildStats = () => {
 // ==================== 缓存 ====================
 // 会话文件可能累计到很大，按「文件数 + 总字节 + 最新 mtime」做签名，命中即跳过解压；
 // 文档按机器隔离（同 usage_cache / heatmap 先例）。无 uTools 环境（单测）时自动跳过。
-const cacheDocId = () => `ccswitch_dsh_usage_cache_${window.utools.getNativeId()}`
+const cacheDocId = () => `ccconfig_dsh_usage_cache_${window.utools.getNativeId()}`
 
 const getCache = () => {
   try {

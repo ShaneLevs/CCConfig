@@ -40,7 +40,7 @@ pub fn system_locale() -> Locale {
     Locale::Zh
 }
 
-/// 显式偏好（DB 里的 ccswitch_locale）→ Locale；'system' / 缺失 / 未知值返回 None
+/// 显式偏好（DB 里的 ccconfig_locale）→ Locale；'system' / 缺失 / 未知值返回 None
 pub fn from_preference(value: Option<&str>) -> Option<Locale> {
     match value {
         Some("zh-CN") => Some(Locale::Zh),
@@ -87,7 +87,7 @@ pub fn native(locale: Locale, path: &[&str]) -> String {
 mod tests {
     use super::*;
 
-    // 托盘菜单逐项取文案，缺一个该行就会变成空字符串（菜单会被压到看不见）
+    // 托盘弹窗整块注入 native.json 的 tray 子树，缺 key 页面上会直接露出空字符串
     const TRAY_KEYS: &[&str] = &[
         "gatewayDisabled",
         "gatewayPortBusy",
@@ -96,6 +96,10 @@ mod tests {
         "successRate",
         "tokens",
         "cacheHitRate",
+        "subscription",
+        "subscriptionEmpty",
+        "remaining",
+        "localServiceOffline",
         "showWindow",
         "restartGateway",
         "quit",

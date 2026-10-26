@@ -35,17 +35,17 @@ function detectInitialLocale() {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
   try {
     if (typeof window !== "undefined" && window.utools && window.utools.db) {
-      // 按机器隔离的文档优先；旧共享档 ccswitch_locale 仅作迁移种子
+      // 按机器隔离的文档优先；旧共享档 ccconfig_locale 仅作迁移种子
       let nativeId = "";
       try {
         nativeId = window.utools.getNativeId() || "";
       } catch (e) {
         /* ignore */
       }
-      const docId = nativeId ? `ccswitch_locale_${nativeId}` : "ccswitch_locale";
+      const docId = nativeId ? `ccconfig_locale_${nativeId}` : "ccconfig_locale";
       let doc = window.utools.db.get(docId);
-      if (!doc && docId !== "ccswitch_locale") {
-        doc = window.utools.db.get("ccswitch_locale");
+      if (!doc && docId !== "ccconfig_locale") {
+        doc = window.utools.db.get("ccconfig_locale");
       }
       if (doc && doc.locale && doc.locale !== "system") {
         const normalized = normalizeLocale(doc.locale);

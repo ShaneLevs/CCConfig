@@ -4,6 +4,7 @@ const zlib = require('node:zlib')
 const https = require('node:https')
 
 const { t } = require('./i18n')
+const legacy = require('./legacy')
 
 const CLAUDE_SETTINGS_PATH = path.join(window.utools.getPath('home'), '.claude', 'settings.json')
 const CLAUDE_JSON_PATH = path.join(window.utools.getPath('home'), '.claude.json')
@@ -117,15 +118,22 @@ const openClaudeMcpFile = () => {
   }
 }
 
+const EXPORT_APP_FIELD = 'ccconfig'
+
 const exportConfigsToFile = (filePath, configs) => {
-  const data = { version: '1.0', exportedAt: Date.now(), app: 'ccswitch', configs }
+  const data = { version: '1.0', exportedAt: Date.now(), app: EXPORT_APP_FIELD, configs }
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: 'utf-8' })
   return true
 }
 
+// 导入：兼容改名前的导出文件（app 字段仍是旧名），统一归一为新字段值
 const importConfigsFromFile = (filePath) => {
   const content = fs.readFileSync(filePath, 'utf8')
-  return JSON.parse(content)
+  const data = JSON.parse(content)
+  if (data && typeof data === 'object' && data.app === legacy.EXPORT_APP_FIELD) {
+    return { ...data, app: EXPORT_APP_FIELD }
+  }
+  return data
 }
 
 const compressConfigs = (configs) => {
@@ -147,7 +155,7 @@ const decompressConfigs = (compressedStr) => {
 
 const saveOverriddenEnv = (envData) => {
   try {
-    const docId = `ccswitch_overridden_env_${getNativeId()}`
+    const docId = `ccconfig_overridden_env_${getNativeId()}`
     const doc = { _id: docId, env: envData, updatedAt: Date.now() }
     const existing = window.utools.db.get(docId)
     if (existing) doc._rev = existing._rev
@@ -161,7 +169,7 @@ const saveOverriddenEnv = (envData) => {
 
 const getOverriddenEnv = () => {
   try {
-    const docId = `ccswitch_overridden_env_${getNativeId()}`
+    const docId = `ccconfig_overridden_env_${getNativeId()}`
     const doc = window.utools.db.get(docId)
     return doc?.env || null
   } catch (error) {
@@ -173,7 +181,7 @@ const getOverriddenEnv = () => {
 const saveHeatmapHistory = (contributions) => {
   try {
     const nativeId = getNativeId()
-    const docId = `ccswitch_heatmap_${nativeId}`
+    const docId = `ccconfig_heatmap_${nativeId}`
     const days = {}
     for (const day of contributions) {
       if (day.tokens > 0) {
@@ -191,7 +199,7 @@ const saveHeatmapHistory = (contributions) => {
 
 const getHeatmapHistory = () => {
   try {
-    const docId = `ccswitch_heatmap_${getNativeId()}`
+    const docId = `ccconfig_heatmap_${getNativeId()}`
     const doc = window.utools.db.get(docId)
     return doc?.days || {}
   } catch (error) {
@@ -209,7 +217,7 @@ const getHeatmapHistory = () => {
 const saveUsageCache = (signature, stats) => {
   try {
     const nativeId = getNativeId()
-    const docId = `ccswitch_usage_cache_${nativeId}`
+    const docId = `ccconfig_usage_cache_${nativeId}`
     const doc = {
       _id: docId,
       nativeId,
@@ -231,7 +239,7 @@ const saveUsageCache = (signature, stats) => {
 
 const getUsageCache = () => {
   try {
-    const docId = `ccswitch_usage_cache_${getNativeId()}`
+    const docId = `ccconfig_usage_cache_${getNativeId()}`
     const doc = window.utools.db.get(docId)
     return doc ? { signature: doc.signature, stats: doc.stats, updatedAt: doc.updatedAt } : null
   } catch (error) {

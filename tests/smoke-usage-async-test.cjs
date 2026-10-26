@@ -51,7 +51,7 @@ const ok = (cond, name) => {
   ok(stats && stats.contributions.length === 365, 'DSH worker 空统计返回 365 天骨架')
 
   // ==================== DSH：历史档种子 → worker 内历史回放不归零 ====================
-  const docId = 'ccswitch_agent_usage_dsh_test-native'
+  const docId = 'ccconfig_agent_usage_dsh_test-native'
   savedDocs.set(docId, {
     _id: docId, nativeId: 'test-native', agent: 'dsh', updatedAt: Date.now(),
     days: { '2026-01-05': { tokens: 1070, inputTokens: 1050, outputTokens: 20,
@@ -62,7 +62,7 @@ const ok = (cond, name) => {
   ok(day && day.tokens === 1070, `DSH worker 历史回放 tokens=1070（got=${day && day.tokens}）`)
 
   // ==================== ZCode：历史档种子回放 ====================
-  const zdocId = 'ccswitch_agent_usage_zcode_test-native'
+  const zdocId = 'ccconfig_agent_usage_zcode_test-native'
   savedDocs.set(zdocId, {
     _id: zdocId, nativeId: 'test-native', agent: 'zcode', updatedAt: Date.now(),
     days: { '2026-01-06': { tokens: 1530, inputTokens: 1500, outputTokens: 30,
@@ -77,10 +77,10 @@ const ok = (cond, name) => {
   const day4 = stats4.contributions.find(d => d.tokens > 0)
   ok(!!day4, `Claude worker 真实解析 JSONL（tokens=${day4 && day4.tokens}）`)
   ok(stats4.summary.totalTokens === 180, `totalTokens=180（got=${stats4.summary.totalTokens}）`)
-  const claudeDoc = savedDocs.get('ccswitch_agent_usage_claude_test-native')
+  const claudeDoc = savedDocs.get('ccconfig_agent_usage_claude_test-native')
   ok(!!claudeDoc && claudeDoc.days[day4.date]?.tokens === 180, 'worker 落库写队列重放到主线程 DB')
-  ok(!!savedDocs.get('ccswitch_heatmap_test-native'), '热力图历史落库重放')
-  ok(!!savedDocs.get('ccswitch_usage_cache_test-native'), 'usage 缓存落库重放')
+  ok(!!savedDocs.get('ccconfig_heatmap_test-native'), '热力图历史落库重放')
+  ok(!!savedDocs.get('ccconfig_usage_cache_test-native'), 'usage 缓存落库重放')
 
   console.log(`\n${passed} passed, ${failed} failed`)
   fs.rmSync(tmp, { recursive: true, force: true })
