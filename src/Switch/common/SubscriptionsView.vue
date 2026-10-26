@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Space, Tooltip, MessagePlugin, Popconfirm,
@@ -63,6 +63,13 @@ const refreshOne = async (item) => {
 };
 
 const relogin = async (item) => {
+  // 手填过 Cookie 的订阅没有「可重新读取的浏览器登录态」→ 不去白扫一遍浏览器（还可能弹钥匙串框），
+  // 直接打开编辑弹窗让用户重粘：这是这一类登录态唯一有效的续命方式。
+  if (item.cookieSource === "manual") {
+    openEdit(item);
+    MessagePlugin.warning(t("commonApp.subscription.manualReloginHint"));
+    return;
+  }
   busyId.value = item.id;
   try {
     await window.services.reloginSubscription(item.id);
@@ -102,6 +109,21 @@ const capturedCookie = ref("");
 const capturedBrowser = ref("");
 // 未命中时的具体原因，用于把「去点钥匙串允许」「换浏览器」等提示区分开
 const captureReason = ref("");
+// 手动粘贴的 Cookie 头（钥匙串授权拿不到、或想用别的机器的登录态时的兜底）。
+// 非空即代表用户明确要覆盖：优先级高于自动读取的结果。
+const manualCookie = ref("");
+
+// 真正要存进订阅的 Cookie：手填优先，其次才是自动读取的结果
+const effectiveCookie = computed(() => (manualCookie.value || "").trim() || capturedCookie.value);
+
+// 手填框一改就同步状态：填了 → 手填；清空 → 回到浏览器读取 / 未找到（编辑时回到「沿用已保存」）
+watch(manualCookie, (val) => {
+  if ((val || "").trim()) {
+    captureState.value = "manual";
+  } else if (captureState.value === "manual") {
+    captureState.value = capturedCookie.value ? "found" : editTarget.value ? "stored" : "notfound";
+  }
+});
 
 const openAdd = () => {
   editTarget.value = null;
@@ -109,6 +131,7 @@ const openAdd = () => {
   formDirs.value = [];
   capturedCookie.value = "";
   capturedBrowser.value = "";
+  manualCookie.value = "";
   captureReason.value = "";
   captureState.value = "idle";
   dialogVisible.value = true;
@@ -122,6 +145,7 @@ const openEdit = (item) => {
   formDirs.value = Array.isArray(item.cookieDirs) ? [...item.cookieDirs] : [];
   capturedCookie.value = "";
   capturedBrowser.value = "";
+  manualCookie.value = "";
   captureReason.value = "";
   // 编辑时默认沿用已存的登录态（不主动读浏览器，避开不必要的钥匙串弹窗）：
   // 想换登录态就点「重新读取」；过期了就直接当未找到处理。
@@ -145,7 +169,6 @@ const readCookie = () => {
       if (res.found) {
         capturedCookie.value = res.header;
         capturedBrowser.value = res.browser || "";
-        captureState.value = "found";
         // 备注名自动填入（用户仍可改）：没填过就用站点品牌名，不用用户自己想名字
         if (!form.value.label) form.value.label = providerLabelOf(form.value.provider);
       } else {
@@ -158,12 +181,17 @@ const readCookie = () => {
             : res.supported === false
               ? "unsupported"
               : "";
-        captureState.value = "notfound";
       }
     } catch (e) {
       capturedCookie.value = "";
-      captureReason.value = "";
-      captureState.value = "notfound";
+      console.error("读取登录态失败:", e);
+    } finally {
+      // 手填的 Cookie 优先于自动读取的结果：这时不需要「已从某浏览器读到」/「没找到」这类提示
+      captureState.value = manualCookie.value.trim()
+        ? "manual"
+        : capturedCookie.value
+          ? "found"
+          : "notfound";
     }
   }, 30);
 };
@@ -196,7 +224,9 @@ const openLogin = () => {
 const saving = ref(false);
 
 const submit = async () => {
-  if (editTarget.value && !capturedCookie.value) {
+  // 手填了 Cookie 就一定走「写入登录态」的分支（编辑时也一样：用户就是要换登录态）
+  const cookie = effectiveCookie.value;
+  if (editTarget.value && !cookie) {
     // 只改备注名 / 手选目录，不动 Cookie
     try {
       saving.value = true;
@@ -221,8 +251,8 @@ const submit = async () => {
       await window.services.updateSubscription({
         id: editTarget.value.id,
         label: form.value.label,
-        cookie: capturedCookie.value,
-        cookieSource: capturedBrowser.value,
+        cookie,
+        cookieSource: cookie === capturedCookie.value ? capturedBrowser.value : "",
         cookieDirs: formDirs.value,
       });
       MessagePlugin.success(t("commonApp.subscription.savedToast"));
@@ -230,8 +260,8 @@ const submit = async () => {
       await window.services.addSubscription({
         provider: form.value.provider,
         label: form.value.label,
-        cookie: capturedCookie.value,
-        cookieSource: capturedBrowser.value,
+        cookie,
+        cookieSource: cookie === capturedCookie.value ? capturedBrowser.value : "",
         cookieDirs: formDirs.value,
       });
       MessagePlugin.success(t("commonApp.subscription.addedToast"));
@@ -434,7 +464,7 @@ onMounted(() => {
       v-model:visible="dialogVisible"
       :header="editTarget ? t('commonApp.subscription.editTitle') : t('commonApp.subscription.addTitle')"
       width="520px"
-      :confirm-btn="{ content: t('common.save'), loading: saving, disabled: !editTarget && captureState !== 'found' }"
+      :confirm-btn="{ content: t('common.save'), loading: saving, disabled: !editTarget && !effectiveCookie }"
       :cancel-btn="{ content: t('common.cancel') }"
       @confirm="submit"
     >
@@ -475,6 +505,10 @@ onMounted(() => {
                 ? t('commonApp.subscription.cookieFoundIn', { browser: capturedBrowser })
                 : t('commonApp.subscription.cookieFound') }}</span>
             </div>
+            <div v-else-if="captureState === 'manual'" class="subs-login-line is-ok">
+              <CheckCircleFilledIcon />
+              <span>{{ t('commonApp.subscription.cookieManual') }}</span>
+            </div>
             <div v-else class="subs-login-line is-miss">
               <LinkIcon />
               <span>{{ t('commonApp.subscription.cookieNotFound') }}</span>
@@ -514,6 +548,22 @@ onMounted(() => {
               <div class="subs-dirs-hint is-block">{{ t('commonApp.subscription.dirHint') }}</div>
             </div>
             <div class="subs-login-hint">{{ t('commonApp.subscription.loginHint') }}</div>
+            <div class="subs-manual">
+              <div class="subs-dirs-head">
+                <span>{{ t('commonApp.subscription.manualTitle') }}</span>
+                <Button size="small" variant="text" theme="primary" class="subs-manual-btn" @click="openLogin">
+                  <template #icon><LinkIcon /></template>
+                  {{ t('commonApp.subscription.manualHowto') }}
+                </Button>
+              </div>
+              <Input
+                v-model="manualCookie"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+                :placeholder="t('commonApp.subscription.manualPlaceholder')"
+              />
+              <div class="subs-dirs-hint is-block">{{ t('commonApp.subscription.manualHint') }}</div>
+            </div>
           </div>
         </div>
       </div>

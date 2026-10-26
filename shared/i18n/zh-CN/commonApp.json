@@ -232,6 +232,12 @@
       "readCookie": "重新读取",
       "openLogin": "打开登录页",
       "loginHint": "插件会扫描本机浏览器的登录态（Chrome、Edge、Brave、ego lite、Quark 等 Chromium 系应用，以及 Firefox、Safari），清单之外的应用也能自动发现。macOS 首次读取会弹出钥匙串授权框，请点「允许」。若仍找不到，点「选择目录」直接指定浏览器的用户数据文件夹。",
+      "cookieManual": "已手填登录态（保存时优先使用）",
+      "manualTitle": "手动填 Cookie",
+      "manualHowto": "前往该网站",
+      "manualPlaceholder": "stTb6fr9Hq4kHz……（只粘值也行，会自动补上 __Secure-better-auth.session_token=）",
+      "manualHint": "右键网页 → 检查 → 应用 → Cookie → 复制 __Secure-better-auth.session_token 的「值」。填了就不再读本机浏览器。",
+      "manualReloginHint": "这条订阅用的是手动填的 Cookie：已帮你打开编辑窗口，重新粘贴一份即可。",
       "relogin": "重新读取登录态",
       "reloginToast": "登录态已更新",
       "refreshedToast": "用量已更新",
@@ -256,6 +262,7 @@
         "generic": "{key}"
       },
       "error": {
+        "invalid_cookie": "Cookie 格式不对：需要「名称=值」的形式（例如 __Secure-better-auth.session_token=xxx）",
         "unauthorized": "登录态已失效，请重新登录后读取",
         "not_found": "本机浏览器里没有找到登录态，请先登录",
         "network": "网络请求失败，请稍后重试",

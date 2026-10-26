@@ -59,6 +59,42 @@ eq(windowKeyOf(7200), 'h2', '7200s 落 h2')
 eq(formatReset(new Date(Date.now() - 1000).toISOString()), '即将重置', '已到重置时间显示「即将重置」')
 eq(formatReset(''), '', '空值不抛错、返回空串')
 
+// 手抄 Cookie 的规整：用户在 DevTools 里看到的是「名称 / 值」两列，只粘值是最自然的动作
+const { normalizeCookieInput } = subs._internal
+const odNames = { cookieNames: ['__Secure-better-auth.session_token'] }
+eq(
+  normalizeCookieInput('stTb6fr9Hq4kHzgl3B2h1KT6sJcvl89X.leov2Mnvst3aF27gQbZbKTOL00mVRV7W0%2FM7NzkY8wk%3D', odNames),
+  '__Secure-better-auth.session_token=stTb6fr9Hq4kHzgl3B2h1KT6sJcvl89X.leov2Mnvst3aF27gQbZbKTOL00mVRV7W0%2FM7NzkY8wk%3D',
+  '只粘值（URL 编码带 %3D）→ 自动补全名称',
+)
+// 用户粘贴的往往是解码后的值（末尾那个 = 是 base64 填充符，不是名称分隔符）
+eq(
+  normalizeCookieInput('stTb6fr9Hq4kHzgl3B2h1KT6sJcvl89X.leov2Mnvst3aF27gQbZbKTOL00mVRV7W0/M7NzkY8wk=', odNames),
+  '__Secure-better-auth.session_token=stTb6fr9Hq4kHzgl3B2h1KT6sJcvl89X.leov2Mnvst3aF27gQbZbKTOL00mVRV7W0/M7NzkY8wk=',
+  '只粘值（解码后末尾带 =）→ 仍补全名称，不被当成 header',
+)
+eq(
+  normalizeCookieInput('  "__Secure-better-auth.session_token=abc%3D"  ', odNames),
+  '__Secure-better-auth.session_token=abc%3D',
+  '带引号和空格 → 去掉包裹',
+)
+eq(
+  normalizeCookieInput('Cookie: __Secure-better-auth.session_token=abc', odNames),
+  '__Secure-better-auth.session_token=abc',
+  '带「Cookie: 」前缀 → 去掉',
+)
+eq(
+  normalizeCookieInput('__Secure-better-auth.session_token=abc%3D', odNames),
+  '__Secure-better-auth.session_token=abc%3D',
+  '已带正确名称 → 不重复补',
+)
+eq(normalizeCookieInput('', odNames), '', '空输入返回空串')
+eq(
+  normalizeCookieInput('a=1; b=2', odNames),
+  'a=1; b=2',
+  '多段 Cookie 原样保留（不按第一段拆）',
+)
+
 // ==================== 2. 存储与脱敏 ====================
 console.log('2. 存储与脱敏')
 eq(readDoc(), [], '空库读出空数组')

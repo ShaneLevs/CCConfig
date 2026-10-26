@@ -216,6 +216,27 @@
   line-height: 1.5;
 }
 
+/* ===== 手抄 Cookie（钥匙串拿不到时的兜底） ===== */
+.subs-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--td-component-stroke);
+}
+
+.subs-manual-btn {
+  padding: 0 4px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  font-size: 11px;
+}
+
+.subs-manual-btn .t-button__text {
+  gap: 3px;
+  font-size: 11px;
+}
+
 /* ===== 登录态：未命中的具体原因 ===== */
 .subs-login-reason {
   font-size: 11px;

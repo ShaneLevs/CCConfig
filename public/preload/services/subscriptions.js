@@ -26,9 +26,13 @@ const REQUEST_TIMEOUT_MS = 15 * 1000
 
 // 错误码 → 渲染层按 code 决定是「去登录」还是「稍后重试」，不靠 message 字符串匹配
 const ERR_UNAUTHORIZED = 'unauthorized'
+// 用户手抄 Cookie 时记的来源标签（品牌名不翻译；UI 用 i18n 文案显示，不直接展示这个值）
+const SOURCE_MANUAL = 'manual'
 const ERR_NETWORK = 'network'
 const ERR_HTTP = 'http'
 const ERR_EMPTY = 'empty'
+// 手抄 Cookie 常见的格式错误（只粘了值、没带「名称=」），单独一个码以免提示成「接口没返回数据」
+const ERR_INVALID_COOKIE = 'invalid_cookie'
 
 const makeError = (code, message, extra) => Object.assign(new Error(message), { code, ...extra })
 
@@ -260,6 +264,27 @@ const cookieHeaderOf = (item) => {
   }
 }
 
+/**
+ * 把用户手抄的东西规整成一条可用的 Cookie 头。用户在开发者工具里看到的是
+ * 名称、值两列，天然会只复制值（stTb6...%3D），也可能整行复制（含名称/分号/引号）：
+ *   只有值  → 按适配器的 cookieNames 补上名称（唯一名，不会歧义）
+ *   整行   → 去掉首尾引号和可选的「Cookie: 」前缀
+ *   有多个名（a=1; b=2）→ 原样保留，反正值本身可能就带 '='
+ * 注意 base64 值自己就带 `=` 填充（解码后的 stTb6...wk=），不能拿「含 = 就算带名称」来判断，
+ * 否则会把填充符当成名称分隔符。因此只有「恰好缺了预期的那个名称」时才补名。
+ */
+const normalizeCookieInput = (raw, adapter) => {
+  let text = String(raw || '').trim().replace(/^cookie\s*:\s*/i, '')
+  // 从浏览器复制时会把整行带引号包起来
+  if (/^["'].*["']$/.test(text)) text = text.slice(1, -1).trim()
+  if (!text) return ''
+  // 单 Cookie 站点：没带名称、也不是多段头 → 直接补上名称
+  if (adapter?.cookieNames?.length === 1 && !text.includes(';')) {
+    const name = adapter.cookieNames[0]
+    if (!text.toLowerCase().startsWith(`${name.toLowerCase()}=`)) text = `${name}=${text}`
+  }
+  return text
+}
 // ==================== 查询用量 ====================
 
 const refreshOne = async (item) => {
@@ -423,7 +448,8 @@ const addSubscription = async ({ provider, label, cookie, cookieSource, cookieDi
   if (!adapter) throw makeError(ERR_EMPTY, 'unknown_provider')
 
   const dirs = normalizeDirs(cookieDirs)
-  let header = cookie || ''
+  // 手抄的 Cookie 先规整（去掉引号/前缀，只有值时补全名称）
+  let header = cookie ? normalizeCookieInput(cookie, adapter) : ''
   let source = cookieSource || ''
   if (!header) {
     const captured = captureCookie(provider, { customDirs: dirs })
@@ -436,7 +462,9 @@ const addSubscription = async ({ provider, label, cookie, cookieSource, cookieDi
     header = captured.header
     source = captured.browser || ''
   }
-  if (!/^[^=;]+=/.test(header)) throw makeError(ERR_EMPTY, 'invalid cookie')
+  if (!/^[^=;]+=[^;]*/.test(header)) throw makeError(ERR_INVALID_COOKIE, 'invalid cookie')
+  // 外部传入的 Cookie 不来自浏览器读取 → 记「手动」，避免界面显示成「从某个浏览器读到」
+  if (!source) source = SOURCE_MANUAL
 
   // 先查一次：Cookie 无效就不该存进去，避免列表里多一条永远显示「未登录」的记录
   const snapshot = await adapter.fetchUsage(header)
@@ -469,12 +497,13 @@ const updateSubscription = async ({ id, label, cookie, cookieSource, cookieDirs 
   if (typeof label === 'string') item.label = label
   if (cookieDirs !== undefined) item.cookieDirs = normalizeDirs(cookieDirs)
   if (cookie) {
-    if (!/^[^=;]+=/.test(cookie)) throw makeError(ERR_EMPTY, 'invalid cookie')
     const adapter = getAdapter(item.provider)
     if (!adapter) throw makeError(ERR_EMPTY, 'unknown_provider')
-    item.cookie = crypto.encrypt(cookie)
-    item.cookieSource = cookieSource || ''
-    item.snapshot = { ...(await adapter.fetchUsage(cookie)), fetchedAt: Date.now() }
+    const header = normalizeCookieInput(cookie, adapter)
+    if (!/^[^=;]+=[^;]*/.test(header)) throw makeError(ERR_INVALID_COOKIE, 'invalid cookie')
+    item.cookie = crypto.encrypt(header)
+    item.cookieSource = cookieSource || SOURCE_MANUAL
+    item.snapshot = { ...(await adapter.fetchUsage(header)), fetchedAt: Date.now() }
     item.lastError = ''
     item.lastErrorAt = 0
     item.cookieExpired = false
@@ -616,5 +645,14 @@ module.exports = {
   getSubscriptionsTray,
   AUTO_REFRESH_MS,
   // 冒烟测试用
-  _internal: { windowKeyOf, formatReset, readDoc, writeDoc, cookieHeaderOf, remainingPercentOf },
+  _internal: {
+    windowKeyOf,
+    formatReset,
+    readDoc,
+    writeDoc,
+    cookieHeaderOf,
+    remainingPercentOf,
+    normalizeCookieInput,
+    SOURCE_MANUAL,
+  },
 }

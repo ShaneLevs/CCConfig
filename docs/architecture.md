@@ -281,10 +281,25 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
   注意桌面版 desktop/sidecar/utools-shim.js 的 showOpenDialog 原本只实现 `choose file`，
   必须按 properties 里的 openDirectory 切到 AppleScript 的 `choose folder`，否则选目录框选不到目录。
 
+  手抄 Cookie（订阅弹窗里的「手动填 Cookie」输入框）：钥匙串授权拿不到（uTools 版尤其常见——
+  授权主体是宿主 uTools.app，且不能继承终端/桌面版点过的「始终允许」）/ 想用别的机器的登录态时的兜底。
+  UI 侧 manualCookie 非空即优先于自动读取结果（effectiveCookie = 手填 || 浏览器读取），
+  此时 captureState='manual'、不显示「没找到」/「已从某浏览器读到」；保存时 cookieSource 传空 →
+  服务层落 SOURCE_MANUAL='manual'，列表的「重新读取登录态」据此改成「去编辑里重粘」的提示，
+  而不是永远报「本机浏览器里没有找到登录态」。addSubscription/updateSubscription 本来就直接收 cookie 字符串，
+  服务层只多了一条来源标签，校验仍是 /^[^=;]+=[^;]*/ + 先请求一次接口验活。
+  **只粘值也能用**：用户在 DevTools 的「应用 → Cookie」看到的是名称/值两列，复制出来的通常只是值，
+  所以 normalizeCookieInput(raw, adapter) 统一做三件事：去首尾引号、「Cookie: 」前缀；
+  单 Cookie 站点（适配器 cookieNames 只有一条，如 open-design）在「不含 `;` 且不以 `<name>=` 开头」时
+  自动补 `<name>=`；多段（a=1; b=2）原样保留。
+  判断「是否已带名称」**不能**用「含 `=`」——base64/URL 编码的值自带 `=` 填充（`...wk=`、`...%3D`），
+  否则会把填充符当成分隔符。URL 编码（`%2F`/`%3D`）与解码后的原值服务端都接收，实测 get-session 均 200。
+
 存储:
   ccconfig_subscriptions_<nativeId> → [{ id, provider, label, cookie(加密 v2:<iv>:<ct>), cookieSource,
       cookieDirs(手选的浏览器数据目录，非敏感，对外原样返回), workspaceId, snapshot, lastError,
       lastErrorAt, cookieExpired, updatedAt }]
+      cookieSource 为浏览器显示名（如 'ego lite'）或 'manual'（用户手抄）
   对外（getSubscriptions）剥掉 cookie 原文，只留 hasCookie；失效 Cookie 不删（换回登录态就能救活）
   刷新：单个 refreshSubscription / 批量 refreshSubscriptions（只刷超过 5 分钟或已过期的，带并发守卫）
   添加：先读本机 Cookie → 先请求一次接口验活 → 通过才入库（不留永远登不上的死记录）

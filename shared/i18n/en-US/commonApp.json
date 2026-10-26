@@ -232,6 +232,12 @@
       "readCookie": "Read again",
       "openLogin": "Open sign-in page",
       "loginHint": "The plugin scans local browser sessions — Chromium apps (Chrome, Edge, Brave, ego lite, Quark, …), Firefox and Safari — and auto-discovers apps outside that list. On macOS the first read asks for keychain access: choose Allow. If it still fails, click \"Choose folder\" to point at a browser profile folder directly.",
+      "cookieManual": "Session pasted manually (used when saving)",
+      "manualTitle": "Paste cookie manually",
+      "manualHowto": "Open the site",
+      "manualPlaceholder": "stTb6fr9Hq4kHz… (value only is fine — the name is added for you)",
+      "manualHint": "Right-click the page → Inspect → Application → Cookies → copy the value of __Secure-better-auth.session_token. Once filled, browsers are not read.",
+      "manualReloginHint": "This subscription uses a pasted cookie: the edit dialog is open — paste a fresh one.",
       "relogin": "Refresh session",
       "reloginToast": "Session updated",
       "refreshedToast": "Usage updated",
@@ -256,6 +262,7 @@
         "generic": "{key}"
       },
       "error": {
+        "invalid_cookie": "Malformed cookie: use the \"name=value\" form (e.g. __Secure-better-auth.session_token=xxx)",
         "unauthorized": "Session expired — sign in again, then read the session",
         "not_found": "No session found in local browsers — sign in first",
         "network": "Network request failed, please retry later",
