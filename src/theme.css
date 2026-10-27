@@ -462,6 +462,23 @@
   color: var(--td-gray-color-14);
 }
 
+/* 日期选择器（统计页日期筛选）深色模式选中态改用绿色：
+   本主题把整条 brand 色阶换成了灰阶，深色下 --td-brand-color 派生为 --td-brand-color-1(#e1e1e1)，
+   选中日期变成浅灰底 + 白字，几乎读不出数字。这里只在日期选择器作用域内重绑品牌色到 success 绿，
+   选中单元格底色、hover 描边、区间首尾连接块随之变绿；浅色模式不受影响。
+   弹层 teleport 到 body，所以同时要覆盖 popup 外层容器类 ___panel-container（样式见 TDesign date-picker/style）。 */
+:root[theme-mode="dark"] .t-date-picker,
+:root[theme-mode="dark"] .t-date-range-picker,
+:root[theme-mode="dark"] .t-date-picker__panel-container,
+:root[theme-mode="dark"] .t-date-range-picker__panel-container {
+  --td-brand-color: var(--td-success-color);
+  --td-brand-color-hover: var(--td-success-color-hover);
+  --td-brand-color-active: var(--td-success-color-active);
+  /* 区间高亮 / “今天”底色：success 深色档太暗看不出，用与统计卡片同源的半透明绿 */
+  --td-brand-color-light: rgba(82, 196, 26, 0.16);
+  --td-brand-color-light-hover: rgba(82, 196, 26, 0.26);
+}
+
 /* Switch 开启状态使用绿色 */
 .t-switch.t-is-checked {
   background-color: var(--td-success-color) !important;

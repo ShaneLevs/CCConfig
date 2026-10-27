@@ -48,11 +48,13 @@ const stats = [
 
 const displayLimit = 5;
 
-// 日期区间快捷预设（label 随语言切换）
-const datePresets = computed(() => [
-  { label: t('usage.last7Days'), value: [new Date(Date.now() - 6 * 864e5), new Date()] },
-  { label: t('usage.last30Days'), value: [new Date(Date.now() - 29 * 864e5), new Date()] },
-]);
+// 日期区间快捷预设：TDesign 的 presets 要求「标签 → 区间」的普通对象（PresetRange），
+// 传数组不会被识别成预设，会原样渲染成文本（深色弹层底部显示 [object Object][object Object]）。
+// 值用函数形式，点击时才取当天，避免页面长时间停留后预设过期；标签随语言切换。
+const datePresets = computed(() => ({
+  [t('usage.last7Days')]: () => [new Date(Date.now() - 6 * 864e5), new Date()],
+  [t('usage.last30Days')]: () => [new Date(Date.now() - 29 * 864e5), new Date()],
+}));
 
 const formatNumber = (num) => {
   if (!num || num === 0) return "0";
