@@ -83,7 +83,8 @@ Claude:
       工具 schema：补 enum/const 缺的 type、oneOf→anyOf；入站 tool 形状（Chat 嵌套 / Responses 扁平 / Anthropic input_schema / MCP inputSchema）统一识别
       max_tokens：入站未给时用主数据模型 maxTokens，anthropic 出站兜底 16384
       错误体：按状态码归一为协议原生 type（429 rate_limit_error / 5xx·529 overloaded·api_error），上游 Retry-After 透传
-    上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发；客户端断开（流式）立即中止上游并记 499
+    上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发
+    连接生命周期（长时间常驻必须）：每个入站请求一个上游守卫，客户端一旦断开（含只发出请求、还没收到响应头的阶段）立刻 destroy 它名下所有在途上游并记 499；等响应头超过 10 分钟视为上游卡死，销毁请求回 504（不重试，只覆盖响应头之前，不影响已开始的流式响应；注意流式的响应头 = 首字节 TTFT，非流式要等整段生成完才发头，两者共用同一阈值）；所有在途上游登记在 pendingUpstreams，停网关时一并销毁（server.closeAllConnections 管不到出站 socket）
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
     配置存本地数据库（ccconfig_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
 

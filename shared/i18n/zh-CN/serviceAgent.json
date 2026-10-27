@@ -148,6 +148,7 @@
       "saveConfigFailedReason": "保存自动网关配置失败：{message}",
       "invalidUpstreamUrl": "无效的上游地址: {url}",
       "upstreamRequestFailed": "上游请求失败",
+      "upstreamTimeout": "上游 {seconds} 秒内未返回响应头，请求已中止",
       "invalidApiKey": "无效的 API Key（请在 CCConfig 自动网关页复制正确的 key）",
       "unknownEndpoint": "未知端点: {method} {path}",
       "invalidJsonBody": "请求体不是有效的 JSON",

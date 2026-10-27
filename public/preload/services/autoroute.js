@@ -367,8 +367,11 @@ const CODEX_CATALOG_MAX_BYTES = 1024 * 1024;
 
 // ==================== HTTP 细节 ====================
 
+// 客户端断开（agent 取消/超时）后不能再写响应：向已销毁的 socket 写会抛 ERR_STREAM_DESTROYED
+const canWrite = (res) => !res.headersSent && !res.writableEnded && !res.destroyed;
+
 const sendJson = (res, status, body) => {
-  if (res.headersSent) return;
+  if (!canWrite(res)) return;
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 };
@@ -376,7 +379,7 @@ const sendJson = (res, status, body) => {
 // 错误响应：错误体按入站协议归一（type 跟着状态码走，agent SDK 据此决定是否重试），
 // 上游给了 Retry-After 就带下去
 const sendError = (res, sourceProtocol, status, message, headers) => {
-  if (res.headersSent) return;
+  if (!canWrite(res)) return;
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...(headers || {}) });
   res.end(JSON.stringify(errorBody(sourceProtocol, status, message)));
 };
@@ -395,8 +398,56 @@ const detectProtocol = (path) => {
   return null;
 };
 
-// POST JSON 到上游，返回 IncomingMessage
-const forwardUpstream = (url, headers, bodyObj) =>
+// 等上游响应头的上限：兜住「请求已发出、上游卡死 / 连接半开」这种情况。
+// 只覆盖响应头到达之前，不影响已开始的流式响应（长流可能长时间没有新分片）。
+// 注意两种模式的语义不同：流式的响应头 = 首字节（TTFT）；非流式要等上游整段生成完才发响应头，
+// 所以它约束的是整次生成耗时。目前统一 10 分钟，需要放宽非流式时在这里按 stream 拆开。
+const UPSTREAM_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
+
+const clientGoneError = () => {
+  const err = new Error(t("serviceAgent.autoroute.clientDisconnected"));
+  err.aborted = true;
+  return err;
+};
+
+// 在途上游请求 / 响应全局登记：停网关时一并销毁。
+// server.closeAllConnections() 只管入站连接，出站 socket 不归它管。
+const pendingUpstreams = new Set();
+let upstreamsStopping = false; // 停网关期间被主动断掉的上游：按「已中止」处理，不再重试
+
+const untrackUpstream = (guard, up) => {
+  if (guard) guard.pending.delete(up);
+  pendingUpstreams.delete(up);
+};
+
+const trackUpstream = (guard, up) => {
+  if (guard) guard.pending.add(up);
+  pendingUpstreams.add(up);
+  up.once("close", () => untrackUpstream(guard, up));
+};
+
+// 每个入站请求一个守卫：客户端断开时立刻销毁它名下所有在途上游（含只发出请求、还没收到响应头的）。
+// 没有这条链路时，上游卡死 + 客户端取消 = 每条请求漏一个 socket，且网关停止也清不掉。
+const createUpstreamGuard = (res) => {
+  const guard = { gone: false, pending: new Set() };
+  res.once("close", () => {
+    if (res.writableFinished) return;
+    guard.gone = true;
+    for (const up of guard.pending) {
+      try {
+        up.destroy();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    guard.pending.clear();
+  });
+  return guard;
+};
+
+// POST JSON 到上游，返回 IncomingMessage。
+// guard：本次入站请求的守卫（客户端断开即中止）；响应头超过 UPSTREAM_HEADERS_TIMEOUT_MS 未到即销毁请求。
+const forwardUpstream = (url, headers, bodyObj, guard) =>
   new Promise((resolve, reject) => {
     let u;
     try {
@@ -405,8 +456,20 @@ const forwardUpstream = (url, headers, bodyObj) =>
       reject(new Error(t("serviceAgent.autoroute.invalidUpstreamUrl", { url })));
       return;
     }
+    if (guard && guard.gone) {
+      reject(clientGoneError());
+      return;
+    }
     const mod = u.protocol === "https:" ? https : http;
     const payload = Buffer.from(JSON.stringify(bodyObj));
+    let settled = false;
+    let headersTimer = null;
+    const settle = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (headersTimer) clearTimeout(headersTimer);
+      fn(value);
+    };
     const req = mod.request(
       {
         hostname: u.hostname,
@@ -415,9 +478,34 @@ const forwardUpstream = (url, headers, bodyObj) =>
         method: "POST",
         headers: { ...headers, "content-length": payload.length },
       },
-      (res) => resolve(res)
+      (res) => {
+        if (settled) {
+          // 已被守卫销毁或已超时：迟到的响应直接丢掉
+          try {
+            res.destroy();
+          } catch (e) {
+            /* ignore */
+          }
+          return;
+        }
+        untrackUpstream(guard, req);
+        trackUpstream(guard, res);
+        settle(resolve, res);
+      }
     );
-    req.on("error", reject);
+    trackUpstream(guard, req);
+    req.on("error", (e) => settle(reject, e));
+    // 没拿到响应就 close：守卫销毁（客户端断开 / 网关停止）只发 close 不发 error，按已中止处理；
+    // 其他情况（上游干净地关了连接）当成普通失败，交给 sendUpstream 重试
+    req.once("close", () => settle(reject, (guard && guard.gone) || upstreamsStopping
+      ? clientGoneError()
+      : new Error(t("serviceAgent.autoroute.upstreamRequestFailed"))));
+    headersTimer = setTimeout(() => {
+      const err = new Error(t("serviceAgent.autoroute.upstreamTimeout", { seconds: Math.round(UPSTREAM_HEADERS_TIMEOUT_MS / 1000) }));
+      err.code = "UPSTREAM_TIMEOUT";
+      req.destroy(err);
+    }, UPSTREAM_HEADERS_TIMEOUT_MS);
+    if (headersTimer.unref) headersTimer.unref();
     req.write(payload);
     req.end();
   });
@@ -468,7 +556,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 //     或点名 beta 头 → 去掉它（并记住这家不收）立即重试，而不是让整轮对话失败
 // 成功：{ ok: true, upstreamRes, body }（响应体尚未读取，交给调用方消费）
 // 失败：{ ok: false, status, text, error, headers }（错误体已读完，text 为空表示连接层失败）
-const sendUpstream = async ({ url, headers, body, provider }) => {
+const sendUpstream = async ({ url, headers, body, provider, guard }) => {
   const known = knownRefusedFields(provider);
   let payload = stripFields(body, known);
   let sendHeaders = stripHeaderFields(headers, known);
@@ -480,8 +568,15 @@ const sendUpstream = async ({ url, headers, body, provider }) => {
     }
     let upstreamRes;
     try {
-      upstreamRes = await forwardUpstream(url, sendHeaders, payload);
+      upstreamRes = await forwardUpstream(url, sendHeaders, payload, guard);
     } catch (e) {
+      // 客户端已断开 / 上游响应头超时：重试没有意义（客户端不再等，超时重试只会再堵十分钟）
+      if (e && (e.aborted || (guard && guard.gone))) {
+        return { ok: false, status: 499, text: "", error: (e && e.message) || t("serviceAgent.autoroute.clientDisconnected"), headers: null };
+      }
+      if (e && e.code === "UPSTREAM_TIMEOUT") {
+        return { ok: false, status: 504, text: "", error: (e && e.message) || t("serviceAgent.autoroute.upstreamRequestFailed"), headers: null };
+      }
       last = { error: (e && e.message) || String(e), wait: 0 };
       continue;
     }
@@ -514,6 +609,7 @@ const sendUpstream = async ({ url, headers, body, provider }) => {
 
 const handleRequest = async (req, res) => {
   const started = Date.now();
+  const guard = createUpstreamGuard(res); // 客户端断开 → 立刻中止这次请求的在途上游
   let logged = false;
   let targetApi = ""; // 出站协议，进入转发阶段才记录（供日志展示转换链路）
   let liveLog = null; // 进行中的日志行：解析出目标模型时创建，finish 原地补全
@@ -521,6 +617,11 @@ const handleRequest = async (req, res) => {
     if (logged) return;
     logged = true;
     const done = { status: entry.status, ms: Date.now() - started, target: targetApi, ...entry };
+    // 客户端已经走了（上游被守卫中止）：对客户端来说这次调用就是 499，不计成功
+    if (guard.gone) {
+      done.status = 499;
+      done.error = t("serviceAgent.autoroute.clientDisconnected");
+    }
     if (liveLog) {
       Object.assign(liveLog, done);
       recordStats(liveLog);
@@ -642,12 +743,12 @@ const handleRequest = async (req, res) => {
 
     if (isPassthrough) {
       // 同协议直通：仅重写 model，原样转发（保留图片、cache_control 等全部字段）
-      const up = await sendUpstream({ url, headers, body: { ...body, model: model.id }, provider });
+      const up = await sendUpstream({ url, headers, body: { ...body, model: model.id }, provider, guard });
       if (!up.ok) {
         const retryAfter = up.headers && up.headers["retry-after"];
         if (up.text) {
           // 原样转发上游错误体（agent SDK 认得上游自己的错误格式），同时把可读原因记入日志
-          if (!res.headersSent) {
+          if (canWrite(res)) {
             const h = { "content-type": (up.headers && up.headers["content-type"]) || "application/json; charset=utf-8" };
             if (retryAfter) h["retry-after"] = retryAfter;
             res.writeHead(up.status, h);
@@ -661,6 +762,16 @@ const handleRequest = async (req, res) => {
       }
       const upstreamRes = up.upstreamRes;
       if (wantsStream) {
+        // 客户端在等待上游的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
+        if (!canWrite(res)) {
+          try {
+            upstreamRes.destroy();
+          } catch (e) {
+            /* ignore */
+          }
+          finish({ protocol: sourceProtocol, model: model.id, status: 499, passthrough: true });
+          return;
+        }
         res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
         // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
         // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
@@ -716,8 +827,10 @@ const handleRequest = async (req, res) => {
         usage: scanUsageFromText(text),
         ...(status >= 400 ? { error: extractUpstreamErrorMessage(text, status) } : {}),
       });
-      res.writeHead(status, { "content-type": upstreamRes.headers["content-type"] || "application/json; charset=utf-8" });
-      res.end(text);
+      if (canWrite(res)) {
+        res.writeHead(status, { "content-type": upstreamRes.headers["content-type"] || "application/json; charset=utf-8" });
+        res.end(text);
+      }
       return;
     }
 
@@ -728,7 +841,7 @@ const handleRequest = async (req, res) => {
     // 入站没给输出上限时，用主数据模型自己配的 maxTokens（Anthropic 必须带 max_tokens）
     canonical.fallbackMaxTokens = Number(model.maxTokens) || 0;
     const upstreamBody = target.buildRequest(canonical);
-    const up = await sendUpstream({ url, headers, body: upstreamBody, provider });
+    const up = await sendUpstream({ url, headers, body: upstreamBody, provider, guard });
     if (!up.ok) {
       fail(sourceProtocol, up.status, up.error, model.id, up.headers && up.headers["retry-after"]);
       return;
@@ -798,6 +911,7 @@ const startAutoRoute = () => {
       serverState.server = server;
       serverState.port = config.port;
       serverState.startedAt = Date.now();
+      upstreamsStopping = false;
       // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
       serverState.logs = [];
       serverState.stats = emptyStats();
@@ -821,6 +935,16 @@ const stopAutoRoute = () => {
     } catch (e) {
       /* node 版本兜底 */
     }
+    // 出站上游 socket 不归 server 管：停网关时一并断掉，避免挂起的请求继续占着连接
+    upstreamsStopping = true;
+    for (const up of pendingUpstreams) {
+      try {
+        up.destroy();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    pendingUpstreams.clear();
     server.close(() => resolve(getAutoRouteStatus()));
   });
 };

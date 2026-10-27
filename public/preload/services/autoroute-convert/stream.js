@@ -25,6 +25,16 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
 // upstreamRes: 上游 IncomingMessage（已 200）；target: 出站适配器；source: 入站适配器；res: 客户端 ServerResponse
 // onClientGone: 客户端提前断开时回调（上游随之被中止，统计侧据此记 499）
 const pipeStream = async ({ upstreamRes, target, source, res, onClientGone }) => {
+  // 客户端在等待上游响应头的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
+  if (res.destroyed || res.writableEnded) {
+    try {
+      upstreamRes.destroy();
+    } catch (e) {
+      /* ignore */
+    }
+    if (typeof onClientGone === "function") onClientGone();
+    return null;
+  }
   res.writeHead(200, sseHeaders());
   let closed = false;
   res.on("close", () => {

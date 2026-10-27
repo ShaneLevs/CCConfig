@@ -148,6 +148,7 @@
       "saveConfigFailedReason": "Failed to save the gateway configuration: {message}",
       "invalidUpstreamUrl": "Invalid upstream URL: {url}",
       "upstreamRequestFailed": "Upstream request failed",
+      "upstreamTimeout": "Upstream did not return response headers within {seconds}s; the request was aborted",
       "invalidApiKey": "Invalid API Key (copy the correct key from the CCConfig gateway page)",
       "unknownEndpoint": "Unknown endpoint: {method} {path}",
       "invalidJsonBody": "Request body is not valid JSON",
