@@ -1,4 +1,5 @@
 <script setup>
+import { computed, onBeforeUnmount, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Checkbox } from "tdesign-vue-next";
 import { GripVertical } from "@lucide/vue";
@@ -9,14 +10,68 @@ import { useAgentVisibility } from "../composables/useAgentVisibility";
 // 样式自带（settings-* 基础类与 index.vue 内各自 scoped 一份，互不影响）。
 const { t } = useI18n();
 const { activeApp } = useAppContext();
-const {
-  agentOrder,
-  AGENT_META,
-  visibleAgents,
-  onAgentDragStart,
-  onAgentDrop,
-  onAgentDragEnd,
-} = useAgentVisibility();
+const { agentOrder, AGENT_META, visibleAgents } = useAgentVisibility();
+
+// 拖拽排序用 Pointer Events：HTML5 DnD 在桌面版（Tauri 窗口接管原生拖放）里收不到 drag 事件。
+// 拖动期间渲染一份草稿顺序，指针落到哪一项就把它插到那一项的位置（实时重排），松手才写回 agentOrder。
+const draftOrder = ref(null);
+const draggingApp = ref(null);
+const listOrder = computed(() => draftOrder.value || agentOrder.value);
+let press = null;
+
+const appAtPoint = (x, y) => {
+  const el = document.elementFromPoint(x, y);
+  const item = el && el.closest ? el.closest(".agent-visibility-item") : null;
+  return item ? item.dataset.app : null;
+};
+
+const stopDrag = () => {
+  window.removeEventListener("pointermove", onPointerMove);
+  window.removeEventListener("pointerup", stopDrag);
+  window.removeEventListener("pointercancel", stopDrag);
+  if (press && press.handle.hasPointerCapture && press.handle.hasPointerCapture(press.pointerId)) {
+    try { press.handle.releasePointerCapture(press.pointerId); } catch (e) { /* ignore */ }
+  }
+  // 只有真正拖动过才落库：单击手柄不应触发一次写库
+  if (draftOrder.value && draggingApp.value) agentOrder.value = draftOrder.value;
+  draftOrder.value = null;
+  draggingApp.value = null;
+  press = null;
+  document.body.classList.remove("agent-sorting");
+};
+
+function onPointerMove(event) {
+  if (!press || event.pointerId !== press.pointerId) return;
+  if (!draggingApp.value) {
+    // 超过 4px 才算拖动，避免误触打乱顺序
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < 4) return;
+    draftOrder.value = [...agentOrder.value];
+    draggingApp.value = press.app;
+    document.body.classList.add("agent-sorting");
+  }
+  event.preventDefault();
+  const targetApp = appAtPoint(event.clientX, event.clientY);
+  if (!targetApp || targetApp === press.app) return;
+  const order = [...draftOrder.value];
+  const from = order.indexOf(press.app);
+  const to = order.indexOf(targetApp);
+  if (from < 0 || to < 0 || from === to) return;
+  order.splice(from, 1);
+  order.splice(to, 0, press.app);
+  draftOrder.value = order;
+}
+
+const startDrag = (event, app) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  try { event.currentTarget.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+  press = { app, x: event.clientX, y: event.clientY, pointerId: event.pointerId, handle: event.currentTarget };
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", stopDrag);
+  window.addEventListener("pointercancel", stopDrag);
+};
+
+onBeforeUnmount(stopDrag);
 </script>
 
 <template>
@@ -25,17 +80,15 @@ const {
     <div class="settings-desc">{{ t('agents.visibility.desc') }}</div>
     <div class="agent-visibility-list">
       <div
-        v-for="(app, idx) in agentOrder"
+        v-for="app in listOrder"
         :key="app"
         class="agent-visibility-item"
-        @dragover.prevent
-        @drop="onAgentDrop(idx)"
+        :class="{ 'is-dragging': draggingApp === app }"
+        :data-app="app"
       >
         <span
           class="agent-visibility-drag"
-          draggable="true"
-          @dragstart="onAgentDragStart(idx)"
-          @dragend="onAgentDragEnd"
+          @pointerdown="startDrag($event, app)"
         >
           <GripVertical :size="16" />
         </span>
@@ -81,9 +134,15 @@ const {
   padding: 6px 8px;
   border-radius: var(--td-radius-default);
   user-select: none;
+  /* 拖动中其它项让开时不选中文字 */
+  transition: background-color 0.12s ease;
 }
 .agent-visibility-item:hover {
   background: var(--td-bg-color-container-hover);
+}
+.agent-visibility-item.is-dragging {
+  background: var(--td-bg-color-container-hover);
+  opacity: 0.55;
 }
 .agent-visibility-drag {
   flex-shrink: 0;
@@ -91,8 +150,9 @@ const {
   cursor: grab;
   display: inline-flex;
   align-items: center;
+  touch-action: none;
 }
-.agent-visibility-drag:active {
+.agent-visibility-item.is-dragging .agent-visibility-drag {
   cursor: grabbing;
 }
 .agent-visibility-icon {
@@ -113,4 +173,7 @@ const {
   border-radius: 4px;
 }
 /* agent 显示复选框绿色由 main.css 全局规则统一处理 */
+:global(body.agent-sorting) {
+  cursor: grabbing;
+}
 </style>

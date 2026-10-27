@@ -23,7 +23,6 @@ export { AGENT_ORDER, AGENT_META };
 const visibleAgents = ref(null);
 // agent 显示顺序（可拖拽排序），默认 AGENT_ORDER
 const agentOrder = ref([...AGENT_ORDER]);
-let dragAgentIndex = null;
 
 const saveVisibleAgents = () => {
   let existing = null;
@@ -121,17 +120,8 @@ const toggleAgentVisibility = (app, val) => {
   visibleAgents.value[app] = val;
 };
 
-// 拖拽排序：调整 agentOrder 并持久化
-const onAgentDragStart = (idx) => { dragAgentIndex = idx; };
-const onAgentDrop = (idx) => {
-  if (dragAgentIndex === null || dragAgentIndex === idx) { dragAgentIndex = null; return; }
-  const order = [...agentOrder.value];
-  const [moved] = order.splice(dragAgentIndex, 1);
-  order.splice(idx, 0, moved);
-  agentOrder.value = order; // watch 自动持久化
-  dragAgentIndex = null;
-};
-const onAgentDragEnd = () => { dragAgentIndex = null; };
+// 拖拽排序由 AgentVisibilitySettings 用 Pointer Events 实现（桌面版 Tauri 收不到 HTML5 drag 事件）：
+// 拖动期间在组件内维护草稿顺序，松手后整体写回 agentOrder，watch 自动持久化。
 
 // 切换器下拉项内容：图标 + 名称（TDesign Dropdown 的 content 支持 (h) => VNode）
 // name 省略时退回 meta.name（agent 用固定展示名，只有「通用」需要外部传翻译后的名字）
@@ -169,8 +159,5 @@ export function useAgentVisibility() {
     agentOrder,
     appDropdownOptions,
     toggleAgentVisibility,
-    onAgentDragStart,
-    onAgentDrop,
-    onAgentDragEnd,
   };
 }
