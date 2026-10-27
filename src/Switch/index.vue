@@ -265,6 +265,7 @@ onUnmounted(() => {
         <CommonSubscriptionsView
           v-if="isTabVisited('common', 'subscription')"
           v-show="activeApp === 'common' && activeTab === 'subscription'"
+          :active-tab="activeTab"
         />
         <CommonUsageView
           v-if="isTabVisited('common', 'usage')"

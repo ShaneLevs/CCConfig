@@ -313,6 +313,10 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
       message = 过期 / 无数据时的提示文案（已本地化）
       页面先渲染这份缓存快照（绝不在首帧等网络），再用异步 /rpc-poll 调 refreshSubscriptions 原地更新；
       刷新失败保留缓存，不打扰用户
+  两个界面同源（同一份 `ccconfig_subscriptions_<nativeId>`），但**视图各自持有内存副本**：
+      托盘每次展开都重读 + 刷新一次；订阅页保持挂载（v-if + v-show），所以必须在
+      「页签变可见 / 窗口重新聚焦或可见」时重读库（只读，不联网），否则会出现「托盘已刷新、
+      页面还是旧值」。只有首次挂载才按 5 分钟节流打一次接口。
   冒烟测试：node tests/smoke-subscriptions.cjs（不联网，覆盖存储脱敏/托盘数据/窗口与倒计时换算）
 ```
 

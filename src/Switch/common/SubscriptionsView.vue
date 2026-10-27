@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Empty, Button, Tag, Space, Tooltip, MessagePlugin, Popconfirm,
@@ -10,9 +10,16 @@ import {
   RefreshIcon, AddIcon, EditIcon, DeleteIcon, LoginIcon, LinkIcon, CheckCircleFilledIcon,
   FolderAddIcon, CloseIcon,
 } from "tdesign-icons-vue-next";
+import { useAppContext } from "../../composables/useAppContext";
 import "./styles/SubscriptionsView.css";
 
 const { t } = useI18n();
+
+// activeTab 由 index.vue 传入（与 v-model:active-tab 同一个 ref），用来判断本页是否可见：
+// 已访问的页签用 v-if + v-show 保持挂载，组件不重建，需要靠它触发重读。
+const props = defineProps({
+  activeTab: { type: String, default: "config" },
+});
 
 // 「订阅」：用户手动添加已订阅的第三方服务（目前是 open-design），插件用自己的登录态查用量。
 // getSubscriptions() 返回的快照不含 Cookie 原文；Cookie 由 preload 从本机浏览器读一次、
@@ -336,14 +343,49 @@ const errorTextOf = (item) => {
   return t(`commonApp.subscription.error.${item.lastError}`);
 };
 
-onMounted(() => {
+// ==================== 重新读取数据的时机 ====================
+// 本视图挂在 index.vue 的「已访问标签页」列表里，用 v-if + v-show 保持不销毁：
+// onMounted 只跑一次，之后再回到本页不会重建组件。而托盘弹窗每次展开都会重读并刷新快照，
+// 只存进 DB 不会通知到这里 —— 不主动重读就会出现「托盘已刷新、页面还是旧值」。
+// 因此三处都要重读：① 页签变可见；② 窗口重新获得焦点 / 重新可见（从菜单栏弹窗点回主窗口、
+// 或 Tauri 把隐藏的主窗口 show 出来）；③ 重新进入插件（uTools 版页面重建，走 onMounted）。
+// 可见 / 聚焦只读库（便宜、不联网）——数据已经是共享的那份，重读就能看到托盘刷新的结果；
+// 只有首次挂载才按 5 分钟节流打一次接口。
+const ACTIVE_TAB = "subscription";
+const { activeApp } = useAppContext();
+const isVisible = computed(() => activeApp.value === "common" && props.activeTab === ACTIVE_TAB);
+
+const reloadFromStore = () => loadSubscriptions();
+const reloadWithRefresh = (force = false) => {
   loadSubscriptions();
+  if (items.value.length) refreshAll(force);
+};
+
+// 页签变可见：只读库。托盘刚刷新过的结果立刻就能看到，也不额外打接口。
+watch(isVisible, (visible) => {
+  if (visible) reloadFromStore();
+});
+
+// 窗口重新聚焦 / 重新可见：桌面版主窗口被托盘「打开主窗口」show 出来时 WebView 不重建，
+// watch 不会触发，只能靠这两个事件补。
+const onWindowWake = () => {
+  if (isVisible.value) reloadFromStore();
+};
+
+onMounted(() => {
   try {
     providers.value = window.services.getSubscriptionProviders() || [];
   } catch (e) {
     providers.value = [{ id: "open-design", label: "Open Design" }];
   }
-  if (items.value.length) refreshAll(false);
+  reloadWithRefresh(false);
+  window.addEventListener("focus", onWindowWake);
+  document.addEventListener("visibilitychange", onWindowWake);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", onWindowWake);
+  document.removeEventListener("visibilitychange", onWindowWake);
 });
 </script>
 
