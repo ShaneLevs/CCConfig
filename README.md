@@ -1,36 +1,36 @@
 # CCConfig
 
-[简体中文](README.zh-CN.md) | **English**
+**简体中文** | [English](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20uTools-blue)](#installation)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20uTools-blue)](#安装)
 [![uTools](https://img.shields.io/badge/uTools-plugin-1a73e8)](https://u.tools/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883)](https://vuejs.org/)
 [![GitHub stars](https://img.shields.io/github/stars/ShaneLevs/CCConfig?style=social)](https://github.com/ShaneLevs/CCConfig/stargazers)
 
-A multi-app AI configuration manager, shipped as both a [uTools](https://u.tools/) plugin and a standalone macOS app.
+多应用 AI 配置管理工具，同时提供 [uTools](https://u.tools/) 插件与 macOS 独立应用两种形态。
 
-It gives thirteen AI coding CLIs a single place to manage API providers, models, MCP servers, skills, plugins and token usage — and lets you switch between providers in one click instead of hand-editing TOML/YAML/JSON.
+把十三个 AI 编程 CLI 的供应商、模型、MCP、Skill、插件与 Token 用量收进一个界面，一键切换供应商，不必再手改 TOML/YAML/JSON。
 
-## Features
+## 功能特性
 
-- **Unified app switcher** — thirteen AI CLIs plus a cross-agent "Common Config", each with independent, switchable API configurations
-- **API config management** — read, save and switch provider configs per app, preserving every field the tool does not manage (unknown keys round-trip untouched)
-- **Provider/model master data** — a shared provider and model database (AES-256-CBC encrypted keys) supporting OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative AI; dispatch it into any supported agent with one click
-- **Local gateway** — expose selected providers/models at `http://127.0.0.1:<port>` and speak Anthropic, OpenAI Chat or OpenAI Responses to any local agent, with automatic cross-protocol conversion including streaming
-- **MCP management** — per-app MCP server config plus a live tool-discovery canvas; shared MCP servers in Common Config mirror into local JSON files with a per-machine enable switch
-- **Skill & plugin management** — install skills from SkillHub / ModelScope, toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
-- **Usage analytics** — token usage, model distribution and GitHub-style contribution heatmaps, aggregated across agents in one view
-- **Subscription quota** — manually add services you subscribe to (open-design today), read their 5-hour / weekly quota with your local browser's sign-in and mirror it into the desktop menu bar
-- **Batch edit, import/export, appearance** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and a three-mode appearance setting (follow system / light / dark) with optional dark-mode animated backgrounds
-- **Bilingual UI** — Simplified Chinese and English, follows the system language by default and can be switched in Settings → General
+- **统一应用切换** — 十三个 AI CLI + 跨 agent 的「通用配置」，各自独立配置，一键切换
+- **API 配置管理** — 逐应用读取、保存、切换供应商配置，本工具不管理的字段原样保留（未知键往返不丢）
+- **供应商/模型主数据** — 共享的供应商与模型库（API Key AES-256-CBC 加密），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议，一键下发到任意受支持的 agent
+- **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）
+- **MCP 管理** — 逐应用 MCP Server 配置 + 实时工具发现画布；通用配置里的共享 MCP 按机器开关镜像写入本地 JSON 文件
+- **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill 并用 `.disabled` 机制启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
+- **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图，跨 agent 汇总一页查看
+- **订阅用量** — 手动添加已订阅的服务（目前 open-design），用本机浏览器的登录态代查 5 小时／周额度，同时显示在桌面版托盘面板
+- **批量编辑 / 导入导出 / 外观** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出；外观支持跟随系统 / 固定浅色 / 固定深色，深色下可选动态背景特效
+- **中英双语** — 默认跟随系统语言，可在「设置 → 通用」中切换简体中文 / English
 
-## Supported apps
+## 支持的应用
 
-| App | Config location |
+| 应用 | 配置文件 |
 |---|---|
-| Claude Code | `~/.claude/settings.json` (+ `~/.claude.json` for MCP) |
+| Claude Code | `~/.claude/settings.json`（MCP 在 `~/.claude.json`） |
 | OpenCode | `~/.config/opencode.json` / `opencode.jsonc` |
 | Pi Agent | `~/.pi/agent/settings.json` + `models.json` |
 | omp | `~/.omp/agent/models.yml` + `config.yml` |
@@ -41,54 +41,54 @@ It gives thirteen AI coding CLIs a single place to manage API providers, models,
 | Qoder | `~/.qoder/settings.json` / `~/.qoder-cn/settings.json` |
 | ZCode | `~/.zcode/v2/provider_config.json` |
 | Hermes | `~/.hermes/config.yaml` |
-| DSH (DeepSeek Harness) | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
-| Grok Build | `~/.grok/config.toml` |
+| DSH（DeepSeek Harness） | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
+| Grok Build（xAI 官方 CLI） | `~/.grok/config.toml` |
 
-Field-level rules for every app are documented in [docs/architecture.md](docs/architecture.md) (Chinese).
+各应用的字段级规则见 [docs/architecture.md](docs/architecture.md)。
 
-## Installation
+## 安装
 
-**uTools plugin** — search for **CCConfig** in the uTools plugin store.
+**uTools 插件** — 在 uTools 插件商店搜索 **CCConfig** 安装。
 
-**macOS app** — requires Node.js ≥ 18 on your machine (the app deliberately does not bundle a runtime).
+**macOS 独立应用** — 需要本机已安装 Node.js ≥ 18（应用刻意不内置运行时）。
 
 ```bash
 npm install
 npm run tauri:build
-# → release/CCConfig_<version>_<arch>.dmg (Tauri's own output stays in
-#   src-tauri/target/release/bundle/dmg/; scripts/collect-release.mjs copies it to release/)
+# → release/CCConfig_<版本>_<arch>.dmg（Tauri 原始产物仍在 src-tauri/target/release/bundle/dmg/，
+#   scripts/collect-release.mjs 在构建末尾复制一份到仓库根的 release/）
 ```
 
-App data lives in `~/.ccconfig/`. Closing the window keeps the app in the menu bar so the local gateway keeps serving: left-click the tray icon for the status panel (gateway stats, subscription usage, actions), right-click to reopen the main window.
+应用数据存放于 `~/.ccconfig/`。关闭窗口只是隐藏到菜单栏，本地网关继续运行：左键单击托盘图标打开状态面板（网关统计、订阅用量、快捷动作），右键单击显示窗口。
 
-If Node was installed via nvm/fnm/volta and the app cannot find it when launched from the Dock, point it explicitly:
+如果 Node 是通过 nvm/fnm/volta 安装的、从 Dock 启动后应用找不到它，可显式指定：
 
 ```bash
 CCCONFIG_NODE=$(which node) open -a CCConfig
 ```
 
-## Usage
+## 使用方式
 
-In uTools, type a keyword to open the matching app — `CCConfig` / `通用配置` (Common Config), `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link opens Skill install; `pi install <package>` opens Pi extension install.
+uTools 中输入关键词唤起对应应用：`CCConfig` / `通用配置`（指向通用配置）、`Claude Code配置`、`OpenCode配置`、`Pi Agents配置`、`omp配置`、`Reasonix配置`、`Codex配置`、`Kimi Code配置`、`MiniMax Code配置`、`dsh配置`。粘贴 SkillHub / 魔搭链接进入 Skill 安装；`pi install <包名>` 进入 Pi Extension 安装。
 
-The macOS app has no search box: it opens on Common Config and you switch apps from the left rail.
+macOS 独立应用没有搜索框：启动后进入「通用配置」，通过左侧栏切换应用。
 
-## Development
+## 开发
 
 ```bash
 npm install
-npm run dev          # uTools plugin dev server (localhost:5173)
-npm run build        # uTools plugin → dist/
-npm run build:app    # desktop renderer → dist-app/ + sidecar resources
-npm run tauri:dev    # desktop app in dev mode
-npm run tauri:build  # desktop app → release/*.dmg
+npm run dev          # uTools 插件开发服务器 (localhost:5173)
+npm run build        # uTools 插件 → dist/
+npm run build:app    # 桌面版渲染层 → dist-app/ + sidecar 资源
+npm run tauri:dev    # 桌面版开发模式
+npm run tauri:build  # 桌面版打包 → release/*.dmg
 ```
 
-Both builds share `src/` and `public/preload/`; only the shell differs. Architecture notes and the constraints that keep this true are in [AGENTS.md](AGENTS.md) and [docs/architecture.md](docs/architecture.md).
+两个发行版共用 `src/` 与 `public/preload/`，只有外壳不同。架构说明与维持这一点的约束见 [AGENTS.md](AGENTS.md) 与 [docs/architecture.md](docs/architecture.md)。
 
-## Tech Stack
+## 技术栈
 
-Vue 3 + Vite + TDesign Vue Next on the renderer; UI copy via vue-i18n with a shared `shared/i18n` JSON catalog used by Vue, preload, and Rust. A bundled esbuild preload handles all filesystem/network work, served through the uTools API or a Tauri v2 Node sidecar. Config parsing via json5, js-yaml and smol-toml; MCP tool discovery via `@modelcontextprotocol/sdk`; background effects via ogl.
+渲染层 Vue 3 + Vite + TDesign Vue Next；文案用 vue-i18n 与共享的 `shared/i18n` JSON（Vue / preload / Rust 三端共用）。文件读写与网络请求全部在打包后的 preload 里，经 uTools API 或 Tauri v2 Node sidecar 暴露。配置解析用 json5 / js-yaml / smol-toml；MCP 工具发现用 `@modelcontextprotocol/sdk`；背景特效用 ogl。
 
 ## License
 
