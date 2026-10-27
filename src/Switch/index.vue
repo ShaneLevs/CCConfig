@@ -29,6 +29,10 @@ import ZcodeUsageView from "./zcode/UsageView.vue";
 import HermesConfigView from "./hermes/ConfigView.vue";
 import DshConfigView from "./dsh/ConfigView.vue";
 import DshUsageView from "./dsh/UsageView.vue";
+import GrokConfigView from "./grok/ConfigView.vue";
+import GrokMcpView from "./grok/McpView.vue";
+import GrokSkillView from "./grok/SkillView.vue";
+import GrokUsageView from "./grok/UsageView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -167,6 +171,7 @@ onMounted(() => {
     zcodeConfig: "zcode",
     hermesConfig: "hermes",
     dshConfig: "dsh",
+    grokConfig: "grok",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -217,6 +222,9 @@ onUnmounted(() => {
             alt="logo"
             class="logo"
           />
+          <!-- 可点击元素内部禁掉拖拽区域，否则点击会被拖动吞掉。
+               另外注释不能放进 Dropdown 的默认插槽：TDesign 取插槽第一个节点当触发器，
+               开发模式保留注释时触发器会变成注释节点，名称整块丢失。 -->
           <Transition name="app-select">
             <Dropdown
               v-show="!showAgentRail"
@@ -224,7 +232,6 @@ onUnmounted(() => {
               :min-column-width="160"
               @click="handleAppSelect"
             >
-              <!-- 可点击元素内部禁掉拖拽区域，否则点击会被拖动吞掉 -->
               <span class="app-selector" data-tauri-drag-region="false">
                 {{ appLabel }} <ChevronDownIcon size="16px" />
               </span>
@@ -381,6 +388,23 @@ onUnmounted(() => {
       <!-- Hermes views（仅模型配置） -->
       <template v-if="isAppReady('hermes')">
         <HermesConfigView v-if="activeApp === 'hermes' && activeTab === 'config'" />
+      </template>
+
+      <!-- Grok Build views（模型配置 + MCP + Skill + 使用统计） -->
+      <template v-if="isAppReady('grok')">
+        <GrokConfigView v-if="activeApp === 'grok' && activeTab === 'config'" />
+        <GrokMcpView
+          v-if="isTabVisited('grok', 'mcp')"
+          v-show="activeApp === 'grok' && activeTab === 'mcp'"
+        />
+        <GrokSkillView
+          v-if="isTabVisited('grok', 'skill')"
+          v-show="activeApp === 'grok' && activeTab === 'skill'"
+        />
+        <GrokUsageView
+          v-if="isTabVisited('grok', 'usage')"
+          v-show="activeApp === 'grok' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- DSH views（DeepSeek Harness：模型配置 + 使用统计） -->

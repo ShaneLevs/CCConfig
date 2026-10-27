@@ -19,6 +19,7 @@ const hermes = require("./services/hermes");
 const dsh = require("./services/dsh");
 const dshUsage = require("./services/dsh-usage");
 const codex = require("./services/codex");
+const grok = require("./services/grok");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
@@ -230,6 +231,10 @@ window.services = {
       const s = zcode.readZcodeUsage()
       collected.zcode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] ZCode 采集失败:', e); collected.zcode = false }
+    try {
+      const s = grok.readGrokUsage()
+      collected.grok = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Grok 采集失败:', e); collected.grok = false }
     return collected
   },
   // 「通用」统计页异步版：采集在后台线程串行执行，完成后纯读 DB 合并；
@@ -251,6 +256,7 @@ window.services = {
       tryCollect('pi', () => usageAsync.readPiUsageAsync()),
       tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
       tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
+      tryCollect('grok', () => usageAsync.readGrokUsageAsync()),
     ])
     return collected
   },
@@ -428,6 +434,41 @@ window.services = {
   ZCODE_API_TYPES: zcode.ZCODE_API_TYPES,
   ZCODE_ACCESS_TYPES: zcode.ZCODE_ACCESS_TYPES,
 
+  // ==================== Grok Build（~/.grok/config.toml，模型 / MCP / Skill / 统计） ====================
+  getGrokHome: grok.getGrokHome,
+  getGrokConfigPath: grok.getGrokConfigPath,
+  getGrokModelList: grok.getGrokModelList,
+  getGrokUngroupedModels: grok.getGrokUngroupedModels,
+  getGrokProviderList: grok.getGrokProviderList,
+  addGrokProvider: grok.addGrokProvider,
+  updateGrokProvider: grok.updateGrokProvider,
+  deleteGrokProvider: grok.deleteGrokProvider,
+  addGrokModel: grok.addGrokModel,
+  updateGrokModel: grok.updateGrokModel,
+  deleteGrokModel: grok.deleteGrokModel,
+  getGrokDefaultModel: grok.getGrokDefaultModel,
+  setGrokDefaultModel: grok.setGrokDefaultModel,
+  openGrokDir: grok.openGrokDir,
+  openGrokConfigFile: grok.openGrokConfigFile,
+  openGrokSessionsDir: grok.openGrokSessionsDir,
+  isGrokInstalled: grok.isGrokInstalled,
+  GROK_API_BACKENDS: grok.GROK_API_BACKENDS,
+  // MCP（[mcp_servers.<name>] + 顶层 disabled_mcp_servers）
+  getGrokMcpServers: grok.getGrokMcpServers,
+  setGrokMcpServer: grok.setGrokMcpServer,
+  setGrokMcpEnabled: grok.setGrokMcpEnabled,
+  deleteGrokMcpServer: grok.deleteGrokMcpServer,
+  grokMcpConfigFor: grok.toGenericMcpConfig,
+  // Skill（~/.grok/skills + .disabled）
+  getGrokSkills: grok.getGrokSkills,
+  setGrokSkillEnabled: grok.setGrokSkillEnabled,
+  deleteGrokSkill: grok.deleteGrokSkill,
+  getGrokSkillsDir: grok.getGrokSkillsDir,
+  // 使用统计（~/.grok/sessions/<cwd>/<session>/usage.json）
+  readGrokUsage: grok.readGrokUsage,
+  readGrokUsageFromHistory: grok.readGrokUsageFromHistory,
+  getGrokSessionsDir: grok.getGrokSessionsDir,
+
   // ==================== Hermes（~/.hermes/config.yaml，仅模型配置） ====================
   getHermesConfigPath: hermes.getHermesConfigPath,
   getHermesProviderList: hermes.getHermesProviderList,
@@ -491,6 +532,7 @@ window.services = {
       zcode: false,
       hermes: false,
       dsh: false,
+      grok: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -587,6 +629,12 @@ window.services = {
     // dsh：cordis.patch.yml 有受管模型路由条目（官方 / 第三方 / 默认模型）
     try {
       hasData.dsh = dsh.hasDshConfig();
+    } catch (e) {
+      /* ignore */
+    }
+    // grok：config.toml 有 [model.*] / [model_providers.*] / [mcp_servers.*]
+    try {
+      hasData.grok = grok.hasGrokConfig();
     } catch (e) {
       /* ignore */
     }

@@ -1,7 +1,7 @@
 {
   "name": "ccconfig",
-  "version": "1.0.4",
-  "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes and DSH. Ships as a uTools plugin and a standalone macOS app.",
+  "version": "1.1.0",
+  "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes, DSH and Grok Build. Ships as a uTools plugin and a standalone macOS app.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,6 +20,7 @@
     "zcode",
     "hermes",
     "deepseek-harness",
+    "grok-build",
     "ai-cli",
     "llm-config",
     "api-key-switcher",

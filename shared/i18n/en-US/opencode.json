@@ -155,7 +155,7 @@
       "installing": "Installing...",
       "install": "Install",
       "packageName": "npm package name",
-      "packageNamePlaceholder": "e.g. @tarquinen/opencode-dcp",
+      "packageNamePlaceholder": "e.g. {'@'}tarquinen/opencode-dcp",
       "packageRequired": "Enter a plugin package name",
       "installSuccess": "Plugin {name} installed",
       "installFailed": "Install failed: {message}",

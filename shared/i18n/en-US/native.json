@@ -4,7 +4,7 @@
       "gatewayDisabled": "Gateway off · Enable it in Common → Gateway",
       "gatewayPortBusy": "Gateway not running · Port {port} may be in use",
       "gatewayRunning": "Gateway running · Port {port}",
-      "requests": "Requests",
+      "requests": "Total requests",
       "successRate": "Success rate",
       "tokens": "Tokens",
       "cacheHitRate": "Cache hit rate",

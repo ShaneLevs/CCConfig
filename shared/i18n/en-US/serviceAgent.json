@@ -161,6 +161,19 @@
       "internalError": "Gateway internal error: {message}",
       "internalErrorShort": "Gateway internal error",
       "portInUse": "Port {port} is already in use; choose another port"
+    },
+    "grok": {
+      "unsupportedApiBackend": "Unsupported API backend {backend} (available: {options})",
+      "providerNameRequired": "Provider name is required",
+      "providerNameInvalidChars": "Provider name may only contain letters, digits, underscore, hyphen, dot and colon",
+      "modelIdInvalidChars": "Model ID may only contain letters, digits, underscore, hyphen, dot, colon and slash",
+      "modelNotFoundForDefault": "Model {model} does not exist, cannot set as default",
+      "mcpNameRequired": "MCP server name is required",
+      "mcpNameInvalidChars": "MCP server name must start with a letter or underscore and contain only letters, digits, underscore and hyphen",
+      "mcpNotFound": "MCP server {name} does not exist",
+      "mcpCommandRequired": "A stdio server requires a command",
+      "mcpUrlRequired": "An HTTP/SSE server requires a URL",
+      "providerInUse": "Provider {name} is still referenced by models ({models}); delete or move those models first"
     }
   }
 }

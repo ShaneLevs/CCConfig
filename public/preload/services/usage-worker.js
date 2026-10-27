@@ -63,6 +63,7 @@ const RUNNERS = {
   pi: () => require("./pi").readPiUsage(),
   zcode: () => require("./zcode").readZcodeUsage(),
   dsh: (force) => require("./dsh-usage").readDshUsage(force),
+  grok: (force) => require("./grok").readGrokUsage(force),
 };
 
 parentPort.on("message", (msg) => {

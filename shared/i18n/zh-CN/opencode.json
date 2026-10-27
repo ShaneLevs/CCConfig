@@ -155,7 +155,7 @@
       "installing": "安装中...",
       "install": "安装",
       "packageName": "npm 包名",
-      "packageNamePlaceholder": "例如：@tarquinen/opencode-dcp",
+      "packageNamePlaceholder": "例如：{'@'}tarquinen/opencode-dcp",
       "packageRequired": "请输入插件包名",
       "installSuccess": "插件 {name} 安装成功",
       "installFailed": "安装失败: {message}",

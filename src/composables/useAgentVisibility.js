@@ -1,6 +1,6 @@
 import { h, ref, computed, watch } from "vue";
 import { i18n } from "../i18n";
-import { AGENT_ORDER, LEGACY_AGENT_ORDER, AGENT_META, COMMON_APP_META } from "./agentMeta";
+import { AGENT_ORDER, LEGACY_AGENT_ORDERS, AGENT_META, COMMON_APP_META } from "./agentMeta";
 
 // Agent 显示管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
@@ -53,17 +53,22 @@ const initVisibleAgents = () => {
   }
   const stored = doc?.visible || null;
   const storedOrder = doc?.order || null;
-  // 存量记录仍是旧默认顺序（说明用户从未拖拽过排序）：升级为新默认顺序
+  // 存量记录仍是某个历史默认顺序（说明用户从未拖拽过排序）：升级为当前默认顺序
   let orderUpgraded = false;
   if (Array.isArray(storedOrder) && storedOrder.length) {
-    // 存量记录里没有的新增 agent 追加到末尾（否则升级后设置列表/切换器永远看不到新 agent）
-    const known = storedOrder.filter(a => AGENT_ORDER.includes(a));
-    AGENT_ORDER.forEach((app) => { if (!known.includes(app)) known.push(app); });
-    if (known.join() === LEGACY_AGENT_ORDER.join()) {
+    // 两边都先补上「记录里/历史顺序里没有的当前 agent」再比：
+    // 新 agent（如后加的 DSH / Grok）从未进过存量记录，不补齐就永远对不上历史默认顺序。
+    const normalize = (list) => {
+      const known = list.filter((a) => AGENT_ORDER.includes(a));
+      AGENT_ORDER.forEach((app) => { if (!known.includes(app)) known.push(app); });
+      return known;
+    };
+    const known = normalize(storedOrder);
+    if (LEGACY_AGENT_ORDERS.some((legacy) => known.join() === normalize(legacy).join())) {
       agentOrder.value = [...AGENT_ORDER];
       orderUpgraded = true;
     } else {
-      agentOrder.value = known; // 用户自定义顺序：原样保留
+      agentOrder.value = known; // 用户自定义顺序：原样保留，新 agent 追加到末尾
     }
   }
   if (stored) {

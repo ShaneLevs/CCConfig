@@ -161,6 +161,19 @@
       "internalError": "网关内部错误: {message}",
       "internalErrorShort": "网关内部错误",
       "portInUse": "端口 {port} 已被占用，请更换端口"
+    },
+    "grok": {
+      "unsupportedApiBackend": "不支持的 API 协议 {backend}（可选：{options}）",
+      "providerNameRequired": "供应商名不能为空",
+      "providerNameInvalidChars": "供应商名只能包含字母、数字、下划线、中划线、点、冒号",
+      "modelIdInvalidChars": "模型 ID 只能包含字母、数字、下划线、中划线、点、冒号、斜杠",
+      "modelNotFoundForDefault": "模型 {model} 不存在，无法设为默认",
+      "mcpNameRequired": "MCP 服务器名不能为空",
+      "mcpNameInvalidChars": "MCP 服务器名必须以字母或下划线开头，只能包含字母、数字、下划线、中划线",
+      "mcpNotFound": "MCP 服务器 {name} 不存在",
+      "mcpCommandRequired": "stdio 服务器必须填写启动命令",
+      "mcpUrlRequired": "HTTP/SSE 服务器必须填写 URL",
+      "providerInUse": "供应商 {name} 仍被模型引用（{models}），请先删除或移动相关模型"
     }
   }
 }

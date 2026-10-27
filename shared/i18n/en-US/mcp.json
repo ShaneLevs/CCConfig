@@ -24,7 +24,7 @@
     "command": "Command",
     "commandPlaceholder": "e.g. npx",
     "args": "Arguments (args, space separated)",
-    "argsPlaceholder": "e.g. -y @modelcontextprotocol/server-filesystem /path/to/files",
+    "argsPlaceholder": "e.g. -y {'@'}modelcontextprotocol/server-filesystem /path/to/files",
     "env": "Environment variables (env)",
     "envKeyPlaceholder": "Variable name",
     "envValuePlaceholder": "Variable value",

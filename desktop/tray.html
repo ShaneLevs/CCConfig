@@ -526,7 +526,11 @@
     } else {
       setStatus(t('gatewayRunning', { port: gatewayPort }), 'ok')
     }
-    renderStats(enabled && running, status.stats || {})
+    // 托盘展示网关累计统计（按天落库 + 内存中的本次运行计数）：
+    // 网关关闭后历史仍然保留，所以只要有过调用就继续展示
+    const historyTotal = (status.history && status.history.total) || {}
+    const totalRequests = Number(historyTotal.requests || 0)
+    renderStats(totalRequests > 0 || (enabled && running), totalRequests > 0 ? historyTotal : (status.stats || {}))
     renderSubs(subs)
     reportHeight()
 

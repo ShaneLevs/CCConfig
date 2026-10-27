@@ -140,7 +140,7 @@
       "piNotInstalled": "未检测到 pi 命令，可能未安装 Pi Agent。仅可浏览市场，无法安装扩展。",
       "installTitle": "安装 Pi 扩展",
       "extensionSource": "扩展包名或来源",
-      "extensionSourcePlaceholder": "例如：@hypabolic/pi-hypa 或 npm:@hypabolic/pi-hypa",
+      "extensionSourcePlaceholder": "例如：{'@'}hypabolic/pi-hypa 或 npm:{'@'}hypabolic/pi-hypa",
       "supportedFormats": "支持格式：",
       "installing": "安装中...",
       "extensionRequired": "请输入扩展包名",

@@ -113,29 +113,150 @@ const regenerateAutoRouteKey = () => writeAutoRouteConfig({ key: generateKey() }
 
 // ==================== 运行状态 ====================
 
-const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, stats: newSessionStats() };
+const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, stats: emptyStats() };
 
 // 本次运行统计（随网关重启清零）：仅统计已路由转发的模型调用（entry.target 非空），
 // 401 鉴权失败 / 模型未启用 / /v1/models 等控制面请求不计入。
-function newSessionStats() {
+function emptyStats() {
   return { requests: 0, successes: 0, promptTokens: 0, cachedTokens: 0, outputTokens: 0 };
 }
+
+// ==================== 历史统计（按天落库） ====================
+// 与 agent 统计落库同思路，但网关是独立口径：经过网关的调用可能同时出现在某个 agent 的
+// 本地日志里，不能并进「通用统计」求和。这里只存每日聚合计数，不存请求日志。
+// 文档按机器隔离：ccconfig_autoroute_usage_<nativeId>。
+const HISTORY_DOC_PREFIX = "ccconfig_autoroute_usage_";
+
+let historyState = null; // { days, rev }
+let historyDirty = false;
+
+const getHistoryDocId = () => `${HISTORY_DOC_PREFIX}${window.utools.getNativeId()}`;
+
+// 本地日期：页面上的「今日」按用户时区理解，不与 agent 统计的 UTC 日期混用
+const localDateKey = (time) => {
+  const d = new Date(typeof time === "number" ? time : Date.now());
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const normalizeDay = (raw) => {
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
+  return {
+    requests: num(raw && raw.requests),
+    successes: num(raw && raw.successes),
+    promptTokens: num(raw && raw.promptTokens),
+    cachedTokens: num(raw && raw.cachedTokens),
+    outputTokens: num(raw && raw.outputTokens),
+  };
+};
+
+const loadHistory = () => {
+  if (historyState) return historyState;
+  const days = {};
+  let rev;
+  try {
+    const doc = window.utools.db.get(getHistoryDocId());
+    if (doc && doc.days && typeof doc.days === "object") {
+      for (const [date, raw] of Object.entries(doc.days)) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) days[date] = normalizeDay(raw);
+      }
+    }
+    if (doc && doc._rev) rev = doc._rev;
+  } catch (e) {
+    console.error("[autoroute] 读取历史统计失败:", e.message || e);
+  }
+  historyState = { days, rev };
+  return historyState;
+};
+
+const flushHistory = () => {
+  if (!historyDirty) return;
+  historyDirty = false;
+  const state = loadHistory();
+  const nativeId = window.utools.getNativeId();
+  const payload = { _id: getHistoryDocId(), nativeId, days: state.days, updatedAt: Date.now() };
+  if (state.rev) payload._rev = state.rev;
+  try {
+    const res = window.utools.db.put(payload);
+    if (res && res.ok) {
+      state.rev = res.rev || state.rev;
+      return;
+    }
+    historyDirty = true;
+    // 文档被别处改过时刷新 _rev，下一次请求完成时即可继续写；其他错误同样留给下一次
+    if (res && res.name === "conflict") {
+      try {
+        const cur = window.utools.db.get(getHistoryDocId());
+        if (cur && cur._rev) state.rev = cur._rev;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    console.error("[autoroute] 保存历史统计失败:", (res && res.message) || "unknown error");
+  } catch (e) {
+    historyDirty = true;
+    console.error("[autoroute] 保存历史统计失败:", e.message || e);
+  }
+};
+
+const recordHistoryStats = (time, success, promptTokens, cachedTokens, outputTokens) => {
+  const state = loadHistory();
+  const date = localDateKey(time);
+  const day = state.days[date] || (state.days[date] = emptyStats());
+  day.requests++;
+  if (success) day.successes++;
+  day.promptTokens += promptTokens;
+  day.cachedTokens += cachedTokens;
+  day.outputTokens += outputTokens;
+  historyDirty = true;
+  // 请求完成就落库：调用频率低（一次 API 调用一行），避免退出/崩溃时丢最后几条；
+  // 桌面 sidecar 的 db.put 只改内存、磁盘写入由 shim 自己 debounce
+  flushHistory();
+};
+
+const getHistorySummary = () => {
+  const { days } = loadHistory();
+  const todayKey = localDateKey(Date.now());
+  const total = emptyStats();
+  let since = "";
+  for (const [date, day] of Object.entries(days)) {
+    total.requests += day.requests;
+    total.successes += day.successes;
+    total.promptTokens += day.promptTokens;
+    total.cachedTokens += day.cachedTokens;
+    total.outputTokens += day.outputTokens;
+    if (!since || date < since) since = date;
+  }
+  return {
+    today: { ...emptyStats(), ...(days[todayKey] || {}) },
+    total,
+    since,
+  };
+};
 
 // usage 语义差异归一：anthropic 的 input_tokens 不含缓存（cache_read/cache_creation 分列），
 // openai 的 prompt_tokens/input_tokens 已含 cached → 统一折成 promptTokens（含缓存）+ cachedTokens。
 const recordStats = (entry) => {
   if (!entry || !entry.target || typeof entry.status !== "number") return;
+  const u = entry.usage;
+  const cached = (u && u.cacheReadTokens) || 0;
+  const prompt = u
+    ? (entry.target === "anthropic-messages"
+      ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0)
+      : u.inputTokens || 0)
+    : 0;
+  const output = (u && u.outputTokens) || 0;
+  const success = entry.status < 400;
+
   const s = serverState.stats;
   s.requests++;
-  if (entry.status < 400) s.successes++;
-  const u = entry.usage;
-  if (!u) return;
-  const cached = u.cacheReadTokens || 0;
-  s.promptTokens += entry.target === "anthropic-messages"
-    ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0)
-    : u.inputTokens || 0;
+  if (success) s.successes++;
+  s.promptTokens += prompt;
   s.cachedTokens += cached;
-  s.outputTokens += u.outputTokens || 0;
+  s.outputTokens += output;
+
+  // 历史统计与会话统计同口径：请求 / 成功 / token 都记，响应没有 usage 时 token 部分记 0
+  recordHistoryStats(entry.time, success, prompt, cached, output);
 };
 
 // 请求日志存内存，仅保留最近 10 条（新条目插头部；多了渲染/轮询拷贝会卡）。
@@ -168,6 +289,9 @@ const getAutoRouteStatus = () => ({
   baseUrl: serverState.server ? `http://127.0.0.1:${serverState.port}` : "",
   logs: [...serverState.logs],
   stats: { ...serverState.stats },
+  // 历史统计（按本地日期聚合）：today 今日、total 累计、since 最早一天。
+  // 页面用于「本次运行 / 今日 / 累计」切换，托盘只取 total。
+  history: getHistorySummary(),
 });
 
 // ==================== 模型解析 ====================
@@ -674,16 +798,18 @@ const startAutoRoute = () => {
       serverState.server = server;
       serverState.port = config.port;
       serverState.startedAt = Date.now();
-      // 新一次运行：请求日志与本次统计从零开始
+      // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
       serverState.logs = [];
-      serverState.stats = newSessionStats();
+      serverState.stats = emptyStats();
       resolve(getAutoRouteStatus());
     });
   });
 };
 
-const stopAutoRoute = () =>
-  new Promise((resolve) => {
+const stopAutoRoute = () => {
+  // 停止前把尚未落库的历史统计写掉，避免关网关/退出时丢最后几条
+  try { flushHistory(); } catch (e) { console.error("[autoroute] 停止时保存历史统计失败:", e.message || e); }
+  return new Promise((resolve) => {
     const server = serverState.server;
     if (!server) {
       resolve(getAutoRouteStatus());
@@ -697,6 +823,7 @@ const stopAutoRoute = () =>
     }
     server.close(() => resolve(getAutoRouteStatus()));
   });
+};
 
 // 生命周期自愈：装载/进入插件时 enabled=true 则幂等拉起
 const startAutoRouteIfEnabled = () => {

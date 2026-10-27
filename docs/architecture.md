@@ -17,9 +17,9 @@ src-tauri/    # 仅桌面版：Tauri v2 外壳（Rust）
 docs/         # 架构文档
 ```
 
-- **`src/`** — 渲染层。`main.js`/`App.vue` 入口；`i18n/` 语言解析与 vue-i18n 实例，`composables/useAppearance.js` 解析外观（跟随系统/浅色/深色），`composables/useLocale.js` 管理语言；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、外观设置等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
+- **`src/`** — 渲染层。`main.js`/`App.vue` 入口；`i18n/` 语言解析与 vue-i18n 实例，`composables/useAppearance.js` 解析外观（跟随系统/浅色/深色），`composables/useLocale.js` 管理语言；`Switch/<app>/` 每个应用（claude / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / grok / common 通用配置）一个子目录，内含 ConfigView / McpView / SkillView / PluginView / UsageView 五个视图（部分应用只有其中几个）与同名 `styles/`；`components/` 跨应用共享组件（MCP/Skill 卡片弹窗、外观设置等）；`composables/` 共享逻辑（应用上下文、配置切换/导入导出、Skill 安装等）。
 - **`shared/i18n/`** — 中英文案单一事实来源（按域拆 JSON）。Vue 通过 `src/i18n/index.js` 的 `import.meta.glob` 合并；preload 通过 `services/i18n.js` 用 CJS require（esbuild 内联）；Rust 通过 `src-tauri/src/i18n.rs` 的 `include_str!` 读 `native.json`。
-- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / plugins / dispatch / autoroute / subscriptions / browser-cookies / sqlite-query / commands / usage / crypto / db-migrate / legacy / i18n），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
+- **`public/preload/`** — Node 敏感操作全部在这里：`services.js` 组装暴露为 `window.services`，具体实现在 `services/` 下按应用/职责分模块（config / common / mcp / opencode / pi / omp / reasonix / codex / kimi / minimax / qoder / zcode / hermes / dsh / grok / plugins / dispatch / autoroute / subscriptions / browser-cookies / sqlite-query / commands / usage / crypto / db-migrate / legacy / i18n），构建时由 esbuild 打进 `dist/preload/services.js`；preload 依赖清单在 `public/preload/package.json`。
 - **`desktop/`** — 仅桌面版。`sidecar/server.js` 把打包后的 preload 以回环 HTTP 服务暴露；`sidecar/utools-shim.js` 在 Node 里实现最小 uTools API 面；`bridge/window-shim.js` 构建时注入渲染层，提供 `window.utools` / `window.services`；`guide.html` 是启动失败引导页（提示没找到 Node，或 sidecar 起不来——原因由 Rust 注入 `window.__CC_GUIDE__` / `window.__CC_FAIL__`）。
 - **`src-tauri/`** — 仅桌面版的 Rust 外壳：Node 运行时探测、sidecar 生命周期、托盘、窗口主题；`i18n.rs` 负责托盘/引导页文案，语言偏好通过 sidecar RPC 先取 nativeId 再读 `ccconfig_locale_<nativeId>`（旧共享档作回退）。
 
@@ -69,6 +69,7 @@ Claude:
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
+    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次运行）与 history.today/total/since，网关页切换「本次运行 / 今日 / 累计」，托盘展示 history.total。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
       同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
       跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
@@ -221,6 +222,54 @@ DSH（DeepSeek Harness）:
       页面保活（isTabVisited + v-show）不重复拉取，点刷新也走签名校验、日志有变化才重新全量解析
       历史落库：每日聚合落 ccconfig_agent_usage_dsh_<nativeId>（与「通用」统计页同源，不另存一份），
       读取时按「同一天取较大值」合并历史（日志被清理/压缩后历史不缩水），日志全没了则直接回放历史档
+
+Grok Build（xAI 官方编码 CLI，命令 `grok`）:
+  ~/.grok/config.toml（GROK_HOME 优先，默认 ~/.grok）→ smol-toml 读写（解析失败抛错阻断写回；Grok 自身也不覆盖无法解析的配置）
+  与其它应用一致采用「供应商 → 模型」两层结构；只管理四处，其余节（[ui] / [features] / [permissions] /
+  [hooks] / [plugins] / [toolset]）读改写原样保留：
+    [model_providers.<name>]  供应商（命名连接信息）。受管字段：base_url / api_backend / api_key / env_key（字符串或数组）/
+                            context_window / extra_headers；未知键（api_base_url / auth / auth_provider / query_params /
+                            env_http_headers / max_request_bytes / context_windows …）经 _extra 原样往返
+                            语义（见 xai-grok-shell/src/agent/model_providers.rs 的 with_provider_defaults）：
+                            base_url / api_base_url / api_backend / max_request_bytes / extra_headers 为「模型没写才继承」，
+                            context_window 只在模型整组未设时整体继承，api_key / env_key 在模型自己没有任何凭据时继承
+                            改名会同步改掉引用它的 model_provider；仍被模型引用时禁止删除
+                            没有模型的供应商照常保留（不写空表：条目为空时整节删除）
+    [model.<key>]             模型条目，通过 model_provider 引用供应商。受管字段：model（发往 API 的模型 ID）/ name /
+                            description / context_window / max_completion_tokens / temperature / top_p / extra_headers
+                            内联写法（官方文档里直接给 [model.<id>] 写 base_url 的例子）也支持：条目自带
+                            base_url / api_backend / api_key / env_key，此时没有 model_provider，UI 归入「未分组模型」；
+                            把内联模型改挂到供应商时会清掉它自己的连接字段（否则会盖掉供应商的值）
+                            官方内置模型可只写要覆盖的字段（无连接信息、无 model_provider = 内置覆盖，UI 打标）
+                            api_backend 三值：chat_completions（默认）/ responses / messages（Anthropic /v1/messages，
+                            但鉴权仍走 Bearer；需要 x-api-key 时用 extra_headers）——google-generative-ai 无对应实现，写入前拦截
+                            未知键（reasoning_efforts / reasoning_summary / model_family / query_params / env_http_headers /
+                            notice / hidden / stream_tool_calls / supports_backend_search …）经 _extra 原样往返
+    [models]                  顶层全局默认：default（默认模型，存的是 [model.<key>] 的模型键，可为内置模型 ID）/
+                            web_search 等其余键原样保留；modelId 置空 = 删键，回退 Grok 内置默认
+    顶层 disabled_mcp_servers 关闭的 MCP 名单（官方 grok mcp disable 的落点），与 [mcp_servers.<name>] 配合
+  模型改键时 models.default 跟随；删除被设为默认的模型时回退到目录内首个剩余模型（无剩余则删键）；新增首个模型时自动设默认
+  通用库下发：协议映射 openai-completions→chat_completions / openai-responses→responses / anthropic-messages→messages
+    （google 拒绝）；供应商名经 providerKeyFor 确定性清洗为 TOML 裸键（中文/符号名 → ASCII 骨架 + 稳定哈希，upsert 幂等）；
+    写入形态 = [model_providers.<key>] 连接信息 + [model.<模型ID>]（model_provider 引用）+ 首次无默认时补 models.default；
+    context_window / max_completion_tokens 写在模型条目上（不写供应商，避免同供应商多模型互相覆盖）
+  网关下发：走 anthropic-messages + `http://127.0.0.1:<port>/v1`（grok 自己只追加 /messages，不补 /v1，同 Codex / Kimi / ZCode）
+  MCP：[mcp_servers.<name>]（stdio: command/args/env/cwd；http: url/headers，SSE 用 type = "sse"）。
+    开关同时维护顶层 disabled_mcp_servers 名单（不写条目的 enabled，与官方 CLI 行为一致）；
+    oauth / setup / tool_timeouts / bearer_token_* 等未知键经 _extra 原样往返
+  Skill：~/.grok/skills/<name>/SKILL.md（官方用户级目录；grok 也递归子目录，这里只读一层，同 OpenCode 视图）；
+    启停 = 物理移动目录到 .disabled/（同 Claude / OpenCode / 通用 Skill）；安装复用 SkillHub / 魔搭流水线
+  使用统计：~/.grok/sessions/<URL 编码工作目录>/<session-id>/usage.json（`grok usage` 的落盘版本）：
+    结构 { sessionId, updatedAt, session: UsageSummary, turns: [{ turnNumber, endedAt, ...UsageSummary }] }（serde camelCase），
+    UsageSummary 含 inputTokens / outputTokens / cachedReadTokens / cacheCreationTokens / reasoningTokens /
+    modelCalls / primaryModelId / modelUsage{<模型ID>: UsageSummary}
+    按 turns 逐轮汇总（多天会话能落到正确日期，日期取 endedAt 的本地日期），模型维度取 turn.modelUsage，
+    无 modelUsage 时退回 primaryModelId；无 turns 的老档退回 session 汇总 + updatedAt 日期；读失败的会话跳过（正在写入）
+    口径：输入 = inputTokens + cachedReadTokens + cacheCreationTokens（含缓存），输出 = outputTokens；
+      day.inputTokens 含缓存（页面日期筛选直接取该字段），day.models[].inputTokens 为未缓存输入（页面重算再叠加缓存）；
+      summary.inputTokens = 总 - 输出
+    历史落库：ccconfig_agent_usage_grok_<nativeId>（与「通用」统计页同源），源目录被清理后回放历史不归零
+  已知取舍：整档 smol-toml 重写不保留 TOML 注释（同 codex / kimi / reasonix）
 ```
 
 ### 订阅用量（通用 → 订阅）

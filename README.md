@@ -11,11 +11,11 @@
 
 A multi-app AI configuration manager, shipped as both a [uTools](https://u.tools/) plugin and a standalone macOS app.
 
-It gives twelve AI coding CLIs a single place to manage API providers, models, MCP servers, skills, plugins and token usage — and lets you switch between providers in one click instead of hand-editing TOML/YAML/JSON.
+It gives thirteen AI coding CLIs a single place to manage API providers, models, MCP servers, skills, plugins and token usage — and lets you switch between providers in one click instead of hand-editing TOML/YAML/JSON.
 
 ## Features
 
-- **Unified app switcher** — twelve AI CLIs plus a cross-agent "Common Config", each with independent, switchable API configurations
+- **Unified app switcher** — thirteen AI CLIs plus a cross-agent "Common Config", each with independent, switchable API configurations
 - **API config management** — read, save and switch provider configs per app, preserving every field the tool does not manage (unknown keys round-trip untouched)
 - **Provider/model master data** — a shared provider and model database (AES-256-CBC encrypted keys) supporting OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative AI; dispatch it into any supported agent with one click
 - **Local gateway** — expose selected providers/models at `http://127.0.0.1:<port>` and speak Anthropic, OpenAI Chat or OpenAI Responses to any local agent, with automatic cross-protocol conversion including streaming
@@ -42,6 +42,7 @@ It gives twelve AI coding CLIs a single place to manage API providers, models, M
 | ZCode | `~/.zcode/v2/provider_config.json` |
 | Hermes | `~/.hermes/config.yaml` |
 | DSH (DeepSeek Harness) | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
+| Grok Build | `~/.grok/config.toml` |
 
 Field-level rules for every app are documented in [docs/architecture.md](docs/architecture.md) (Chinese).
 

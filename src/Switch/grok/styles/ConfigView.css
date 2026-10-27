@@ -1,0 +1,94 @@
+.grok-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.grok-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.grok-toolbar-left { min-width: 0; flex: 1; }
+.grok-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.grok-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grok-toolbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.grok-config-warning { margin-bottom: 0; }
+.grok-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.grok-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.grok-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.grok-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.grok-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.grok-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.grok-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.grok-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.grok-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.grok-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.grok-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.grok-provider-body { padding: 10px 0 4px; }
+.grok-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.grok-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.grok-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.grok-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.grok-key-lock { color: var(--td-text-color-placeholder); margin-right: 2px; }
+.grok-key-copy { cursor: pointer; margin-left: 4px; color: var(--td-text-color-placeholder); }
+.grok-key-copy:hover { color: var(--td-brand-color); }
+
+/* 模型子区 */
+.grok-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.grok-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 6px; }
+.grok-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.grok-model-list { display: flex; flex-direction: column; gap: 2px; }
+
+.grok-model-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--td-radius-default);
+  transition: background 0.15s;
+}
+.grok-model-item:hover { background: var(--td-bg-color-container-hover); }
+.grok-model-info { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.grok-model-name { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.grok-model-sub { font-size: 11px; color: var(--td-text-color-placeholder); word-break: break-all; }
+.grok-model-actions { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+
+/* ===== 未分组模型 ===== */
+.grok-ungrouped-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--td-border-level-1-color);
+}
+.grok-ungrouped-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); }
+.grok-ungrouped-list { display: flex; flex-direction: column; gap: 2px; }
+.grok-ungrouped-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 10px;
+  background: var(--td-bg-color-container-hover);
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: var(--td-radius-default);
+}
+
+/* ===== 表单弹窗 ===== */
+.grok-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.grok-form-item { display: flex; flex-direction: column; gap: 4px; }
+.grok-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.grok-form-item .t-input-number { width: 220px; }
+.grok-form-row { display: flex; gap: 16px; }
+.grok-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.grok-form-required { color: var(--td-error-color); }
+.grok-fetch-error { color: var(--td-error-color); }
+.grok-fetch-retry { color: var(--td-brand-color); cursor: pointer; margin-left: 4px; }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* ===== 暗色 ===== */
+:root[theme-mode="dark"] .grok-provider-details { background: var(--td-bg-color-secondarycontainer); }
+:root[theme-mode="dark"] .grok-ungrouped-item { background: var(--td-bg-color-container-hover); }

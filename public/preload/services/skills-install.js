@@ -6,6 +6,7 @@ const path = require("node:path");
 const config = require("./config");
 const opencode = require("./opencode");
 const common = require("./common");
+const grok = require("./grok");
 const { t } = require("./i18n");
 
 // ==================== SkillHub API 辅助 ====================
@@ -321,6 +322,15 @@ const completeOpencodeSkillInstall = (skillName, extractDir) =>
   completeInstall(opencode.getOpencodeSkillsPath(), skillName, extractDir);
 const cancelOpencodeSkillInstall = () => cancelInstall();
 
+// Grok Build → ~/.grok/skills（调用时取，同 OpenCode 的惰性求值）
+const installGrokSkill = (slug, version, namespace, onProgress) =>
+  installFromSkillhub(grok.getGrokSkillsDir(), slug, version, namespace, onProgress);
+const installGrokSkillFromModelScope = (skillPath, onProgress) =>
+  installFromModelScope(grok.getGrokSkillsDir(), skillPath, onProgress);
+const completeGrokSkillInstall = (skillName, extractDir) =>
+  completeInstall(grok.getGrokSkillsDir(), skillName, extractDir);
+const cancelGrokSkillInstall = () => cancelInstall();
+
 // 通用 → ~/.agents/skills
 const installCommonSkill = (slug, version, namespace, onProgress) =>
   installFromSkillhub(common.COMMON_SKILLS_DIR(), slug, version, namespace, onProgress);
@@ -347,4 +357,8 @@ module.exports = {
   installCommonSkillFromModelScope,
   completeCommonSkillInstall,
   cancelCommonSkillInstall,
+  installGrokSkill,
+  installGrokSkillFromModelScope,
+  completeGrokSkillInstall,
+  cancelGrokSkillInstall,
 };

@@ -34,6 +34,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "ZCode", value: "zcode" },
   { label: "Hermes", value: "hermes" },
   { label: "DSH", value: "dsh" },
+  { label: "Grok Build", value: "grok" },
 ];
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
@@ -44,6 +45,7 @@ const AGENT_PROTOCOLS = {
   qoder: ["openai-completions", "openai-responses", "anthropic-messages"],
   zcode: ["openai-completions", "openai-responses", "anthropic-messages"],
   hermes: ["openai-completions", "openai-responses", "anthropic-messages"],
+  grok: ["openai-completions", "openai-responses", "anthropic-messages"],
 };
 
 const modelKeys = ref([]);
@@ -183,6 +185,9 @@ watch(() => props.visible, (v) => {
             </Tooltip>
             <Tooltip v-else-if="opt.value === 'dsh'" :content="t('commonApp.dispatch.dshTooltip')">
               <Checkbox :value="opt.value" :disabled="isTargetDisabled('dsh')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
+            </Tooltip>
+            <Tooltip v-else-if="opt.value === 'grok'" :content="t('commonApp.dispatch.grokTooltip')">
+              <Checkbox :value="opt.value" :disabled="isTargetDisabled('grok')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
             </Tooltip>
             <Checkbox v-else :value="opt.value" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
           </label>

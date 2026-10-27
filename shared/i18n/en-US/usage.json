@@ -2,8 +2,8 @@
   "usage": {
     "defaultTip": "For reference only",
     "emptyDescription": "No usage data",
-    "commonTip": "Combined usage for Claude Code / Pi Agent / OpenCode / DSH / ZCode",
-    "commonEmptyHint": "No usage records found for Claude Code / Pi Agent / OpenCode / DSH / ZCode. Generate some usage, then reopen this page or click Refresh to aggregate.",
+    "commonTip": "Combined usage across Claude Code / Pi Agent / OpenCode / DSH / ZCode / Grok Build",
+    "commonEmptyHint": "No usage found for Claude Code / Pi Agent / OpenCode / DSH / ZCode / Grok Build. Re-open this page or hit refresh after you generate some usage.",
     "statTotal": "Total tokens",
     "statInput": "Input tokens (incl. cache)",
     "statOutput": "Output tokens",

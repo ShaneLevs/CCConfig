@@ -185,11 +185,15 @@ const readZcodeUsageAsync = () =>
 const readDshUsageAsync = (force) =>
   withFallback("dsh", force, () => require("./dsh-usage").readDshUsage(force));
 
+const readGrokUsageAsync = (force) =>
+  withFallback("grok", force, () => require("./grok").readGrokUsage(force));
+
 module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
   readPiUsageAsync,
   readZcodeUsageAsync,
   readDshUsageAsync,
+  readGrokUsageAsync,
   readAgentUsageFromHistory,
 };

@@ -11,11 +11,11 @@
 
 多应用 AI 配置管理工具，同时提供 [uTools](https://u.tools/) 插件与 macOS 独立应用两种形态。
 
-把十二个 AI 编程 CLI 的供应商、模型、MCP、Skill、插件与 Token 用量收进一个界面，一键切换供应商，不必再手改 TOML/YAML/JSON。
+把十三个 AI 编程 CLI 的供应商、模型、MCP、Skill、插件与 Token 用量收进一个界面，一键切换供应商，不必再手改 TOML/YAML/JSON。
 
 ## 功能特性
 
-- **统一应用切换** — 十二个 AI CLI + 跨 agent 的「通用配置」，各自独立配置，一键切换
+- **统一应用切换** — 十三个 AI CLI + 跨 agent 的「通用配置」，各自独立配置，一键切换
 - **API 配置管理** — 逐应用读取、保存、切换供应商配置，本工具不管理的字段原样保留（未知键往返不丢）
 - **供应商/模型主数据** — 共享的供应商与模型库（API Key AES-256-CBC 加密），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议，一键下发到任意受支持的 agent
 - **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）
@@ -42,6 +42,7 @@
 | ZCode | `~/.zcode/v2/provider_config.json` |
 | Hermes | `~/.hermes/config.yaml` |
 | DSH（DeepSeek Harness） | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
+| Grok Build（xAI 官方 CLI） | `~/.grok/config.toml` |
 
 各应用的字段级规则见 [docs/architecture.md](docs/architecture.md)。
 

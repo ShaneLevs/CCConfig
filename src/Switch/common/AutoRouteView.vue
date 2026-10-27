@@ -24,11 +24,12 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "ZCode", value: "zcode" },
   { label: "Hermes", value: "hermes" },
   { label: "DSH", value: "dsh" },
+  { label: "Grok Build", value: "grok" },
 ];
 
 const loading = ref(false);
 const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] });
-const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: null });
+const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: null, history: null });
 const providers = ref([]);
 const selectionKeys = ref([]);
 const portDraft = ref(17877); // 端口输入框草稿值，失焦/回车时校验并保存
@@ -70,6 +71,13 @@ const loadAll = () => {
     autoRouteEnabled.value = !!config.value.enabled;
     providers.value = window.services.readCommonProviders().providers;
     refreshStatus();
+    // 首次打开：有累计数据就看累计；只有本次运行有数据（历史刚上线/无落库）就先看本次
+    if (!statsScopeTouched.value) {
+      statsScopeTouched.value = true;
+      const total = (status.value.history && status.value.history.total && status.value.history.total.requests) || 0;
+      const session = (status.value.stats && status.value.stats.requests) || 0;
+      statsScope.value = total > 0 || !session ? "total" : "session";
+    }
     selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
     portDraft.value = config.value.port;
   } catch (e) {
@@ -320,9 +328,33 @@ const formatNumber = (n) => {
   return String(n);
 };
 
-// 本次运行累计统计（随网关重启清零，数据来自 preload getAutoRouteStatus.stats，随轮询刷新）
-const sessionStats = computed(() => {
-  const s = status.value.stats || {};
+// 网关统计口径：本次运行来自 preload 内存（getAutoRouteStatus.stats），
+// 今日/累计来自按天落库的 history（随轮询刷新，间隔 1s）
+const statsScope = ref("total");
+const statsScopeTouched = ref(false);
+const onStatsScopeChange = () => {
+  statsScopeTouched.value = true;
+};
+const statsScopeOptions = computed(() => [
+  { label: t("commonApp.autoRoute.statScopeSession"), value: "session" },
+  { label: t("commonApp.autoRoute.statScopeToday"), value: "today" },
+  { label: t("commonApp.autoRoute.statScopeTotal"), value: "total" },
+]);
+const historyInfo = computed(() => status.value.history || {});
+const statsSource = computed(() => {
+  if (statsScope.value === "session") return status.value.stats || {};
+  if (statsScope.value === "today") return historyInfo.value.today || {};
+  return historyInfo.value.total || {};
+});
+// 本次运行没有调用但历史有数据时也要展示（否则切不回累计）
+const hasStats = computed(
+  () =>
+    ((status.value.stats && status.value.stats.requests) || 0) > 0 ||
+    ((historyInfo.value.total && historyInfo.value.total.requests) || 0) > 0
+);
+const statsSince = computed(() => historyInfo.value.since || "");
+const statsSummary = computed(() => {
+  const s = statsSource.value;
   const requests = s.requests || 0;
   const prompt = s.promptTokens || 0;
   const output = s.outputTokens || 0;
@@ -491,22 +523,32 @@ onUnmounted(() => {
       </template>
     </div>
 
-    <div v-if="sessionStats.requests" class="autoroute-stats">
-      <div class="autoroute-stat">
-        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statRequests') }}</span>
-        <span class="autoroute-stat-value">{{ sessionStats.requests }}</span>
+    <div v-if="hasStats" class="autoroute-stats-block">
+      <div class="autoroute-stats-head">
+        <RadioGroup v-model="statsScope" variant="default-filled" size="small" @change="onStatsScopeChange">
+          <RadioButton v-for="opt in statsScopeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</RadioButton>
+        </RadioGroup>
+        <span v-if="statsScope === 'total' && statsSince" class="autoroute-stats-since">
+          {{ t('commonApp.autoRoute.statSince', { date: statsSince }) }}
+        </span>
       </div>
-      <div class="autoroute-stat">
-        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statSuccessRate') }}</span>
-        <span class="autoroute-stat-value">{{ sessionStats.successRate }}</span>
-      </div>
-      <div class="autoroute-stat">
-        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statTokens') }}</span>
-        <span class="autoroute-stat-value">{{ sessionStats.tokens }}</span>
-      </div>
-      <div class="autoroute-stat">
-        <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statCacheHit') }}</span>
-        <span class="autoroute-stat-value">{{ sessionStats.cacheHit }}</span>
+      <div class="autoroute-stats">
+        <div class="autoroute-stat">
+          <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statRequests') }}</span>
+          <span class="autoroute-stat-value">{{ statsSummary.requests }}</span>
+        </div>
+        <div class="autoroute-stat">
+          <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statSuccessRate') }}</span>
+          <span class="autoroute-stat-value">{{ statsSummary.successRate }}</span>
+        </div>
+        <div class="autoroute-stat">
+          <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statTokens') }}</span>
+          <span class="autoroute-stat-value">{{ statsSummary.tokens }}</span>
+        </div>
+        <div class="autoroute-stat">
+          <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statCacheHit') }}</span>
+          <span class="autoroute-stat-value">{{ statsSummary.cacheHit }}</span>
+        </div>
       </div>
     </div>
 

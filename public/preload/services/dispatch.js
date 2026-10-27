@@ -13,6 +13,7 @@
 //   hermes   → ~/.hermes/config.yaml  custom_providers[name]（api_mode 三协议映射）+ models 字典 + 顶层 model.provider/model.default（可选默认）
 //   dsh      → ~/.dsh/profiles/<profile>/cordis.patch.yml  llm-pi-ai.providers[route]（api 协议同名映射）+ models[] + agent-default-model（可选默认）
 //             密钥写入 ~/.dsh/.credentials.yaml 的 refs[<ROUTE>_API_KEY]（patch 只记录凭据引用名）
+//   grok     → ~/.grok/config.toml  [model_providers.<key>]（连接信息）+ [model.<id>]（model_provider 引用）+ [models].default（可选默认）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -27,6 +28,7 @@ const qoder = require('./qoder')
 const zcode = require('./zcode')
 const hermes = require('./hermes')
 const dsh = require('./dsh')
+const grok = require('./grok')
 const autoroute = require('./autoroute')
 const { t } = require('./i18n')
 
@@ -611,6 +613,56 @@ const dispatchToDsh = (provider, model, opts) => {
   )
 }
 
+// Grok Build：config.toml [model_providers.<key>]（共享连接信息）+ [model.<id>]（model_provider 引用）
+// + 可选 [models].default。协议映射：openai-completions → chat_completions、openai-responses → responses、
+// anthropic-messages → messages（Anthropic /v1/messages）；google-generative-ai 无对应后端需守卫；
+// 通用库供应商名可为中文 → providerKeyFor 确定性清洗为 TOML 裸键
+const GROK_API_BACKEND = {
+  'openai-completions': 'chat_completions',
+  'openai-responses': 'responses',
+  'anthropic-messages': 'messages',
+}
+
+const dispatchToGrok = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  const apiBackend = GROK_API_BACKEND[api]
+  if (!apiBackend) {
+    throw new Error(
+      t('service.dispatch.grokProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
+  }
+  const name = opts.providerName || provider.name
+  const key = grok.providerKeyFor(name)
+  // 供应商只放共享连接信息；上下文窗口等模型级字段写到模型条目上，
+  // 否则同一供应商下多个模型下发时会互相覆盖 context_window
+  grok.upsertGrokProvider(key, {
+    apiBackend,
+    baseUrl: provider.baseUrl || '',
+    apiKey: provider.apiKey || '',
+  })
+  const modelId = grok.upsertGrokModel(key, model.id, {
+    name: model.name || model.id,
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+  })
+  let suffix = ''
+  if (opts.setDefault) {
+    grok.setGrokDefaultModel(modelId)
+    suffix = t('service.dispatch.setAsDefault')
+  }
+  const keyNote =
+    key === name ? '' : t('service.dispatch.keyNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: modelId,
+    }) + suffix
+  )
+}
+
 // ==================== 自动网关下发 ====================
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
 //（对外就是 Anthropic 协议端点，可通过协议守卫），其余目标用 openai-completions；
@@ -713,13 +765,16 @@ const dispatchAutoRoute = (targets) => {
     // kimi / zcode 的 openai 类型按 SDK 约定向 baseUrl 追加端点路径，网关路径需带 /v1（同 Codex）
     const isKimi = (target && target.app) === "kimi";
     const isZcode = (target && target.app) === "zcode";
+    // grok 自己只把 api_backend 对应的路径（messages / chat/completions / responses）拼在 base_url 后面，
+    // 不补 /v1，所以网关路径必须带 /v1（与 Codex / Kimi / ZCode 同理）
+    const isGrok = (target && target.app) === "grok";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // hermes 同 claude 走网关的 Anthropic Messages 入站（api_mode: anthropic_messages），base_url 不带 /v1；
       // dsh 的 pi-ai anthropic-messages 路由同样填网关根地址（SDK 自行追加 /v1/messages）
-      api: (target && target.app) === "claude" || (target && target.app) === "hermes" || (target && target.app) === "dsh" ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
+      api: (target && target.app) === "claude" || (target && target.app) === "hermes" || (target && target.app) === "dsh" || isGrok ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
-      baseUrl: isCodex || isKimi || isZcode ? `${baseUrl}/v1` : baseUrl,
+      baseUrl: isCodex || isKimi || isZcode || isGrok ? `${baseUrl}/v1` : baseUrl,
       models,
     };
     const targetResults = [];
@@ -757,6 +812,7 @@ const APP_DISPATCHERS = {
   zcode: { run: dispatchToZcode },
   hermes: { run: dispatchToHermes },
   dsh: { run: dispatchToDsh },
+  grok: { run: dispatchToGrok },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -792,5 +848,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh, dispatchToGrok,
 }

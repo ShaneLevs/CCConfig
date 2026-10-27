@@ -70,7 +70,10 @@
 .autoroute-endpoint-method { flex-shrink: 0; font-variant-numeric: tabular-nums; min-width: 44px; justify-content: center; }
 .autoroute-endpoint-path { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); color: var(--td-text-color-primary); }
 .autoroute-endpoint-desc { color: var(--td-text-color-placeholder); }
-/* 本次运行统计条（有调用后才展示） */
+/* 网关统计（本次运行 / 今日 / 累计，有调用记录后展示） */
+.autoroute-stats-block { display: flex; flex-direction: column; gap: 8px; }
+.autoroute-stats-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.autoroute-stats-since { font-size: 12px; color: var(--td-text-color-placeholder); }
 .autoroute-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .autoroute-stat {
   display: flex;

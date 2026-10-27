@@ -2,8 +2,8 @@
   "usage": {
     "defaultTip": "统计仅供参考",
     "emptyDescription": "暂无使用数据",
-    "commonTip": "Claude Code / Pi Agent / OpenCode / DSH / ZCode 合并统计",
-    "commonEmptyHint": "未检测到 Claude Code / Pi Agent / OpenCode / DSH / ZCode 的使用记录，产生用量后重新进入本页或点刷新即可汇总",
+    "commonTip": "Claude Code / Pi Agent / OpenCode / DSH / ZCode / Grok Build 合并统计",
+    "commonEmptyHint": "未检测到 Claude Code / Pi Agent / OpenCode / DSH / ZCode / Grok Build 的使用记录，产生用量后重新进入本页或点刷新即可汇总",
     "statTotal": "总 Tokens",
     "statInput": "输入 Tokens（含缓存）",
     "statOutput": "输出 Tokens",

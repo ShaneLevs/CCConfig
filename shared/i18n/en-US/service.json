@@ -117,7 +117,8 @@
         "qoderConfig": "Manage Qoder model configuration",
         "zcodeConfig": "Manage ZCode model configuration",
         "hermesConfig": "Manage Hermes model configuration",
-        "dshConfig": "Manage DSH (DeepSeek Harness) model configuration"
+        "dshConfig": "Manage DSH (DeepSeek Harness) model configuration",
+        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager"
       },
       "label": {
         "installClaudeSkill": "Install Claude Code Skill",

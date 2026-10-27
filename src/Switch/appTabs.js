@@ -55,6 +55,12 @@ export const APP_TABS = {
     { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
     { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
   ],
+  grok: [
+    { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
+    { key: "mcp", labelKey: "nav.tab.mcp", titleKey: "nav.title.mcpConfig", icon: ServerIcon },
+    { key: "skill", labelKey: "nav.tab.skill", titleKey: "nav.title.skillManage", icon: BookIcon },
+    { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
+  ],
 };
 
 // uTools 入口深链路由 → 目标应用 / 页签 / 子视图 ref 方法

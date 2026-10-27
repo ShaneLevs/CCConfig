@@ -140,7 +140,7 @@
       "piNotInstalled": "pi command not found; Pi Agent may not be installed. You can browse the market but cannot install extensions.",
       "installTitle": "Install Pi extension",
       "extensionSource": "Extension package or source",
-      "extensionSourcePlaceholder": "e.g. @hypabolic/pi-hypa or npm:@hypabolic/pi-hypa",
+      "extensionSourcePlaceholder": "e.g. {'@'}hypabolic/pi-hypa or npm:{'@'}hypabolic/pi-hypa",
       "supportedFormats": "Supported formats: ",
       "installing": "Installing...",
       "extensionRequired": "Enter an extension package name",
