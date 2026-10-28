@@ -123,12 +123,22 @@ pub fn health_ok(port: u16) -> bool {
 
 impl Sidecar {
     pub fn start(node: &Path, script_dir: &Path, data_dir: Option<&Path>) -> Result<Sidecar, String> {
+        // 防御：调用方可能拿到 tauri 的 verbatim 路径（`\\?\C:\...`），Node 解析不了
+        let script_dir = crate::simplify_path(script_dir.to_path_buf());
         let server_js = script_dir.join("server.js");
         if !server_js.is_file() {
             return Err(format!("找不到 sidecar 入口: {}", server_js.display()));
         }
-        let (log_file, log_path) = open_log()?;
+        let (mut log_file, log_path) = open_log()?;
         let token = random_token();
+        // 记下实际命令（GUI 进程的 eprintln 在 Windows 上无处可去，日志只能靠这里）
+        let _ = writeln!(
+            log_file,
+            "[sidecar] 启动 node={} script={} cwd={}",
+            node.display(),
+            server_js.display(),
+            script_dir.display()
+        );
 
         let mut cmd = Command::new(node);
         cmd.arg(&server_js)

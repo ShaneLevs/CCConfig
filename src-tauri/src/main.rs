@@ -123,6 +123,36 @@ pub(crate) fn data_dir() -> PathBuf {
     home_dir().join(".ccconfig")
 }
 
+/// 去掉 Windows 的 verbatim 前缀（`\\?\C:\...` → `C:\...`）。
+///
+/// tauri 的 `resource_dir()` 内部对 exe 路径做了 `canonicalize()`，Windows 上拿到的是
+/// `\\?\C:\Users\...\sidecar`。Rust 自己用没事，但**交给 Node 会炸**：Node 24.x 的
+/// `fs.realpathSync` 把根 `\\?\C:\` 原样传给 libuv，libuv 去掉末尾分隔符后只剩 `C:`，
+/// 直接抛 `EISDIR: illegal operation on a directory, lstat 'C:'`，sidecar 起不来
+/// （v1.3.0 Windows 版「打不开」的根因，Node 24.18.1 上复现；新版本 Node 才修）。
+/// 凡是传给 Node 的路径都要先过这里。
+#[cfg(target_os = "windows")]
+pub(crate) fn simplify_path(path: PathBuf) -> PathBuf {
+    let simplified = {
+        let s = path.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            // UNC 的 verbatim 形式：\\?\UNC\server\share → \\server\share
+            Some(format!(r"\\{rest}"))
+        } else {
+            s.strip_prefix(r"\\?\").map(str::to_string)
+        }
+    };
+    match simplified {
+        Some(s) => PathBuf::from(s),
+        None => path,
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn simplify_path(path: PathBuf) -> PathBuf {
+    path
+}
+
 fn log_dir() -> PathBuf {
     data_dir().join("logs")
 }
@@ -161,14 +191,17 @@ fn migrate_legacy_data() {
 }
 
 /// 生产：<App>/Contents/Resources/sidecar；开发：src-tauri/resources/sidecar
+///
+/// Windows 的 `resource_dir()` 是 canonicalize 过的 verbatim 路径，这里必须转回普通路径，
+/// 否则 Node 起不来（见 `simplify_path` 注释）。
 fn resolve_sidecar_dir(app: &tauri::AppHandle) -> PathBuf {
     if let Ok(dir) = app.path().resource_dir() {
-        let candidate = dir.join("sidecar");
+        let candidate = simplify_path(dir.join("sidecar"));
         if candidate.join("server.js").is_file() {
             return candidate;
         }
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/sidecar")
+    simplify_path(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/sidecar"))
 }
 
 /// 读系统外观（AppHandle 无 theme() 取值接口，窗口创建前只能问系统）。

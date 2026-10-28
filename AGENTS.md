@@ -190,9 +190,10 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 
 - **窗口**：Windows 保留系统原生标题栏。`title_bar_style` / `hidden_title` 在 tauri 里是 `#[cfg(target_os = "macos")]`（无条件调用会编不过 Windows），`main.rs` 已做 cfg 门控；bridge 在 `<html>` 上加 `.is-windows`，`main.css` 据此把 `--cc-desktop-titlebar` 置 0。主窗口背景走 Mica → 亚克力 → 模糊，托盘弹窗只用亚克力。
 - **路径**：`home_dir()` 用 `USERPROFILE` / `HOMEDRIVE+HOMEPATH` 兜底（Windows 默认没有 `HOME`），数据目录 `%USERPROFILE%\.ccconfig`；`main.rs` / `node_runtime.rs` / `sidecar.rs` 统一走它。
+- **verbatim 路径（v1.3.0 Windows 版打不开的根因）**：tauri 的 `resource_dir()` 内部 `canonicalize()` 了 exe 路径，Windows 上返回 `\\?\C:\...`。Rust 自己用没事，但 Node 24.x 的 `fs.realpathSync` 把根 `\\?\C:\` 原样交给 libuv，libuv 去掉末尾分隔符后只剩 `C:`，直接抛 `EISDIR: illegal operation on a directory, lstat 'C:'`，sidecar 起不来（日志里全是这段栈 +「sidecar 未输出合法端口」；Node 24.21 之后才修了这个 bug，不能指望用户的 Node 版本）。**凡是交给 Node 的路径必须先过 `main.rs` 的 `simplify_path()`**（`resolve_sidecar_dir` 已处理，`Sidecar::start` 里再兜一次）。排查 Windows 启动问题时先看 `~/.ccconfig/logs/sidecar.log` 里 `[sidecar] 启动 node=... script=... cwd=...` 那行，能直接看出传给 Node 的路径。
 - **Node 探测**：Program Files / `%LOCALAPPDATA%\Programs`、volta、nvm-windows（`NVM_HOME`/`NVM_SYMLINK`/`%APPDATA%\nvm`）、fnm，最后 `where node`；**过滤 `WindowsApps` 的商店别名**（执行会拉起 Microsoft Store）。所有 spawn 的 Node / reg / where 子进程统一 `CREATE_NO_WINDOW`，否则会弹黑窗。
 - **shim**：`desktop/sidecar/utools-shim.js` 的 `isWindows/isMacOS/isLinux` 用 `process.platform`，bridge 用 UA；`shellOpenPath` / `shellOpenExternal` / `copyText` / `showOpenDialog` 在 Windows 走 `cmd /c start`、PowerShell `Set-Clipboard`、PowerShell WinForms 对话框（`clip.exe` 按控制台代码页解码，中文会乱码）。
 - **打包**：`src-tauri/tauri.windows.conf.json` 把 target 换成 `nsis` 并指定 `icons/icon.ico`（由 `npx tauri icon` 生成并入库）。Windows 版同样要求本机已装 Node ≥ 18；未签名安装包会触发 SmartScreen 提示。
-- **验证状态**：Rust 的 Windows 分支已做编译门控，首次 Windows 构建由 CI 验证；托盘、透明/Mica、Node 探测仍需在 Windows 实机验收。
+- **验证状态**：v1.3.0 实机首次运行只走到「sidecar 起不来」，已定位为上面的 verbatim 路径问题并在 v1.3.1 修复；托盘、透明/Mica、Node 探测仍需在 Windows 实机验收。
 
 - 首次 `cargo build` 若卡在 crates.io，可在 `src-tauri/.cargo/config.toml` 加稀疏镜像（该文件已 gitignore，各人自备）：`[source.crates-io] replace-with = "rsproxy"` + `[source.rsproxy] registry = "sparse+https://rsproxy.cn/index/"`。
