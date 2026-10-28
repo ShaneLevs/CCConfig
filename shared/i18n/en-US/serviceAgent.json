@@ -174,6 +174,26 @@
       "mcpCommandRequired": "A stdio server requires a command",
       "mcpUrlRequired": "An HTTP/SSE server requires a URL",
       "providerInUse": "Provider {name} is still referenced by models ({models}); delete or move those models first"
+    },
+    "commandcode": {
+      "parseFailed": "Failed to parse {file}; changes blocked (fix the JSON syntax first): {message}",
+      "notJsonObject": "{file} must contain a JSON object at the top level",
+      "unsupportedApi": "Unsupported API protocol {api} (available: {options})",
+      "providerIdRequired": "Provider ID is required",
+      "providerIdInvalid": "Provider ID may only contain lowercase letters, digits and hyphens, starting with a letter or digit (got: {id})",
+      "apiKeyRequired": "API key is required",
+      "modelNotFoundForDefault": "Model {model} does not exist, cannot set as default",
+      "providerHasNoModels": "Provider {name} has no models yet; add a model first",
+      "mcpNameRequired": "MCP server name is required",
+      "mcpNotFound": "MCP server {name} does not exist",
+      "tasteProjectRootRequired": "Project taste needs the current project directory",
+      "tasteCategoryRequired": "Taste category name is required",
+      "tasteCategoryInvalid": "Taste category name may not contain path separators (got: {name})",
+      "tasteCategoryDuplicate": "Taste category {name} already exists",
+      "tasteCategoryNotFound": "Taste category {name} does not exist",
+      "tasteEntryTextRequired": "Taste entry text is required",
+      "tasteEntryNotFound": "Taste entry does not exist",
+      "tasteConfidenceInvalid": "Taste confidence must be between 0 and 1"
     }
   }
 }

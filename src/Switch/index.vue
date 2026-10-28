@@ -33,6 +33,11 @@ import GrokConfigView from "./grok/ConfigView.vue";
 import GrokMcpView from "./grok/McpView.vue";
 import GrokSkillView from "./grok/SkillView.vue";
 import GrokUsageView from "./grok/UsageView.vue";
+import CommandCodeConfigView from "./commandcode/ConfigView.vue";
+import CommandCodeMcpView from "./commandcode/McpView.vue";
+import CommandCodeSkillView from "./commandcode/SkillView.vue";
+import CommandCodeTasteView from "./commandcode/TasteView.vue";
+import CommandCodeUsageView from "./commandcode/UsageView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -82,8 +87,9 @@ const skillViewRef = ref(null);
 const ocSkillViewRef = ref(null);
 const commonSkillViewRef = ref(null);
 const piPluginViewRef = ref(null);
+const commandCodeSkillViewRef = ref(null);
 // 深链路由 → 子视图 ref 查找表
-const deepLinkRefs = { skillViewRef, ocSkillViewRef, commonSkillViewRef, piPluginViewRef };
+const deepLinkRefs = { skillViewRef, ocSkillViewRef, commonSkillViewRef, piPluginViewRef, commandCodeSkillViewRef };
 
 // 记录哪些应用已被激活过，激活后保留组件不销毁，避免 v-show 导致热力图宽度计算为 0
 const activatedApps = ref(new Set(["claude"]));
@@ -172,6 +178,7 @@ onMounted(() => {
     hermesConfig: "hermes",
     dshConfig: "dsh",
     grokConfig: "grok",
+    commandcodeConfig: "commandcode",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -404,6 +411,28 @@ onUnmounted(() => {
         <GrokUsageView
           v-if="isTabVisited('grok', 'usage')"
           v-show="activeApp === 'grok' && activeTab === 'usage'"
+        />
+      </template>
+
+      <!-- Command Code views（模型配置 + MCP + Skill + Taste + 使用统计） -->
+      <template v-if="isAppReady('commandcode')">
+        <CommandCodeConfigView v-if="activeApp === 'commandcode' && activeTab === 'config'" />
+        <CommandCodeMcpView
+          v-if="isTabVisited('commandcode', 'mcp')"
+          v-show="activeApp === 'commandcode' && activeTab === 'mcp'"
+        />
+        <CommandCodeSkillView
+          v-if="isTabVisited('commandcode', 'skill')"
+          v-show="activeApp === 'commandcode' && activeTab === 'skill'"
+          ref="commandCodeSkillViewRef"
+        />
+        <CommandCodeTasteView
+          v-if="isTabVisited('commandcode', 'taste')"
+          v-show="activeApp === 'commandcode' && activeTab === 'taste'"
+        />
+        <CommandCodeUsageView
+          v-if="isTabVisited('commandcode', 'usage')"
+          v-show="activeApp === 'commandcode' && activeTab === 'usage'"
         />
       </template>
 

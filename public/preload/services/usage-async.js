@@ -188,6 +188,11 @@ const readDshUsageAsync = (force) =>
 const readGrokUsageAsync = (force) =>
   withFallback("grok", force, () => require("./grok").readGrokUsage(force));
 
+const readCommandCodeUsageAsync = (force) =>
+  withFallback("commandcode", force, () =>
+    require("./command-code").readCommandCodeUsage(force),
+  );
+
 module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
@@ -195,5 +200,6 @@ module.exports = {
   readZcodeUsageAsync,
   readDshUsageAsync,
   readGrokUsageAsync,
+  readCommandCodeUsageAsync,
   readAgentUsageFromHistory,
 };

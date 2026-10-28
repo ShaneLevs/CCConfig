@@ -118,12 +118,14 @@
         "zcodeConfig": "Manage ZCode model configuration",
         "hermesConfig": "Manage Hermes model configuration",
         "dshConfig": "Manage DSH (DeepSeek Harness) model configuration",
-        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager"
+        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager",
+        "commandcodeConfig": "Command Code model / MCP / skill / taste configuration manager"
       },
       "label": {
         "installClaudeSkill": "Install Claude Code Skill",
         "installOpencodeSkill": "Install OpenCode Skill",
-        "installPiExtension": "Install Pi Agent Extension"
+        "installPiExtension": "Install Pi Agent Extension",
+        "installCommandCodeSkill": "Install Command Code Skill"
       }
     },
     "subscription": {

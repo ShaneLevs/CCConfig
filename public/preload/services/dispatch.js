@@ -1,5 +1,5 @@
 // 通用配置主数据 → 各 Agent 模型配置下发
-// 把通用库（uTools DB）中的 provider + model 写入 11 个 agent 的模型配置：
+// 把通用库（uTools DB）中的 provider + model 写入各 agent 的模型配置：
 //   claude   → ~/.claude/settings.json  env（ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL）
 //   opencode → ~/.config/opencode.json(.jsonc)  provider[id]（options.baseURL/apiKey + models[id]）
 //   pi       → ~/.pi/agent/models.json  providers[name] + settings.json（可选默认）
@@ -14,6 +14,8 @@
 //   dsh      → ~/.dsh/profiles/<profile>/cordis.patch.yml  llm-pi-ai.providers[route]（api 协议同名映射）+ models[] + agent-default-model（可选默认）
 //             密钥写入 ~/.dsh/.credentials.yaml 的 refs[<ROUTE>_API_KEY]（patch 只记录凭据引用名）
 //   grok     → ~/.grok/config.toml  [model_providers.<key>]（连接信息）+ [model.<id>]（model_provider 引用）+ [models].default（可选默认）
+//   commandcode → ~/.commandcode/providers.json  provider.<key>（api 三协议同名）+ models 字典 + settings.json model（可选默认）
+//             密钥写入 ~/.commandcode/auth.json 的 <key>.apiKey（providers.json 的 apiKey 只接受引用语法）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -29,6 +31,7 @@ const zcode = require('./zcode')
 const hermes = require('./hermes')
 const dsh = require('./dsh')
 const grok = require('./grok')
+const commandCode = require('./command-code')
 const autoroute = require('./autoroute')
 const { t } = require('./i18n')
 
@@ -663,6 +666,50 @@ const dispatchToGrok = (provider, model, opts) => {
   )
 }
 
+// Command Code：三种 wire 官方原生支持，无需协议转换（openai-completions /
+// openai-responses / anthropic-messages 一一对应）
+const dispatchToCommandCode = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  if (!commandCode.CC_APIS.includes(api)) {
+    throw new Error(
+      t('service.dispatch.grokProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
+  }
+  const name = opts.providerName || provider.name
+  // provider id 同时是 settings.json model 的前缀 → 必须是合法 slug
+  const key = commandCode.providerKeyFor(name)
+  commandCode.upsertCommandCodeProvider(key, {
+    name,
+    api,
+    baseUrl: provider.baseUrl || '',
+  })
+  // key 必须写 auth.json：providers.json 的 apiKey 只接受引用语法（明文会被官方拒绝）
+  if (provider.apiKey) commandCode.setCommandCodeApiKey(key, provider.apiKey)
+  const modelId = commandCode.upsertCommandCodeModel(key, model.id, {
+    name: model.name || model.id,
+    contextWindow: model.contextWindow,
+    maxOutput: model.maxOutput || model.maxTokens,
+    reasoningEfforts: model.reasoningEfforts,
+    cost: model.cost,
+    api: model.api,
+  })
+  let suffix = ''
+  if (opts.setDefault) {
+    commandCode.setCommandCodeDefaultModel(key, modelId)
+    suffix = t('service.dispatch.setAsDefault')
+  }
+  const keyNote = key === name ? '' : t('service.dispatch.keyNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: modelId,
+    }) + suffix
+  )
+}
+
 // ==================== 自动网关下发 ====================
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
 //（对外就是 Anthropic 协议端点，可通过协议守卫），其余目标用 openai-completions；
@@ -730,6 +777,15 @@ const cleanupLegacyAutoRoute = (app) => {
       if (kAliases.includes(kimi.getKimiDefaultModel())) return;
       kAliases.forEach((a) => kimi.deleteKimiModel(a));
       kimi.deleteKimiProvider(LEGACY_AUTOROUTE_NAME);
+    } else if (app === "commandcode") {
+      // providers.json 的键是 slug：旧版中文名从未被本插件写入过（providerKeyFor 恒产出 slug），
+      // 这里只处理「历史上某次手工写入的中文 id」的清理，被默认模型引用时跳过
+      const providers = commandCode.getCommandCodeProviderList();
+      const legacy = providers.find((p) => p.id === LEGACY_AUTOROUTE_NAME || p.name === LEGACY_AUTOROUTE_NAME);
+      if (!legacy) return;
+      const def = commandCode.getCommandCodeDefaultModel();
+      if (def.provider === legacy.id) return;
+      commandCode.deleteCommandCodeProvider(legacy.id);
     }
   } catch (e) {
     /* 清理失败不影响本次下发 */
@@ -768,13 +824,16 @@ const dispatchAutoRoute = (targets) => {
     // grok 自己只把 api_backend 对应的路径（messages / chat/completions / responses）拼在 base_url 后面，
     // 不补 /v1，所以网关路径必须带 /v1（与 Codex / Kimi / ZCode 同理）
     const isGrok = (target && target.app) === "grok";
+    // commandcode 同 grok：按 api 把 chat/completions | responses | messages 拼在 baseURL 后，
+    // 不补 /v1，因此网关路径必须带 /v1
+    const isCommandCode = (target && target.app) === "commandcode";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // hermes 同 claude 走网关的 Anthropic Messages 入站（api_mode: anthropic_messages），base_url 不带 /v1；
       // dsh 的 pi-ai anthropic-messages 路由同样填网关根地址（SDK 自行追加 /v1/messages）
       api: (target && target.app) === "claude" || (target && target.app) === "hermes" || (target && target.app) === "dsh" || isGrok ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
-      baseUrl: isCodex || isKimi || isZcode || isGrok ? `${baseUrl}/v1` : baseUrl,
+      baseUrl: isCodex || isKimi || isZcode || isGrok || isCommandCode ? `${baseUrl}/v1` : baseUrl,
       models,
     };
     const targetResults = [];
@@ -813,6 +872,7 @@ const APP_DISPATCHERS = {
   hermes: { run: dispatchToHermes },
   dsh: { run: dispatchToDsh },
   grok: { run: dispatchToGrok },
+  commandcode: { run: dispatchToCommandCode },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -848,5 +908,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh, dispatchToGrok,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh, dispatchToGrok, dispatchToCommandCode,
 }

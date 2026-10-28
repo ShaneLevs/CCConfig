@@ -1,0 +1,134 @@
+.commandcode-taste-container { display: flex; flex-direction: column; gap: 12px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.commandcode-taste-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.commandcode-taste-toolbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.commandcode-taste-toolbar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.commandcode-taste-path { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commandcode-taste-tip { font-size: 11px; color: var(--td-text-color-placeholder); line-height: 1.5; }
+
+.commandcode-taste-projectpick,
+.commandcode-taste-empty { margin-top: 28px; }
+.commandcode-taste-empty-hint { text-align: center; font-size: 12px; color: var(--td-text-color-placeholder); margin-top: 8px; }
+
+/* ===== 主体：左侧分类 + 右侧条目 ===== */
+.commandcode-taste-body {
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  gap: 12px;
+  min-height: 320px;
+}
+
+/* 左侧分类列表 */
+.commandcode-taste-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  overflow-y: auto;
+  max-height: 60vh;
+}
+.commandcode-taste-sidebar-title {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; font-weight: 500; color: var(--td-text-color-placeholder);
+  padding: 2px 6px 8px;
+}
+.commandcode-taste-sidebar-count { font-size: 11px; }
+.commandcode-taste-sidebar-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 6px; }
+
+.commandcode-taste-cat {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--td-radius-default);
+  cursor: pointer;
+  transition: background 0.15s;
+  min-width: 0;
+}
+.commandcode-taste-cat:hover { background: var(--td-bg-color-container-hover); }
+.commandcode-taste-cat.is-active { background: var(--td-bg-color-container); box-shadow: inset 2px 0 0 var(--td-brand-color); }
+.commandcode-taste-cat-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
+.commandcode-taste-cat-name {
+  font-size: 13px; color: var(--td-text-color-primary);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.commandcode-taste-cat-count { font-size: 11px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
+.commandcode-taste-cat-del {
+  display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small);
+  color: var(--td-text-color-placeholder); flex-shrink: 0; cursor: pointer;
+}
+.commandcode-taste-cat-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
+
+/* 右侧条目表 */
+.commandcode-taste-main {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: var(--td-radius-default);
+  min-width: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.commandcode-taste-main-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.commandcode-taste-main-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.commandcode-taste-main-title > span:first-child {
+  font-size: 14px; font-weight: 600; color: var(--td-text-color-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.commandcode-taste-main-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+.commandcode-taste-main-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 20px 0; text-align: center; }
+
+.commandcode-taste-notice {
+  font-size: 12px;
+  color: var(--td-warning-color);
+  background: var(--td-warning-color-1);
+  padding: 6px 10px;
+  border-radius: var(--td-radius-default);
+}
+
+.commandcode-taste-entries { display: flex; flex-direction: column; gap: 6px; }
+.commandcode-taste-entry {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  padding: 8px 10px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+}
+.commandcode-taste-entry-main { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+.commandcode-taste-entry-text { font-size: 13px; color: var(--td-text-color-primary); line-height: 1.5; word-break: break-word; }
+.commandcode-taste-entry-meta { display: flex; align-items: center; gap: 6px; }
+.commandcode-taste-entry-actions { flex-shrink: 0; }
+
+/* ===== 汇总 ===== */
+.commandcode-taste-summary { margin-top: 4px; }
+.commandcode-taste-summary-empty { font-size: 12px; color: var(--td-text-color-placeholder); }
+.commandcode-taste-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.commandcode-taste-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.commandcode-taste-summary-label {
+  font-size: 11px; color: var(--td-text-color-placeholder);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.commandcode-taste-summary-value { font-size: 13px; color: var(--td-text-color-primary); }
+
+.commandcode-taste-dup-title { font-size: 12px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 6px; }
+.commandcode-taste-dup-empty { font-size: 12px; color: var(--td-text-color-placeholder); }
+.commandcode-taste-dup-list { display: flex; flex-direction: column; gap: 4px; }
+.commandcode-taste-dup { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
+.commandcode-taste-dup-text { color: var(--td-text-color-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commandcode-taste-dup-scopes { color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* ===== 表单弹窗 ===== */
+.commandcode-taste-form { display: flex; flex-direction: column; gap: 12px; }
+.commandcode-taste-form-item { display: flex; flex-direction: column; gap: 4px; }
+.commandcode-taste-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.commandcode-taste-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+
+/* 深色主题 */
+:root[theme-mode="dark"] .commandcode-taste-sidebar { background: var(--td-bg-color-container-hover); }
+:root[theme-mode="dark"] .commandcode-taste-cat.is-active { background: var(--td-bg-color-secondarycontainer); }
+:root[theme-mode="dark"] .commandcode-taste-entry { background: var(--td-bg-color-container-hover); }

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="256" height="256">
+  <!-- Command Code 品牌标是深色终端提示符（>_）。透明底在暗色主题下会「图标消失」
+       （下拉项底色 #2f3133 与深色路径几乎同色），所以固定铺一层白色圆角底板，
+       与 icon-grok / icon-dsh / icon-codex / icon-kimi / icon-omp 的做法一致。 -->
+  <rect width="1024" height="1024" rx="220" fill="#ffffff" />
+  <g fill="none" stroke="#0A0A0A" stroke-width="84" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M330 340 L540 512 L330 684" />
+    <path d="M600 700 L740 700" />
+  </g>
+</svg>

@@ -118,12 +118,14 @@
         "zcodeConfig": "ZCode 模型配置管理工具",
         "hermesConfig": "Hermes 模型配置管理工具",
         "dshConfig": "DSH（DeepSeek Harness）模型配置管理工具",
-        "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具"
+        "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具",
+        "commandcodeConfig": "Command Code 模型 / MCP / Skill / Taste 配置管理工具"
       },
       "label": {
         "installClaudeSkill": "安装 Claude Code Skill",
         "installOpencodeSkill": "安装 OpenCode Skill",
-        "installPiExtension": "安装 Pi Agent 扩展"
+        "installPiExtension": "安装 Pi Agent 扩展",
+        "installCommandCodeSkill": "安装 Command Code Skill"
       }
     },
     "subscription": {
