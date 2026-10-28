@@ -118,6 +118,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 
 - `build` / `build:app` 会先跑 `version:check`、`i18n:check` 与 `routes:check`。
 - **`routes:check`（`tests/smoke-app-routes-test.cjs`）是新增 agent 的防白屏闸**：`src/App.vue` 里 `<Switch v-if="[...].includes(route)" />` 的数组是**整个页面渲染的总闸**，uTools 指令的 `action.code` 不在里面时页面完全不挂载、白屏且不报错。本检查静态解析源码，校验 `APP_TABS` 每个 key（agent id）→ `<agent>Config`（common → `commonConfig`）都在白名单里、`DEEP_LINK_ROUTES` 的 route 也在白名单里、`index.vue` 的 `appMap` 覆盖一致、白名单无孤儿项与重复项。**新增 agent 时不要只补 `agentMeta` / `appTabs` / `commands.js`，`App.vue` 白名单同样必须补**，漏了构建会直接失败。
+- **`public/preload` 有独立依赖清单**（json5 / smol-toml / fzstd / js-yaml）：根 `npm install` / `npm ci` 的 `postinstall` 会调 `scripts/install-preload-deps.mjs` 安装到 `public/preload/node_modules`，CI 也显式跑一次。新增 preload 依赖只改 `public/preload/package.json` 并在该目录更新 lock，**不要并进根 `package.json`**（esbuild 打包 preload 时按该目录解析）。
 - 构建后清理 Vite 复制到 `dist/preload` 的 node_modules（js-yaml 的 .map 会导致 uTools 打包拒绝）及 .DS_Store。
 - `@modelcontextprotocol/sdk` 在 `mcp.js` try/catch 懒加载，缺失时工具发现自动降级。
 - Base path `./`（uTools file:// 加载）。

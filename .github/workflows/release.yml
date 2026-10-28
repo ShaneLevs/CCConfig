@@ -47,6 +47,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # public/preload 有独立依赖（json5 / smol-toml / fzstd），根 npm ci 的
+      # postinstall 会装；这里显式再跑一次，避免 CI 环境跳过 lifecycle scripts
+      - name: Install preload dependencies
+        run: node scripts/install-preload-deps.mjs
+
       - name: Build frontend + sidecar
         run: npm run build:app
 
@@ -99,6 +104,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # public/preload 有独立依赖（json5 / smol-toml / fzstd），根 npm ci 的
+      # postinstall 会装；这里显式再跑一次，避免 CI 环境跳过 lifecycle scripts
+      - name: Install preload dependencies
+        run: node scripts/install-preload-deps.mjs
 
       - name: Build frontend + sidecar
         run: npm run build:app
