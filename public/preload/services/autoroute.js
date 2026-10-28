@@ -37,6 +37,8 @@ const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，�
 const PRESET_ALIASES = ["flash", "plus", "pro"];
 const SOURCE_OF_API = { "anthropic-messages": "anthropic", "openai-completions": "chat", "openai-responses": "responses" };
 
+// 下发给 agent 的占位 key：网关不校验 key，但部分 agent（Codex / Claude）要求 apiKey / auth token 非空，
+// 所以仍保留生成逻辑，仅用于 dispatch.js 写配置。
 const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
 
 // ==================== 配置（uTools DB，按电脑隔离） ====================
@@ -88,7 +90,7 @@ const readAutoRouteConfig = () => {
   const config = sanitizeConfig({ ...DEFAULT_CONFIG, ...data });
   if (!Array.isArray(config.selection)) config.selection = [];
   if (typeof config.port !== "number" || config.port < 1 || config.port > 65535) config.port = DEFAULT_CONFIG.port;
-  if (!config.key) config.key = generateKey();
+  if (!config.key) config.key = generateKey(); // 旧配置补占位符，仅用于下发
   // 模型映射首次初始化：用户从未碰过映射（mappingSeeded 未置位）且当前没有任何映射时，
   // 预置 flash / plus / pro 三行（目标留空，由用户在页面选或删），并立刻落库，
   // 保证用户把三行删空后不会被反复回填。
@@ -109,14 +111,12 @@ const readAutoRouteConfig = () => {
 const writeAutoRouteConfig = (patch) =>
   persistConfig(sanitizeConfig({ ...readAutoRouteConfig(), ...patch, updatedAt: Date.now() }));
 
-const regenerateAutoRouteKey = () => writeAutoRouteConfig({ key: generateKey() }).key;
-
 // ==================== 运行状态 ====================
 
 const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, stats: emptyStats() };
 
 // 本次运行统计（随网关重启清零）：仅统计已路由转发的模型调用（entry.target 非空），
-// 401 鉴权失败 / 模型未启用 / /v1/models 等控制面请求不计入。
+// 模型未启用 / /v1/models 等控制面请求不计入。
 function emptyStats() {
   return { requests: 0, successes: 0, promptTokens: 0, cachedTokens: 0, outputTokens: 0 };
 }
@@ -217,18 +217,26 @@ const recordHistoryStats = (time, success, promptTokens, cachedTokens, outputTok
 const getHistorySummary = () => {
   const { days } = loadHistory();
   const todayKey = localDateKey(Date.now());
+  const monthKey = todayKey.slice(0, 7);
   const total = emptyStats();
+  const month = emptyStats();
   let since = "";
+  const addDay = (target, day) => {
+    target.requests += day.requests;
+    target.successes += day.successes;
+    target.promptTokens += day.promptTokens;
+    target.cachedTokens += day.cachedTokens;
+    target.outputTokens += day.outputTokens;
+  };
   for (const [date, day] of Object.entries(days)) {
-    total.requests += day.requests;
-    total.successes += day.successes;
-    total.promptTokens += day.promptTokens;
-    total.cachedTokens += day.cachedTokens;
-    total.outputTokens += day.outputTokens;
+    addDay(total, day);
+    if (date.startsWith(monthKey)) addDay(month, day);
     if (!since || date < since) since = date;
   }
   return {
     today: { ...emptyStats(), ...(days[todayKey] || {}) },
+    // 本月同样按本地日期聚合，跨月第一天自然从 0 起
+    month,
     total,
     since,
   };
@@ -289,8 +297,8 @@ const getAutoRouteStatus = () => ({
   baseUrl: serverState.server ? `http://127.0.0.1:${serverState.port}` : "",
   logs: [...serverState.logs],
   stats: { ...serverState.stats },
-  // 历史统计（按本地日期聚合）：today 今日、total 累计、since 最早一天。
-  // 页面用于「本次运行 / 今日 / 累计」切换，托盘只取 total。
+  // 历史统计（按本地日期聚合）：today 今日、month 本月、total 累积、since 最早一天。
+  // 网关页与托盘共用「本次 / 今日 / 本月 / 累积」四个口径。
   history: getHistorySummary(),
 });
 
@@ -382,13 +390,6 @@ const sendError = (res, sourceProtocol, status, message, headers) => {
   if (!canWrite(res)) return;
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...(headers || {}) });
   res.end(JSON.stringify(errorBody(sourceProtocol, status, message)));
-};
-
-const extractKey = (req) => {
-  const auth = req.headers["authorization"] || "";
-  if (auth.startsWith("Bearer ")) return auth.slice(7).trim();
-  if (req.headers["x-api-key"]) return String(req.headers["x-api-key"]).trim();
-  return "";
 };
 
 const detectProtocol = (path) => {
@@ -642,17 +643,14 @@ const handleRequest = async (req, res) => {
     const config = readAutoRouteConfig();
     const sourceProtocol = detectProtocol(path);
 
-    // 健康检查无需鉴权
+    // 健康检查
     if (method === "GET" && (path === "/" || path === "/health")) {
       sendJson(res, 200, { status: "ok", service: "ccconfig-autoroute" });
       return;
     }
 
-    const key = extractKey(req);
-    if (!config.key || key !== config.key) {
-      fail(sourceProtocol, 401, t("serviceAgent.autoroute.invalidApiKey"));
-      return;
-    }
+    // 不校验 key：网关只监听本机回环地址，供本机 agent 直接调用，任意 Authorization / x-api-key
+    // 或完全不传都放行（config.key 仅作为下发给 agent 的占位符，见 dispatch.js）。
 
     if (method === "GET" && (path === "/v1/models" || path === "/models")) {
       const data = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider }) => ({
@@ -979,7 +977,6 @@ const setAutoRouteEnabled = async (enabled) => {
 module.exports = {
   readAutoRouteConfig,
   writeAutoRouteConfig,
-  regenerateAutoRouteKey,
   resolveAutoRouteModels,
   startAutoRoute,
   stopAutoRoute,

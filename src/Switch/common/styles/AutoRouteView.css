@@ -13,17 +13,6 @@
 }
 .autoroute-status-row { display: flex; align-items: center; gap: 10px; }
 .autoroute-url { font-size: 13px; color: var(--td-brand-color); font-weight: 500; }
-.autoroute-key {
-  font-size: 12px;
-  color: var(--td-text-color-primary);
-  background: var(--td-bg-color-secondarycontainer);
-  padding: 2px 8px;
-  border-radius: var(--td-radius-default);
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .autoroute-form-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
@@ -70,7 +59,7 @@
 .autoroute-endpoint-method { flex-shrink: 0; font-variant-numeric: tabular-nums; min-width: 44px; justify-content: center; }
 .autoroute-endpoint-path { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); color: var(--td-text-color-primary); }
 .autoroute-endpoint-desc { color: var(--td-text-color-placeholder); }
-/* 网关统计（本次运行 / 今日 / 累计，有调用记录后展示） */
+/* 网关统计（本次 / 今日 / 本月 / 累积，有调用记录后展示） */
 .autoroute-stats-block { display: flex; flex-direction: column; gap: 8px; }
 .autoroute-stats-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .autoroute-stats-since { font-size: 12px; color: var(--td-text-color-placeholder); }

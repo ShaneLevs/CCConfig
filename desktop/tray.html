@@ -29,6 +29,7 @@
     --card: rgba(255, 255, 255, 0.55);
     --card-edge: rgba(0, 0, 0, 0.05);
     --track: rgba(0, 0, 0, 0.1);
+    --pill: #ffffff;
     --hover: rgba(0, 0, 0, 0.06);
     --press: rgba(0, 0, 0, 0.1);
     --divider: rgba(0, 0, 0, 0.08);
@@ -52,6 +53,7 @@
       --card: rgba(255, 255, 255, 0.07);
       --card-edge: rgba(255, 255, 255, 0.06);
       --track: rgba(255, 255, 255, 0.12);
+      --pill: rgba(255, 255, 255, 0.2);
       --hover: rgba(255, 255, 255, 0.09);
       --press: rgba(255, 255, 255, 0.14);
       --divider: rgba(255, 255, 255, 0.1);
@@ -94,20 +96,27 @@
 
   /* 动作条固定在底部，订阅很多时只让内容区滚动（原生菜单也不会把「退出」藏起来） */
   #scroll {
-    max-height: 430px;
+    max-height: 452px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 14px 14px 8px;
+    padding: 14px 14px 10px;
   }
   #scroll::-webkit-scrollbar { width: 0; height: 0; }
 
-  /* ---------- 网关状态 ---------- */
+  /* ---------- 网关状态（右侧是重启网关） ---------- */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+    padding: 0 2px;
+  }
   .status {
     display: flex;
     align-items: center;
     gap: 7px;
-    min-height: 20px;
-    padding: 0 2px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .dot {
     width: 8px;
@@ -130,7 +139,7 @@
     box-shadow: 0 0 0 3px var(--bad-ring);
   }
   .status-text {
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.005em;
     white-space: nowrap;
@@ -138,12 +147,73 @@
     text-overflow: ellipsis;
   }
 
+  /* 纯文字按钮（重启网关 / 底部动作），与截图里的轻量链接一致 */
+  .text-button {
+    flex: none;
+    margin: 0;
+    padding: 2px 2px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .text-button:hover { color: var(--text); }
+  .text-button:active { color: var(--text); opacity: 0.7; }
+  .text-button[disabled] { color: var(--faint); pointer-events: none; }
+
+  /* ---------- 统计口径切换 ---------- */
+  .scope-row {
+    display: flex;
+    align-items: center;
+    margin-top: 13px;
+    padding: 0 2px;
+  }
+  .scope-row[hidden] { display: none; }
+  .scope {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--track);
+  }
+  .scope button {
+    margin: 0;
+    padding: 3px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .scope button:hover { color: var(--text); }
+  .scope button.on {
+    background: var(--pill);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+
   /* ---------- 统计卡片 ---------- */
   .stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 7px;
-    margin-top: 12px;
+    margin-top: 8px;
   }
   .stats[hidden] { display: none; }
   .stat {
@@ -189,16 +259,48 @@
     background: var(--card);
     border: 0.5px solid var(--card-edge);
     border-radius: 10px;
-    padding: 10px 11px;
+    padding: 9px 10px 10px 11px;
     margin-top: 7px;
   }
   .sub:first-child { margin-top: 0; }
+  .sub-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
   .sub-title {
+    flex: 1 1 auto;
+    min-width: 0;
     font-size: 12.5px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .sub-refresh {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin: 0 -3px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .sub-refresh:hover { background: var(--hover); color: var(--text); }
+  .sub-refresh:active { background: var(--press); }
+  .sub-refresh[disabled] { color: var(--faint); pointer-events: none; }
+  .sub-refresh.busy svg { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .sub-refresh.busy svg { animation: none; opacity: 0.5; }
   }
   .sub-email {
     margin-top: 1px;
@@ -213,6 +315,7 @@
     font-size: 11.5px;
     color: var(--muted);
   }
+  .sub-note.sub-error { color: var(--bad); }
   .meter { margin-top: 9px; }
   .meter-head {
     display: flex;
@@ -244,40 +347,51 @@
     color: var(--faint);
   }
 
-  /* ---------- 动作 ---------- */
+  /* ---------- 底部动作（右下角小字） ---------- */
   .footer {
-    padding: 7px 14px 10px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 18px;
+    padding: 8px 16px 9px;
     border-top: 0.5px solid var(--divider);
   }
-  .action {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    height: 30px;
-    padding: 0 8px;
+  .footer button {
+    margin: 0;
+    padding: 0;
     border: 0;
-    border-radius: 7px;
     background: transparent;
-    color: var(--text);
+    color: var(--muted);
     font: inherit;
-    font-size: 12.5px;
-    text-align: left;
+    font-size: 12px;
+    white-space: nowrap;
     cursor: default;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
   }
-  .action:hover { background: var(--hover); }
-  .action:active { background: var(--press); }
-  .action[disabled] { color: var(--faint); pointer-events: none; }
+  .footer button:hover { color: var(--text); }
+  .footer button:active { opacity: 0.7; }
 </style>
 </head>
 <body>
 <div id="panel">
   <div id="scroll">
-    <div class="status">
-      <span class="dot" id="dot"></span>
-      <span class="status-text" id="status-text"></span>
+    <div class="status-row">
+      <div class="status">
+        <span class="dot" id="dot"></span>
+        <span class="status-text" id="status-text"></span>
+      </div>
+      <button class="text-button" type="button" data-action="restart-gateway"></button>
+    </div>
+
+    <div class="scope-row" id="scope-row" hidden>
+      <div class="scope" id="scope">
+        <button type="button" data-scope="session"></button>
+        <button type="button" data-scope="today"></button>
+        <button type="button" data-scope="month"></button>
+        <button type="button" data-scope="total"></button>
+      </div>
     </div>
 
     <div class="stats" id="stats" hidden></div>
@@ -289,9 +403,8 @@
   </div>
 
   <div class="footer">
-    <button class="action" type="button" data-action="show-main"></button>
-    <button class="action" type="button" data-action="restart-gateway"></button>
-    <button class="action" type="button" data-action="quit"></button>
+    <button type="button" data-action="show-main"></button>
+    <button type="button" data-action="quit"></button>
   </div>
 </div>
 
@@ -303,12 +416,15 @@
   const panel = $('panel')
   const dotEl = $('dot')
   const statusEl = $('status-text')
+  const scopeRow = $('scope-row')
+  const scopeEl = $('scope')
   const statsEl = $('stats')
   const subsSection = $('subs-section')
   const subsTitle = $('subs-title')
   const subsEl = $('subs')
-  const buttons = Array.from(document.querySelectorAll('[data-action]'))
-  const restartButton = buttons.find((button) => button.dataset.action === 'restart-gateway')
+  const restartButton = document.querySelector('[data-action="restart-gateway"]')
+  const footerButtons = Array.from(document.querySelectorAll('.footer [data-action]'))
+  const scopeButtons = Array.from(scopeEl.querySelectorAll('[data-scope]'))
 
   // 每次展开 Rust 都会重新注入，所以不能缓存成常量
   const port = () => window.__CCCONFIG_PORT__
@@ -397,6 +513,20 @@
   }
   const toneOf = (percent) => (percent <= 10 ? 'bad' : percent <= 30 ? 'warn' : 'good')
   const clampPct = (n) => Math.max(0, Math.min(100, Number(n) || 0))
+  const requestsOf = (stats) => Number((stats && stats.requests) || 0)
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  // ---------- 状态 ----------
+  let lastStatus = {}
+  let lastEnabled = false
+  let lastSubs = []
+  let restarting = false
+  // sidecar 掉线后，迟到的刷新结果不能再把订阅区画回来
+  let offline = false
+  // 统计口径：本次来自 preload 内存（getAutoRouteStatus.stats），
+  // 今日 / 本月 / 累积来自按本地日期落库的 history
+  let scope = 'today'
+  let scopeTouched = false
 
   // ---------- 渲染 ----------
   function setStatus(text, tone) {
@@ -404,13 +534,48 @@
     dotEl.className = 'dot' + (tone ? ' ' + tone : '')
   }
 
-  function renderStats(visible, stats) {
+  function renderActionLabels() {
+    const labels = {
+      'show-main': t('showWindow'),
+      'restart-gateway': t('restartGateway'),
+      quit: t('quit'),
+    }
+    for (const button of [...footerButtons, restartButton]) {
+      button.textContent = labels[button.dataset.action] || ''
+    }
+  }
+
+  function renderScopeLabels() {
+    const labels = {
+      session: t('statScopeSession'),
+      today: t('statScopeToday'),
+      month: t('statScopeMonth'),
+      total: t('statScopeTotal'),
+    }
+    for (const button of scopeButtons) {
+      button.textContent = labels[button.dataset.scope] || ''
+      button.classList.toggle('on', button.dataset.scope === scope)
+    }
+  }
+
+  const scopeStats = () => {
+    const history = lastStatus.history || {}
+    if (scope === 'session') return lastStatus.stats || {}
+    if (scope === 'month') return history.month || {}
+    if (scope === 'total') return history.total || {}
+    return history.today || {}
+  }
+
+  function renderStats(visible) {
     statsEl.hidden = !visible
+    scopeRow.hidden = !visible
     if (!visible) {
       statsEl.innerHTML = ''
       return
     }
-    const requests = Number(stats.requests || 0)
+    renderScopeLabels()
+    const stats = scopeStats()
+    const requests = requestsOf(stats)
     const successes = Number(stats.successes || 0)
     const prompt = Number(stats.promptTokens || 0)
     const cached = Number(stats.cachedTokens || 0)
@@ -427,7 +592,17 @@
     )).join('')
   }
 
+  const REFRESH_ICON =
+    '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96"/><path d="M13.6 2.6V5.2h-2.6"/></svg>'
+
+  // 手动刷新的卡片：请求进行中显示转圈，失败短暂提示后恢复缓存数据
+  const subBusy = new Set()
+  const subFailed = new Set()
+
   function renderSubs(list) {
+    if (offline) return
     subsSection.hidden = false
     subsTitle.textContent = t('subscription')
     if (!list || !list.length) {
@@ -435,6 +610,14 @@
       return
     }
     subsEl.innerHTML = list.map((sub) => {
+      const id = sub && sub.id ? String(sub.id) : ''
+      const busy = id && subBusy.has(id)
+      const refresh = id
+        ? '<button class="sub-refresh' + (busy ? ' busy' : '') + '" type="button"' +
+          ' data-refresh="' + esc(id) + '"' + (busy ? ' disabled' : '') +
+          ' title="' + esc(t('refreshSub')) + '" aria-label="' + esc(t('refreshSub')) + '">' +
+          REFRESH_ICON + '</button>'
+        : ''
       const title = esc(sub && sub.title)
       const email = sub && sub.email
         ? '<div class="sub-email">' + esc(sub.email) + '</div>'
@@ -456,28 +639,26 @@
       } else if (sub && sub.message) {
         body = '<div class="sub-note">' + esc(sub.message) + '</div>'
       }
-      return '<div class="sub"><div class="sub-title">' + title + '</div>' + email + body + '</div>'
+      if (id && subFailed.has(id)) {
+        body += '<div class="sub-note sub-error">' + esc(t('refreshFailed')) + '</div>'
+      }
+      return (
+        '<div class="sub">' +
+          '<div class="sub-head"><div class="sub-title">' + title + '</div>' + refresh + '</div>' +
+          email + body +
+        '</div>'
+      )
     }).join('')
   }
 
   function renderOffline() {
+    offline = true
     setStatus(t('localServiceOffline'), 'bad')
-    renderStats(false, {})
+    renderStats(false)
     subsSection.hidden = true
     subsEl.innerHTML = ''
     restartButton.disabled = true
     reportHeight()
-  }
-
-  function renderActionLabels() {
-    const labels = {
-      'show-main': t('showWindow'),
-      'restart-gateway': t('restartGateway'),
-      quit: t('quit'),
-    }
-    for (const button of buttons) {
-      button.textContent = labels[button.dataset.action] || ''
-    }
   }
 
   let heightRaf = 0
@@ -511,30 +692,48 @@
       subs = Array.isArray(results[2]) ? results[2] : []
     } catch (error) {
       if (seq === renderSeq) renderOffline()
-      return
+      return null
     }
-    if (seq !== renderSeq) return
+    if (seq !== renderSeq) return null
 
+    offline = false
     const enabled = !!config.enabled
     const running = !!status.running
     const gatewayPort = Number(status.port || config.port || 0)
-    restartButton.disabled = !enabled
-    if (!enabled) {
+    lastStatus = status
+    lastEnabled = enabled
+    restartButton.disabled = !enabled || restarting
+    if (restarting) {
+      setStatus(t('restarting'), 'warn')
+    } else if (!enabled) {
       setStatus(t('gatewayDisabled'), '')
     } else if (!running) {
       setStatus(t('gatewayPortBusy', { port: gatewayPort }), 'warn')
     } else {
       setStatus(t('gatewayRunning', { port: gatewayPort }), 'ok')
     }
-    // 托盘展示网关累计统计（按天落库 + 内存中的本次运行计数）：
-    // 网关关闭后历史仍然保留，所以只要有过调用就继续展示
+
+    if (!scopeTouched) {
+      // 默认看今日；今日还没有调用就看本次，再没有就看本月 / 累积
+      const history = status.history || {}
+      scope = requestsOf(history.today)
+        ? 'today'
+        : requestsOf(status.stats)
+          ? 'session'
+          : requestsOf(history.month)
+            ? 'month'
+            : 'total'
+    }
+
+    lastSubs = subs
     const historyTotal = (status.history && status.history.total) || {}
-    const totalRequests = Number(historyTotal.requests || 0)
-    renderStats(totalRequests > 0 || (enabled && running), totalRequests > 0 ? historyTotal : (status.stats || {}))
+    const hasAny = requestsOf(historyTotal) > 0 || requestsOf(status.stats) > 0
+    renderStats(hasAny || (enabled && running))
     renderSubs(subs)
     reportHeight()
 
     if (shouldRefresh) refreshSubscriptions(seq)
+    return status
   }
 
   // 先展示缓存快照，再后台请求一次（service 层有 5 分钟节流）。
@@ -546,6 +745,7 @@
       await rpc('refreshSubscriptions', [{ force: false }])
       const subs = await rpc('getSubscriptionsTray')
       if (seq === renderSeq && Array.isArray(subs)) {
+        lastSubs = subs
         renderSubs(subs)
         reportHeight()
       }
@@ -556,13 +756,85 @@
     }
   }
 
+  // 单张订阅卡片手动刷新：绕过 5 分钟节流，立即请求该站点用量
+  async function refreshSub(id) {
+    if (!id || subBusy.has(id)) return
+    subBusy.add(id)
+    subFailed.delete(id)
+    renderSubs(lastSubs)
+    try {
+      await rpc('refreshSubscription', [id])
+      const subs = await rpc('getSubscriptionsTray')
+      if (Array.isArray(subs)) lastSubs = subs
+    } catch (error) {
+      diag('tray-refresh-sub', error)
+      subFailed.add(id)
+      setTimeout(() => {
+        if (subFailed.delete(id)) renderSubs(lastSubs)
+      }, 4000)
+    } finally {
+      subBusy.delete(id)
+      renderSubs(lastSubs)
+      reportHeight()
+    }
+  }
+
+  // 「重启网关」在 Rust 后台线程里执行：先停后起，这里连续两次看到 running
+  // 才认为重启完成，避免停掉旧服务的瞬间读到「仍在运行」就提前收工。
+  async function waitForRestart(prevRunning = false, attempt = 0) {
+    await delay(900)
+    const status = await reload({ refresh: false })
+    const running = !!(status && status.running)
+    if ((running && prevRunning) || attempt >= 5) {
+      restarting = false
+      await reload({ refresh: false })
+      restartButton.disabled = !lastEnabled
+      return
+    }
+    waitForRestart(running, attempt + 1)
+  }
+
+  async function restartGateway() {
+    if (restarting || restartButton.disabled) return
+    restarting = true
+    restartButton.disabled = true
+    setStatus(t('restarting'), 'warn')
+    try {
+      await invoke('tray_popup_action', { action: 'restart-gateway' })
+    } catch (error) {
+      diag('tray-restart', error)
+      restarting = false
+      await reload({ refresh: false })
+      return
+    }
+    waitForRestart()
+  }
+
   // Rust 在每次展开时调用；首次加载（窗口隐藏）只渲染缓存，不联网
   window.__ccTrayReload = () => reload({ refresh: true })
 
-  buttons.forEach((button) => {
+  footerButtons.forEach((button) => {
     button.addEventListener('click', () => {
       invoke('tray_popup_action', { action: button.dataset.action }).catch((error) => diag('tray-action', error))
     })
+  })
+
+  restartButton.addEventListener('click', restartGateway)
+
+  scopeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const next = button.dataset.scope
+      if (!next || next === scope) return
+      scope = next
+      scopeTouched = true
+      renderStats(!statsEl.hidden)
+    })
+  })
+
+  subsEl.addEventListener('click', (event) => {
+    const target = event.target
+    const button = target && target.closest ? target.closest('[data-refresh]') : null
+    if (button) refreshSub(button.dataset.refresh)
   })
 
   window.addEventListener('keydown', (event) => {

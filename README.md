@@ -21,7 +21,7 @@
 - **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）
 - **MCP 管理** — 逐应用 MCP Server 配置 + 实时工具发现画布；通用配置里的共享 MCP 按机器开关镜像写入本地 JSON 文件
 - **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill 并用 `.disabled` 机制启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
-- **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图，跨 agent 汇总一页查看
+- **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图；通用统计页另有按天/按周堆叠的 Token 柱状图，可按模型或 Agent 拆分看用量构成
 - **订阅用量** — 手动添加已订阅的服务（目前 open-design），用本机浏览器的登录态代查 5 小时／周额度，同时显示在桌面版托盘面板
 - **批量编辑 / 导入导出 / 外观** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出；外观支持跟随系统 / 固定浅色 / 固定深色，深色下可选动态背景特效
 - **中英双语** — 默认跟随系统语言，可在「设置 → 通用」中切换简体中文 / English

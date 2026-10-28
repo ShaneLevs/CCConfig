@@ -1,15 +1,17 @@
 <script setup>
 // 通用统计页：Claude Code / Pi Agent / OpenCode / DSH 与「通用配置」汇总统计共用同一页面，仅数据源与文案不同。
 // - 热力图：固定展示最近 N 周（铺满整行，GitHub 风格）
+// - Token 柱状图：按时间堆叠，可切换「模型 / Agent」两个维度（仅通用统计页传入 chart 配置）
 // - 模型使用分布：进度条相对最大值（最多的模型整条满，其余按比例）
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
-import { Card, Statistic, Empty, Button, DateRangePicker, Space, Tooltip } from "tdesign-vue-next";
+import { Card, Statistic, Empty, Button, DateRangePicker, Space, Tooltip, RadioGroup, RadioButton } from "tdesign-vue-next";
 import {
   RefreshIcon, ArrowDownIcon, ArrowUpIcon, SumIcon,
   ChevronUpIcon, ChevronDownIcon,
 } from "tdesign-icons-vue-next";
 import ContributionGrid from "./ContributionGrid.vue";
+import UsageTokenChart from "./UsageTokenChart.vue";
 import "./styles/UsagePage.css";
 
 const { t } = useI18n();
@@ -28,11 +30,20 @@ const props = defineProps({
   emptyDescription: { type: String, default: "" },
   // 完全无数据时的补充提示（如 OpenCode 的 db 路径说明）
   emptyHint: { type: String, default: "" },
+  // Token 柱状图（仅通用统计页启用）：true 时在热力图下方展示可切换「模型 / Agent」维度的柱状图。
+  // 数据完全来自 contributions 已有的 models / agentModels，不额外采集。
+  showChart: { type: Boolean, default: false },
 });
 
 const loading = ref(false);
 const showAllModels = ref(false);
 const dateRange = ref([]);
+// 柱状图拆分维度：按模型 / 按 Agent
+const chartDimension = ref("model");
+const chartDimensions = [
+  { value: "model", labelKey: "usage.chartByModel" },
+  { value: "agent", labelKey: "usage.chartByAgent" },
+];
 
 const usageData = ref({
   summary: { totalTokens: 0, inputTokens: 0, outputTokens: 0 },
@@ -131,6 +142,29 @@ const getStatValue = (key) => {
     default: return 0;
   }
 };
+
+// 柱状图数据：由（已按日期区间过滤的）contributions 派生，每天带两个维度的分类合计
+// - 按模型：兼容单 agent 页（models 缺 cache 字段）与通用页（合并后含 cache）两种形状，
+//   与「模型使用分布」同口径：tokens = input + output + cacheRead + cacheCreation
+// - 按 Agent：取 agentModels（仅通用页有；单 agent 页没有该字段 → 该维度无可画数据）
+// 柱高由各维度分类之和决定，不另传 total，避免柱高与分段口径不一致。
+const chartDays = computed(() =>
+  filteredData.value.contributions.map((day) => {
+    const models = {};
+    for (const [name, m] of Object.entries(day.models || {})) {
+      const tokens =
+        (m.inputTokens || 0) + (m.outputTokens || 0) +
+        (m.cacheReadTokens || 0) + (m.cacheCreationTokens || 0);
+      if (tokens) models[name] = tokens;
+    }
+    const agents = {};
+    for (const [id, group] of Object.entries(day.agentModels || {})) {
+      const tokens = group.tokens || 0;
+      if (tokens) agents[id] = tokens;
+    }
+    return { date: day.date, models, agents };
+  })
+);
 
 const hasAnyData = computed(() =>
   usageData.value.contributions.length > 0 || usageData.value.modelStats.length > 0
@@ -236,6 +270,26 @@ defineExpose({ loadData });
         <Empty :description="emptyDescription || t('usage.emptyDescription')" size="small" />
       </div>
       <ContributionGrid v-else :contributions="filteredData.contributions" />
+    </Card>
+
+    <!-- Token 堆叠柱状图（仅通用统计页）：按模型 / Agent 拆分 -->
+    <Card v-if="showChart" :title="t('usage.tokenChart')">
+      <template #actions>
+        <RadioGroup v-model="chartDimension" variant="default-filled" size="small">
+          <RadioButton v-for="d in chartDimensions" :key="d.value" :value="d.value">
+            {{ t(d.labelKey) }}
+          </RadioButton>
+        </RadioGroup>
+      </template>
+      <div v-if="loading && !hasAnyData" class="empty-small">
+        <Empty :description="t('common.loading')" size="small" />
+      </div>
+      <UsageTokenChart
+        v-else
+        :days="chartDays"
+        :dimension="chartDimension"
+        :empty-description="emptyDescription || t('usage.emptyDescription')"
+      />
     </Card>
 
     <!-- 模型使用分布（进度条相对最大值） -->

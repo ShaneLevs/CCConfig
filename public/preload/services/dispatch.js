@@ -666,7 +666,7 @@ const dispatchToGrok = (provider, model, opts) => {
 // ==================== 自动网关下发 ====================
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
 //（对外就是 Anthropic 协议端点，可通过协议守卫），其余目标用 openai-completions；
-// baseUrl 指向 http://127.0.0.1:<port>，key 为网关随机 key（agent 侧是占位符，网关侧用于鉴权）。
+// baseUrl 指向 http://127.0.0.1:<port>，key 为网关占位符（网关不校验 key，但部分 agent 要求 apiKey / token 非空）。
 // 供应商名用英文 router：该名字同时用作 Codex 的 model_providers.<id>（TOML ID 仅支持英文，
 // 中文名会导致 Codex 侧无法识别）。
 const AUTOROUTE_PROVIDER_NAME = "router";

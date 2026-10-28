@@ -338,7 +338,6 @@ window.services = {
   // 自动网关：本地模型代理（配置 / 启停 / 状态 / 下发）
   readAutoRouteConfig: autoroute.readAutoRouteConfig,
   writeAutoRouteConfig: autoroute.writeAutoRouteConfig,
-  regenerateAutoRouteKey: autoroute.regenerateAutoRouteKey,
   resolveAutoRouteModels: autoroute.resolveAutoRouteModels,
   startAutoRoute: autoroute.startAutoRoute,
   stopAutoRoute: autoroute.stopAutoRoute,

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
-import { CopyIcon, RefreshIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
+import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import "./styles/AutoRouteView.css";
 
@@ -71,7 +71,7 @@ const loadAll = () => {
     autoRouteEnabled.value = !!config.value.enabled;
     providers.value = window.services.readCommonProviders().providers;
     refreshStatus();
-    // 首次打开：有累计数据就看累计；只有本次运行有数据（历史刚上线/无落库）就先看本次
+    // 首次打开：有累积数据就看累积；只有本次有数据（历史刚上线/无落库）就先看本次
     if (!statsScopeTouched.value) {
       statsScopeTouched.value = true;
       const total = (status.value.history && status.value.history.total && status.value.history.total.requests) || 0;
@@ -213,15 +213,6 @@ const onPortChange = async (val) => {
   }
 };
 
-const onRegenKey = () => {
-  try {
-    config.value = { ...config.value, key: window.services.regenerateAutoRouteKey() };
-    MessagePlugin.success(t('commonApp.autoRoute.keyRegenerated'));
-  } catch (e) {
-    MessagePlugin.error(e.message);
-  }
-};
-
 const copy = (text) => {
   window.utools.copyText(text);
   MessagePlugin.success(t('common.copied'));
@@ -328,8 +319,8 @@ const formatNumber = (n) => {
   return String(n);
 };
 
-// 网关统计口径：本次运行来自 preload 内存（getAutoRouteStatus.stats），
-// 今日/累计来自按天落库的 history（随轮询刷新，间隔 1s）
+// 网关统计口径：本次来自 preload 内存（getAutoRouteStatus.stats），
+// 今日 / 本月 / 累积来自按天落库的 history（随轮询刷新，间隔 1s）
 const statsScope = ref("total");
 const statsScopeTouched = ref(false);
 const onStatsScopeChange = () => {
@@ -338,15 +329,17 @@ const onStatsScopeChange = () => {
 const statsScopeOptions = computed(() => [
   { label: t("commonApp.autoRoute.statScopeSession"), value: "session" },
   { label: t("commonApp.autoRoute.statScopeToday"), value: "today" },
+  { label: t("commonApp.autoRoute.statScopeMonth"), value: "month" },
   { label: t("commonApp.autoRoute.statScopeTotal"), value: "total" },
 ]);
 const historyInfo = computed(() => status.value.history || {});
 const statsSource = computed(() => {
   if (statsScope.value === "session") return status.value.stats || {};
   if (statsScope.value === "today") return historyInfo.value.today || {};
+  if (statsScope.value === "month") return historyInfo.value.month || {};
   return historyInfo.value.total || {};
 });
-// 本次运行没有调用但历史有数据时也要展示（否则切不回累计）
+// 本次没有调用但历史有数据时也要展示（否则切不回累积）
 const hasStats = computed(
   () =>
     ((status.value.stats && status.value.stats.requests) || 0) > 0 ||
@@ -419,18 +412,6 @@ onUnmounted(() => {
       <div class="autoroute-form-row">
         <span class="autoroute-label">{{ t('commonApp.autoRoute.port') }}</span>
         <Input v-model="portDraft" type="number" size="small" class="autoroute-port" placeholder="1-65535" @change="onPortChange" />
-        <span class="autoroute-label">Key</span>
-        <code class="autoroute-key">{{ config.key }}</code>
-        <Tooltip :content="t('commonApp.autoRoute.copyKey')" placement="top">
-          <Button size="small" variant="text" @click="copy(config.key)">
-            <template #icon><CopyIcon /></template>
-          </Button>
-        </Tooltip>
-        <Tooltip :content="t('commonApp.autoRoute.regenerateTooltip')" placement="top">
-          <Button size="small" variant="text" @click="onRegenKey">
-            <template #icon><RefreshIcon /></template> {{ t('commonApp.autoRoute.regenerate') }}
-          </Button>
-        </Tooltip>
       </div>
 
       <div class="autoroute-form-row">

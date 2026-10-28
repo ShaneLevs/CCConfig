@@ -22,5 +22,6 @@ const quickFetcher = () => window.services.readCommonUsage();
     :quick-fetcher="quickFetcher"
     :empty-description="t('usage.emptyDescription')"
     :empty-hint="t('usage.commonEmptyHint')"
+    show-chart
   />
 </template>

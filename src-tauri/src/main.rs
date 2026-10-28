@@ -195,7 +195,10 @@ fn build_main_window(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::R
     let dark = system_is_dark();
     let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::App("index.html".into()))
         .title("CCConfig")
-        .inner_size(1240.0, 840.0)
+        // 默认尺寸 = 左侧 agent 切换栏刚好出现的宽度：前端 src/Switch/index.vue 的
+        // updateAgentRail 要求 (innerWidth - 800) / 2 >= 100，即 1000（800 内容 + 两侧各 100）；
+        // 再宽就只是两侧留白变大，故 1000 是能“看见侧栏”的最小窗口。高度取宽度的 80%。
+        .inner_size(1000.0, 800.0)
         .min_inner_size(900.0, 600.0)
         .center()
         // 透明窗口：页面底色交给原生毛玻璃（vibrancy）与应用自己的深色底，
@@ -511,7 +514,9 @@ fn toggle_tray_popup(app: &tauri::AppHandle, position: PhysicalPosition<f64>, re
 
 // ==================== 弹窗 → Rust 的命令 ====================
 
-/// 弹窗底部的三个动作。重启网关会阻塞几百毫秒（sidecar RPC），放后台线程避免卡住页面。
+/// 弹窗动作：底部「打开 CCConfig / 退出」，顶部「重启网关」。
+/// 重启会阻塞几百毫秒（sidecar RPC），放后台线程避免卡住页面；弹窗保持打开，
+/// 页面轮询 getAutoRouteStatus 把状态从「重启中」刷回「运行中」。
 #[tauri::command]
 fn tray_popup_action(app: tauri::AppHandle, action: String) {
     match action.as_str() {
@@ -520,7 +525,6 @@ fn tray_popup_action(app: tauri::AppHandle, action: String) {
             show_main(&app);
         }
         "restart-gateway" => {
-            hide_popup_window(&app);
             let handle = app.clone();
             std::thread::spawn(move || restart_gateway(&handle));
         }
@@ -697,6 +701,8 @@ fn json_at<'a>(v: &'a Option<serde_json::Value>, path: &[&str]) -> Option<&'a se
 fn restart_gateway(app: &tauri::AppHandle) {
     let config = sidecar_rpc(app, "readAutoRouteConfig");
     if !json_bool(&config, &["enabled"]) {
+        // 网关没开时重启没有意义：收起弹窗并带用户去主窗口开启
+        hide_popup_window(app);
         show_main(app);
         return;
     }

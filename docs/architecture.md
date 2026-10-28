@@ -61,15 +61,16 @@ Claude:
   汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
     通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
+    通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；价格 / 速度 / 请求数等未落库口径不展示
     DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
   本地网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
-    model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；随机 key 鉴权（Authorization Bearer / x-api-key）
+    model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；不校验 key（仅监听本机回环地址，Authorization Bearer / x-api-key 传任意值或留空均放行）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
-    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次运行）与 history.today/total/since，网关页切换「本次运行 / 今日 / 累计」，托盘展示 history.total。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
+    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页默认累积，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
       同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
       跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
@@ -362,6 +363,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
       state = 'ok' | 'expired' | 'nodata'；windows = [{ key, label, percent }]（label 已本地化，percent 是**剩余**百分比）；
       message = 过期 / 无数据时的提示文案（已本地化）
       页面先渲染这份缓存快照（绝不在首帧等网络），再用异步 /rpc-poll 调 refreshSubscriptions 原地更新；
+      每张卡片右上角有手动刷新（refreshSubscription 单条，绕过 5 分钟节流），失败只短暂提示、保留缓存；
       刷新失败保留缓存，不打扰用户
   两个界面同源（同一份 `ccconfig_subscriptions_<nativeId>`），但**视图各自持有内存副本**：
       托盘每次展开都重读 + 刷新一次；订阅页保持挂载（v-if + v-show），所以必须在
