@@ -35,6 +35,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Hermes", value: "hermes" },
   { label: "DSH", value: "dsh" },
   { label: "Grok Build", value: "grok" },
+  { label: "Cline", value: "cline" },
 ];
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
@@ -46,6 +47,8 @@ const AGENT_PROTOCOLS = {
   zcode: ["openai-completions", "openai-responses", "anthropic-messages"],
   hermes: ["openai-completions", "openai-responses", "anthropic-messages"],
   grok: ["openai-completions", "openai-responses", "anthropic-messages"],
+  // Cline 侧第三方端点只有 openai-compatible（OpenAI Chat Completions），其余协议需先接网关
+  cline: ["openai-completions"],
 };
 
 const modelKeys = ref([]);
@@ -188,6 +191,9 @@ watch(() => props.visible, (v) => {
             </Tooltip>
             <Tooltip v-else-if="opt.value === 'grok'" :content="t('commonApp.dispatch.grokTooltip')">
               <Checkbox :value="opt.value" :disabled="isTargetDisabled('grok')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
+            </Tooltip>
+            <Tooltip v-else-if="opt.value === 'cline'" :content="t('commonApp.dispatch.clineTooltip')">
+              <Checkbox :value="opt.value" :disabled="isTargetDisabled('cline')" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
             </Tooltip>
             <Checkbox v-else :value="opt.value" class="common-dispatch-checkbox">{{ opt.label }}</Checkbox>
           </label>

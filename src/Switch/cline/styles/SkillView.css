@@ -1,0 +1,30 @@
+.cline-skill-container { display: flex; flex-direction: column; gap: 12px; padding-top: 0; }
+
+.cline-skill-header { display: flex; justify-content: space-between; align-items: center; }
+.cline-skill-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.cline-skill-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.cline-skill-empty { padding: 60px 0; }
+
+.cline-skill-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+.cline-skill-section-divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--td-component-border);
+}
+.cline-skill-section-label { font-size: 12px; font-weight: 500; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 详情弹窗 */
+.cline-skill-detail-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cline-skill-detail { display: flex; flex-direction: column; gap: 14px; }
+.cline-skill-detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 16px; }
+.cline-skill-detail-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cline-skill-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.cline-skill-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.cline-skill-detail-section { display: flex; flex-direction: column; gap: 4px; }
+.cline-skill-detail-title { font-size: 12px; font-weight: 500; color: var(--td-text-color-placeholder); }
+.cline-skill-detail-desc { font-size: 13px; color: var(--td-text-color-primary); white-space: pre-wrap; word-break: break-word; }

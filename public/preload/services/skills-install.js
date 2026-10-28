@@ -7,6 +7,7 @@ const config = require("./config");
 const opencode = require("./opencode");
 const common = require("./common");
 const grok = require("./grok");
+const cline = require("./cline");
 const { t } = require("./i18n");
 
 // ==================== SkillHub API 辅助 ====================
@@ -331,6 +332,15 @@ const completeGrokSkillInstall = (skillName, extractDir) =>
   completeInstall(grok.getGrokSkillsDir(), skillName, extractDir);
 const cancelGrokSkillInstall = () => cancelInstall();
 
+// Cline → ~/.cline/skills（调用时取，同 OpenCode / Grok 的惰性求值）
+const installClineSkill = (slug, version, namespace, onProgress) =>
+  installFromSkillhub(cline.getClineSkillsDir(), slug, version, namespace, onProgress);
+const installClineSkillFromModelScope = (skillPath, onProgress) =>
+  installFromModelScope(cline.getClineSkillsDir(), skillPath, onProgress);
+const completeClineSkillInstall = (skillName, extractDir) =>
+  completeInstall(cline.getClineSkillsDir(), skillName, extractDir);
+const cancelClineSkillInstall = () => cancelInstall();
+
 // 通用 → ~/.agents/skills
 const installCommonSkill = (slug, version, namespace, onProgress) =>
   installFromSkillhub(common.COMMON_SKILLS_DIR(), slug, version, namespace, onProgress);
@@ -361,4 +371,8 @@ module.exports = {
   installGrokSkillFromModelScope,
   completeGrokSkillInstall,
   cancelGrokSkillInstall,
+  installClineSkill,
+  installClineSkillFromModelScope,
+  completeClineSkillInstall,
+  cancelClineSkillInstall,
 };

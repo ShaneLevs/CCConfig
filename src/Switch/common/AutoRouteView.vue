@@ -25,6 +25,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "Hermes", value: "hermes" },
   { label: "DSH", value: "dsh" },
   { label: "Grok Build", value: "grok" },
+  { label: "Cline", value: "cline" },
 ];
 
 const loading = ref(false);

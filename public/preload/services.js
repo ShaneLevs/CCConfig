@@ -20,6 +20,7 @@ const dsh = require("./services/dsh");
 const dshUsage = require("./services/dsh-usage");
 const codex = require("./services/codex");
 const grok = require("./services/grok");
+const cline = require("./services/cline");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
@@ -235,6 +236,10 @@ window.services = {
       const s = grok.readGrokUsage()
       collected.grok = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Grok 采集失败:', e); collected.grok = false }
+    try {
+      const s = cline.readClineUsage()
+      collected.cline = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Cline 采集失败:', e); collected.cline = false }
     return collected
   },
   // 「通用」统计页异步版：采集在后台线程串行执行，完成后纯读 DB 合并；
@@ -257,6 +262,7 @@ window.services = {
       tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
       tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
       tryCollect('grok', () => usageAsync.readGrokUsageAsync()),
+      tryCollect('cline', () => usageAsync.readClineUsageAsync()),
     ])
     return collected
   },
@@ -468,6 +474,46 @@ window.services = {
   readGrokUsageFromHistory: grok.readGrokUsageFromHistory,
   getGrokSessionsDir: grok.getGrokSessionsDir,
 
+  // ==================== Cline（~/.cline/data/settings，供应商 / 模型 / MCP / Skill / 统计） ====================
+  getClineDir: cline.getClineDir,
+  getClineDataDir: cline.getClineDataDir,
+  getClineProvidersPath: cline.getClineProvidersPath,
+  getClineModelsPath: cline.getClineModelsPath,
+  // 供应商（providers.json）
+  getClineProviderList: cline.getClineProviderList,
+  getClineActiveProvider: cline.getClineActiveProvider,
+  addClineProvider: cline.addClineProvider,
+  updateClineProvider: cline.updateClineProvider,
+  deleteClineProvider: cline.deleteClineProvider,
+  setClineActiveProvider: cline.setClineActiveProvider,
+  // 模型（models.json）
+  getClineModelList: cline.getClineModelList,
+  addClineModel: cline.addClineModel,
+  updateClineModel: cline.updateClineModel,
+  deleteClineModel: cline.deleteClineModel,
+  setClineDefaultModel: cline.setClineDefaultModel,
+  openClineDir: cline.openClineDir,
+  openClineProvidersFile: cline.openClineProvidersFile,
+  isClineInstalled: cline.isClineInstalled,
+  CLINE_CAPABILITIES: cline.CLINE_CAPABILITIES,
+  // MCP（cline_mcp_settings.json，与 IDE 扩展共享）
+  getClineMcpServers: cline.getClineMcpServers,
+  setClineMcpServer: cline.setClineMcpServer,
+  setClineMcpEnabled: cline.setClineMcpEnabled,
+  deleteClineMcpServer: cline.deleteClineMcpServer,
+  openClineMcpFile: cline.openClineMcpFile,
+  clineMcpConfigFor: cline.toGenericClineMcp,
+  // Skill（~/.cline/skills + .disabled）
+  getClineSkills: cline.getClineSkills,
+  setClineSkillEnabled: cline.setClineSkillEnabled,
+  deleteClineSkill: cline.deleteClineSkill,
+  getClineSkillsDir: cline.getClineSkillsDir,
+  // 使用统计（~/.cline/data/sessions/<id>/<id>.json）
+  readClineUsage: cline.readClineUsage,
+  readClineUsageFromHistory: cline.readClineUsageFromHistory,
+  getClineSessionsDir: cline.getClineSessionsDir,
+  openClineSessionsDir: cline.openClineSessionsDir,
+
   // ==================== Hermes（~/.hermes/config.yaml，仅模型配置） ====================
   getHermesConfigPath: hermes.getHermesConfigPath,
   getHermesProviderList: hermes.getHermesProviderList,
@@ -532,6 +578,7 @@ window.services = {
       hermes: false,
       dsh: false,
       grok: false,
+      cline: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -634,6 +681,12 @@ window.services = {
     // grok：config.toml 有 [model.*] / [model_providers.*] / [mcp_servers.*]
     try {
       hasData.grok = grok.hasGrokConfig();
+    } catch (e) {
+      /* ignore */
+    }
+    // cline：providers.json 有供应商，或 cline_mcp_settings.json 有 MCP 服务器
+    try {
+      hasData.cline = cline.hasClineConfig();
     } catch (e) {
       /* ignore */
     }

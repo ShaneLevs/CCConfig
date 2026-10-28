@@ -20,7 +20,8 @@ export function useAppContext() {
   const isHermes = computed(() => activeApp.value === 'hermes')
   const isDsh = computed(() => activeApp.value === 'dsh')
   const isGrok = computed(() => activeApp.value === 'grok')
+  const isCline = computed(() => activeApp.value === 'cline')
   const isCommon = computed(() => activeApp.value === 'common')
 
-  return { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isQoder, isZcode, isHermes, isDsh, isGrok, isCommon }
+  return { activeApp, setActiveApp, isClaude, isOpenCode, isPi, isOmp, isReasonix, isCodex, isKimi, isMinimax, isQoder, isZcode, isHermes, isDsh, isGrok, isCline, isCommon }
 }

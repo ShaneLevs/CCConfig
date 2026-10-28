@@ -272,6 +272,46 @@ Grok Build（xAI 官方编码 CLI，命令 `grok`）:
       summary.inputTokens = 总 - 输出
     历史落库：ccconfig_agent_usage_grok_<nativeId>（与「通用」统计页同源），源目录被清理后回放历史不归零
   已知取舍：整档 smol-toml 重写不保留 TOML 注释（同 codex / kimi / reasonix）
+
+Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文件，IDE 扩展共用 MCP 与 rules/skills）:
+  目录：CLINE_DIR（默认 ~/.cline）、CLINE_DATA_DIR（默认 <CLINE_DIR>/data），与 @cline/shared 的
+        resolveClineDir / resolveClineDataDir 一致
+  <data>/settings/providers.json  ←→  CLI / Desktop / SDK（IDE 扩展的供应商配置在其 globalState，非文件，本工具不覆盖）
+    信封 { version: 1（字面量）, lastUsedProvider?, modes: { voiceInput? }, repairs?, providers: {...} }
+    providers.<providerId> = { settings: { provider, apiKey?, model?, baseUrl?, headers? }, updatedAt, tokenSource }
+    ⚠️ Cline 用 zod 严格校验整档，任一不合规即静默丢弃（当空档处理），因此本模块：
+       - 读到的 version 不是 1 → 抛错中止，绝不写回（否则用户全部供应商被清空）
+       - updatedAt 一律写 new Date().toISOString()；tokenSource 只取 manual / oauth / migration，不自造
+       - 原子写（tmp + rename）并 chmod 0600（Cline 自己也按 0600 写）
+       - settings 内未识别键与供应商条目顶层未识别键均原样往返（_extra / topExtra）
+    切换供应商 = 写 lastUsedProvider；删除当前供应商时清空 lastUsedProvider 与 modes.voiceInput 引用
+  <data>/settings/models.json  —— 独立于 providers.json 的另一套 { version: 1, providers: {...} } 信封
+    providers.<providerId> = { provider: { name, baseUrl, defaultModelId? }, models: { <modelId>: {
+      id, name?, contextWindow?, maxTokens?, capabilities? } }, discoveredModelIds? }
+    capabilities 只写 Cline 认识的 streaming / tools / images / reasoning（未知值过滤）
+    默认模型两处同步：providers.json 的 settings.model 与目录的 provider.defaultModelId
+    模型改 ID 时两处引用一起跟随；删掉默认模型时回退到目录内首个剩余模型（无剩余则删键）
+  <data>/settings/cline_mcp_settings.json（IDE 扩展与 CLI 共享）
+    { mcpServers: { <name>: { command/args/env | type: "streamableHttp"|"sse" + url/headers,
+      disabled, autoApprove, ... } } }
+    关闭态写条目自身 disabled: true（开启时删掉该键）；autoApprove 等未识别键原样往返
+  ~/.cline/skills/<name>/SKILL.md  Skill 目录；启停 = 物理移动目录到 .disabled/（同 Claude / OpenCode / Grok）；
+    安装复用 SkillHub / 魔搭流水线（~/.agents/skills 由「通用配置 → Skill」管理，此处不重复接管）
+  使用统计：<data>/sessions/<session_id>/<session_id>.json
+    { session_id, started_at, updated_at?, provider, model,
+      metadata: { usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, totalCost },
+                  aggregateUsage?: {...} } }
+    优先取 metadata.aggregateUsage（多供应商 / 子 agent 合并后），否则 metadata.usage；
+    按会话汇总（Cline 只有会话级用量，没有逐轮增量），日期取 updated_at → started_at 的本地日期；
+    全零用量会话跳过；读失败的会话跳过（正在写入）
+    口径与 Claude / DSH / Grok 一致：输入 = inputTokens + cacheReadTokens + cacheWriteTokens，输出 = outputTokens；
+      day.inputTokens 含缓存，day.models[].inputTokens 为未缓存输入
+    历史落库：ccconfig_agent_usage_cline_<nativeId>，源会话被清理后回放历史不归零
+  通用库下发：Cline 侧第三方端点只有 openai-compatible，协议守卫只放行 openai-completions（其余协议先接网关）；
+    供应商名经 providerKeyFor 确定性清洗为合法 providerId（中文/符号 → ASCII 骨架，upsert 幂等）；
+    写入形态 = providers.json settings（provider/baseUrl/apiKey）+ models.json 模型条目 + 可选
+    settings.model / defaultModelId / lastUsedProvider
+  网关下发：走 openai-completions + `http://127.0.0.1:<port>/v1`（Cline 自行追加 /chat/completions，不补 /v1）
 ```
 
 ### 订阅用量（通用 → 订阅）

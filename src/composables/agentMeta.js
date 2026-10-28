@@ -8,7 +8,7 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 
 // 默认顺序：已有使用统计的五个应用（Claude Code / Pi Agent / OpenCode / DSH / Grok Build）排在前面，其余按原有顺序跟随。
 // 用户拖拽排序后以 DB 记录里的 order 为准，仅在「仍是某个历史默认顺序」时升级。
-export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "grok", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
+export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "grok", "cline", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
 // 历史默认顺序（自上而下逐版演进）：仅用于识别「用户仍停在某个历史默认顺序」的存量记录，
 // 命中任一即升级为当前 AGENT_ORDER。用户自定义过的顺序不在其中，原样保留（新 agent 追加到末尾）。
 export const LEGACY_AGENT_ORDERS = [
@@ -16,6 +16,8 @@ export const LEGACY_AGENT_ORDERS = [
   ["claude", "opencode", "pi", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes", "dsh"],
   // 第二版：DSH 提前到使用统计组末尾
   ["claude", "pi", "opencode", "dsh", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"],
+  // 第三版：Grok Build 追加到使用统计组末尾（Cline 加入前的最后一版）
+  ["claude", "pi", "opencode", "dsh", "grok", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"],
 ];
 // 「通用配置」不是 agent，但会出现在切换器下拉里，展示元数据与 agent 放一起便于复用
 // 名称是唯一需要翻译的展示字段：这里只放 key，解析交给调用方（保持本文件纯数据、无副作用）
@@ -34,6 +36,7 @@ export const AGENT_META = {
   hermes: { name: "Hermes", icon: `${ASSET_BASE}icon-hermes.png` },
   dsh: { name: "DSH", icon: `${ASSET_BASE}icon-dsh.png` },
   grok: { name: "Grok Build", icon: `${ASSET_BASE}icon-grok.svg` },
+  cline: { name: "Cline", icon: `${ASSET_BASE}icon-cline.svg` },
 };
 
 // 落库统计里的 agent id → 展示名（未收录的 id 原样显示，避免新增 agent 时标题消失）

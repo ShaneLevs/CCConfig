@@ -43,13 +43,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run version:check && npm run i18n:check && vite build",
-    "build:app": "npm run version:check && npm run i18n:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
+    "build": "npm run version:check && npm run i18n:check && npm run routes:check && vite build",
+    "build:app": "npm run version:check && npm run i18n:check && npm run routes:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
     "tauri:dev": "npm run build:app && cargo tauri dev",
     "tauri:build": "npm run build:app && cargo tauri build && node scripts/collect-release.mjs",
     "bump": "node scripts/bump-version.mjs",
     "version:check": "node scripts/check-versions.mjs",
     "i18n:check": "node scripts/check-i18n.mjs",
+    "routes:check": "node tests/smoke-app-routes-test.cjs",
+    "test": "node tests/run-all.cjs",
     "release:collect": "node scripts/collect-release.mjs"
   },
   "dependencies": {

@@ -14,6 +14,8 @@
 //   dsh      → ~/.dsh/profiles/<profile>/cordis.patch.yml  llm-pi-ai.providers[route]（api 协议同名映射）+ models[] + agent-default-model（可选默认）
 //             密钥写入 ~/.dsh/.credentials.yaml 的 refs[<ROUTE>_API_KEY]（patch 只记录凭据引用名）
 //   grok     → ~/.grok/config.toml  [model_providers.<key>]（连接信息）+ [model.<id>]（model_provider 引用）+ [models].default（可选默认）
+//   cline    → ~/.cline/data/settings/providers.json（供应商连接信息，provider=openai-compatible）
+//              + models.json（模型目录）+ lastUsedProvider（可选首选）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
@@ -29,6 +31,7 @@ const zcode = require('./zcode')
 const hermes = require('./hermes')
 const dsh = require('./dsh')
 const grok = require('./grok')
+const cline = require('./cline')
 const autoroute = require('./autoroute')
 const { t } = require('./i18n')
 
@@ -663,6 +666,51 @@ const dispatchToGrok = (provider, model, opts) => {
   )
 }
 
+// Cline：providers.json（settings.provider=openai-compatible + baseUrl/apiKey）
+// + models.json（provider 目录 + models[id]）+ 可选 lastUsedProvider。
+// Cline 侧第三方端点只支持 OpenAI Chat Completions 一种协议，其余三类需先转成网关
+//（网关对外提供 /v1/chat/completions，agent 侧统一走 openai-completions）
+const CLINE_PROTOCOLS = ['openai-completions']
+
+const dispatchToCline = (provider, model, opts) => {
+  const api = provider.api || 'openai-completions'
+  if (!CLINE_PROTOCOLS.includes(api)) {
+    throw new Error(
+      t('service.dispatch.clineProtocolUnsupported', {
+        name: provider.name,
+        api,
+      }),
+    )
+  }
+  const name = opts.providerName || provider.name
+  const key = cline.providerKeyFor(name)
+  cline.upsertClineProvider(key, {
+    name,
+    baseUrl: provider.baseUrl || '',
+    apiKey: provider.apiKey || '',
+  })
+  const modelId = cline.upsertClineModel(key, {
+    id: model.id,
+    name: model.name || model.id,
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+  })
+  let suffix = ''
+  if (opts.setDefault) {
+    // 设为默认模型：同时把该供应商设为当前使用（Cline 的 lastUsedProvider）
+    cline.setClineDefaultModelForProvider(key, modelId)
+    cline.setClineActiveProvider(key)
+    suffix = t('service.dispatch.setAsDefault')
+  }
+  const keyNote = key === name ? '' : t('service.dispatch.keyNote', { key })
+  return (
+    t('service.dispatch.providerModelUpdated', {
+      name: name + keyNote,
+      model: modelId,
+    }) + suffix
+  )
+}
+
 // ==================== 自动网关下发 ====================
 // 自动网关（autoroute.js）作为虚拟供应商写入各 agent：Claude 目标用 anthropic-messages
 //（对外就是 Anthropic 协议端点，可通过协议守卫），其余目标用 openai-completions；
@@ -768,13 +816,15 @@ const dispatchAutoRoute = (targets) => {
     // grok 自己只把 api_backend 对应的路径（messages / chat/completions / responses）拼在 base_url 后面，
     // 不补 /v1，所以网关路径必须带 /v1（与 Codex / Kimi / ZCode 同理）
     const isGrok = (target && target.app) === "grok";
+    // cline 的 openai-compatible 会自行拼 /chat/completions，不补 /v1，网关路径需带 /v1（同 Codex / Kimi / ZCode）
+    const isCline = (target && target.app) === "cline";
     const provider = {
       name: AUTOROUTE_PROVIDER_NAME,
       // hermes 同 claude 走网关的 Anthropic Messages 入站（api_mode: anthropic_messages），base_url 不带 /v1；
       // dsh 的 pi-ai anthropic-messages 路由同样填网关根地址（SDK 自行追加 /v1/messages）
       api: (target && target.app) === "claude" || (target && target.app) === "hermes" || (target && target.app) === "dsh" || isGrok ? "anthropic-messages" : isCodex ? "openai-responses" : "openai-completions",
       apiKey: config.key || "",
-      baseUrl: isCodex || isKimi || isZcode || isGrok ? `${baseUrl}/v1` : baseUrl,
+      baseUrl: isCodex || isKimi || isZcode || isGrok || isCline ? `${baseUrl}/v1` : baseUrl,
       models,
     };
     const targetResults = [];
@@ -813,6 +863,7 @@ const APP_DISPATCHERS = {
   hermes: { run: dispatchToHermes },
   dsh: { run: dispatchToDsh },
   grok: { run: dispatchToGrok },
+  cline: { run: dispatchToCline },
 }
 
 // 主入口：provider/model 来自通用库（apiKey 已解密），targets = [{ app, providerName?, setDefault? }]
@@ -848,5 +899,5 @@ module.exports = {
   dispatchCommonModel,
   dispatchAutoRoute,
   // 内部实现导出，供测试/复用
-  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh, dispatchToGrok,
+  dispatchToClaude, dispatchToOpencode, dispatchToPi, dispatchToOmp, dispatchToReasonix, dispatchToCodex, dispatchToKimi, dispatchToMinimax, dispatchToQoder, dispatchToZcode, dispatchToHermes, dispatchToDsh, dispatchToGrok, dispatchToCline,
 }

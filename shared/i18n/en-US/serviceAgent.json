@@ -174,6 +174,24 @@
       "mcpCommandRequired": "A stdio server requires a command",
       "mcpUrlRequired": "An HTTP/SSE server requires a URL",
       "providerInUse": "Provider {name} is still referenced by models ({models}); delete or move those models first"
+    },
+    "cline": {
+      "providersReadFailed": "Failed to read providers.json (write blocked to protect your Cline config): {path} — {message}",
+      "modelsReadFailed": "Failed to read models.json (write blocked): {path} — {message}",
+      "mcpReadFailed": "Failed to read cline_mcp_settings.json (write blocked): {path} — {message}",
+      "notJsonObject": "File content is not a JSON object: {path}",
+      "providersVersionInvalid": "providers.json has version {version} (Cline requires the literal 1); Cline would drop the whole file, so the change was blocked",
+      "providerIdRequired": "Provider ID is required",
+      "providerIdInvalid": "Provider ID “{id}” contains invalid characters (letters, digits, underscore, hyphen, dot, colon and slash only)",
+      "providerExists": "Provider {id} already exists",
+      "providerNotFound": "Provider {id} not found",
+      "modelIdRequired": "Model ID is required",
+      "modelIdInvalid": "Model ID “{id}” contains invalid characters",
+      "modelExists": "Model {id} already exists",
+      "modelNotFound": "Model {id} not found",
+      "mcpNameRequired": "MCP server name is required",
+      "mcpNameInvalidChars": "MCP server name must start with a letter or underscore and contain only letters, digits, underscores, hyphens and dots",
+      "mcpNotFound": "MCP server {name} not found"
     }
   }
 }

@@ -1,0 +1,71 @@
+.cline-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.cline-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cline-toolbar-left { min-width: 0; flex: 1; }
+.cline-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.cline-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cline-toolbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.cline-config-warning { margin-bottom: 0; }
+.cline-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.cline-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.cline-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.cline-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.cline-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.cline-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.cline-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.cline-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cline-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.cline-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.cline-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.cline-provider-body { padding: 10px 0 4px; }
+.cline-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.cline-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cline-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.cline-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.cline-key-lock { color: var(--td-text-color-placeholder); margin-right: 2px; }
+.cline-key-copy { cursor: pointer; margin-left: 4px; color: var(--td-text-color-placeholder); }
+.cline-key-copy:hover { color: var(--td-brand-color); }
+
+/* 模型子区 */
+.cline-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.cline-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 6px; }
+.cline-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.cline-model-list { display: flex; flex-direction: column; gap: 2px; }
+
+.cline-model-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--td-radius-default);
+  transition: background 0.15s;
+}
+.cline-model-item:hover { background: var(--td-bg-color-container-hover); }
+.cline-model-info { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.cline-model-name { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.cline-model-sub { font-size: 11px; color: var(--td-text-color-placeholder); word-break: break-all; }
+.cline-model-actions { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+
+/* ===== 表单弹窗 ===== */
+.cline-edit-form { display: flex; flex-direction: column; gap: 12px; }
+.cline-form-item { display: flex; flex-direction: column; gap: 4px; }
+.cline-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.cline-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.cline-form-required { color: var(--td-error-color); }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* ===== 暗色 ===== */
+:root[theme-mode="dark"] .cline-provider-details { background: var(--td-bg-color-secondarycontainer); }

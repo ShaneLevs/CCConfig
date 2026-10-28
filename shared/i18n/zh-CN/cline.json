@@ -1,0 +1,103 @@
+{
+  "cline": {
+    "config": {
+      "toolbarSubtitle": "providers.json（供应商）+ models.json（模型目录）",
+      "addProvider": "添加供应商",
+      "editProvider": "编辑供应商",
+      "addModel": "添加模型",
+      "addModelTitle": "添加模型",
+      "editModelTitle": "编辑模型",
+      "emptyProviders": "还没有供应商。Cline 的第三方端点按 openai-compatible 协议配置，先添加一个供应商",
+      "activeTag": "当前使用",
+      "setActive": "设为当前使用",
+      "setActiveTooltip": "写入 providers.json 的 lastUsedProvider",
+      "defaultTag": "默认",
+      "setDefaultTooltip": "设为该供应商的默认模型",
+      "deleteProvider": "删除供应商",
+      "deleteProviderConfirm": "删除供应商 {name}？其模型目录也会一并删除",
+      "deleteModelConfirm": "删除模型 {id}？",
+      "modelsTitle": "模型",
+      "modelsEmpty": "该供应商下还没有模型",
+      "modelCount": "{count} 个模型",
+      "providerIdLabel": "供应商 ID（providers.json 的键）",
+      "providerIdHint": "字母、数字、下划线、中划线、点、冒号、斜杠；创建后不建议修改",
+      "displayNameLabel": "显示名称（models.json provider.name）",
+      "displayNameHint": "仅用于展示，留空则与供应商 ID 相同",
+      "baseUrlLabel": "Base URL",
+      "baseUrlHint": "OpenAI 兼容端点；Cline 会自行追加 /chat/completions，通常填到 …/v1 为止",
+      "apiKeyLabel": "API Key",
+      "apiKeyPlaceholder": "明文写入 providers.json apiKey",
+      "apiKeySavedPlaceholder": "已保存（已加密存储），留空则保持不变",
+      "modelIdLabel": "模型 ID",
+      "modelIdHint": "发往 API 的模型标识，可与显示名称不同",
+      "nameLabel": "显示名称",
+      "namePlaceholder": "模型选择器里显示的名称",
+      "capabilitiesLabel": "能力（capabilities）",
+      "capabilitiesHint": "声明模型支持的能力；工具 / 图片能力缺失时 Cline 会禁用对应功能",
+      "openFile": "打开 providers.json",
+      "notInstalled": "未检测到 ~/.cline 目录（尚未安装或使用过 Cline）",
+      "settingsWarn": "Cline 会严格校验 providers.json：version 必须为 1、updatedAt 必须为 ISO 时间、tokenSource 只能是 manual / oauth / migration。任一不合规时 Cline 会静默丢弃整个文件，因此本工具遇到不合规内容会阻止写入"
+    },
+    "providerType": {
+      "openaiCompatible": "openai-compatible（OpenAI Chat Completions）"
+    },
+    "model": {
+      "idRequired": "请输入模型 ID",
+      "added": "模型 {id} 已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "模型配置已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "模型 {id} 已删除",
+      "deleteFailed": "删除失败: {message}",
+      "defaultSet": "默认模型已设为 {id}"
+    },
+    "provider": {
+      "idRequired": "请输入供应商 ID",
+      "added": "供应商 {name} 已添加",
+      "addFailed": "添加失败: {message}",
+      "updated": "供应商已更新",
+      "saveFailed": "保存失败: {message}",
+      "deleted": "供应商 {name} 已删除",
+      "deleteFailed": "删除失败: {message}",
+      "activated": "已切换到 {name}",
+      "activateFailed": "切换失败: {message}"
+    },
+    "mcp": {
+      "tip": "（cline_mcp_settings.json，CLI 与 IDE 扩展共用同一份）",
+      "add": "添加 MCP",
+      "addFirst": "添加第一个 MCP",
+      "empty": "未配置 MCP 服务器",
+      "added": "MCP 服务器已添加",
+      "updated": "MCP 服务器已更新",
+      "deleted": "MCP 服务器已删除",
+      "enabled": "已启用",
+      "disabled": "已关闭",
+      "deleteConfirm": "删除该 MCP 服务器？",
+      "enableBeforeTools": "请先启用该服务器再查看工具"
+    },
+    "skill": {
+      "tip": "（~/.cline/skills，启停写入 .disabled/）",
+      "install": "安装 Skill",
+      "empty": "未安装 Skill；可用「安装 Skill」从 SkillHub / 魔搭社区安装，或手动放入目录",
+      "enabledSuccess": "已启用 {name}",
+      "disabledSuccess": "已停用 {name}",
+      "deletedSuccess": "已删除 {name}",
+      "deleteConfirm": "删除该 Skill 目录？",
+      "openDirFailed": "无法打开目录",
+      "openFolder": "打开目录",
+      "folder": "目录",
+      "detailTitle": "Skill 详情",
+      "status": "状态",
+      "fileCount": "{count} 个文件",
+      "fileCountLabel": "文件数",
+      "description": "描述",
+      "disabledSection": "已停用（{count}）"
+    },
+    "usage": {
+      "tip": "统计源：~/.cline/data/sessions/<会话>/<会话>.json 的 metadata.usage",
+      "empty": "暂无 Cline 使用记录",
+      "emptyHint": "用 cline 跑过会话后会自动生成 {path}；未安装或未使用过时可忽略",
+      "modelHint": "按会话汇总的用量；未缓存输入 + 缓存读 + 缓存写 + 输出"
+    }
+  }
+}

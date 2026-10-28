@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CCConfig（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH（DeepSeek Harness）/ Grok Build 十三应用的 API 配置切换（Qoder / Hermes 仅模型配置，ZCode / DSH / Grok 另含使用统计，Grok 另含 MCP / Skill）、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动网关、模型下发、订阅用量）。
+CCConfig（uTools 插件名 CCConfig）：管理 Claude Code / OpenCode / Pi / omp / Reasonix / Codex / Kimi Code / MiniMax Code / Qoder / ZCode / Hermes / DSH（DeepSeek Harness）/ Grok Build / Cline 十四应用的 API 配置切换（Qoder / Hermes 仅模型配置，ZCode / DSH / Grok / Cline 另含使用统计，Grok 与 Cline 另含 MCP / Skill）、MCP/Skill/Plugin 管理与使用统计；另有「通用配置」应用（跨 agent 供应商/模型主数据、通用 MCP/Skill、自动网关、模型下发、订阅用量）。
 
 ## 技术栈与命令
 
@@ -11,6 +11,8 @@ npm run dev            # 开发（localhost:5173，watch public/preload/** 与 s
 npm run build          # 生产构建（含 esbuild 打包 preload）
 npm run version:check  # 校验 5 处版本号是否一致（build / build:app 已内置）
 npm run i18n:check     # 校验中英文案 key / 占位符一致、英文无残留中文（build / build:app 已内置）
+npm run routes:check   # 校验 APP_TABS 每个 agent 都有 App.vue 白名单路由（漏了会白屏；build / build:app 已内置）
+npm test               # 跑 tests/ 下全部冒烟测试
 npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / major 亦可）
 ```
 
@@ -31,6 +33,7 @@ npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / maj
 
 - **Fat Preload**：所有 Node 敏感操作（文件 I/O、网络、子进程）在 `public/preload/services/` 实现，经 `services.js` 暴露为 `window.services`；由 `vite.config.js` 的 `bundlePreloadPlugin`（esbuild：bundle/cjs/node18）打进 `dist/preload/services.js`。preload 依赖清单在 `public/preload/package.json`（dev 模式 uTools 直接 require 源码需要）。
 - **App Context 单例**：`useAppContext` 用模块级 ref（非 provide/inject）在 index.vue 与各子视图间共享状态。
+- **Cline 的写入纪律（`services/cline.js`，破坏任一条 Cline 会静默丢弃整档）**：Cline 用 zod 严格校验 `~/.cline/data/settings/providers.json`——`version` 必须是字面量 `1`、每个 provider 的 `updatedAt` 必须是 ISO datetime（`toISOString`）、`tokenSource` 只能是 `manual`/`oauth`/`migration`，文件权限 `0600`。校验失败时 Cline 不报错、直接当空档处理，所以本模块在读到不合规内容时**抛错中止**，绝不「读成空 → 全量写回」。另注意 `models.json` 与 `providers.json` 是**两套独立的 `version: 1` 信封**；IDE 扩展的供应商/模型存在编辑器 globalState 里（非文件），本模块只覆盖 CLI / 桌面版 / SDK，而 MCP（`cline_mcp_settings.json`）与 rules/skills 是 CLI 与扩展共享的。改动后用 `node tests/smoke-cline-test.cjs` 验证。
 - **视图组织**：`src/Switch/<app>/ConfigView|McpView|SkillView|PluginView|UsageView.vue` + 同名 `styles/` CSS；跨应用共享组件在 `src/components/`，共享逻辑在 `src/composables/`（Agent 默认顺序与展示名元数据在 `composables/agentMeta.js`，纯数据、无副作用：切换器 / 设置弹窗 / 统计页 Agent 分组标题共用，不要在展示组件里引 `useAgentVisibility`）；单应用专属的弹窗/卡片等子组件放 `src/Switch/<app>/components/`（如 `common/components/BatchAddModelsDialog.vue`、`pi/components/PiPluginDetailDialog.vue`），沿用该视图 `styles/` 里的全局类，不重复定义样式。preload 各功能域模块也在 `public/preload/services/`（如 `skills.js`、`pi-common.js`、`claude-usage.js`），`services.js` 仅做装配（window.services 公开 API 面不可变）。
 - **数据存储**：配置存 uTools DB（API Key 经 AES-256-CBC 加密，`crypto.js`）；按机器隔离的数据（自动网关、Env 额外字段、通用 MCP 本地启停 `ccconfig_mcp_local_state_<nativeId>`（disabled 名单，主档在 ccconfig_common_mcp）、使用统计 heatmap/usage_cache、MCP 停用、Agent 启停 `ccconfig_visible_agents_<nativeId>`、外观 `ccconfig_dark_background_<nativeId>`（字段 `theme`/`enabled`/`effect`）、界面语言 `ccconfig_locale_<nativeId>`（`{ locale: 'system'|'zh-CN'|'en-US' }`））用 `_<nativeId>` 后缀分文档，旧共享档仅作迁移种子只读；桌面版 Rust 托盘通过 sidecar RPC 先取 nativeId 再读本机语言档。切换配置 = 写 managed env 字段（见 `constants.js`）+ 清非 managed + 合并全局与配置特定 extra fields；激活配置 ID 存 `ccconfig_active_config_id`。
 - **命名迁移（ccswitch → ccconfig）**：项目历史上叫 CCSwitch，已全面统一为 CCConfig。旧名只允许作为**数据兼容常量**存在，不能直接删：
@@ -65,7 +68,8 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 
 ## 构建注意
 
-- `build` / `build:app` 会先跑 `version:check` 与 `i18n:check`。
+- `build` / `build:app` 会先跑 `version:check`、`i18n:check` 与 `routes:check`。
+- **`routes:check`（`tests/smoke-app-routes-test.cjs`）是新增 agent 的防白屏闸**：`src/App.vue` 里 `<Switch v-if="[...].includes(route)" />` 的数组是**整个页面渲染的总闸**，uTools 指令的 `action.code` 不在里面时页面完全不挂载、白屏且不报错。本检查静态解析源码，校验 `APP_TABS` 每个 key（agent id）→ `<agent>Config`（common → `commonConfig`）都在白名单里、`DEEP_LINK_ROUTES` 的 route 也在白名单里、`index.vue` 的 `appMap` 覆盖一致、白名单无孤儿项与重复项。**新增 agent 时不要只补 `agentMeta` / `appTabs` / `commands.js`，`App.vue` 白名单同样必须补**，漏了构建会直接失败。
 - 构建后清理 Vite 复制到 `dist/preload` 的 node_modules（js-yaml 的 .map 会导致 uTools 打包拒绝）及 .DS_Store。
 - `@modelcontextprotocol/sdk` 在 `mcp.js` try/catch 懒加载，缺失时工具发现自动降级。
 - Base path `./`（uTools file:// 加载）。

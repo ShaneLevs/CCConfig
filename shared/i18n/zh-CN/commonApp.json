@@ -214,6 +214,7 @@
       "zcodeTooltip": "仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 ZCode；供应商名会按 ZCode 规则清洗为小写 ID",
       "dshTooltip": "dsh 支持四类协议（手工新增供应商时仅开放 OpenAI Chat / Anthropic Messages）；中文供应商名会自动清洗为路由名，密钥写入 ~/.dsh/.credentials.yaml",
       "grokTooltip": "仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 Grok Build；中文供应商名会自动清洗为 TOML 键",
+      "clineTooltip": "仅 OpenAI Chat Completions 协议的供应商可下发 Cline；中文供应商名会自动清洗为 provider ID",
       "agentPathsHint": "Claude → 写入 uTools DB 配置（Claude 配置页可见）；OpenCode → opencode.json；Pi → models.json；omp → models.yml；Reasonix → config.toml；Codex → ~/.codex/config.toml；Kimi → ~/.kimi-code/config.toml（别名 供应商/模型ID）；MiniMax Code → ~/.minimax/config.yaml（custom_provider，键名自动 ASCII 化）；Qoder → ~/.qoder/settings.json（providers，键名自动 ASCII 化）；ZCode → ~/.zcode/v2/provider_config.json（自定义模型，ID 按 ZCode 规则清洗）；Hermes → ~/.hermes/config.yaml；DSH → ~/.dsh/profiles/<profile>/cordis.patch.yml（llm-pi-ai.providers，路由名自动 ASCII 化，密钥写入 .credentials.yaml）；Grok Build → ~/.grok/config.toml（model_providers + model，键名自动清洗）"
     },
     "subscription": {

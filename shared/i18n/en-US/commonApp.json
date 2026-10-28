@@ -214,6 +214,7 @@
       "zcodeTooltip": "Only providers using the OpenAI Chat / Responses / Anthropic Messages protocol can dispatch to ZCode; provider names are sanitized to lowercase IDs by ZCode rules",
       "dshTooltip": "dsh supports four protocols (manually added providers only expose OpenAI Chat / Anthropic Messages); Chinese provider names are sanitized to route names and the key is written to ~/.dsh/.credentials.yaml",
       "grokTooltip": "Only OpenAI Chat / Responses / Anthropic Messages providers can be dispatched to Grok Build; non-ASCII provider names are sanitized into TOML keys",
+      "clineTooltip": "Only OpenAI Chat Completions providers can be dispatched to Cline; non-ASCII provider names are sanitized into provider IDs",
       "agentPathsHint": "Claude → uTools DB config (visible on the Claude config page); OpenCode → opencode.json; Pi → models.json; omp → models.yml; Reasonix → config.toml; Codex → ~/.codex/config.toml; Kimi → ~/.kimi-code/config.toml (alias provider/modelID); MiniMax Code → ~/.minimax/config.yaml (custom_provider, keys sanitized to ASCII); Qoder → ~/.qoder/settings.json (providers, keys sanitized to ASCII); ZCode → ~/.zcode/v2/provider_config.json (custom models, IDs sanitized by ZCode rules); Hermes → ~/.hermes/config.yaml; DSH → ~/.dsh/profiles/<profile>/cordis.patch.yml (llm-pi-ai.providers, route names sanitized to ASCII, key written to .credentials.yaml); Grok Build → ~/.grok/config.toml (model_providers + model, keys sanitized)"
     },
     "subscription": {

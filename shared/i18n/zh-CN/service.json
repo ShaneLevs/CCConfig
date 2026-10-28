@@ -76,6 +76,7 @@
       "zcodeProtocolUnsupported": "供应商「{name}」协议为 {api}，ZCode 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
       "hermesProtocolUnsupported": "供应商「{name}」协议为 {api}，Hermes 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
       "dshProtocolUnsupported": "供应商「{name}」协议为 {api}，dsh 仅支持 {protocols}",
+      "clineProtocolUnsupported": "供应商「{name}」协议为 {api}，Cline 仅支持 OpenAI Chat Completions 协议供应商（其他协议请先接入网关）",
       "claudeModelExists": "Claude 配置「{name}」中已有模型 {model}",
       "claudeSlotsFull": "Claude 配置「{name}」5 个模型槽位已满，请先在 Claude 配置页清理后再下发",
       "claudeSaveFailed": "保存 Claude 配置失败",
@@ -118,7 +119,8 @@
         "zcodeConfig": "ZCode 模型配置管理工具",
         "hermesConfig": "Hermes 模型配置管理工具",
         "dshConfig": "DSH（DeepSeek Harness）模型配置管理工具",
-        "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具"
+        "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具",
+        "clineConfig": "Cline（CLI / 桌面版）供应商 / 模型 / MCP / Skill 配置管理工具"
       },
       "label": {
         "installClaudeSkill": "安装 Claude Code Skill",

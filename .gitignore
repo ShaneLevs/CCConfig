@@ -34,6 +34,9 @@ dist-ssr
 .zcode/
 /opencode.db*
 
+# 本地工具目录
+.pi/
+.commandcode/
 
 
 # 桌面版（Tauri）构建产物
@@ -45,8 +48,6 @@ src-tauri/gen/schemas
 # 本机 crates 镜像配置，不入库（各人网络环境不同）
 src-tauri/.cargo/
 
-# 本地工具目录
-.pi/
 # desktop/sidecar 下的 preload 产物副本（prepare-sidecar 从 dist/preload 取，这两份不入库）
 desktop/sidecar/services.js
 desktop/sidecar/usage-worker.js

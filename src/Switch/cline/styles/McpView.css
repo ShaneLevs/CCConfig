@@ -1,0 +1,13 @@
+.cline-mcp-container { display: flex; flex-direction: column; gap: 12px; padding-top: 0; }
+
+.cline-mcp-header { display: flex; justify-content: space-between; align-items: center; }
+.cline-mcp-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.cline-mcp-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.cline-mcp-empty { padding: 60px 0; }
+.cline-mcp-list { display: flex; flex-direction: column; gap: 12px; }
+
+.cline-mcp-info-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cline-mcp-summary { color: var(--td-text-color-secondary); font-size: 13px; font-family: monospace; word-break: break-all; }
+.cline-mcp-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.cline-mcp-meta-item { font-size: 12px; color: var(--td-text-color-placeholder); }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }

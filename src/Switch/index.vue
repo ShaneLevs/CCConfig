@@ -33,6 +33,10 @@ import GrokConfigView from "./grok/ConfigView.vue";
 import GrokMcpView from "./grok/McpView.vue";
 import GrokSkillView from "./grok/SkillView.vue";
 import GrokUsageView from "./grok/UsageView.vue";
+import ClineConfigView from "./cline/ConfigView.vue";
+import ClineMcpView from "./cline/McpView.vue";
+import ClineSkillView from "./cline/SkillView.vue";
+import ClineUsageView from "./cline/UsageView.vue";
 import CommonConfigView from "./common/ConfigView.vue";
 import CommonMcpView from "./common/McpView.vue";
 import CommonSkillView from "./common/SkillView.vue";
@@ -172,6 +176,7 @@ onMounted(() => {
     hermesConfig: "hermes",
     dshConfig: "dsh",
     grokConfig: "grok",
+    clineConfig: "cline",
     commonConfig: "common",
   };
   if (appMap[props.route]) {
@@ -404,6 +409,23 @@ onUnmounted(() => {
         <GrokUsageView
           v-if="isTabVisited('grok', 'usage')"
           v-show="activeApp === 'grok' && activeTab === 'usage'"
+        />
+      </template>
+
+      <!-- Cline views（供应商 / 模型 + MCP + Skill + 使用统计） -->
+      <template v-if="isAppReady('cline')">
+        <ClineConfigView v-if="activeApp === 'cline' && activeTab === 'config'" />
+        <ClineMcpView
+          v-if="isTabVisited('cline', 'mcp')"
+          v-show="activeApp === 'cline' && activeTab === 'mcp'"
+        />
+        <ClineSkillView
+          v-if="isTabVisited('cline', 'skill')"
+          v-show="activeApp === 'cline' && activeTab === 'skill'"
+        />
+        <ClineUsageView
+          v-if="isTabVisited('cline', 'usage')"
+          v-show="activeApp === 'cline' && activeTab === 'usage'"
         />
       </template>
 

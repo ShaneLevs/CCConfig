@@ -39,6 +39,7 @@ const CMDS = {
   hermesConfig: ["Hermes配置", "Hermes config"],
   dshConfig: ["dsh配置", "DeepSeek Harness配置", "dsh config", "DeepSeek Harness config"],
   grokConfig: ["Grok配置", "Grok Build配置", "Grok config", "Grok Build config"],
+  clineConfig: ["Cline配置", "Cline config"],
 };
 
 function getFeatureDefinitions() {
@@ -163,6 +164,12 @@ function getFeatureDefinitions() {
       icon: "icon-grok.svg",
       cmds: CMDS.grokConfig,
     },
+    clineConfig: {
+      code: "clineConfig",
+      explain: t("service.commands.explain.clineConfig"),
+      icon: "icon-cline.svg",
+      cmds: CMDS.clineConfig,
+    },
   };
 }
 
@@ -182,6 +189,7 @@ const AGENT_FEATURES = {
   hermes: ["hermesConfig"],
   dsh: ["dshConfig"],
   grok: ["grokConfig"],
+  cline: ["clineConfig"],
 };
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：

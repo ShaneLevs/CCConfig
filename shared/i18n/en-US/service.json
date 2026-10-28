@@ -76,6 +76,7 @@
       "zcodeProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; ZCode only supports OpenAI Chat / Responses / Anthropic Messages",
       "hermesProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Hermes only supports OpenAI Chat / Responses / Anthropic Messages",
       "dshProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; dsh only supports {protocols}",
+      "clineProtocolUnsupported": "Provider “{name}” uses {api}, but Cline only supports OpenAI Chat Completions providers (route other protocols through the gateway)",
       "claudeModelExists": "Claude config \"{name}\" already contains model {model}",
       "claudeSlotsFull": "All 5 model slots in Claude config \"{name}\" are full. Clean up the Claude config page before dispatching",
       "claudeSaveFailed": "Failed to save Claude config",
@@ -118,7 +119,8 @@
         "zcodeConfig": "Manage ZCode model configuration",
         "hermesConfig": "Manage Hermes model configuration",
         "dshConfig": "Manage DSH (DeepSeek Harness) model configuration",
-        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager"
+        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager",
+        "clineConfig": "Cline (CLI / desktop) provider / model / MCP / skill configuration manager"
       },
       "label": {
         "installClaudeSkill": "Install Claude Code Skill",

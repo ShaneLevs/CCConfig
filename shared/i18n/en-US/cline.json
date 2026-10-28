@@ -1,0 +1,103 @@
+{
+  "cline": {
+    "config": {
+      "toolbarSubtitle": "providers.json (providers) + models.json (model catalog)",
+      "addProvider": "Add provider",
+      "editProvider": "Edit provider",
+      "addModel": "Add model",
+      "addModelTitle": "Add model",
+      "editModelTitle": "Edit model",
+      "emptyProviders": "No providers yet. Cline configures third-party endpoints over the openai-compatible protocol — add a provider first",
+      "activeTag": "In use",
+      "setActive": "Set as current",
+      "setActiveTooltip": "Writes lastUsedProvider in providers.json",
+      "defaultTag": "Default",
+      "setDefaultTooltip": "Set as this provider's default model",
+      "deleteProvider": "Delete provider",
+      "deleteProviderConfirm": "Delete provider {name}? Its model catalog is removed as well",
+      "deleteModelConfirm": "Delete model {id}?",
+      "modelsTitle": "Models",
+      "modelsEmpty": "No models under this provider yet",
+      "modelCount": "{count} models",
+      "providerIdLabel": "Provider ID (key in providers.json)",
+      "providerIdHint": "Letters, digits, underscore, hyphen, dot, colon and slash; avoid renaming after creation",
+      "displayNameLabel": "Display name (provider.name in models.json)",
+      "displayNameHint": "Display only; falls back to the provider ID when empty",
+      "baseUrlLabel": "Base URL",
+      "baseUrlHint": "OpenAI-compatible endpoint; Cline appends /chat/completions itself, so usually stop at …/v1",
+      "apiKeyLabel": "API key",
+      "apiKeyPlaceholder": "Stored as plaintext apiKey in providers.json",
+      "apiKeySavedPlaceholder": "Saved (encrypted at rest); leave blank to keep it",
+      "modelIdLabel": "Model ID",
+      "modelIdHint": "Model identifier sent to the API; may differ from the display name",
+      "nameLabel": "Display name",
+      "namePlaceholder": "Name shown in the model picker",
+      "capabilitiesLabel": "Capabilities",
+      "capabilitiesHint": "Declares what the model supports; missing tool / image capabilities disable those features in Cline",
+      "openFile": "Open providers.json",
+      "notInstalled": "~/.cline not found (Cline has not been installed or used yet)",
+      "settingsWarn": "Cline strictly validates providers.json: version must be 1, updatedAt must be an ISO timestamp, and tokenSource may only be manual / oauth / migration. Cline silently drops the whole file when any of these fails, so this tool blocks writes on invalid content"
+    },
+    "providerType": {
+      "openaiCompatible": "openai-compatible (OpenAI Chat Completions)"
+    },
+    "model": {
+      "idRequired": "Model ID is required",
+      "added": "Model {id} added",
+      "addFailed": "Failed to add: {message}",
+      "updated": "Model updated",
+      "saveFailed": "Failed to save: {message}",
+      "deleted": "Model {id} deleted",
+      "deleteFailed": "Failed to delete: {message}",
+      "defaultSet": "Default model set to {id}"
+    },
+    "provider": {
+      "idRequired": "Provider ID is required",
+      "added": "Provider {name} added",
+      "addFailed": "Failed to add: {message}",
+      "updated": "Provider updated",
+      "saveFailed": "Failed to save: {message}",
+      "deleted": "Provider {name} deleted",
+      "deleteFailed": "Failed to delete: {message}",
+      "activated": "Switched to {name}",
+      "activateFailed": "Failed to switch: {message}"
+    },
+    "mcp": {
+      "tip": "(cline_mcp_settings.json, shared by the CLI and IDE extensions)",
+      "add": "Add MCP",
+      "addFirst": "Add the first MCP",
+      "empty": "No MCP servers configured",
+      "added": "MCP server added",
+      "updated": "MCP server updated",
+      "deleted": "MCP server deleted",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "deleteConfirm": "Delete this MCP server?",
+      "enableBeforeTools": "Enable this server before inspecting its tools"
+    },
+    "skill": {
+      "tip": "(~/.cline/skills; disabling moves the folder into .disabled/)",
+      "install": "Install skill",
+      "empty": "No skills installed; use “Install skill” to add one from SkillHub / ModelScope, or drop it into the folder manually",
+      "enabledSuccess": "Enabled {name}",
+      "disabledSuccess": "Disabled {name}",
+      "deletedSuccess": "Deleted {name}",
+      "deleteConfirm": "Delete this skill folder?",
+      "openDirFailed": "Unable to open the folder",
+      "openFolder": "Open folder",
+      "folder": "Folder",
+      "detailTitle": "Skill details",
+      "status": "Status",
+      "fileCount": "{count} files",
+      "fileCountLabel": "Files",
+      "description": "Description",
+      "disabledSection": "Disabled ({count})"
+    },
+    "usage": {
+      "tip": "Source: metadata.usage in ~/.cline/data/sessions/<session>/<session>.json",
+      "empty": "No Cline usage recorded yet",
+      "emptyHint": "Run a session with cline to generate {path}; ignore this if Cline is not installed or unused",
+      "modelHint": "Session-level totals; uncached input + cache read + cache write + output"
+    }
+  }
+}
