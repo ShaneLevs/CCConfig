@@ -58,7 +58,8 @@ export function readVersion(target) {
   const { text } = readTarget(target);
 
   if (target.mode === "cargo-lock") {
-    const m = text.match(/\[\[package\]\]\nname = "ccconfig"\nversion = "([^"]+)"/);
+    // Windows 检出可能把文件转成 CRLF（runner 的 core.autocrlf），这里两种换行都认
+    const m = text.match(/\[\[package\]\]\r?\nname = "ccconfig"\r?\nversion = "([^"]+)"/);
     if (!m) throw new Error(`在 ${target.file} 里找不到 name = "ccconfig" 的 package 块`);
     return m[1];
   }
@@ -77,7 +78,7 @@ export function writeVersion(target, version) {
   let next;
 
   if (target.mode === "cargo-lock") {
-    const re = /(\[\[package\]\]\nname = "ccconfig"\nversion = ")[^"]+(")/;
+    const re = /(\[\[package\]\]\r?\nname = "ccconfig"\r?\nversion = ")[^"]+(")/;
     if (!re.test(text)) throw new Error(`在 ${target.file} 里找不到 name = "ccconfig" 的 package 块`);
     next = text.replace(re, `$1${version}$2`);
   } else if (target.mode === "cargo") {

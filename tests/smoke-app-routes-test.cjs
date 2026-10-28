@@ -65,10 +65,10 @@ const parseDeepLinkRoutes = () => {
 // index.vue 的 appMap（路由码 → agent id）
 const parseAppMap = () => {
   const src = read('src/Switch/index.vue')
-  const m = src.match(/const appMap = \{([\s\S]*?)\n  \};/)
+  const m = src.match(/const appMap = \{([\s\S]*?)\r?\n  \};/)
   if (!m) return null
   const map = {}
-  for (const line of m[1].split('\n')) {
+  for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(/^\s*([A-Za-z][\w]*)\s*:\s*["']([^"']+)["']\s*,?\s*$/)
     if (kv) map[kv[1]] = kv[2]
   }

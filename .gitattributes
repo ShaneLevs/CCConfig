@@ -1,0 +1,16 @@
+# 统一用 LF 检出：Windows runner（core.autocrlf）曾把 Cargo.lock 转成 CRLF，
+# 让 version:check 里按 \n 匹配 package 块的正则直接失败。
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
