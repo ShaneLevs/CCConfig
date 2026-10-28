@@ -44,8 +44,9 @@ export const AGENT_META = {
 export const agentLabel = (id) => AGENT_META[id]?.name || id;
 
 // 面向「所有 agent」的选项列表（如下发到 Agent 的目标勾选）：顺序跟随传入的 agentOrder，
-// 与切换器下拉 / 左侧栏 / 设置里的排序保持一致；未收录的 id 跳过。
-export const agentOptionsInOrder = (order = AGENT_ORDER) =>
+// 与切换器下拉 / 左侧栏 / 设置里的排序保持一致；传入 visible（设置里的启停状态）时，
+// 隐藏的 agent 不再出现（缺键按显示处理，与 useAgentVisibility 的默认一致）。未收录的 id 跳过。
+export const agentOptionsInOrder = (order = AGENT_ORDER, visible = null) =>
   order
-    .filter((id) => AGENT_META[id])
+    .filter((id) => AGENT_META[id] && (!visible || visible[id] !== false))
     .map((id) => ({ value: id, label: AGENT_META[id].name }));

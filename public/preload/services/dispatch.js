@@ -704,6 +704,11 @@ const dispatchToCline = (provider, model, opts) => {
     cline.setClineDefaultModelForProvider(key, modelId)
     cline.setClineActiveProvider(key)
     suffix = t('service.dispatch.setAsDefault')
+  } else {
+    // 没要求设默认时，只在「Cline 里没有生效的当前供应商」时自动接管（空配置 / lastUsedProvider 悬空 /
+    // 条目被判废）。否则 Cline 里等于没配置 —— 会话退回内置 cline 账号，用户看到的就是「下发没生效」。
+    const auto = cline.activateClineIfUnset(key)
+    if (auto.activated) suffix = t('service.dispatch.clineAutoActivated')
   }
   const keyNote = key === name ? '' : t('service.dispatch.keyNote', { key })
   return (

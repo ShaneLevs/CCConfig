@@ -105,30 +105,29 @@ fn log_dir() -> PathBuf {
     data_dir().join("logs")
 }
 
-/// 把改名/改位置之前的数据一次性搬到新目录（新位置已有 db.json 时跳过，不覆盖）
+/// 把改名/改位置之前的数据一次性搬到新目录（新位置已有数据时跳过，不覆盖）。
+///
+/// DB 已改为 `~/.ccconfig/db/` 下每文档一个 JSON 文件，旧的 `db.json` 不再读取也不再搬运；
+/// 这里只迁移 Node 路径缓存与日志。
 fn migrate_legacy_data() {
     let home = home_dir();
     let new_dir = data_dir();
     let legacy_dir = home.join(LEGACY_APP_SUPPORT_DIR);
 
-    if new_dir.join("db.json").is_file() {
+    // 新位置已有数据（新格式的 db/ 目录或 runtime.json）就跳过
+    if new_dir.join("db").is_dir() || new_dir.join("runtime.json").is_file() {
         return;
     }
-    if !legacy_dir.join("db.json").is_file() {
-        return;
-    }
-    if let Err(e) = std::fs::create_dir_all(&new_dir) {
-        eprintln!("[ccconfig] 创建数据目录失败: {e}");
-        return;
-    }
-    for name in ["db.json", "runtime.json"] {
-        let src = legacy_dir.join(name);
-        if !src.is_file() {
-            continue;
+
+    let runtime_src = legacy_dir.join("runtime.json");
+    if runtime_src.is_file() {
+        if let Err(e) = std::fs::create_dir_all(&new_dir) {
+            eprintln!("[ccconfig] 创建数据目录失败: {e}");
+            return;
         }
-        match std::fs::copy(&src, new_dir.join(name)) {
-            Ok(_) => eprintln!("[ccconfig] 已迁移 {name} → {}", new_dir.display()),
-            Err(e) => eprintln!("[ccconfig] 迁移 {name} 失败: {e}"),
+        match std::fs::copy(&runtime_src, new_dir.join("runtime.json")) {
+            Ok(_) => eprintln!("[ccconfig] 已迁移 runtime.json → {}", new_dir.display()),
+            Err(e) => eprintln!("[ccconfig] 迁移 runtime.json 失败: {e}"),
         }
     }
     // 旧日志一并搬过来，保留排查线索
@@ -610,7 +609,7 @@ fn log_startup_failure(line: &str) {
 }
 
 /// 当前界面语言：优先读本机文档 ccconfig_locale_<nativeId>，再回退旧共享档 / 系统语言。
-/// 走 /rpc 而不是直接读 db.json：sidecar 的落盘有 200ms 防抖，窗口长期开着时文件可能滞后。
+/// 走 /rpc 而不是直接读 db/ 下的文档文件：sidecar 的落盘有 200ms 防抖，窗口长期开着时文件可能滞后。
 fn current_locale(app: &tauri::AppHandle) -> i18n::Locale {
     let native_id = sidecar_rpc(app, "__utools.getNativeId")
         .and_then(|v| v.get("value").and_then(|x| x.as_str()).map(str::to_string))

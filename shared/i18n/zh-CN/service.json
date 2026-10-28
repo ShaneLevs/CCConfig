@@ -90,6 +90,7 @@
       "providerModelAliasUpdated": "供应商 {name} 已更新，模型别名 {alias} 已写入",
       "ompModelRolesHint": "（默认模型请到 omp 配置页配置 modelRoles）",
       "setAsDefault": "，已设为默认模型",
+      "clineAutoActivated": "，并已自动启用为 Cline 当前使用的供应商（Cline 里原本没有可用的当前配置）",
       "setAsPrimary": "，已设为首选模型",
       "keyNote": "（键 {key}）",
       "idNote": "（ID {id}）",

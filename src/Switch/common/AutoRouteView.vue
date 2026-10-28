@@ -5,7 +5,6 @@ import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Che
 import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../../composables/useAgentVisibility";
-import { agentOptionsInOrder } from "../../composables/agentMeta";
 import "./styles/AutoRouteView.css";
 
 const { t } = useI18n();
@@ -13,9 +12,9 @@ const { t } = useI18n();
 // 自动网关：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
 // 开启状态同步到共享 ref，驱动 index.vue「网关」tab 按钮的绿点标识
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
-// 下发目标顺序跟随设置里的 Agent 显示顺序（agentOrder），与切换器 / 侧栏一致
-const { agentOrder } = useAgentVisibility();
-const AGENT_DISPATCH_OPTIONS = computed(() => agentOptionsInOrder(agentOrder.value));
+// 下发目标的顺序与显隐都跟随设置里的 Agent 管理（与切换器 / 侧栏一致）
+const { visibleAgentOptions } = useAgentVisibility();
+const AGENT_DISPATCH_OPTIONS = visibleAgentOptions;
 
 const loading = ref(false);
 const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] });

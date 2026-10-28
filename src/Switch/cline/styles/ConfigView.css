@@ -24,7 +24,9 @@
 .cline-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
 
 .cline-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.cline-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.cline-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
+/* 「启用」按钮：唯一有文字的头部操作，字号略小一点避免挤压标题 */
+.cline-provider-header-right .t-button { font-size: 12px; }
 .cline-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
 .cline-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
 

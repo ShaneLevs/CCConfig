@@ -362,6 +362,50 @@ cline.addClineProvider({ id: 'fresh', baseUrl: 'https://api.example.com/v1', api
 eq(readJson(providersPath).lastUsedProvider, 'fresh', '新增供应商在有悬空当前使用时自动接管')
 eq(cline.getClineActiveProvider(), 'fresh', '接管后实际生效')
 
+// ==================== 12. 下发自动接管（空配置时启用下发的 provider + 第一个模型） ====================
+console.log('12. 下发自动接管')
+// 清空配置，模拟「Cline 里什么都没有」时第一次下发
+fs.rmSync(providersPath, { force: true })
+fs.rmSync(modelsPath, { force: true })
+// 下发顺序：先 provider、再 model，然后由 activateClineIfUnset 接管
+const autoKey = cline.providerKeyFor('网关')
+cline.upsertClineProvider(autoKey, { name: '网关', baseUrl: 'http://127.0.0.1:17877/v1', apiKey: 'gw' })
+cline.upsertClineModel(autoKey, { id: 'gpt-5', name: 'GPT-5' })
+cline.upsertClineModel(autoKey, { id: 'claude-5', name: 'Claude 5' })
+const auto = cline.activateClineIfUnset(autoKey)
+eq(auto.activated, true, '空配置时下发自动接管')
+eq(readJson(providersPath).lastUsedProvider, autoKey, '自动写上 lastUsedProvider')
+// 目录里第一个模型（按 id 排序：claude-5 < gpt-5）
+eq(auto.modelId, 'claude-5', '自动选中目录里第一个模型')
+eq(readJson(providersPath).providers[autoKey].settings.model, 'claude-5', '同步写 settings.model')
+eq(readJson(modelsPath).providers[autoKey].provider.defaultModelId, 'claude-5', '同步写 defaultModelId')
+eq(cline.getClineProviderList().find((p) => p.id === autoKey).isActive, true, '页面显示为当前使用')
+
+// 已有生效配置时不再自动改用户的选择
+cline.addClineProvider({ id: 'mine', baseUrl: 'https://api.example.com/v1', apiKey: 'k' })
+cline.setClineActiveProvider('mine')
+cline.upsertClineProvider(autoKey, { name: '网关', baseUrl: 'http://127.0.0.1:17877/v1', apiKey: 'gw' })
+const auto2 = cline.activateClineIfUnset(autoKey)
+eq(auto2.activated, false, '已有生效配置时不接管')
+eq(readJson(providersPath).lastUsedProvider, 'mine', '不覆盖用户选的当前使用')
+
+// lastUsedProvider 悬空（指向已删条目）时同样接管
+const gapDoc2 = readJson(providersPath)
+gapDoc2.lastUsedProvider = 'gone'
+fs.writeFileSync(providersPath, JSON.stringify(gapDoc2, null, 2), { mode: 0o600 })
+eq(cline.activateClineIfUnset(autoKey).activated, true, 'lastUsedProvider 悬空时接管')
+eq(cline.getClineActiveProvider(), autoKey, '悬空修好后实际生效')
+
+// 当前条目已被设过默认模型时，接管不再改模型
+const pinnedDoc = readJson(providersPath)
+pinnedDoc.providers[autoKey].settings.model = 'gpt-5'
+fs.writeFileSync(providersPath, JSON.stringify(pinnedDoc, null, 2), { mode: 0o600 })
+delete pinnedDoc.lastUsedProvider
+fs.writeFileSync(providersPath, JSON.stringify(pinnedDoc, null, 2), { mode: 0o600 })
+const auto3 = cline.activateClineIfUnset(autoKey)
+eq(auto3.activated, true, '清空 lastUsedProvider 后接管')
+eq(auto3.modelId, 'gpt-5', '已有 settings.model 时沿用，不改成第一个模型')
+
 console.log(`\n结果: ${passed} 通过, ${failed} 失败`)
 fs.rmSync(tmp, { recursive: true, force: true })
 process.exit(failed ? 1 : 0)

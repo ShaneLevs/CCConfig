@@ -6,7 +6,8 @@
 //   - db.put(doc) 无 _rev 时新建、有 _rev 时校验，不一致返回 { error: true, name: 'conflict' }
 //   - 单文档上限 1 MB
 //   - db.remove 接受 id 字符串或 doc 对象
-//   - db.allDocs() 无参返回全部文档数组
+//   - db.allDocs() 无参返回全部、传字符串按 ID 前缀过滤、传数组按 ID 取
+// 存储：~/.ccconfig/db/ 下一个文档一个 JSON 文件（文件名映射见下方 DB 段落）。
 // 与文档的唯一有意偏差：新建文档时若携带 _rev（例如从旧导出数据导入）忽略之，不报 not_found，
 // 以免迁移数据因残留 _rev 而写入失败。
 //
@@ -19,67 +20,123 @@ const crypto = require("node:crypto");
 const { execFileSync, spawnSync } = require("node:child_process");
 
 // 数据目录在用户目录下（与 .claude / .dsh / .codex 等 agent 配置同层，便于备份与排查），
-// 不再放 ~/Library/Application Support。旧位置在 Rust 启动时一次性迁移。
+// 不再放 ~/Library/Application Support。旧位置在 Rust 启动时只迁移 runtime.json 与日志；
+// 数据库已改为 db/ 下每文档一文件，旧 db.json 不再读取。
 const APP_SUPPORT = () =>
   process.env.CCCONFIG_DATA_DIR ||
   process.env.CCSWITCH_DATA_DIR || // 兼容旧环境变量名
   path.join(os.homedir(), ".ccconfig");
 
-const DB_FILE = () => path.join(APP_SUPPORT(), "db.json");
+const DB_DIR = () => path.join(APP_SUPPORT(), "db");
 const MAX_DOC_BYTES = 1024 * 1024;
 const FLUSH_DEBOUNCE_MS = 200;
 
 // ==================== DB ====================
+//
+// 存储形态：`~/.ccconfig/db/<slug>-<sha1(id) 前 12 位>.json`，一个文档一个文件。
+//
+// 不直接拿文档 ID 当文件名：ID 片段可能来自用户配置（`ccconfig_mcp_disabled_<nativeId>_<name>`），
+// 含 `/`、`:`、中文、`..` 都合法；而 macOS 默认的大小写不敏感 / Unicode 规范化不敏感的卷会把
+// `Foo` 与 `foo`、NFC 与 NFD 落到同一个文件。slug 只负责可读性，哈希负责唯一性，真正的 `_id`
+// 以文件内容为准。
+//
+// 写入沿用 uTools 语义：_rev 冲突校验、单文档 1MB 上限。一次 put 只标脏一条文档，
+// 200ms 防抖后只落这一条；flushNow() 供 onPluginEnter/Out、退出与 allDocs 前强制刷盘。
 
-let _docs = null; // Map<string, doc>
+let _cache = new Map(); // id -> doc | null（null = 已确认不存在）
+let _dirty = new Map(); // id -> "put" | "delete"
 let _flushTimer = null;
-let _flushPending = false;
 
 function ensureDir() {
-  const dir = APP_SUPPORT();
+  const dir = DB_DIR();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
-function loadDb() {
-  if (_docs) return;
-  _docs = new Map();
+function docFile(id) {
+  const hash = crypto
+    .createHash("sha1")
+    .update(String(id), "utf8")
+    .digest("hex")
+    .slice(0, 12);
+  const slug =
+    String(id)
+      .replace(/[^A-Za-z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "doc";
+  return path.join(DB_DIR(), `${slug}-${hash}.json`);
+}
+
+function readDoc(id) {
+  if (_cache.has(id)) return _cache.get(id);
+  let doc = null;
   try {
-    const raw = fs.readFileSync(DB_FILE(), "utf8");
-    const obj = JSON.parse(raw);
-    for (const [id, doc] of Object.entries(obj)) {
-      if (doc && typeof doc === "object") _docs.set(id, doc);
+    const parsed = JSON.parse(fs.readFileSync(docFile(id), "utf8"));
+    if (parsed && parsed._id === id) doc = parsed;
+    else if (parsed && typeof parsed._id === "string") {
+      console.error(`[shim] 文件名哈希撞车，忽略 ${parsed._id}`);
     }
   } catch (e) {
     if (e.code !== "ENOENT") {
-      console.error(`[shim] db 读取失败，按空库继续: ${e.message}`);
+      console.error(`[shim] 读取文档 ${id} 失败: ${e.message}`);
     }
   }
+  _cache.set(id, doc);
+  return doc;
 }
 
-function flushNow() {
-  if (!_docs || !_flushPending) return;
-  _flushPending = false;
+function writeDocFile(file, doc) {
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   try {
-    ensureDir();
-    const obj = Object.create(null);
-    for (const [id, doc] of _docs) obj[id] = doc;
-    const target = DB_FILE();
-    const tmp = `${target}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(obj), { encoding: "utf8", mode: 0o600 });
-    fs.renameSync(tmp, target); // 原子替换，避免 kill -9 留下半截文件
+    fs.writeFileSync(tmp, JSON.stringify(doc), { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(tmp, file); // 原子替换，避免 kill -9 留下半截文件
     // 库里含 AES 加密后的 API Key 与网关 key，收紧为仅本人可读
     try {
-      fs.chmodSync(target, 0o600);
+      fs.chmodSync(file, 0o600);
     } catch (e) {
       /* 忽略（非 unix 文件系统） */
     }
   } catch (e) {
-    console.error(`[shim] db 落盘失败: ${e.message}`);
+    try {
+      fs.unlinkSync(tmp);
+    } catch (e2) {
+      /* 忽略 */
+    }
+    throw e;
   }
 }
 
-function markDirty() {
-  _flushPending = true;
+function flushNow() {
+  if (_dirty.size === 0) return;
+  const pending = _dirty;
+  _dirty = new Map();
+  try {
+    ensureDir();
+  } catch (e) {
+    console.error(`[shim] 创建文档目录失败: ${e.message}`);
+    for (const [id, op] of pending) _dirty.set(id, op);
+    return;
+  }
+  for (const [id, op] of pending) {
+    try {
+      if (op === "delete") {
+        try {
+          fs.unlinkSync(docFile(id));
+        } catch (e) {
+          if (e.code !== "ENOENT") throw e;
+        }
+      } else {
+        const doc = _cache.get(id);
+        if (doc) writeDocFile(docFile(id), doc);
+      }
+    } catch (e) {
+      console.error(`[shim] 文档落盘失败 ${id}: ${e.message}`);
+      _dirty.set(id, op); // 下次 flushNow / 防抖再试
+    }
+  }
+}
+
+function markDirty(id, op) {
+  _dirty.set(id, op);
   if (_flushTimer) return;
   _flushTimer = setTimeout(() => {
     _flushTimer = null;
@@ -99,13 +156,11 @@ function clone(value) {
 
 const db = {
   get(id) {
-    loadDb();
-    const doc = _docs.get(String(id));
+    const doc = readDoc(String(id));
     return doc ? clone(doc) : null;
   },
 
   put(doc) {
-    loadDb();
     if (!doc || typeof doc !== "object" || typeof doc._id !== "string" || !doc._id) {
       return { error: true, name: "bad_request", message: "doc._id 必须是非空字符串" };
     }
@@ -120,7 +175,7 @@ const db = {
       return { error: true, name: "too_large", message: `文档 ${size} 字节，超过 1MB 上限`, id };
     }
 
-    const cur = _docs.get(id);
+    const cur = readDoc(id);
     if (cur && cur._rev && doc._rev !== cur._rev) {
       return {
         error: true,
@@ -133,30 +188,72 @@ const db = {
     const rev = nextRev(cur && cur._rev);
     const stored = clone(doc);
     stored._rev = rev;
-    _docs.set(id, stored);
-    markDirty();
+    _cache.set(id, stored);
+    markDirty(id, "put");
     return { ok: true, id, rev };
   },
 
   remove(idOrDoc, maybeRev) {
-    loadDb();
     const isDoc = idOrDoc && typeof idOrDoc === "object";
     const id = isDoc ? idOrDoc._id : idOrDoc;
     const rev = isDoc ? idOrDoc._rev : maybeRev;
     if (!id) return { error: true, name: "bad_request", message: "缺少 _id" };
-    const cur = _docs.get(String(id));
+    const cur = readDoc(String(id));
     if (!cur) return { error: true, name: "not_found", message: "文档不存在", id: String(id) };
     if (rev && cur._rev && rev !== cur._rev) {
       return { error: true, name: "conflict", message: "Document update conflict", id: String(id) };
     }
-    _docs.delete(String(id));
-    markDirty();
+    _cache.set(String(id), null);
+    markDirty(String(id), "delete");
     return { ok: true, id: String(id) };
   },
 
-  allDocs() {
-    loadDb();
-    return Array.from(_docs.values()).map(clone);
+  // 对齐 uTools：无参返回全部、字符串按 ID 前缀过滤、数组按 ID 取
+  allDocs(arg) {
+    flushNow(); // 先把内存里的写入/删除落到磁盘，再以磁盘为准扫描
+    if (Array.isArray(arg)) {
+      const docs = [];
+      for (const id of arg) {
+        const doc = readDoc(String(id));
+        if (doc) docs.push(clone(doc));
+      }
+      return docs;
+    }
+    const prefix = typeof arg === "string" ? arg : "";
+    const docs = [];
+    const seen = new Set();
+    let names = [];
+    try {
+      names = fs.readdirSync(DB_DIR());
+    } catch (e) {
+      if (e.code !== "ENOENT") console.error(`[shim] 读取文档目录失败: ${e.message}`);
+    }
+    for (const name of names) {
+      if (!name.endsWith(".json")) continue; // 跳过 .DS_Store、残留 .tmp 等
+      let parsed;
+      try {
+        parsed = JSON.parse(fs.readFileSync(path.join(DB_DIR(), name), "utf8"));
+      } catch (e) {
+        console.error(`[shim] 跳过无法解析的文档文件 ${name}: ${e.message}`);
+        continue;
+      }
+      if (!parsed || typeof parsed._id !== "string") continue;
+      if (prefix && !parsed._id.startsWith(prefix)) continue;
+      // 磁盘内容可能落后于内存（写盘失败时仍在 _dirty），内存有记录就以内存为准
+      const cached = _cache.get(parsed._id);
+      const doc = cached === undefined ? parsed : cached;
+      if (cached === undefined) _cache.set(parsed._id, parsed);
+      if (!doc || seen.has(parsed._id)) continue;
+      seen.add(parsed._id);
+      docs.push(clone(doc));
+    }
+    // 写盘失败、只剩内存副本的文档也一并返回
+    for (const [id, doc] of _cache) {
+      if (!doc || seen.has(id) || !_dirty.has(id)) continue;
+      if (prefix && !id.startsWith(prefix)) continue;
+      docs.push(clone(doc));
+    }
+    return docs;
   },
 };
 
@@ -203,17 +300,15 @@ function firstMacAddress() {
 
 // 与 uTools 的「按插件独立哈希的设备 ID」语义对齐：稳定、不可逆、不含明文主机信息
 function getNativeId() {
-  loadDb();
-  const cached =
-    _docs.get(NATIVE_ID_DOC) || _docs.get(LEGACY_NATIVE_ID_DOC);
+  const cached = readDoc(NATIVE_ID_DOC) || readDoc(LEGACY_NATIVE_ID_DOC);
   if (cached && typeof cached.value === "string" && cached.value) return cached.value;
 
   const seed = `${os.hostname()}|${firstMacAddress()}|${NATIVE_ID_SEED_SUFFIX}`;
   const value = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 32);
 
   const doc = { _id: NATIVE_ID_DOC, value, createdAt: Date.now() };
-  _docs.set(NATIVE_ID_DOC, doc);
-  markDirty();
+  _cache.set(NATIVE_ID_DOC, doc);
+  markDirty(NATIVE_ID_DOC, "put");
   return value;
 }
 

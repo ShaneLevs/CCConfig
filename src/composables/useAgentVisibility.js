@@ -1,6 +1,6 @@
 import { h, ref, computed, watch } from "vue";
 import { i18n } from "../i18n";
-import { AGENT_ORDER, LEGACY_AGENT_ORDERS, AGENT_META, COMMON_APP_META } from "./agentMeta";
+import { AGENT_ORDER, LEGACY_AGENT_ORDERS, AGENT_META, COMMON_APP_META, agentOptionsInOrder } from "./agentMeta";
 
 // Agent 显示管理：勾选/拖拽排序 → 按设备隔离持久化（uTools DB）+ 同步 uTools 启动指令。
 // 模块级单例，index.vue 设置弹窗（AgentVisibilitySettings）与切换器下拉共用。
@@ -151,6 +151,10 @@ const appDropdownOptions = computed(() => {
   return opts;
 });
 
+// 面向「所有 agent」的可选项（如通用库 / 网关的「下发到 Agent」目标勾选）：
+// 顺序与显隐都跟随设置里的 Agent 管理，隐藏的 agent 不再作为下发目标出现。
+const visibleAgentOptions = computed(() => agentOptionsInOrder(agentOrder.value, visibleAgents.value));
+
 export function useAgentVisibility() {
   return {
     AGENT_ORDER,
@@ -158,6 +162,7 @@ export function useAgentVisibility() {
     visibleAgents,
     agentOrder,
     appDropdownOptions,
+    visibleAgentOptions,
     toggleAgentVisibility,
   };
 }

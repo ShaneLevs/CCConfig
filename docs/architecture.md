@@ -34,12 +34,22 @@ docs/         # 架构文档
 | `由 CCSwitch 生成`（codex 条目标记） | 同上（`codex.js` 使用） | 识别改名前的 `~/.codex/models.json` 条目 |
 | 导出文件 `app: 'ccswitch'` | 同上（`config.js` 使用） | 导入旧导出文件时归一为新值 |
 | 网关响应头 `x-ccswitch-left-out` | 同上（`autoroute.js` 使用） | 新旧头同时补发，外部脚本不断 |
-| `~/Library/Application Support/CCSwitch`、`~/Library/Logs/CCSwitch` | `src-tauri/src/main.rs` 常量区 | 启动时把老数据/旧日志搬到 `~/.ccconfig` |
+| `~/Library/Application Support/CCSwitch`、`~/Library/Logs/CCSwitch` | `src-tauri/src/main.rs` 常量区 | 启动时把 `runtime.json` 与旧日志搬到 `~/.ccconfig`（DB 已改为 `db/` 每文档一文件，旧 `db.json` 不再迁移） |
 | `CCSWITCH_NODE` | `src-tauri/src/node_runtime.rs` | 旧环境变量作回退 |
 | `CCSWITCH_DATA_DIR` | `desktop/sidecar/utools-shim.js` | 同上 |
 | nativeId 哈希种子 `ccswitch-desktop`、旧文档 `ccswitch_runtime_id` | `desktop/sidecar/utools-shim.js` | **绝不能改**：变了会重算出新的 nativeId，`_<nativeId>` 文档全部孤儿化 |
 
 迁移只做两件事：文档 ID 前缀改名 + 旧格式密文换盐重加密（`<iv>:<ct>` → `v2:<iv>:<ct>`）。密文带版本前缀而不是「先试新盐、失败再试旧盐」：AES-CBC 用错钥匙解密有约 1/256 概率填充合法，会静默返回乱码。幂等、失败保留旧档下次重试。冒烟测试：`node tests/smoke-db-migrate-test.cjs`。
+
+### 桌面版本地数据库（`desktop/sidecar/utools-shim.js`）
+
+uTools 版把文档交给宿主 DB；桌面版在 sidecar 里用文件实现同一套 `utools.db` API，preload services 与渲染层的调用方式不变。
+
+- 位置：`~/.ccconfig/db/<slug>-<sha1(id) 前 12 位>.json`，一文档一文件；目录 0700、文件 0600。
+- 文件名不直接用文档 ID：ID 可能含 `/`、`:`、中文（如 `ccconfig_mcp_disabled_<nativeId>_<name>`），而 macOS 默认卷大小写与 Unicode 规范化不敏感，`Foo`/`foo`、NFC/NFD 会撞文件。slug 只保证可读，哈希保证唯一，真实 `_id` 以文件内容为准。
+- 语义与 uTools 对齐：`_rev` 冲突 / `missing_rev`、单文档 1MB、`remove` 接受 id 或 doc、`allDocs()` 无参 / 前缀 / ID 数组。
+- 写入：`put` / `remove` 只标脏该文档，200ms 防抖后只重写这一条（临时文件 + rename 原子替换）；`onPluginEnter` / `onPluginOut` / 退出 / `allDocs` 前强制 `flushNow()`。内存 Map 既是读缓存，也是进程内的事实来源。
+- 冒烟测试：`node tests/smoke-db-shim-test.cjs`（跨进程持久化、特殊 ID、`allDocs`、写入放大、权限）。
 
 ## 数据流
 
@@ -298,7 +308,10 @@ Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文�
          （`valid` / `invalidReason` / `invalidValue`）把上述判废原因回传页面，由 ConfigView 显式提示；
          `setClineActiveProvider` 拒绝把判废条目设为当前使用
     切换供应商 = 写 lastUsedProvider；删除当前供应商时清空 lastUsedProvider 与 modes.voiceInput 引用；
-    新增供应商时若当前无「实际生效」的供应商（首次 / 悬空）则自动接管，避免新建后仍停在「不生效」
+    新增供应商时若当前无「实际生效」的供应商（首次 / 悬空）则自动接管，避免新建后仍停在「不生效」；
+    通用库 / 网关下发（`dispatchToCline`）在未勾「设为默认」时也调 `activateClineIfUnset`：
+    仅当 Cline 里没有生效的当前供应商（空配置 / lastUsedProvider 悬空 / 条目被判废）才启用刚下发的这条，
+    并给它选上目录里第一个模型（settings.model + defaultModelId 双写）；已有生效配置时不改动用户的选择
   <data>/settings/models.json  —— 独立于 providers.json 的另一套 { version: 1, providers: {...} } 信封
     providers.<providerId> = { provider: { name, baseUrl, defaultModelId? }, models: { <modelId>: {
       id, name?, contextWindow?, maxTokens?, capabilities? } }, discoveredModelIds? }

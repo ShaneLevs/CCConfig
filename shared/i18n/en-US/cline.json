@@ -10,7 +10,7 @@
       "emptyProviders": "No providers yet. Cline configures third-party endpoints over the openai-compatible protocol — add a provider first",
       "activeTag": "In use",
       "setActive": "Set as current",
-      "setActiveTooltip": "Writes lastUsedProvider in providers.json",
+      "setActiveTooltip": "Set as current (writes lastUsedProvider in providers.json; Cline runs only that entry)",
       "defaultTag": "Default",
       "setDefaultTooltip": "Set as this provider's default model",
       "deleteProvider": "Delete provider",

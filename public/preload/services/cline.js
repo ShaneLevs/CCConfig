@@ -543,6 +543,29 @@ const setClineActiveProvider = (id) => {
   return pid
 }
 
+// 下发后自动接管：仅当 Cline 里「没有实际生效的当前供应商」时（配置为空 / lastUsedProvider 悬空 /
+// 条目被判废），才把刚下发的这条设为当前使用，并在它还没有默认模型时选上目录里的第一个模型。
+// 已有生效配置时绝不改动用户的选择 —— 用户点了 setDefault 才会切换。
+// 返回 { activated, modelId }：activated=true 表示这次新建/接管了当前使用。
+const activateClineIfUnset = (providerKey) => {
+  const pid = assertProviderId(providerKey)
+  const doc = readProvidersDoc()
+  if (!doc.providers[pid]) return { activated: false, modelId: '' }
+  if (effectiveLastUsedProvider(doc)) return { activated: false, modelId: '' }
+
+  // 先补默认模型：settings.model 是 Cline 会话实际使用的模型，缺省时它会退回内置 gpt-4o
+  const modelsDoc = readModelsDoc()
+  const entry = modelsOfProvider(modelsDoc, pid)
+  const modelIds = entry && entry.models && typeof entry.models === 'object' ? Object.keys(entry.models) : []
+  let modelId = typeof doc.providers[pid].settings?.model === 'string' ? doc.providers[pid].settings.model : ''
+  if (!modelId && modelIds.length > 0) {
+    modelId = modelIds.sort((a, b) => a.localeCompare(b))[0]
+    setClineDefaultModel(pid, modelId)
+  }
+  setClineActiveProvider(pid)
+  return { activated: true, modelId }
+}
+
 // 设置推理档位（settings.reasoning）。effort 传 '' 表示不写（交给 Cline 的默认），
 // 传 'none' 写成 Cline 选择器关掉思考时的形状 { enabled: false }：
 // 带 effort 的 { enabled: false } 会被 Cline 忽略 effort（实读为「关闭」），写清楚才不会让人误解。
@@ -1279,6 +1302,7 @@ module.exports = {
   readProvidersDoc, writeProvidersDoc, getClineProviderList, getClineActiveProvider,
   getClineDanglingActiveProvider, checkProviderEntry, effectiveLastUsedProvider,
   addClineProvider, updateClineProvider, deleteClineProvider, setClineActiveProvider, setClineProvider,
+  activateClineIfUnset,
   setClineReasoning, normalizeReasoning, CLINE_REASONING_EFFORTS,
   // 模型
   readModelsDoc, writeModelsDoc, getClineModelList,

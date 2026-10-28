@@ -387,9 +387,11 @@ onMounted(() => setTimeout(refresh, 50));
             </template>
             <template #headerRightContent>
               <div class="cline-provider-header-right" @click.stop>
+                <!-- 设为当前使用：带文字，否则只有一个小绿勾，看不出是「启用」 -->
                 <Tooltip v-if="!p.isActive" :content="t('cline.config.setActiveTooltip')" placement="top">
-                  <Button size="small" theme="success" variant="text" :disabled="!p.valid" @click="setActive(p)">
+                  <Button size="small" theme="success" variant="outline" :disabled="!p.valid" @click="setActive(p)">
                     <template #icon><CheckCircleFilledIcon /></template>
+                    {{ t("common.enable") }}
                   </Button>
                 </Tooltip>
                 <Tooltip :content="t('cline.config.editProvider')" placement="top">

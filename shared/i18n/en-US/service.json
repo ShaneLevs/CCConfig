@@ -90,6 +90,7 @@
       "providerModelAliasUpdated": "Provider {name} updated; model alias {alias} written",
       "ompModelRolesHint": " (configure modelRoles on the omp config page for the default model)",
       "setAsDefault": ", set as default model",
+      "clineAutoActivated": ", and automatically enabled as Cline's provider in use (Cline had no usable provider in use)",
       "setAsPrimary": ", set as preferred model",
       "keyNote": " (key {key})",
       "idNote": " (ID {id})",

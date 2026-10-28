@@ -4,11 +4,10 @@ import { useI18n } from "vue-i18n";
 import { Dialog, Cascader, CheckboxGroup, Checkbox, Tooltip, MessagePlugin } from "tdesign-vue-next";
 import { formatNumber } from "../../../utils/format";
 import { useAgentVisibility } from "../../../composables/useAgentVisibility";
-import { agentOptionsInOrder } from "../../../composables/agentMeta";
 
 const { t } = useI18n();
-// 目标 agent 顺序跟随设置里的 Agent 显示顺序（agentOrder），与切换器 / 侧栏一致
-const { agentOrder } = useAgentVisibility();
+// 目标 agent 的顺序与显隐都跟随设置里的 Agent 管理（与切换器 / 侧栏一致）
+const { visibleAgentOptions } = useAgentVisibility();
 
 // 下发到 Agent 弹窗：把通用库的供应商/模型写入各 agent 的模型配置。
 // 样式沿用 common/styles/ConfigView.css 全局类（本组件仅在通用配置页使用）。
@@ -25,7 +24,7 @@ const dialogVisible = computed({
   set: (v) => emit("update:visible", v),
 });
 
-const AGENT_DISPATCH_OPTIONS = computed(() => agentOptionsInOrder(agentOrder.value));
+const AGENT_DISPATCH_OPTIONS = visibleAgentOptions;
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
 const AGENT_PROTOCOLS = {

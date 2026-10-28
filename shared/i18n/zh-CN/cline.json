@@ -10,7 +10,7 @@
       "emptyProviders": "还没有供应商。Cline 的第三方端点按 openai-compatible 协议配置，先添加一个供应商",
       "activeTag": "当前使用",
       "setActive": "设为当前使用",
-      "setActiveTooltip": "写入 providers.json 的 lastUsedProvider",
+      "setActiveTooltip": "设为当前使用（写 providers.json 的 lastUsedProvider；Cline 只跑这一条）",
       "defaultTag": "默认",
       "setDefaultTooltip": "设为该供应商的默认模型",
       "deleteProvider": "删除供应商",
