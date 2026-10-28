@@ -90,14 +90,36 @@ fn theme_of(dark: bool) -> tauri::Theme {
     }
 }
 
-fn home_dir() -> PathBuf {
+/// 用户主目录。Windows 默认没有 HOME，只有 USERPROFILE / HOMEDRIVE+HOMEPATH。
+pub(crate) fn home_dir() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(p) = std::env::var_os("USERPROFILE").filter(|s| !s.is_empty()) {
+            return PathBuf::from(p);
+        }
+        if let (Some(drive), Some(path)) = (
+            std::env::var_os("HOMEDRIVE").filter(|s| !s.is_empty()),
+            std::env::var_os("HOMEPATH").filter(|s| !s.is_empty()),
+        ) {
+            let mut home = PathBuf::from(drive);
+            home.push(path);
+            return home;
+        }
+    }
     std::env::var_os("HOME")
+        .filter(|s| !s.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .unwrap_or_else(|| {
+            if cfg!(target_os = "windows") {
+                PathBuf::from("C:\\")
+            } else {
+                PathBuf::from("/tmp")
+            }
+        })
 }
 
 /// 数据目录：~/.ccconfig（与 .claude / .dsh / .codex 等 agent 配置同层，便于备份与排查）
-fn data_dir() -> PathBuf {
+pub(crate) fn data_dir() -> PathBuf {
     home_dir().join(".ccconfig")
 }
 
@@ -162,14 +184,15 @@ fn system_is_dark() -> bool {
 
 #[cfg(target_os = "windows")]
 fn system_is_dark() -> bool {
-    std::process::Command::new("reg")
-        .args([
-            "query",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-            "/v",
-            "AppsUseLightTheme",
-        ])
-        .output()
+    let mut cmd = std::process::Command::new("reg");
+    cmd.args([
+        "query",
+        r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        "/v",
+        "AppsUseLightTheme",
+    ]);
+    node_runtime::hide_console(&mut cmd);
+    cmd.output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().contains("0x0"))
         .unwrap_or(false)
 }
@@ -202,61 +225,101 @@ fn build_main_window(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::R
         .center()
         // 透明窗口：页面底色交给原生毛玻璃（vibrancy）与应用自己的深色底，
         // 不再用不透明 background_color —— 否则玻璃与 WebGL 背景特效都会被盖住。
-        .transparent(true)
-        // 顶栏透明化：标题栏与内容区同一像素空间，红绿灯浮在页面上（前端用 .is-desktop 留出顶部高度）。
+        .transparent(true);
+
+    // overlay 透明标题栏是 macOS 专属：Windows 保留系统标题栏（红绿灯/拖区/圆角交给 DWM），
+    // 这两个 builder 方法在 tauri 里只在 macOS 上存在，写死会直接编不过 Windows。
+    #[cfg(target_os = "macos")]
+    let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true)
-        // 不在显式设置 theme 前显示，避开 WKWebView 默认 Aqua 外观下的一帧白底。
+        .hidden_title(true);
+
+    // 不在显式设置 theme 前显示，避开 WebView 默认外观下的一帧白底。
+    let builder = builder
         .visible(false)
-        .theme(Some(if dark {
-            tauri::Theme::Dark
-        } else {
-            tauri::Theme::Light
-        }))
+        .theme(Some(theme_of(dark)))
         .initialization_script(&script);
 
     let win = builder.build()?;
-    apply_glass(
-        &win,
-        None,
-        "主窗口",
-        window_vibrancy::NSVisualEffectMaterial::UnderWindowBackground,
-    );
+    apply_main_background(&win, dark);
     let _ = win.show();
     let _ = win.set_focus();
     Ok(())
 }
 
+/// 主窗口背景：macOS 用 NSVisualEffectView；Windows 用 Mica/亚克力（失败退模糊）。
+/// 页面根节点保持透明，背景材质全部由原生视图提供（见 desktop/bridge/window-shim.js 的说明）。
+fn apply_main_background(win: &tauri::WebviewWindow, dark: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = dark;
+        apply_glass(
+            win,
+            None,
+            "主窗口",
+            window_vibrancy::NSVisualEffectMaterial::UnderWindowBackground,
+        );
+    }
+    #[cfg(target_os = "windows")]
+    {
+        apply_windows_background(win, dark, "主窗口");
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (win, dark);
+    }
+}
+
 /// 原生毛玻璃（NSVisualEffectView）：UnderWindowBackground = 系统窗口材质（跟随深浅色），
 /// 即 uTools 8 亚克力观感的同源效果。state=Active 让窗口失焦时玻璃不灰化。
 /// radius 传给玻璃视图做圆角（无边框弹窗需要）；失败不致命，仅告警。
+#[cfg(target_os = "macos")]
 fn apply_glass(
     win: &tauri::WebviewWindow,
     radius: Option<f64>,
     label: &str,
     material: window_vibrancy::NSVisualEffectMaterial,
 ) {
-    #[cfg(target_os = "macos")]
-    {
-        use window_vibrancy::{apply_vibrancy, NSVisualEffectState};
-        match apply_vibrancy(
-            win,
-            material,
-            Some(NSVisualEffectState::Active),
-            radius,
-        ) {
-            Ok(_) => eprintln!("[ccconfig] 已应用原生毛玻璃背景（{label}）"),
-            Err(e) => eprintln!("[ccconfig] 应用毛玻璃失败（{label}，退化为透明窗口）: {e}"),
-        }
+    use window_vibrancy::{apply_vibrancy, NSVisualEffectState};
+    match apply_vibrancy(win, material, Some(NSVisualEffectState::Active), radius) {
+        Ok(_) => eprintln!("[ccconfig] 已应用原生毛玻璃背景（{label}）"),
+        Err(e) => eprintln!("[ccconfig] 应用毛玻璃失败（{label}，退化为透明窗口）: {e}"),
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (win, radius, label, material);
+}
+
+/// Windows 主窗口背景：Win11 优先 Mica（系统窗口材质、性能好），
+/// 失败（Win10/更早）退亚克力，再失败退旧版模糊。
+#[cfg(target_os = "windows")]
+fn apply_windows_background(win: &WebviewWindow, dark: bool, label: &str) {
+    match window_vibrancy::apply_mica(win, Some(dark)) {
+        Ok(_) => {
+            eprintln!("[ccconfig] 已应用 Mica 背景（{label}）");
+            return;
+        }
+        Err(e) => eprintln!("[ccconfig] Mica 不可用（{label}）: {e}"),
+    }
+    apply_windows_acrylic(win, dark, label);
+}
+
+/// Windows 亚克力（Win10 1809+）；失败再退旧版模糊（Win7）。
+#[cfg(target_os = "windows")]
+fn apply_windows_acrylic(win: &WebviewWindow, dark: bool, label: &str) {
+    let tint = if dark {
+        (24u8, 24u8, 28u8, 150u8)
+    } else {
+        (250u8, 250u8, 252u8, 130u8)
+    };
+    match window_vibrancy::apply_acrylic(win, Some(tint)) {
+        Ok(_) => eprintln!("[ccconfig] 已应用亚克力背景（{label}）"),
+        Err(e) => {
+            eprintln!("[ccconfig] 亚克力失败（{label}），退化为模糊: {e}");
+            let _ = window_vibrancy::apply_blur(win, Some(tint));
+        }
     }
 }
 
 /// 托盘弹窗的背景：macOS 用 NSVisualEffectView（Popover 材质，和系统弹出面板同源），
-/// Windows 用亚克力（失败退化为旧版模糊）。页面自己只负责内容与淡色叠层。
+/// Windows 用亚克力（弹窗不适合 Mica；失败退化为旧版模糊）。页面自己只负责内容与淡色叠层。
 fn apply_popup_background(win: &WebviewWindow, dark: bool) {
     #[cfg(target_os = "macos")]
     {
@@ -270,18 +333,7 @@ fn apply_popup_background(win: &WebviewWindow, dark: bool) {
     }
     #[cfg(target_os = "windows")]
     {
-        let tint = if dark {
-            (24u8, 24u8, 28u8, 150u8)
-        } else {
-            (250u8, 250u8, 252u8, 130u8)
-        };
-        match window_vibrancy::apply_acrylic(win, Some(tint)) {
-            Ok(_) => eprintln!("[ccconfig] 已应用亚克力背景（托盘弹窗）"),
-            Err(e) => {
-                eprintln!("[ccconfig] 亚克力失败（托盘弹窗），退化为模糊: {e}");
-                let _ = window_vibrancy::apply_blur(win, Some(tint));
-            }
-        }
+        apply_windows_acrylic(win, dark, "托盘弹窗");
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {

@@ -5,12 +5,26 @@
 // 探测顺序（首个满足 >= 18 的胜出）见方案文档 §5.4。
 
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+#[cfg(not(target_os = "windows"))]
 use std::time::{Duration, Instant};
 
 pub const MIN_MAJOR: u32 = 18;
+
+/// Windows GUI 进程 spawn 控制台程序时默认会弹黑窗；统一加 CREATE_NO_WINDOW。
+/// 非 Windows 上是空操作，调用点无需 cfg。
+#[cfg(target_os = "windows")]
+pub(crate) fn hide_console(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn hide_console(_cmd: &mut Command) {}
 
 #[derive(Debug, Clone)]
 pub struct NodeRuntime {
@@ -31,14 +45,14 @@ fn parse_version(v: &str) -> Option<(u32, u32, u32)> {
 }
 
 fn read_node_version(path: &Path) -> Option<String> {
-    let out = Command::new(path)
-        .arg("-p")
+    let mut cmd = Command::new(path);
+    cmd.arg("-p")
         .arg("process.versions.node")
         .env_remove("NODE_OPTIONS")
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+        .stderr(Stdio::null());
+    hide_console(&mut cmd);
+    let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -67,9 +81,7 @@ fn validate(path: &Path) -> Option<NodeRuntime> {
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"))
+    crate::home_dir()
 }
 
 /// 列出目录下的子目录（不存在或不可读时返回空）
@@ -86,7 +98,8 @@ fn child_dirs(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// 版本管理器目录：按 semver 降序挑最高的那个 node
+/// 版本管理器目录：按 semver 降序挑最高的那个 node（macOS/Linux 布局）
+#[cfg(not(target_os = "windows"))]
 fn from_version_managers() -> Vec<PathBuf> {
     let home = home();
     let mut candidates: Vec<(Option<(u32, u32, u32)>, PathBuf)> = Vec::new();
@@ -141,7 +154,100 @@ fn from_version_managers() -> Vec<PathBuf> {
     candidates.into_iter().map(|(_, p)| p).collect()
 }
 
+/// Windows 常见 Node 安装位置（官方安装包 / volta / nvm-windows 符号链接目录）
+#[cfg(target_os = "windows")]
+fn windows_fixed_paths() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for key in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+        if let Some(base) = std::env::var_os(key).filter(|s| !s.is_empty()) {
+            let base = PathBuf::from(base);
+            out.push(base.join("nodejs").join("node.exe"));
+            out.push(base.join("Programs").join("nodejs").join("node.exe"));
+            out.push(base.join("Volta").join("bin").join("node.exe"));
+        }
+    }
+    if let Some(nvm) = std::env::var_os("NVM_SYMLINK").filter(|s| !s.is_empty()) {
+        out.push(PathBuf::from(nvm).join("node.exe"));
+    }
+    out
+}
+
+/// nvm-windows / fnm 的版本目录，按 semver 降序（新版本优先）
+#[cfg(target_os = "windows")]
+fn windows_version_managers() -> Vec<PathBuf> {
+    let mut candidates: Vec<(Option<(u32, u32, u32)>, PathBuf)> = Vec::new();
+
+    // nvm-windows: %APPDATA%\nvm\v22.1.0\node.exe（NVM_HOME 可重定向）
+    let mut nvm_roots = Vec::new();
+    if let Some(p) = std::env::var_os("NVM_HOME").filter(|s| !s.is_empty()) {
+        nvm_roots.push(PathBuf::from(p));
+    }
+    if let Some(p) = std::env::var_os("APPDATA").filter(|s| !s.is_empty()) {
+        nvm_roots.push(PathBuf::from(p).join("nvm"));
+    }
+    for root in nvm_roots {
+        for dir in child_dirs(&root) {
+            let ver = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.trim_start_matches('v'))
+                .and_then(parse_version);
+            candidates.push((ver, dir.join("node.exe")));
+        }
+    }
+
+    // fnm: %APPDATA%\fnm\node-versions\v22.1.0\installation\node.exe
+    let mut fnm_roots = Vec::new();
+    if let Some(p) = std::env::var_os("APPDATA").filter(|s| !s.is_empty()) {
+        fnm_roots.push(PathBuf::from(p).join("fnm").join("node-versions"));
+    }
+    if let Some(p) = std::env::var_os("LOCALAPPDATA").filter(|s| !s.is_empty()) {
+        fnm_roots.push(PathBuf::from(p).join("fnm").join("node-versions"));
+    }
+    for root in fnm_roots {
+        for dir in child_dirs(&root) {
+            let ver = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.trim_start_matches('v'))
+                .and_then(parse_version);
+            candidates.push((ver, dir.join("installation").join("node.exe")));
+        }
+    }
+
+    candidates.sort_by(|a, b| match (a.0, b.0) {
+        (Some(x), Some(y)) => y.cmp(&x),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
+
+    candidates.into_iter().map(|(_, p)| p).collect()
+}
+
+/// PATH 兜底：`where node`。跳过 WindowsApps 的商店别名（执行它会拉起应用商店）。
+#[cfg(target_os = "windows")]
+fn from_where_command() -> Option<PathBuf> {
+    let mut cmd = Command::new("where");
+    cmd.arg("node")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    hide_console(&mut cmd);
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(PathBuf::from)
+        .find(|p| p.is_file() && !p.to_string_lossy().to_lowercase().contains("windowsapps"))
+}
+
 /// 登录 shell 兜底：会执行用户的 rc 文件，因此必须限时且只取最后一行
+#[cfg(not(target_os = "windows"))]
 fn from_login_shell() -> Option<PathBuf> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut child = Command::new(&shell)
@@ -223,23 +329,16 @@ pub fn detect() -> (Option<NodeRuntime>, Vec<String>) {
         }
     }
 
-    // 3. 固定绝对路径
-    let fixed = [
-        "/opt/homebrew/bin/node",
-        "/usr/local/bin/node",
-        "/usr/bin/node",
+    // 3. 固定绝对路径（Windows 是常见安装目录，macOS/Linux 是包管理器路径）
+    #[cfg(target_os = "windows")]
+    let fixed = windows_fixed_paths();
+    #[cfg(not(target_os = "windows"))]
+    let fixed = vec![
+        PathBuf::from("/opt/homebrew/bin/node"),
+        PathBuf::from("/usr/local/bin/node"),
+        PathBuf::from("/usr/bin/node"),
     ];
-    for p in fixed {
-        let path = PathBuf::from(p);
-        tried.push(p.to_string());
-        if let Some(rt) = validate(&path) {
-            write_cache(&rt.path);
-            return (Some(rt), tried);
-        }
-    }
-
-    // 4. 版本管理器
-    for path in from_version_managers() {
+    for path in fixed {
         tried.push(path.display().to_string());
         if let Some(rt) = validate(&path) {
             write_cache(&rt.path);
@@ -247,12 +346,38 @@ pub fn detect() -> (Option<NodeRuntime>, Vec<String>) {
         }
     }
 
-    // 5. 登录 shell
-    tried.push("$SHELL -l -c 'command -v node'".to_string());
-    if let Some(path) = from_login_shell() {
+    // 4. 版本管理器
+    #[cfg(target_os = "windows")]
+    let managers = windows_version_managers();
+    #[cfg(not(target_os = "windows"))]
+    let managers = from_version_managers();
+    for path in managers {
+        tried.push(path.display().to_string());
         if let Some(rt) = validate(&path) {
             write_cache(&rt.path);
             return (Some(rt), tried);
+        }
+    }
+
+    // 5. PATH / 登录 shell 兜底
+    #[cfg(target_os = "windows")]
+    {
+        tried.push("where node".to_string());
+        if let Some(path) = from_where_command() {
+            if let Some(rt) = validate(&path) {
+                write_cache(&rt.path);
+                return (Some(rt), tried);
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        tried.push("$SHELL -l -c 'command -v node'".to_string());
+        if let Some(path) = from_login_shell() {
+            if let Some(rt) = validate(&path) {
+                write_cache(&rt.path);
+                return (Some(rt), tried);
+            }
         }
     }
 

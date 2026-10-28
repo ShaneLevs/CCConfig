@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <title data-i18n="title">CCConfig · 需要 Node.js</title>
+<script>
+  // 在首帧前决定展示 macOS 还是 Windows 的安装说明
+  if (/Windows/i.test(navigator.userAgent)) document.documentElement.classList.add("is-win");
+</script>
 <style>
   :root {
     --bg: #ffffff;
@@ -30,7 +34,7 @@
     padding: 36px 40px 32px;
     background: var(--bg);
     color: var(--fg);
-    font: 14px/1.65 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+    font: 14px/1.65 -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   h1 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
@@ -44,14 +48,14 @@
   }
   h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
   code {
-    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
     font-size: 12.5px;
     background: var(--code-bg);
     padding: 2px 6px;
     border-radius: 5px;
   }
   pre {
-    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
     font-size: 12.5px;
     background: var(--code-bg);
     padding: 10px 12px;
@@ -64,6 +68,11 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .foot { color: var(--muted); font-size: 12.5px; margin-top: 22px; }
+  /* 引导页同时服务 macOS / Windows：只显示当前平台的安装与排障说明 */
+  .win-only { display: none; }
+  html.is-win .mac-only { display: none; }
+  html.is-win .win-only { display: block; }
+  html.is-win li.win-only { display: list-item; }
 </style>
 </head>
 <body>
@@ -82,7 +91,8 @@
   <div class="card">
     <h2 data-i18n="installTitle">安装方式</h2>
     <ol>
-      <li><span data-i18n="installBrewPrefix">用 Homebrew：</span><code>brew install node</code></li>
+      <li class="mac-only"><span data-i18n="installBrewPrefix">用 Homebrew：</span><code>brew install node</code></li>
+      <li class="win-only"><span data-i18n="installWingetPrefix">或用 winget：</span><code>winget install OpenJS.NodeJS.LTS</code></li>
       <li><span data-i18n="installDownloadPrefix">或从官网下载安装包：</span><a id="node-download" href="https://nodejs.org/zh-cn/download" target="_blank" rel="noreferrer">nodejs.org/download</a></li>
     </ol>
     <p style="margin:10px 0 0;color:var(--muted)" data-i18n="installRequirement">版本要求 <code>&gt;= 18</code>。装好后请<b>完全退出并重新打开</b> CCConfig。</p>
@@ -90,19 +100,27 @@
 
   <div class="card">
     <h2 data-i18n="pathTitle">如果已经装了 Node，但仍然看到这个页面</h2>
-    <p style="margin:0" data-i18n="pathDesc">从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：</p>
-    <pre><span data-i18n="pathComment1"># 1. 在终端确认 node 位置</span>
+    <p class="mac-only" style="margin:0" data-i18n="pathDesc">从「访达/Dock」启动的应用拿不到终端里的 PATH，nvm / fnm / volta 管理的 Node 常常探测不到。可以手动指定路径：</p>
+    <pre class="mac-only"><span data-i18n="pathComment1"># 1. 在终端确认 node 位置</span>
 which node
 
 <span data-i18n="pathComment2"># 2. 用环境变量指定后重启应用</span>
 CCCONFIG_NODE=$(which node) open -a CCConfig</pre>
-    <p style="margin:10px 0 0;color:var(--muted)" data-i18n="pathLaunchctlDesc">也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：</p>
-    <pre>launchctl setenv CCCONFIG_NODE $(which node)</pre>
+    <p class="mac-only" style="margin:10px 0 0;color:var(--muted)" data-i18n="pathLaunchctlDesc">也可以设置一次全局 launchctl 变量，让 Dock 启动时也生效：</p>
+    <pre class="mac-only">launchctl setenv CCCONFIG_NODE $(which node)</pre>
+
+    <p class="win-only" style="margin:0" data-i18n="pathDescWin">Windows 版会自动检查 Program Files、nvm-windows、fnm、volta 与 PATH。若仍然找不到，可在 PowerShell 里指定 node.exe 的位置：</p>
+    <pre class="win-only"><span data-i18n="pathComment1Win"># 1. 在 PowerShell 确认 node 位置</span>
+where.exe node
+
+<span data-i18n="pathComment2Win"># 2. 写入用户环境变量后，完全退出并重新打开 CCConfig</span>
+setx CCCONFIG_NODE "C:\Program Files\nodejs\node.exe"</pre>
   </div>
 
   <div class="card">
     <h2 data-i18n="troubleshootTitle">排查</h2>
-    <p style="margin:0" data-i18n="troubleshootDesc">启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。</p>
+    <p class="mac-only" style="margin:0" data-i18n="troubleshootDesc">启动日志写在 <code>~/.ccconfig/logs/sidecar.log</code>，其中会列出所有尝试过的 Node 路径。</p>
+    <p class="win-only" style="margin:0" data-i18n="troubleshootDescWin">启动日志写在 <code>%USERPROFILE%\.ccconfig\logs\sidecar.log</code>，其中会列出所有尝试过的 Node 路径。</p>
   </div>
 
   <p class="foot" data-i18n="footer">CCConfig · 跨 agent 配置管理</p>

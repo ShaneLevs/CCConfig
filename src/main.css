@@ -17,6 +17,10 @@ body {
 :root.is-desktop {
   --cc-desktop-titlebar: 34px;
 }
+/* Windows 保留原生标题栏（非 overlay），页面无需再让出红绿灯高度。 */
+:root.is-desktop.is-windows {
+  --cc-desktop-titlebar: 0px;
+}
 
 #app {
   background: transparent;

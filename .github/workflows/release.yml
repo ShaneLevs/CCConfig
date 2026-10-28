@@ -1,0 +1,123 @@
+name: Release
+
+# 发布 GitHub Release 时自动构建 macOS dmg + Windows exe，并挂到该 Release 的 Assets。
+# 手动触发（workflow_dispatch）只构建并上传为 Actions artifact，不会碰任何 Release。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos-dmg:
+    name: macOS dmg
+    # macos-latest 是 arm64 runner，产物名形如 CCConfig_<version>_aarch64.dmg
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          version=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          if [ "v$version" != "${{ github.event.release.tag_name }}" ]; then
+            echo "::error::Release tag ${{ github.event.release.tag_name }} does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend + sidecar
+        run: npm run build:app
+
+      - name: Build dmg
+        run: npx tauri build --bundles dmg
+
+      - name: Upload dmg to release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" src-tauri/target/release/bundle/dmg/*.dmg --clobber
+
+      - name: Upload dmg artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccconfig-macos-dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  windows-exe:
+    name: Windows exe
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          version=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
+          if [ "v$version" != "${{ github.event.release.tag_name }}" ]; then
+            echo "::error::Release tag ${{ github.event.release.tag_name }} does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend + sidecar
+        run: npm run build:app
+
+      - name: Build NSIS installer
+        run: npx tauri build --bundles nsis
+
+      - name: Upload exe to release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" src-tauri/target/release/bundle/nsis/*.exe --clobber
+
+      - name: Upload exe artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccconfig-windows-exe
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

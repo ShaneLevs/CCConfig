@@ -33,11 +33,7 @@ fn random_token() -> String {
 }
 
 fn log_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".ccconfig")
-        .join("logs")
+    crate::data_dir().join("logs")
 }
 
 fn open_log() -> Result<(File, PathBuf), String> {
@@ -157,6 +153,9 @@ impl Sidecar {
         if cfg!(debug_assertions) {
             cmd.arg("--verbose");
         }
+
+        // Windows GUI 进程 spawn 控制台程序默认会弹黑窗
+        crate::node_runtime::hide_console(&mut cmd);
 
         let mut child = cmd
             .spawn()

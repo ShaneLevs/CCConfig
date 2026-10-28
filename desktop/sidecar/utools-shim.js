@@ -270,7 +270,11 @@ const PATH_RESOLVERS = {
   videos: () => path.join(os.homedir(), "Movies"),
   userData: () => APP_SUPPORT(),
   appData: () => APP_SUPPORT(),
-  logs: () => path.join(os.homedir(), "Library", "Logs", "CCConfig"),
+  logs: () => {
+    // Windows 没有 ~/Library/Logs；与 Rust 侧 sidecar.log 的落点保持一致
+    if (process.platform === "win32") return path.join(APP_SUPPORT(), "logs");
+    return path.join(os.homedir(), "Library", "Logs", "CCConfig");
+  },
 };
 
 function getPath(name) {
@@ -314,7 +318,23 @@ function getNativeId() {
 
 // ==================== 系统交互 ====================
 
+const IS_WIN = process.platform === "win32";
+
 function shellOpenPath(fullPath) {
+  if (IS_WIN) {
+    try {
+      // start 的第一个引号参数是窗口标题，传空串避免把路径当标题吞掉
+      const r = spawnSync("cmd.exe", ["/c", "start", "", String(fullPath)], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      if (r.error) throw r.error;
+      return "";
+    } catch (e) {
+      console.error(`[shim] shellOpenPath 失败: ${fullPath}: ${e.message}`);
+      return String(e.message || e);
+    }
+  }
   try {
     execFileSync("open", [String(fullPath)], { stdio: "ignore" });
     return "";
@@ -332,6 +352,13 @@ function shellOpenPath(fullPath) {
 
 function shellOpenExternal(url) {
   try {
+    if (IS_WIN) {
+      spawnSync("cmd.exe", ["/c", "start", "", String(url)], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    }
     execFileSync("open", [String(url)], { stdio: "ignore" });
   } catch (e) {
     console.error(`[shim] shellOpenExternal 失败: ${url}: ${e.message}`);
@@ -339,8 +366,22 @@ function shellOpenExternal(url) {
 }
 
 function copyText(text) {
+  const value = String(text ?? "");
   try {
-    const r = spawnSync("pbcopy", [], { input: String(text ?? "") });
+    if (IS_WIN) {
+      // clip.exe 按控制台代码页解码 stdin，中文会乱码；Set-Clipboard 按 UTF-8 读入
+      const script =
+        "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; $t = [Console]::In.ReadToEnd(); Set-Clipboard -Value $t";
+      const encoded = Buffer.from(script, "utf16le").toString("base64");
+      const r = spawnSync(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+        { input: value, windowsHide: true }
+      );
+      if (r.status !== 0) console.error(`[shim] Set-Clipboard 退出码 ${r.status}`);
+      return;
+    }
+    const r = spawnSync("pbcopy", [], { input: value });
     if (r.status !== 0) console.error(`[shim] pbcopy 退出码 ${r.status}`);
   } catch (e) {
     console.error(`[shim] copyText 失败: ${e.message}`);
@@ -349,8 +390,9 @@ function copyText(text) {
 
 // 同步返回 string[] | null，对齐 common.js 对返回值的期望
 function showOpenDialog(options = {}) {
+  if (IS_WIN) return showOpenDialogWindows(options);
   const title = String(options.title || "Select file").replace(/["\\]/g, "");
-  // properties 里的 openDirectory 要映射到 AppleScript 的 choose folder，
+  // properties 里的 openDirectory 要映射到目录选择器，
   // 否则挑浏览器数据目录时只能挑到文件（订阅功能用它让用户指定 profile 目录）。
   const wantsDir = Array.isArray(options.properties) && options.properties.includes("openDirectory");
   const verb = wantsDir ? "choose folder" : "choose file";
@@ -364,6 +406,37 @@ function showOpenDialog(options = {}) {
     return out ? [out] : null;
   } catch (e) {
     // 用户取消时 osascript 退出码 1，不当作错误
+    return null;
+  }
+}
+
+// Windows 没有可同步调用的系统对话框 API，用 PowerShell 的 WinForms 对话框阻塞等待。
+function showOpenDialogWindows(options = {}) {
+  const title = String(options.title || "Select file")
+    .replace(/[\r\n]/g, " ")
+    .replace(/'/g, "''");
+  const wantsDir =
+    Array.isArray(options.properties) && options.properties.includes("openDirectory");
+  const dialog = wantsDir
+    ? `$d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = '${title}'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath }`
+    : `$d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = '${title}'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.FileName }`;
+  const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; ${dialog}`;
+  try {
+    const r = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-STA", "-Command", script],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 120000,
+        windowsHide: true,
+      }
+    );
+    if (r.error || r.status !== 0) return null;
+    const out = String(r.stdout || "").trim();
+    return out ? [out] : null;
+  } catch (e) {
+    console.error(`[shim] showOpenDialog 失败: ${e.message}`);
     return null;
   }
 }
@@ -421,9 +494,9 @@ function createUtoolsShim() {
       return [];
     },
 
-    isWindows: false,
-    isMacOS: true,
-    isLinux: false,
+    isWindows: () => process.platform === "win32",
+    isMacOS: () => process.platform === "darwin",
+    isLinux: () => process.platform === "linux",
   };
 }
 

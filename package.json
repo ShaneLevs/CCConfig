@@ -1,7 +1,7 @@
 {
   "name": "ccconfig",
   "version": "1.2.1",
-  "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes, DSH, Grok Build and Command Code. Ships as a uTools plugin and a standalone macOS app.",
+  "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes, DSH, Grok Build and Command Code. Ships as a uTools plugin and a standalone desktop app (macOS / Windows).",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -45,9 +45,9 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run version:check && npm run i18n:check && npm run routes:check && vite build",
-    "build:app": "npm run version:check && npm run i18n:check && npm run routes:check && CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
-    "tauri:dev": "npm run build:app && cargo tauri dev",
-    "tauri:build": "npm run build:app && cargo tauri build && node scripts/collect-release.mjs",
+    "build:app": "npm run version:check && npm run i18n:check && npm run routes:check && cross-env CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
+    "tauri:dev": "npm run build:app && tauri dev",
+    "tauri:build": "npm run build:app && tauri build && node scripts/collect-release.mjs",
     "bump": "node scripts/bump-version.mjs",
     "version:check": "node scripts/check-versions.mjs",
     "i18n:check": "node scripts/check-i18n.mjs",
@@ -65,7 +65,9 @@
     "vue-i18n": "^11.4.16"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@vitejs/plugin-vue": "^6.0.9",
+    "cross-env": "^10.1.0",
     "esbuild": "^0.28.2",
     "utools-api-types": "^7.5.1",
     "vite": "^8.3.0"

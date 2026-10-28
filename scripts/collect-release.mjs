@@ -29,9 +29,9 @@ if (!fs.existsSync(bundleRoot)) {
   process.exit(1);
 }
 
-// dmg + macos（.app，若本次构建保留了的话）都收；只认当前版本号命名的文件
+// dmg / macos（.app）/ nsis（Windows 安装包）都收；只认当前版本号命名的文件
 const copied = [];
-for (const kind of ["dmg", "macos"]) {
+for (const kind of ["dmg", "macos", "nsis"]) {
   const dir = path.join(bundleRoot, kind);
   if (!fs.existsSync(dir)) continue;
   for (const name of fs.readdirSync(dir)) {

@@ -115,7 +115,10 @@
   // WebGL 背景特效的 canvas 是 `position: fixed; z-index: -1`，负 z-index 层绘制在 body 背景之下，
   // 给 body 铺不透明色会把特效整个盖掉（桌面版「特效不生效」的根因）。
   (function markDesktop() {
-    document.documentElement.classList.add("is-desktop");
+    const root = document.documentElement;
+    root.classList.add("is-desktop");
+    // Windows 保留原生标题栏（macOS 才是 overlay 透明标题栏），前端不需要再让出顶部高度。
+    if (/Windows/i.test(navigator.userAgent)) root.classList.add("is-windows");
   })();
 
   // ==================== 诊断上报 ====================
@@ -272,9 +275,11 @@
     removeFeature: () => {},
     getFeatures: () => [],
 
-    isWindows: false,
-    isMacOS: true,
-    isLinux: false,
+    // 桌面版是 WebView，没有 Node 的 process.platform，按 UA 判断（用于下载目录、
+    // shell 命令等按平台分叉的既有代码路径；macOS 仍是默认分支）
+    isWindows: () => /Windows/i.test(navigator.userAgent),
+    isMacOS: () => !/Windows|Linux/i.test(navigator.userAgent),
+    isLinux: () => /Linux/i.test(navigator.userAgent),
   };
 
   // 供调试：在控制台查看 sidecar 是否可达

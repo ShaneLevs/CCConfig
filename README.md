@@ -3,13 +3,13 @@
 **简体中文** | [English](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20uTools-blue)](#安装)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20uTools-blue)](#安装)
 [![uTools](https://img.shields.io/badge/uTools-plugin-1a73e8)](https://u.tools/)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8)](https://tauri.app/)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883)](https://vuejs.org/)
 [![GitHub stars](https://img.shields.io/github/stars/ShaneLevs/CCConfig?style=social)](https://github.com/ShaneLevs/CCConfig/stargazers)
 
-多应用 AI 配置管理工具，同时提供 [uTools](https://u.tools/) 插件与 macOS 独立应用两种形态。
+多应用 AI 配置管理工具，同时提供 [uTools](https://u.tools/) 插件与独立桌面应用（macOS / Windows）两种形态。
 
 把十四个 AI 编程 CLI 的供应商、模型、MCP、Skill、插件与 Token 用量收进一个界面，一键切换供应商，不必再手改 TOML/YAML/JSON。
 
@@ -52,28 +52,36 @@
 
 **uTools 插件** — 在 uTools 插件商店搜索 **CCConfig** 安装。
 
-**macOS 独立应用** — 需要本机已安装 Node.js ≥ 18（应用刻意不内置运行时）。
+**桌面应用（macOS / Windows）** — 从 [Releases](https://github.com/ShaneLevs/CCConfig/releases) 下载 `.dmg`（macOS）或 `*-setup.exe`（Windows）。发布 Release 时 GitHub Actions 会自动构建并挂上这两个安装包；都需要本机已安装 Node.js ≥ 18（应用刻意不内置运行时）。
+
+本地构建（当前平台）：
 
 ```bash
 npm install
 npm run tauri:build
-# → release/CCConfig_<版本>_<arch>.dmg（Tauri 原始产物仍在 src-tauri/target/release/bundle/dmg/，
-#   scripts/collect-release.mjs 在构建末尾复制一份到仓库根的 release/）
+# macOS → release/CCConfig_<版本>_<arch>.dmg
+# Windows → release/CCConfig_<版本>_x64-setup.exe
+# Tauri 原始产物仍在 src-tauri/target/release/bundle/ 下，
+# scripts/collect-release.mjs 在构建末尾复制一份到仓库根的 release/
 ```
 
-应用数据存放于 `~/.ccconfig/`。关闭窗口只是隐藏到菜单栏，本地网关继续运行：左键单击托盘图标打开状态面板（网关统计、订阅用量、快捷动作），右键单击显示窗口。
+应用数据存放于 `~/.ccconfig/`（Windows 为 `%USERPROFILE%\.ccconfig`）。关闭窗口只是隐藏到托盘，本地网关继续运行：左键单击托盘图标打开状态面板（网关统计、订阅用量、快捷动作），右键单击显示窗口。
 
-如果 Node 是通过 nvm/fnm/volta 安装的、从 Dock 启动后应用找不到它，可显式指定：
+如果 Node 是通过 nvm/fnm/volta 安装的、从 Finder / 开始菜单启动后应用找不到它，可显式指定：
 
 ```bash
+# macOS
 CCCONFIG_NODE=$(which node) open -a CCConfig
+# Windows（PowerShell，先设置变量再启动应用）
+$env:CCCONFIG_NODE = (Get-Command node).Source
+& "C:\Path\To\CCConfig.exe"
 ```
 
 ## 使用方式
 
 uTools 中输入关键词唤起对应应用：`CCConfig` / `通用配置`（指向通用配置）、`Claude Code配置`、`OpenCode配置`、`Pi Agents配置`、`omp配置`、`Reasonix配置`、`Codex配置`、`Kimi Code配置`、`MiniMax Code配置`、`dsh配置`。粘贴 SkillHub / 魔搭链接进入 Skill 安装；`pi install <包名>` 进入 Pi Extension 安装。
 
-macOS 独立应用没有搜索框：启动后进入「通用配置」，通过左侧栏切换应用。
+独立桌面应用没有搜索框：启动后进入「通用配置」，通过左侧栏切换应用。
 
 ## 开发
 
@@ -83,7 +91,7 @@ npm run dev          # uTools 插件开发服务器 (localhost:5173)
 npm run build        # uTools 插件 → dist/
 npm run build:app    # 桌面版渲染层 → dist-app/ + sidecar 资源
 npm run tauri:dev    # 桌面版开发模式
-npm run tauri:build  # 桌面版打包 → release/*.dmg
+npm run tauri:build  # 桌面版打包 → release/*.dmg（macOS）或 *-setup.exe（Windows）
 ```
 
 两个发行版共用 `src/` 与 `public/preload/`，只有外壳不同。架构说明与维持这一点的约束见 [AGENTS.md](AGENTS.md) 与 [docs/architecture.md](docs/architecture.md)。

@@ -23,11 +23,59 @@ npm run bump -- 1.0.2  # 一次写完所有版本号落点（patch / minor / maj
 - 改版本只走 `npm run bump -- <版本|patch|minor|major>`（`scripts/bump-version.mjs`），它会就地替换 5 个文件的版本行；`--app` / `--utools` 可只改一条线。**不要手改单个文件**：v1.0.1 曾出现 dmg 文件名 / 应用内关于 / git tag 各说各话。
 - `npm run version:check`（`scripts/check-versions.mjs`）已挂在 `build` / `build:app` 前面，不一致直接拦下并列出该改哪几个文件。
 - 落点清单与读写规则集中在 `scripts/version-files.mjs`（新增发行目标时只改这里）。
-- 发布顺序：`bump` → 提交 → `git tag vX.Y.Z` → `npm run tauri:build`（dmg 在 `release/`）→ `gh release create vX.Y.Z release/<dmg>`；tag 用小写 `v` 前缀（历史遗留的 `V2.2.0` 不再沿用）。
+- 发布顺序（CI 出包）：`bump` → 提交推送 → `git tag vX.Y.Z && git push origin vX.Y.Z` → `gh release create vX.Y.Z --generate-notes`（只建 Release，不上传文件）。`.github/workflows/release.yml` 会在 release published 时分别用 GitHub 的 macOS / Windows runner 构建 dmg 与 exe，并自动 `gh release upload --clobber` 到该 Release。tag 用小写 `v` 前缀（历史遗留的 `V2.2.0` 不再沿用）。
+- 本地出包仍可用 `npm run tauri:build`（当前平台，dmg 在 `release/`）；CI 的 workflow_dispatch 手动触发只构建并上传 Actions artifact，不会碰 Release。
 
 ## Git
 
 `origin` = ShaneLevs/CCConfig，直接在 `main` 提交推送。提交信息用 `feat:` / `fix:` / `style:` / `docs:` / `refactor:` 前缀 + 中文描述。
+
+## 发版（GitHub Actions）
+
+发布 GitHub Release 时，`.github/workflows/release.yml` 会自动用 GitHub 的 macOS / Windows runner 构建 dmg 与 NSIS exe，并 `gh release upload --clobber` 到该 Release 的 Assets。**前提：workflow 已在 `main` 上**——Release 事件用的是默认分支的 workflow 文件，没推 main 之前发 Release 不会触发。
+
+### 首次 / 手动试跑
+
+```bash
+gh workflow run release.yml
+gh run list --workflow=release.yml --limit 3
+gh run watch <run-id>
+gh run download <run-id> -n ccconfig-macos-dmg -D /tmp/ccconfig-mac
+gh run download <run-id> -n ccconfig-windows-exe -D /tmp/ccconfig-win
+```
+
+手动触发只构建并上传 Actions artifact，**不会碰任何 Release**。
+
+### 正式发版
+
+```bash
+npm run bump -- 1.3.0        # 或 patch / minor / major；5 个版本落点一次写完
+npm run version:check
+git add -A
+git commit -m "chore: 版本号 1.3.0"
+git push origin main
+
+git tag v1.3.0
+git push origin v1.3.0
+gh release create v1.3.0 --title "CCConfig v1.3.0 — 一句话说明" --generate-notes
+```
+
+监控与验收：
+
+```bash
+gh run list --workflow=release.yml --limit 3
+gh run watch <run-id>
+gh release view v1.3.0 --json assets --jq '.assets[].name'
+```
+
+也可以走网页：Releases → Draft a new release → 选 tag → 写标题/说明 → **Publish release**。注意是 Publish 那一刻触发，存成 draft 不触发。
+
+### 规则与失败处理
+
+- **tag 必须等于 `v` + `package.json` 版本**：workflow 第一步会校验，不一致直接失败（防止 dmg 文件名 / 应用内关于 / git tag 各说各话）。
+- 不需要再手动上传安装包；CI 会覆盖同名资产。uTools 插件不进 CI，仍是 `npm run build` → uTools 开发者工具上传 `dist/`。
+- CI 失败先看日志；可直接 `gh run rerun <run-id> --failed`。兜底：本地 `npm run tauri:build` 后 `gh release upload vX.Y.Z <文件> --clobber`。
+- Windows exe 未签名（SmartScreen 提示），macOS dmg 未公证（首次打开需右键打开）；首次 Windows 构建约 10–20 分钟，两个 job 各 60 分钟超时。
 
 ## 核心架构
 
@@ -75,7 +123,7 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 - Base path `./`（uTools file:// 加载）。
 - 普通 CSS 文件（非 SFC scoped）中 `:deep()` 不会被 Vue 转换，是无效选择器，不要使用。
 
-## 双发行：uTools 插件 + macOS 桌面版
+## 双发行：uTools 插件 + 桌面版（macOS / Windows）
 
 同一个仓库产出两个发行目标，**业务代码只有一份**。
 
@@ -83,10 +131,12 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
 |---|---|---|---|
 | uTools 插件 | uTools 宿主 | `npm run build` | `dist/`（加载 `plugin.json`） |
 | macOS 桌面版 | Tauri v2 | `npm run tauri:build` | `.dmg` → `release/`（原始产物在 `src-tauri/target/release/bundle/dmg/`） |
-| 桌面版开发 | Tauri v2 | `npm run tauri:dev` | 自动串起 `build:app` + `cargo tauri dev` |
+| Windows 桌面版 | Tauri v2（NSIS） | `npm run tauri:build`（在 Windows 上） | `*-setup.exe` → `release/`（原始产物在 `src-tauri/target/release/bundle/nsis/`） |
+| 桌面版 CI | GitHub Actions | 发布 Release / 手动 `workflow_dispatch` | dmg + exe 自动挂到 Release Assets（见 `.github/workflows/release.yml`） |
+| 桌面版开发 | Tauri v2 | `npm run tauri:dev` | 自动串起 `build:app` + `tauri dev` |
 
-`npm run build:app` = `CCCONFIG_TARGET=app vite build`（产出 `dist-app/`）+ `scripts/prepare-sidecar.mjs`（组装 `src-tauri/resources/sidecar/`）。
-`npm run tauri:build` = `build:app` + `cargo tauri build` + `scripts/collect-release.mjs`（把当次版本的 dmg 复制到仓库根 `release/`，已 gitignore）。
+`npm run build:app` = `cross-env CCCONFIG_TARGET=app vite build`（产出 `dist-app/`）+ `scripts/prepare-sidecar.mjs`（组装 `src-tauri/resources/sidecar/`）。
+`npm run tauri:build` = `build:app` + `tauri build`（npm 的 `@tauri-apps/cli`，会自动合并 `tauri.windows.conf.json`）+ `scripts/collect-release.mjs`（把当次版本的 dmg / exe 复制到仓库根 `release/`，已 gitignore）。
 
 ### 目录职责
 
@@ -134,5 +184,14 @@ plugin.json **仅静态声明** commonConfig / installCommonSkill；各 agent �
   - 动作走应用命令 `tray_popup_action` / `tray_popup_resize` / `tray_popup_hide`（`invoke_handler`），**不新增 `utools.xxx` 调用**；`tray.html` 是静态页，不经过 Vue 与 desktop bridge，构建时由 `vite.config.js` 的 `closeBundle` 原样复制进 `dist-app`。新增顶部/交互元素不涉及主窗口 `data-tauri-drag-region`。
 - sidecar 的资源目录里（`src-tauri/resources/sidecar/`） `server.js`、`services.js`、`usage-worker.js`、`utools-shim.js`、`package.json` **必须同级**（`usage-async.js` 用 `__dirname` 拼 worker 路径；`package.json` 声明 `type: commonjs` 抵消根目录的 `type: module`）。
 - 各应用配置文件位置、字段语义与读写规则、网关转换细节统一维护在 `docs/architecture.md`（README 只保留概览，新增/修改数据流规则时改这里）。
+
+### Windows 桌面版（与 macOS 的差异）
+
+- **窗口**：Windows 保留系统原生标题栏。`title_bar_style` / `hidden_title` 在 tauri 里是 `#[cfg(target_os = "macos")]`（无条件调用会编不过 Windows），`main.rs` 已做 cfg 门控；bridge 在 `<html>` 上加 `.is-windows`，`main.css` 据此把 `--cc-desktop-titlebar` 置 0。主窗口背景走 Mica → 亚克力 → 模糊，托盘弹窗只用亚克力。
+- **路径**：`home_dir()` 用 `USERPROFILE` / `HOMEDRIVE+HOMEPATH` 兜底（Windows 默认没有 `HOME`），数据目录 `%USERPROFILE%\.ccconfig`；`main.rs` / `node_runtime.rs` / `sidecar.rs` 统一走它。
+- **Node 探测**：Program Files / `%LOCALAPPDATA%\Programs`、volta、nvm-windows（`NVM_HOME`/`NVM_SYMLINK`/`%APPDATA%\nvm`）、fnm，最后 `where node`；**过滤 `WindowsApps` 的商店别名**（执行会拉起 Microsoft Store）。所有 spawn 的 Node / reg / where 子进程统一 `CREATE_NO_WINDOW`，否则会弹黑窗。
+- **shim**：`desktop/sidecar/utools-shim.js` 的 `isWindows/isMacOS/isLinux` 用 `process.platform`，bridge 用 UA；`shellOpenPath` / `shellOpenExternal` / `copyText` / `showOpenDialog` 在 Windows 走 `cmd /c start`、PowerShell `Set-Clipboard`、PowerShell WinForms 对话框（`clip.exe` 按控制台代码页解码，中文会乱码）。
+- **打包**：`src-tauri/tauri.windows.conf.json` 把 target 换成 `nsis` 并指定 `icons/icon.ico`（由 `npx tauri icon` 生成并入库）。Windows 版同样要求本机已装 Node ≥ 18；未签名安装包会触发 SmartScreen 提示。
+- **验证状态**：Rust 的 Windows 分支已做编译门控，首次 Windows 构建由 CI 验证；托盘、透明/Mica、Node 探测仍需在 Windows 实机验收。
 
 - 首次 `cargo build` 若卡在 crates.io，可在 `src-tauri/.cargo/config.toml` 加稀疏镜像（该文件已 gitignore，各人自备）：`[source.crates-io] replace-with = "rsproxy"` + `[source.rsproxy] registry = "sparse+https://rsproxy.cn/index/"`。

@@ -3,7 +3,7 @@
 面向贡献者与问题排查者的技术文档。功能概览、安装与使用方式见 [README](../README.md)。
 
 - 项目结构（渲染层 / preload / 桌面版 / Rust 外壳）见下文「项目结构」。
-- 双发行（uTools 插件 + macOS 桌面版）的构建命令、目录职责与三条硬约束见 [AGENTS.md](../AGENTS.md)。
+- 双发行（uTools 插件 + 桌面版 macOS / Windows）的构建命令、目录职责与三条硬约束见 [AGENTS.md](../AGENTS.md)。
 - 下文「数据流」逐应用列出文件位置、字段语义与读写规则，「认证与模型选择细节」补充 Claude 的特殊处理。
 
 ## 项目结构

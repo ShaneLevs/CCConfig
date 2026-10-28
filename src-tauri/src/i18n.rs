@@ -13,6 +13,7 @@ const EN_NATIVE: &str = include_str!("../../shared/i18n/en-US/native.json");
 
 /// 系统语言：macOS `defaults read -g AppleLanguages` 的第一项。
 /// Dock 启动时没有 LANG/LC_ALL，不能依赖环境变量。
+#[cfg(target_os = "macos")]
 pub fn system_locale() -> Locale {
     let output = std::process::Command::new("defaults")
         .args(["read", "-g", "AppleLanguages"])
@@ -38,6 +39,24 @@ pub fn system_locale() -> Locale {
         return Locale::En;
     }
     Locale::Zh
+}
+
+/// 系统 UI 语言：GetUserDefaultUILanguage 的 LANGID，低 10 位是主语言 ID。
+/// 0x04 = LANG_CHINESE（简体/繁体都按中文处理），其余一律英文回退。
+#[cfg(target_os = "windows")]
+pub fn system_locale() -> Locale {
+    use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
+    let langid = unsafe { GetUserDefaultUILanguage() };
+    if (langid & 0x3ff) == 0x04 {
+        Locale::Zh
+    } else {
+        Locale::En
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn system_locale() -> Locale {
+    Locale::En
 }
 
 /// 显式偏好（DB 里的 ccconfig_locale）→ Locale；'system' / 缺失 / 未知值返回 None
