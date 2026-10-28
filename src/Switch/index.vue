@@ -52,6 +52,7 @@ import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
 import AppearanceSettings from "../components/AppearanceSettings.vue";
 import GeneralSettings from "../components/GeneralSettings.vue";
+import AboutSettings from "../components/AboutSettings.vue";
 import AgentSideRail from "../components/AgentSideRail.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
@@ -479,11 +480,13 @@ onUnmounted(() => {
             <RadioButton value="general">{{ t('settings.tab.general') }}</RadioButton>
             <RadioButton value="agents">{{ t('settings.tab.agents') }}</RadioButton>
             <RadioButton value="appearance">{{ t('settings.tab.appearance') }}</RadioButton>
+            <RadioButton value="about">{{ t('settings.tab.about') }}</RadioButton>
           </RadioGroup>
 
           <GeneralSettings v-if="settingsTab === 'general'" />
           <AgentVisibilitySettings v-else-if="settingsTab === 'agents'" />
           <AppearanceSettings v-else-if="settingsTab === 'appearance'" />
+          <AboutSettings v-else-if="settingsTab === 'about'" />
         </div>
       </Dialog>
     </div>

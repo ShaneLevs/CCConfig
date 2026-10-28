@@ -4,7 +4,11 @@
     "tab": {
       "general": "General",
       "agents": "Agents",
-      "appearance": "Appearance"
+      "appearance": "Appearance",
+      "about": "About"
+    },
+    "about": {
+      "desc": "Configuration manager and switcher for multi-app AI coding assistants"
     },
     "language": {
       "title": "Language",

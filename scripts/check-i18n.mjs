@@ -11,7 +11,7 @@ const BASE = path.join(ROOT, 'shared/i18n')
 // 英文里允许保留中文的路径（语言名称本身）
 const ALLOW_CJK = new Set(['settings.language.zhCN'])
 // 某些语言没有对应后缀，空串是有意为之
-const ALLOW_EMPTY = new Set(['skill.install.hintManualSuffix'])
+const ALLOW_EMPTY = new Set(['skill.install.hintManualSuffix', 'commonApp.skill.tipSuffix'])
 
 const errors = []
 const warnings = []

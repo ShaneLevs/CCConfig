@@ -170,7 +170,7 @@
     },
     "skill": {
       "tipPrefix": "展示 ",
-      "tipSuffix": " 下的 Skill（跨 Agent 共享，禁用后移动到 .disabled 文件夹，同 Claude Code）",
+      "tipSuffix": " 下的 Skill",
       "empty": "{path} 下还没有 Skill",
       "createAndOpen": "创建并打开目录",
       "openFolder": "打开 Skill 文件夹",

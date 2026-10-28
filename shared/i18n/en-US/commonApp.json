@@ -170,7 +170,7 @@
     },
     "skill": {
       "tipPrefix": "Skills under ",
-      "tipSuffix": " (shared across agents; disabling moves them to the .disabled folder, same as Claude Code)",
+      "tipSuffix": "",
       "empty": "No skills in {path} yet",
       "createAndOpen": "Create and open folder",
       "openFolder": "Open Skill folder",

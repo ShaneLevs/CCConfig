@@ -4,7 +4,11 @@
     "tab": {
       "general": "通用",
       "agents": "Agent 显示",
-      "appearance": "外观"
+      "appearance": "外观",
+      "about": "关于"
+    },
+    "about": {
+      "desc": "多应用 AI 编程助手配置管理与切换工具"
     },
     "language": {
       "title": "语言",

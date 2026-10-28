@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'))
+
 // 双 target：默认产出 uTools 插件（dist/），CCCONFIG_TARGET=app 产出桌面版（dist-app/）
 const IS_APP = process.env.CCCONFIG_TARGET === 'app'
 const OUT_DIR = IS_APP ? 'dist-app' : 'dist'
@@ -129,6 +131,10 @@ export default defineConfig({
     },
   ],
   base: './',
+  // 「关于」页展示的客户端版本：构建时取自 package.json（version:check 保证与 plugin.json / Cargo 一致）
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   build: {
     outDir: OUT_DIR,
     // uTools 以 file:// 加载单页插件，拆 chunk 会引入 ES module 跨文件加载风险；
