@@ -10,6 +10,11 @@
 .cline-config-warning { margin-bottom: 0; }
 .cline-config-empty { margin-top: 32px; }
 
+/* 条目被判废 / 当前使用悬空 */
+.cline-issue-list { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 1.6; }
+.cline-issue-item { color: var(--td-text-color-secondary); word-break: break-all; }
+.cline-provider-invalid { margin-bottom: 10px; }
+
 /* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
 .cline-provider-list { display: flex; flex-direction: column; gap: 8px; }
 .cline-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
@@ -37,6 +42,8 @@
 .cline-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cline-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
 .cline-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.cline-detail-hint { font-size: 11px; color: var(--td-text-color-placeholder); }
+.cline-detail-hint-error { color: var(--td-error-color); }
 .cline-key-lock { color: var(--td-text-color-placeholder); margin-right: 2px; }
 .cline-key-copy { cursor: pointer; margin-left: 4px; color: var(--td-text-color-placeholder); }
 .cline-key-copy:hover { color: var(--td-brand-color); }

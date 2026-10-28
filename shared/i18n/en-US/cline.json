@@ -36,6 +36,15 @@
       "capabilitiesHint": "Declares what the model supports; missing tool / image capabilities disable those features in Cline",
       "openFile": "Open providers.json",
       "notInstalled": "~/.cline not found (Cline has not been installed or used yet)",
+      "invalidTag": "Dropped by Cline",
+      "entryInvalidTitle": "These provider entries fail Cline's validation and Cline silently drops them (which is why the config never takes effect):",
+      "entryInvalidHint": "Cline drops this entry: {reason}. Fix it and save again; until then it cannot be set as current.",
+      "noActiveWarning": "The provider in use (providers.json lastUsedProvider) is {id}, but that entry is unusable — Cline silently falls back to the built-in Cline account, so your config never takes effect. Click ⭐ to pick the provider in use again.",
+      "reasoningLabel": "Reasoning effort",
+      "reasoningUnset": "Not set (Cline default)",
+      "reasoningInvalidHint": "The reasoning effort in the file is invalid, so Cline drops the whole entry; pick an effort again to fix it",
+      "reasoningSaved": "Reasoning effort saved (applies to Cline's next session)",
+      "reasoningSaveFailed": "Failed to save reasoning effort: {message}",
       "settingsWarn": "Cline strictly validates providers.json: version must be 1, updatedAt must be an ISO timestamp, and tokenSource may only be manual / oauth / migration. Cline silently drops the whole file when any of these fails, so this tool blocks writes on invalid content"
     },
     "providerType": {

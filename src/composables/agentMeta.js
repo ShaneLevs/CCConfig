@@ -42,3 +42,10 @@ export const AGENT_META = {
 
 // 落库统计里的 agent id → 展示名（未收录的 id 原样显示，避免新增 agent 时标题消失）
 export const agentLabel = (id) => AGENT_META[id]?.name || id;
+
+// 面向「所有 agent」的选项列表（如下发到 Agent 的目标勾选）：顺序跟随传入的 agentOrder，
+// 与切换器下拉 / 左侧栏 / 设置里的排序保持一致；未收录的 id 跳过。
+export const agentOptionsInOrder = (order = AGENT_ORDER) =>
+  order
+    .filter((id) => AGENT_META[id])
+    .map((id) => ({ value: id, label: AGENT_META[id].name }));

@@ -36,6 +36,15 @@
       "capabilitiesHint": "声明模型支持的能力；工具 / 图片能力缺失时 Cline 会禁用对应功能",
       "openFile": "打开 providers.json",
       "notInstalled": "未检测到 ~/.cline 目录（尚未安装或使用过 Cline）",
+      "invalidTag": "会被 Cline 丢弃",
+      "entryInvalidTitle": "以下供应商条目的字段不合 Cline 校验，Cline 会静默丢弃它们（表现就是配置不生效）：",
+      "entryInvalidHint": "该条目会被 Cline 丢弃：{reason}。修正后重新保存即可；在此之前它无法设为当前使用。",
+      "noActiveWarning": "当前使用（providers.json 的 lastUsedProvider）指向 {id}，但该条目不可用 —— Cline 会静默回落到内置 cline 账号，你的配置不会生效。点 ⭐ 重新指定当前使用。",
+      "reasoningLabel": "推理档位",
+      "reasoningUnset": "未设置（用 Cline 默认）",
+      "reasoningInvalidHint": "文件里的 reasoning 档位不合法，Cline 会丢弃整个条目；重新选择一次即可修正",
+      "reasoningSaved": "推理档位已保存（Cline 下一次会话生效）",
+      "reasoningSaveFailed": "保存推理档位失败: {message}",
       "settingsWarn": "Cline 会严格校验 providers.json：version 必须为 1、updatedAt 必须为 ISO 时间、tokenSource 只能是 manual / oauth / migration。任一不合规时 Cline 会静默丢弃整个文件，因此本工具遇到不合规内容会阻止写入"
     },
     "providerType": {

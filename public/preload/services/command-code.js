@@ -959,7 +959,12 @@ const formatTasteEntry = (entry) => {
 const categoryFileOf = (root, name) => path.join(root, name, 'taste.md')
 
 // 读一个 scope 的全部分类（内联 + 引用子文件），返回扁平的 [{ name, inline, entries, filePath }]
+// 读路径宽容：项目作用域还没选目录时返回空包（页面首次进入 / 切到全局都会顺手读一次项目包），
+// 只有写路径（persistTaste / init / open）才允许抛错，避免无意义的红色提示
 const readTasteCategories = (scope, projectRoot) => {
+  if (scope !== 'global' && !String(projectRoot || '').trim()) {
+    return { root: '', mainPath: '', categories: [] }
+  }
   const root = tasteRoot(scope, projectRoot)
   const mainPath = path.join(root, 'taste.md')
   const parsed = parseTasteFile(mainPath)
@@ -1281,6 +1286,123 @@ const listSessionFiles = () => {
   return out
 }
 
+// ==================== 项目发现（Taste 用）====================
+// ~/.commandcode/projects/<slug>/ 的 slug 是官方对 cwd 的**有损**编码
+// （/Users/shane/Documents/GitHub/CCConfig → users-shane-documents-git-hub-cc-config，
+//  大小写与连字符全部拉平），无法反解。真实路径只存在于会话日志首行的 cwd 字段：
+//   {"type":"session","version":3,"id":"…","timestamp":"…","cwd":"/Users/…"}
+// 所以这里从每个项目目录里读一个会话文件的首行拿 cwd，拿不到就退化为 slug 本身。
+// 读出后只保留目录仍存在的项目（项目被移动/删除时 Taste 目录也没意义了）。
+
+const CWD_LINE_MAX = 4096
+
+const readCwdFromSession = (file) => {
+  let fd
+  try {
+    fd = fs.openSync(file, 'r')
+    const buf = Buffer.alloc(CWD_LINE_MAX)
+    const n = fs.readSync(fd, buf, 0, CWD_LINE_MAX, 0)
+    const firstLine = buf.subarray(0, n).toString('utf-8').split(/\r?\n/)[0]
+    if (!firstLine) return ''
+    const obj = JSON.parse(firstLine)
+    // 首行才是 session 头；个别文件可能以消息行开头，此时不猜
+    if (!isPlainObject(obj) || obj.type !== 'session') return ''
+    return typeof obj.cwd === 'string' ? obj.cwd.trim() : ''
+  } catch (e) {
+    return ''
+  } finally {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd) } catch (e) { /* ignore */ }
+    }
+  }
+}
+
+// 项目目录内最近一条会话的时间（用于按活跃度排序）；无会话返回 0
+const projectLastActive = (projectDir) => {
+  try {
+    let latest = 0
+    for (const f of fs.readdirSync(projectDir, { withFileTypes: true })) {
+      if (!f.isFile() || !f.name.endsWith('.jsonl')) continue
+      if (f.name.endsWith('.checkpoints.jsonl')) continue
+      const st = fs.statSync(path.join(projectDir, f.name))
+      if (st.mtimeMs > latest) latest = st.mtimeMs
+    }
+    return latest
+  } catch (e) {
+    return 0
+  }
+}
+
+// 列出所有「本机曾用 Command Code 打开过」的项目
+// extraRoots：用户手动选过 / 上次选中的目录（可能不在 projects 里，如未用 cmd 打开过的仓库），
+//   存在就一并并入结果，避免页面切走后再也找不到它。
+// 返回 [{ slug, root, name, lastActive, hasTaste, manual? }]，按最近活跃倒序
+const listCommandCodeProjects = (extraRoots = []) => {
+  const root = CC_PROJECTS_PATH()
+  const out = []
+  const seen = new Set()
+  let dirs = []
+  if (fs.existsSync(root)) {
+    try {
+      dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory())
+    } catch (e) {
+      console.error('[commandcode] 读取 projects 目录失败:', e)
+      dirs = []
+    }
+  }
+  for (const d of dirs) {
+    const projectDir = path.join(root, d.name)
+    let cwd = ''
+    try {
+      const sessions = fs.readdirSync(projectDir, { withFileTypes: true })
+        .filter((f) => f.isFile() && f.name.endsWith('.jsonl') && !f.name.endsWith('.checkpoints.jsonl'))
+        .map((f) => path.join(projectDir, f.name))
+      // 优先读最新的会话（首行都带 cwd，新的更可能是当前有效路径）
+      sessions.sort((a, b) => {
+        try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs } catch (e) { return 0 }
+      })
+      for (const file of sessions) {
+        cwd = readCwdFromSession(file)
+        if (cwd) break
+      }
+    } catch (e) {
+      /* 单个项目读失败不影响其它项目 */
+    }
+    const projectRoot = cwd || path.join(root, d.name)
+    // 项目被移动/删除后 cwd 已失效：跳过，避免列出一个写不进去的项目
+    if (cwd && !fs.existsSync(cwd)) continue
+    if (seen.has(projectRoot)) continue
+    seen.add(projectRoot)
+    out.push({
+      slug: d.name,
+      // 会话日志里带 cwd 时用它；退化时给 slug 路径（仍可作为选择项）
+      root: projectRoot,
+      name: path.basename(projectRoot) || d.name,
+      lastActive: projectLastActive(projectDir),
+      // 项目级 Taste 是否已存在，UI 用来标记「已初始化」
+      hasTaste: fs.existsSync(path.join(projectRoot, '.commandcode', 'taste', 'taste.md')),
+    })
+  }
+  for (const raw of extraRoots) {
+    const extra = String(raw || '').trim()
+    if (!extra || seen.has(extra)) continue
+    if (!fs.existsSync(extra)) continue
+    let stat
+    try { stat = fs.statSync(extra) } catch (e) { continue }
+    if (!stat.isDirectory()) continue
+    seen.add(extra)
+    out.push({
+      slug: '',
+      root: extra,
+      name: path.basename(extra) || extra,
+      lastActive: 0,
+      hasTaste: fs.existsSync(path.join(extra, '.commandcode', 'taste', 'taste.md')),
+      manual: true,
+    })
+  }
+  return out.sort((a, b) => b.lastActive - a.lastActive)
+}
+
 const collectUsageRecords = () => {
   const messageRecords = []
   const sessionMap = new Map()
@@ -1497,6 +1619,8 @@ module.exports = {
   addCommandCodeTasteCategory, deleteCommandCodeTasteCategory,
   addCommandCodeTasteEntry, updateCommandCodeTasteEntry, deleteCommandCodeTasteEntry,
   initCommandCodeTaste, openCommandCodeTasteDir,
+  // 项目发现（Taste 项目作用域下拉）
+  listCommandCodeProjects,
   // Usage
   readCommandCodeUsage, readCommandCodeUsageFromHistory,
   // 目录 / 检测

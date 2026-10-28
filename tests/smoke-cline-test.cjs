@@ -276,7 +276,7 @@ const dispatchKey = cline.providerKeyFor('router')
 cline.upsertClineProvider(dispatchKey, { name: 'router', baseUrl: 'http://127.0.0.1:17877/v1', apiKey: 'gw' })
 cline.upsertClineModel(dispatchKey, { id: 'gpt-5', name: 'GPT-5', contextWindow: 400000, maxTokens: 32000 })
 const dispProbe = readJson(providersPath).providers[dispatchKey]
-eq(dispProbe.settings.provider, 'openai-compatible', '下发固定 openai-compatible 协议')
+eq(dispProbe.settings.provider, dispatchKey, '下发：settings.provider 跟条目键一致（Cline 的「已配置」判据）')
 eq(dispProbe.settings.baseUrl, 'http://127.0.0.1:17877/v1', '下发 baseUrl')
 const dispModel = readJson(modelsPath).providers[dispatchKey].models['gpt-5']
 eq(dispModel.capabilities, ['streaming', 'tools', 'images', 'reasoning'], '下发默认能力')
@@ -285,6 +285,82 @@ eq(readJson(providersPath).providers[dispatchKey].settings.model, 'gpt-5', '下�
 // 再次下发时非空才覆盖、空值不清旧
 cline.upsertClineModel(dispatchKey, { id: 'gpt-5' })
 eq(readJson(modelsPath).providers[dispatchKey].models['gpt-5'].name, 'GPT-5', '空值不清除已有模型名')
+
+// ==================== 11. 条目校验 / 悬空 lastUsedProvider / 推理档位 ====================
+console.log('11. 条目校验与推理档位（Cline zod 语义）')
+// Cline 只认 lastUsedProvider 指向的条目；条目被判废时它会静默回落内置 cline 账号
+const rawDoc = readJson(providersPath)
+rawDoc.lastUsedProvider = dispatchKey
+fs.writeFileSync(providersPath, JSON.stringify(rawDoc, null, 2), { mode: 0o600 })
+eq(cline.effectiveLastUsedProvider(readJson(providersPath)), dispatchKey, '合法条目 → 当前使用即 lastUsedProvider')
+eq(cline.getClineDanglingActiveProvider(), '', '合法条目时没有悬空的 lastUsedProvider')
+const okList = cline.getClineProviderList()
+ok(okList.every((p) => p.valid === true), '合法条目 valid=true')
+
+// settings.reasoning：effort 只接受 Cline 的档位
+ok(cline.normalizeReasoning({ enabled: true, effort: 'high' }) !== null, 'reasoning effort=high 合法')
+ok(cline.normalizeReasoning({ enabled: false }) !== null, 'reasoning enabled=false 合法（Cline 关闭思考的形状）')
+ok(cline.normalizeReasoning({ effort: 'xhigh' }) !== null, 'reasoning effort=xhigh 合法')
+ok(cline.normalizeReasoning({ effort: 'turbo' }) === null, 'reasoning effort=turbo 非法（会被 Cline 丢弃）')
+ok(cline.normalizeReasoning({ effort: 'HIGH' }) === null, 'reasoning effort 大小写敏感')
+ok(cline.normalizeReasoning({ enabled: 'yes' }) === null, 'reasoning enabled 非布尔非法')
+ok(cline.normalizeReasoning({ budgetTokens: 0 }) === null, 'reasoning budgetTokens 非正整数非法')
+eq(cline.CLINE_REASONING_EFFORTS, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'], '档位清单与 @cline/shared 一致')
+
+cline.setClineReasoning(dispatchKey, 'high')
+eq(readJson(providersPath).providers[dispatchKey].settings.reasoning, { enabled: true, effort: 'high' }, 'setClineReasoning 写 { enabled: true, effort }')
+eq(cline.getClineProviderList().find((p) => p.id === dispatchKey).reasoningEffort, 'high', '列表回读推理档位')
+cline.setClineReasoning(dispatchKey, 'none')
+eq(readJson(providersPath).providers[dispatchKey].settings.reasoning, { enabled: false }, 'effort=none 写成 { enabled: false }（Cline 的关闭形状）')
+cline.setClineReasoning(dispatchKey, '')
+ok(!('reasoning' in readJson(providersPath).providers[dispatchKey].settings), '空档位删除 reasoning 键')
+throws(() => cline.setClineReasoning(dispatchKey, 'turbo'), '非法档位直接报错，不写进文件')
+
+// 保存供应商不能抹掉已有的 reasoning / 未识别字段
+cline.setClineReasoning(dispatchKey, 'low')
+cline.updateClineProvider(dispatchKey, { apiKey: 'gw2' })
+const afterUpdate = readJson(providersPath).providers[dispatchKey].settings
+eq(afterUpdate.reasoning, { enabled: true, effort: 'low' }, '更新供应商保留 reasoning')
+eq(afterUpdate.apiKey, 'gw2', '更新供应商写入 apiKey')
+
+// 被判废的条目：Cline 视为未配置，页面必须能看出来
+const brokenDoc = readJson(providersPath)
+brokenDoc.providers[dispatchKey].settings.reasoning = { effort: 'turbo' }
+brokenDoc.lastUsedProvider = dispatchKey
+fs.writeFileSync(providersPath, JSON.stringify(brokenDoc, null, 2), { mode: 0o600 })
+const brokenEntry = cline.getClineProviderList().find((p) => p.id === dispatchKey)
+eq(brokenEntry.valid, false, '非法 reasoning 的条目被判废')
+eq(brokenEntry.invalidReason, 'reasoningInvalid', '判废原因 = reasoningInvalid')
+eq(brokenEntry.isActive, false, '判废条目不算「当前使用」')
+eq(cline.getClineActiveProvider(), '', '判废条目时实际生效供应商为空（Cline 回落内置账号）')
+eq(cline.getClineDanglingActiveProvider(), dispatchKey, '能识别悬空的 lastUsedProvider')
+throws(() => cline.setClineActiveProvider(dispatchKey), '判废条目不允许设为当前使用')
+
+// settings.provider 与键不一致 → Cline 视为未配置
+brokenDoc.providers[dispatchKey].settings.reasoning = { enabled: true, effort: 'high' }
+brokenDoc.providers[dispatchKey].settings.provider = 'openai-compatible'
+fs.writeFileSync(providersPath, JSON.stringify(brokenDoc, null, 2), { mode: 0o600 })
+eq(cline.getClineProviderList().find((p) => p.id === dispatchKey).invalidReason, 'providerMismatch', 'settings.provider 与键不一致被识别')
+// 下发时 settings.provider 跟随条目键，避免与用户自己的 openai-compatible 撞车
+cline.upsertClineProvider(dispatchKey, { name: 'router', baseUrl: 'http://127.0.0.1:17877/v1', apiKey: 'gw' })
+eq(readJson(providersPath).providers[dispatchKey].settings.provider, dispatchKey, '下发：settings.provider = 条目键')
+eq(readJson(providersPath).providers[dispatchKey].settings.baseUrl, 'http://127.0.0.1:17877/v1', '下发：baseUrl 写回')
+eq(cline.getClineProviderList().find((p) => p.id === dispatchKey).valid, true, '下发后条目恢复合法')
+
+// updatedAt 不是 ISO datetime → 条目被判废
+const timeDoc = readJson(providersPath)
+timeDoc.providers[dispatchKey].updatedAt = '2026-10-28 10:00:00'
+fs.writeFileSync(providersPath, JSON.stringify(timeDoc, null, 2), { mode: 0o600 })
+eq(cline.getClineProviderList().find((p) => p.id === dispatchKey).invalidReason, 'updatedAtInvalid', '非 ISO updatedAt 被识别')
+
+// lastUsedProvider 指向不存在的条目：新增供应商应自动接管，否则永远停在「不生效」
+const gapDoc = readJson(providersPath)
+gapDoc.lastUsedProvider = 'gone-provider'
+fs.writeFileSync(providersPath, JSON.stringify(gapDoc, null, 2), { mode: 0o600 })
+eq(cline.getClineDanglingActiveProvider(), 'gone-provider', '条目缺失也算悬空')
+cline.addClineProvider({ id: 'fresh', baseUrl: 'https://api.example.com/v1', apiKey: 'k' })
+eq(readJson(providersPath).lastUsedProvider, 'fresh', '新增供应商在有悬空当前使用时自动接管')
+eq(cline.getClineActiveProvider(), 'fresh', '接管后实际生效')
 
 console.log(`\n结果: ${passed} 通过, ${failed} 失败`)
 fs.rmSync(tmp, { recursive: true, force: true })

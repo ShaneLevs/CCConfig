@@ -40,25 +40,24 @@
 
 /* 模型子区（星标 = 写入 settings.json 的 modelProvider / model） */
 .commandcode-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
-.commandcode-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; }
+.commandcode-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 6px; }
 .commandcode-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
-.commandcode-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.commandcode-model-tag {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px;
-  background: var(--td-bg-color-container-hover);
+.commandcode-model-list { display: flex; flex-direction: column; gap: 2px; }
+
+.commandcode-model-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px;
   border-radius: var(--td-radius-default);
-  border: 1px solid var(--td-border-level-1-color);
-  transition: border-color 0.15s;
+  transition: background 0.15s;
 }
-.commandcode-model-tag:hover { border-color: var(--td-brand-color); }
-.commandcode-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
-.commandcode-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
-.commandcode-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
-.commandcode-model-tag-star:hover { background: var(--td-warning-color-1); }
+.commandcode-model-item:hover { background: var(--td-bg-color-container-hover); }
+.commandcode-model-info { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.commandcode-model-name { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+.commandcode-model-sub { font-size: 11px; color: var(--td-text-color-placeholder); word-break: break-all; }
+.commandcode-model-actions { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
 
 /* ===== 表单弹窗 ===== */
-.commandcode-edit-form { display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.commandcode-edit-form { display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 .commandcode-form-item { display: flex; flex-direction: column; gap: 4px; }
 .commandcode-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
 .commandcode-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
@@ -66,28 +65,25 @@
 .commandcode-clear-key { margin-top: 2px; }
 .mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
 
-/* 模型行编辑器 */
-.commandcode-model-row { display: flex; gap: 6px; align-items: center; }
-.commandcode-model-row-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 4px; border-radius: var(--td-radius-small); flex-shrink: 0; }
-.commandcode-model-row-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
-
-/* 编辑弹窗内的模型区块 */
-.commandcode-model-block {
+/* 模型弹窗顶部：说明该模型挂在哪个供应商下、协议跟随供应商 */
+.commandcode-model-dialog-tip {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--td-border-level-1-color);
-  border-radius: var(--td-radius-default);
+  gap: 2px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  padding: 6px 10px;
   background: var(--td-bg-color-secondarycontainer);
-  margin-bottom: 8px;
+  border-radius: var(--td-radius-default);
 }
-.commandcode-model-block-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.commandcode-model-block-title { font-size: 13px; font-weight: 500; color: var(--td-text-color-primary); word-break: break-all; }
+.commandcode-model-dialog-tip-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
 
-/* 单价四列 */
-.commandcode-cost-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* 单价：两列，每个字段带自己的标签（InputNumber 默认 144px 固定宽，四列会撑出横向滚动条） */
+.commandcode-cost-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.commandcode-cost-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.commandcode-cost-field-label { font-size: 12px; color: var(--td-text-color-placeholder); }
+.commandcode-cost-grid .t-input-number { width: 100%; }
 
-/* 深色主题：模型区块底色与手风琴头部的对比度 */
-:root[theme-mode="dark"] .commandcode-model-block { background: var(--td-bg-color-container-hover); }
+/* 深色主题：详情区与弹窗提示的对比度 */
 :root[theme-mode="dark"] .commandcode-provider-details { background: var(--td-bg-color-container-hover); }
+:root[theme-mode="dark"] .commandcode-model-dialog-tip { background: var(--td-bg-color-container-hover); }

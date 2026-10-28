@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
 import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
+import { useAgentVisibility } from "../../composables/useAgentVisibility";
+import { agentOptionsInOrder } from "../../composables/agentMeta";
 import "./styles/AutoRouteView.css";
 
 const { t } = useI18n();
@@ -11,23 +13,9 @@ const { t } = useI18n();
 // 自动网关：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
 // 开启状态同步到共享 ref，驱动 index.vue「网关」tab 按钮的绿点标识
 const { autoRouteEnabled, refreshAutoRouteEnabled } = useAutoRouteStatus();
-const AGENT_DISPATCH_OPTIONS = [
-  { label: "Claude Code", value: "claude" },
-  { label: "OpenCode", value: "opencode" },
-  { label: "Pi Agent", value: "pi" },
-  { label: "omp", value: "omp" },
-  { label: "Reasonix", value: "reasonix" },
-  { label: "Codex", value: "codex" },
-  { label: "Kimi Code", value: "kimi" },
-  { label: "MiniMax Code", value: "minimax" },
-  { label: "Qoder", value: "qoder" },
-  { label: "ZCode", value: "zcode" },
-  { label: "Hermes", value: "hermes" },
-  { label: "DSH", value: "dsh" },
-  { label: "Grok Build", value: "grok" },
-  { label: "Cline", value: "cline" },
-  { label: "Command Code", value: "commandcode" },
-];
+// 下发目标顺序跟随设置里的 Agent 显示顺序（agentOrder），与切换器 / 侧栏一致
+const { agentOrder } = useAgentVisibility();
+const AGENT_DISPATCH_OPTIONS = computed(() => agentOptionsInOrder(agentOrder.value));
 
 const loading = ref(false);
 const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] });
@@ -248,7 +236,7 @@ const handleDispatch = async () => {
       }
     });
     Object.entries(byApp).forEach(([app, s]) => {
-      const label = (AGENT_DISPATCH_OPTIONS.find((o) => o.value === app) || {}).label || app;
+      const label = (AGENT_DISPATCH_OPTIONS.value.find((o) => o.value === app) || {}).label || app;
       if (s.fail === 0) MessagePlugin.success(t('commonApp.autoRoute.dispatchSuccess', { label, count: s.ok }));
       else MessagePlugin.warning(t('commonApp.autoRoute.dispatchPartial', { label, ok: s.ok, fail: s.fail, error: s.err }));
     });

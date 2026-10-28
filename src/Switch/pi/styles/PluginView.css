@@ -95,11 +95,13 @@
   gap: 12px;
 }
 /* 市场区：固定高度 flex 纵向布局（不能 flex:1，否则 height 被 flex-basis 覆盖、整页滚动），
-   列表区内部滚动、底部分页常驻；高度 = 视口 - 上方(容器padding+header+tabs+间距) - 下方padding */
+   列表区内部滚动、底部分页常驻；高度 = 视口 - 上方(容器padding+header+tabs+间距) - 下方padding。
+   容器顶部内边距里还含桌面版 overlay 标题栏（main.css 的 --cc-desktop-titlebar，uTools 版为 0），
+   必须一起减掉：漏减这 34px 会让市场区比视口高，外层整页可滚、底部分页被挤到视口下方。 */
 .pi-market-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 108px);
+  height: calc(100vh - 108px - var(--cc-desktop-titlebar, 0px));
   min-height: 200px;
 }
 /* 搜索/筛选并入子标签栏右侧：搜索框占满剩余宽度，窄窗口可收缩 */

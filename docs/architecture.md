@@ -278,13 +278,27 @@ Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文�
         resolveClineDir / resolveClineDataDir 一致
   <data>/settings/providers.json  ←→  CLI / Desktop / SDK（IDE 扩展的供应商配置在其 globalState，非文件，本工具不覆盖）
     信封 { version: 1（字面量）, lastUsedProvider?, modes: { voiceInput? }, repairs?, providers: {...} }
-    providers.<providerId> = { settings: { provider, apiKey?, model?, baseUrl?, headers? }, updatedAt, tokenSource }
-    ⚠️ Cline 用 zod 严格校验整档，任一不合规即静默丢弃（当空档处理），因此本模块：
+    providers.<providerId> = { settings: { provider, apiKey?, model?, baseUrl?, headers?, reasoning? }, updatedAt, tokenSource }
+    ⚠️ Cline 用 zod 严格校验整个信封，**任一 provider 条目不合规就丢弃这一条**（不是整个文件；整档被丢弃的
+       情况只有 version 不是 1 / 顶层不是对象 / JSON 语法错）。因此本模块：
        - 读到的 version 不是 1 → 抛错中止，绝不写回（否则用户全部供应商被清空）
        - updatedAt 一律写 new Date().toISOString()；tokenSource 只取 manual / oauth / migration，不自造
        - 原子写（tmp + rename）并 chmod 0600（Cline 自己也按 0600 写）
        - settings 内未识别键与供应商条目顶层未识别键均原样往返（_extra / topExtra）
-    切换供应商 = 写 lastUsedProvider；删除当前供应商时清空 lastUsedProvider 与 modes.voiceInput 引用
+    ⚠️ **Cline 只跑 lastUsedProvider 指向的那一条**（CLI 3.0.74 源码：`getLastUsedProviderSettings()` →
+       `providers[lastUsedProvider].settings`，会话模型取 `settings.model`）。该条目缺失或被判废时 Cline
+       **静默回落到内置 cline 账号**（表现为「模型配置不生效」），所以：
+       - `settings.provider` 必须等于条目键（Cline 的 `resolveProviderSettings` 拿它当「已配置」判据）；
+         本模块新建/下发时一律写条目键本身（`openai-compatible` 只在内置条目上才成立）
+       - `settings.reasoning` 受严格校验：`effort` 只能是 none/minimal/low/medium/high/xhigh/max
+         （`default`/`turbo`/大写都非法），`enabled` 必须是布尔，`budgetTokens` 必须是正整数；任一不合法
+         → 整条目被丢弃。`effort: 'none'` 写为 `{ enabled: false }`（Cline 选择器关思考的形状）
+       - `settings.protocol` / `settings.client` 也在枚举内校验，非法同样整条目丢弃
+       - 对外 API 用 `effectiveLastUsedProvider`（悬空/判废即视为「无当前供应商」）与 `checkProviderEntry`
+         （`valid` / `invalidReason` / `invalidValue`）把上述判废原因回传页面，由 ConfigView 显式提示；
+         `setClineActiveProvider` 拒绝把判废条目设为当前使用
+    切换供应商 = 写 lastUsedProvider；删除当前供应商时清空 lastUsedProvider 与 modes.voiceInput 引用；
+    新增供应商时若当前无「实际生效」的供应商（首次 / 悬空）则自动接管，避免新建后仍停在「不生效」
   <data>/settings/models.json  —— 独立于 providers.json 的另一套 { version: 1, providers: {...} } 信封
     providers.<providerId> = { provider: { name, baseUrl, defaultModelId? }, models: { <modelId>: {
       id, name?, contextWindow?, maxTokens?, capabilities? } }, discoveredModelIds? }
@@ -307,7 +321,8 @@ Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文�
     口径与 Claude / DSH / Grok 一致：输入 = inputTokens + cacheReadTokens + cacheWriteTokens，输出 = outputTokens；
       day.inputTokens 含缓存，day.models[].inputTokens 为未缓存输入
     历史落库：ccconfig_agent_usage_cline_<nativeId>，源会话被清理后回放历史不归零
-  通用库下发：Cline 侧第三方端点只有 openai-compatible，协议守卫只放行 openai-completions（其余协议先接网关）；
+  通用库下发：Cline 侧第三方端点只有 openai-compatible 协议（settings.provider 写条目键本身，Cline 只按
+    「键 = settings.provider」判断已配置），协议守卫只放行 openai-completions（其余协议先接网关）；
     供应商名经 providerKeyFor 确定性清洗为合法 providerId（中文/符号 → ASCII 骨架，upsert 幂等）；
     写入形态 = providers.json settings（provider/baseUrl/apiKey）+ models.json 模型条目 + 可选
     settings.model / defaultModelId / lastUsedProvider
@@ -341,6 +356,16 @@ Command Code（cmd，~/.commandcode/，COMMANDCODE_HOME 可覆盖）：
                    写：整包重写，超过阈值的分类写子文件+留引用，回落 <=5 条时把子文件并回主档并删目录；
                    删除分类时清理其子目录（只 rmdir 空目录，不留误删用户文件的可能）
                    置信度越界（<0 或 >1）直接报错，不静默夹紧
+                   项目作用域的项目列表：listCommandCodeProjects() 扫 ~/.commandcode/projects/<slug>/。
+                   **slug 是官方对 cwd 的有损编码**（/Users/shane/Documents/GitHub/CCConfig →
+                   users-shane-documents-git-hub-cc-config，大小写/连字符全拉平）不可反解，
+                   真实路径只存在于会话日志首行的 cwd 字段（{"type":"session",…,"cwd":"/…"}）；
+                   因此每个 slug 目录读最新会话文件的前 4KB 取首行 cwd，读不到则退化用 slug 目录本身。
+                   cwd 指向的目录已不存在（项目被移动/删除、worktree 已清理）→ 跳过，不列举写不进去的项目。
+                   可传 extraRoots（上次选中 / 手动选的目录）并入结果，避免用户切走后找不到；
+                   返回按目录内最新会话 mtime 倒序，带 hasTaste 供 UI 标记已初始化。
+                   读路径（getCommandCodeTastePackages / Summary）在项目作用域缺 root 时返回空包不抛错，
+                   只有写路径（persistTaste / init / open）抛错。
   使用统计：~/.commandcode/projects/<项目slug>/<会话ID>.jsonl，逐行 JSON：
      { type:"message", timestamp, model, usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }, message }
      只取带 usage 的行（同一条消息可能拆多行，各自带增量），跳过 *.checkpoints.jsonl；

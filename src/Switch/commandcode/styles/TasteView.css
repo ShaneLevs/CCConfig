@@ -5,6 +5,8 @@
 .commandcode-taste-toolbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .commandcode-taste-toolbar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .commandcode-taste-path { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 项目下拉：限宽 + 允许收缩，路径过长时靠 Select 自身省略 */
+.commandcode-taste-project-select { width: 320px; max-width: 42vw; min-width: 160px; flex-shrink: 1; }
 .commandcode-taste-tip { font-size: 11px; color: var(--td-text-color-placeholder); line-height: 1.5; }
 
 .commandcode-taste-projectpick,

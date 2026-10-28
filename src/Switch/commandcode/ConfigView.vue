@@ -1,11 +1,12 @@
 <script setup>
 // Command Code 模型配置页：~/.commandcode/providers.json + settings.json + auth.json
-// - 供应商：providers.json 的 provider.<id>（api 三协议 / baseURL / headers / disabled）
-// - 模型：供应商条目的 models 字典（contextWindow / maxOutput / reasoningEfforts / cost / options）
-// - 默认模型：settings.json 的 modelProvider + model（全限定名 <providerId>/<modelId>）
+// 供应商与模型分两层编辑（同 Cline / Pi）：
+//   供应商弹窗只改连接信息（ID / 名称 / API 协议 / Base URL / 请求头 / 停用）
+//   模型弹窗只改单个模型（ID / 名称 / 上下文 / 输出 / 推理档位 / 单价 / 额外参数）
+// - 模型：供应商条目的 models 字典，展开供应商后按行列出，星标 = 写入 settings.json 的默认模型
+// - 协议只在供应商层设置（模型跟随供应商）；模型条目上的 api 字段仅为兼容既有数据原样往返，不提供 UI
 // - API Key：**不在 providers.json 里**（那里只接受 $ENV / {env:} / !cmd 引用语法，明文会被拒绝），
 //   而是写进 auth.json 的 <providerId>.apiKey（与 /connect 同源）；页面只展示是否已保存 + 掩码。
-// 风格：供应商手风琴 + 模型标签（同 Hermes / ZCode），模型在供应商弹窗内编辑。
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
@@ -72,50 +73,6 @@ const fieldsToHeaders = (fields) => {
   return out;
 };
 
-// ==================== 数据加载 ====================
-
-const refresh = () => {
-  loading.value = true;
-  warningMsg.value = "";
-  try {
-    providers.value = window.services.getCommandCodeProviderList() || [];
-    defaultKey.value = window.services.getCommandCodeDefaultModel() || null;
-  } catch (e) {
-    console.error("加载 Command Code 配置失败:", e);
-    warningMsg.value = e.message || t("common.loadFailed");
-  } finally {
-    loading.value = false;
-  }
-};
-
-const openConfigFile = () => {
-  try { window.services.openCommandCodeConfigFile(); } catch { /* ignore */ }
-};
-
-// ==================== 供应商弹窗 ====================
-
-const emptyModelRow = () => ({
-  id: "", name: "", contextWindow: null, maxOutput: null,
-  reasoning: null, reasoningEfforts: [], cost: {}, options: [], api: "", baseURL: "", _extra: {},
-});
-
-const emptyForm = () => ({
-  id: "", name: "", api: "openai-completions", baseUrl: "",
-  apiKey: "", headers: [], models: [], disabled: false,
-});
-
-const addDialog = ref(false);
-const addForm = ref(emptyForm());
-const editDialog = ref(false);
-const editingId = ref("");
-const editForm = ref(emptyForm());
-// 编辑弹窗已有 key 的掩码（用于提示「已保存」），以及是否要清除
-const originalHasKey = ref(false);
-const clearApiKeyFlag = ref(false);
-
-const addModelRow = (form) => form.models.push(emptyModelRow());
-const removeModelRow = (form, idx) => form.models.splice(idx, 1);
-
 const optionsToFields = (options) =>
   Object.entries(options || {}).map(([key, value]) => ({ key, value: String(value ?? "") }));
 const fieldsToOptions = (fields) => {
@@ -147,36 +104,44 @@ const formToCost = (cost) => {
   return out;
 };
 
-const modelFromEntry = (m) => ({
-  id: m.id,
-  name: m.name || "",
-  contextWindow: m.contextWindow || null,
-  maxOutput: m.maxOutput || null,
-  reasoning: m.reasoning === true ? true : m.reasoning === false ? false : null,
-  reasoningEfforts: Array.isArray(m.reasoningEfforts) ? [...m.reasoningEfforts] : [],
-  cost: costToForm(m.cost),
-  options: optionsToFields(m.options),
-  api: m.api || "",
-  baseURL: m.baseURL || "",
-  _extra: m._extra || {},
+// ==================== 数据加载 ====================
+
+const refresh = () => {
+  loading.value = true;
+  warningMsg.value = "";
+  try {
+    providers.value = window.services.getCommandCodeProviderList() || [];
+    defaultKey.value = window.services.getCommandCodeDefaultModel() || null;
+  } catch (e) {
+    console.error("加载 Command Code 配置失败:", e);
+    warningMsg.value = e.message || t("common.loadFailed");
+  } finally {
+    loading.value = false;
+  }
+};
+
+const openConfigFile = () => {
+  try { window.services.openCommandCodeConfigFile(); } catch { /* ignore */ }
+};
+
+// ==================== 供应商弹窗 ====================
+
+const emptyProviderForm = () => ({
+  id: "", name: "", api: "openai-completions", baseUrl: "",
+  apiKey: "", headers: [], disabled: false,
 });
 
-const modelToPayload = (m) => ({
-  id: m.id,
-  name: m.name,
-  contextWindow: Number(m.contextWindow) || 0,
-  maxOutput: Number(m.maxOutput) || 0,
-  reasoning: m.reasoning,
-  reasoningEfforts: m.reasoningEfforts || [],
-  cost: formToCost(m.cost),
-  options: fieldsToOptions(m.options),
-  api: m.api || "",
-  baseURL: m.baseURL || "",
-  _extra: m._extra || {},
-});
+const addDialog = ref(false);
+const addForm = ref(emptyProviderForm());
+const editDialog = ref(false);
+const editingId = ref("");
+const editForm = ref(emptyProviderForm());
+// 编辑弹窗已有 key 的掩码（用于提示「已保存」），以及是否要清除
+const originalHasKey = ref(false);
+const clearApiKeyFlag = ref(false);
 
 const openAddDialog = () => {
-  addForm.value = emptyForm();
+  addForm.value = emptyProviderForm();
   addDialog.value = true;
 };
 
@@ -193,11 +158,6 @@ const handleAddProvider = () => {
       apiKey: addForm.value.apiKey.trim(),
       headers: fieldsToHeaders(addForm.value.headers),
     });
-    // 供应商弹窗里排的模型逐条追加（add 接口只建供应商，模型走 addModel）
-    for (const m of addForm.value.models) {
-      if (!String(m.id || "").trim()) continue;
-      window.services.addCommandCodeModel(id, modelToPayload(m));
-    }
     MessagePlugin.success(t("commandcode.provider.added", { name }));
     if (addForm.value.apiKey.trim()) MessagePlugin.success(t("commandcode.config.apiKeySaved"));
     addDialog.value = false;
@@ -216,7 +176,6 @@ const handleEdit = (provider) => {
     baseUrl: provider.baseUrl || "",
     apiKey: "",
     headers: headersToFields(provider.headers),
-    models: (provider.models || []).map(modelFromEntry),
     disabled: !!provider.disabled,
   };
   originalHasKey.value = !!provider.hasStoredKey;
@@ -238,20 +197,6 @@ const handleSaveProvider = () => {
     else if (editForm.value.apiKey.trim()) payload.apiKey = editForm.value.apiKey.trim();
     window.services.updateCommandCodeProvider(editingId.value, payload);
 
-    // 模型增删改：以弹窗里的列表为准
-    const prevModels = providers.value.find((p) => p.id === editingId.value)?.models || [];
-    const prevIds = new Set(prevModels.map((m) => m.id));
-    const nextIds = new Set(editForm.value.models.map((m) => String(m.id || "").trim()).filter(Boolean));
-    for (const id of prevIds) {
-      if (!nextIds.has(id)) window.services.deleteCommandCodeModel(editingId.value, id);
-    }
-    for (const m of editForm.value.models) {
-      const mid = String(m.id || "").trim();
-      if (!mid) continue;
-      if (prevIds.has(mid)) window.services.updateCommandCodeModel(editingId.value, mid, modelToPayload(m));
-      else window.services.addCommandCodeModel(editingId.value, modelToPayload(m));
-    }
-
     MessagePlugin.success(t("commandcode.provider.updated"));
     if (payload.apiKey) MessagePlugin.success(t("commandcode.config.apiKeySaved"));
     if (payload.clearApiKey) MessagePlugin.success(t("commandcode.config.apiKeyCleared"));
@@ -272,7 +217,100 @@ const handleDeleteProvider = (provider) => {
   }
 };
 
-// ==================== 默认模型 ====================
+// ==================== 模型弹窗 ====================
+
+const emptyModelForm = () => ({
+  id: "", name: "", contextWindow: 0, maxOutput: 0,
+  reasoningEfforts: [], cost: costToForm(), options: [], api: "", baseURL: "", _extra: {},
+});
+
+const modelFromEntry = (m) => ({
+  id: m.id,
+  name: m.name || "",
+  contextWindow: m.contextWindow || 0,
+  maxOutput: m.maxOutput || 0,
+  reasoningEfforts: Array.isArray(m.reasoningEfforts) ? [...m.reasoningEfforts] : [],
+  cost: costToForm(m.cost),
+  options: optionsToFields(m.options),
+  api: m.api || "",
+  baseURL: m.baseURL || "",
+  _extra: m._extra || {},
+});
+
+const modelToPayload = (m) => ({
+  id: String(m.id || "").trim(),
+  name: m.name,
+  contextWindow: Number(m.contextWindow) || 0,
+  maxOutput: Number(m.maxOutput) || 0,
+  reasoningEfforts: m.reasoningEfforts || [],
+  cost: formToCost(m.cost),
+  options: fieldsToOptions(m.options),
+  api: m.api || "",
+  baseURL: m.baseURL || "",
+  _extra: m._extra || {},
+});
+
+const modelDialog = ref(false);
+const modelMode = ref("create"); // create | edit
+const modelProviderId = ref("");
+const modelProviderLabel = ref("");
+const modelProviderApi = ref("");
+const editingModelId = ref("");
+const modelForm = ref(emptyModelForm());
+
+const openAddModelDialog = (p) => {
+  modelMode.value = "create";
+  modelProviderId.value = p.id;
+  modelProviderLabel.value = p.name || p.id;
+  modelProviderApi.value = p.api || "";
+  editingModelId.value = "";
+  modelForm.value = emptyModelForm();
+  modelDialog.value = true;
+};
+
+const openEditModelDialog = (p, m) => {
+  modelMode.value = "edit";
+  modelProviderId.value = p.id;
+  modelProviderLabel.value = p.name || p.id;
+  modelProviderApi.value = p.api || "";
+  editingModelId.value = m.id;
+  modelForm.value = modelFromEntry(m);
+  modelDialog.value = true;
+};
+
+const submitModel = () => {
+  const payload = modelToPayload(modelForm.value);
+  if (!payload.id) { MessagePlugin.warning(t("commandcode.model.idRequired")); return; }
+  try {
+    if (modelMode.value === "create") {
+      window.services.addCommandCodeModel(modelProviderId.value, payload);
+      MessagePlugin.success(t("commandcode.model.added", { id: payload.id }));
+    } else {
+      window.services.updateCommandCodeModel(modelProviderId.value, editingModelId.value, payload);
+      MessagePlugin.success(t("commandcode.model.updated"));
+    }
+    modelDialog.value = false;
+    refresh();
+  } catch (e) {
+    MessagePlugin.error(
+      t(modelMode.value === "create" ? "commandcode.model.addFailed" : "commandcode.model.saveFailed", {
+        message: e.message,
+      })
+    );
+  }
+};
+
+const handleDeleteModel = (p, m) => {
+  try {
+    window.services.deleteCommandCodeModel(p.id, m.id);
+    MessagePlugin.success(t("commandcode.model.deleted", { id: m.id }));
+    refresh();
+  } catch (e) {
+    MessagePlugin.error(t("commandcode.model.deleteFailed", { message: e.message }));
+  }
+};
+
+// ==================== 默认模型（settings.json） ====================
 
 const setDefaultModel = (p, m) => {
   try {
@@ -354,7 +392,7 @@ onMounted(refresh);
               </div>
             </template>
 
-            <!-- 展开内容：详情 + 模型列表 -->
+            <!-- 展开内容：供应商详情 + 模型列表 -->
             <template #content>
               <div class="commandcode-provider-body">
                 <div class="commandcode-provider-details">
@@ -375,19 +413,46 @@ onMounted(refresh);
                 <div class="commandcode-models-section">
                   <div class="commandcode-models-title">
                     <span>{{ t("commandcode.config.modelsTitle") }}</span>
+                    <Button size="small" variant="text" @click="openAddModelDialog(p)">
+                      <template #icon><AddIcon /></template> {{ t("commandcode.config.addModel") }}
+                    </Button>
                   </div>
                   <div v-if="p.models.length === 0" class="commandcode-models-empty">
                     {{ t("commandcode.config.modelsEmpty") }}
                   </div>
-                  <div class="commandcode-model-tags">
-                    <span v-for="m in p.models" :key="m.id" class="commandcode-model-tag">
-                      <span class="commandcode-model-tag-name">{{ m.name || m.id }}</span>
-                      <span v-if="m.contextWindow" class="commandcode-model-tag-sub">{{ formatNumber(m.contextWindow) }}</span>
-                      <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">{{ t("common.default") }}</Tag>
-                      <Tooltip :content="t('commandcode.config.setDefaultTooltip')" placement="top">
-                        <span class="commandcode-model-tag-star" @click="setDefaultModel(p, m)"><StarIcon size="12px" /></span>
-                      </Tooltip>
-                    </span>
+                  <div v-else class="commandcode-model-list">
+                    <div v-for="m in p.models" :key="m.id" class="commandcode-model-item">
+                      <div class="commandcode-model-info">
+                        <span class="commandcode-model-name">{{ m.name || m.id }}</span>
+                        <span v-if="m.name && m.name !== m.id" class="commandcode-model-sub mono">{{ m.id }}</span>
+                        <span v-if="m.contextWindow" class="commandcode-model-sub">{{ formatNumber(m.contextWindow) }} ctx</span>
+                        <span v-if="m.maxOutput" class="commandcode-model-sub">{{ formatNumber(m.maxOutput) }} out</span>
+                        <Tag v-if="isDefaultModel(p, m)" size="small" theme="warning" variant="light">
+                          {{ t("common.default") }}
+                        </Tag>
+                      </div>
+                      <div class="commandcode-model-actions" @click.stop>
+                        <Tooltip v-if="!isDefaultModel(p, m)" :content="t('commandcode.config.setDefaultTooltip')" placement="top">
+                          <Button size="small" theme="warning" variant="text" @click="setDefaultModel(p, m)">
+                            <template #icon><StarIcon /></template>
+                          </Button>
+                        </Tooltip>
+                        <Tooltip :content="t('common.edit')" placement="top">
+                          <Button size="small" theme="default" variant="text" @click="openEditModelDialog(p, m)">
+                            <template #icon><EditIcon /></template>
+                          </Button>
+                        </Tooltip>
+                        <Popconfirm
+                          :content="t('commandcode.config.deleteModelConfirm')"
+                          theme="danger"
+                          @confirm="handleDeleteModel(p, m)"
+                        >
+                          <Button size="small" theme="danger" variant="text">
+                            <template #icon><DeleteIcon /></template>
+                          </Button>
+                        </Popconfirm>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -397,11 +462,11 @@ onMounted(refresh);
       </div>
     </template>
 
-    <!-- 添加供应商弹窗 -->
+    <!-- 添加供应商弹窗（只建连接信息，模型在供应商展开后单独添加） -->
     <Dialog
       v-model:visible="addDialog"
       :header="t('commandcode.config.addProvider')"
-      width="680px"
+      width="600px"
       :confirm-btn="{ content: t('common.add'), theme: 'primary' }"
       @confirm="handleAddProvider"
     >
@@ -435,25 +500,14 @@ onMounted(refresh);
           <label>{{ t("commandcode.config.headersLabel") }}</label>
           <DynamicKvEditor v-model="addForm.headers" :show-add="true" />
         </div>
-        <div class="commandcode-form-item">
-          <label>{{ t("commandcode.config.modelsTitle") }}</label>
-          <div v-for="(m, idx) in addForm.models" :key="idx" class="commandcode-model-row">
-            <Input v-model="m.id" :placeholder="t('commandcode.config.modelIdLabel')" />
-            <span class="commandcode-model-row-del" @click="removeModelRow(addForm, idx)"><DeleteIcon size="14px" /></span>
-          </div>
-          <Button size="small" variant="outline" @click="addModelRow(addForm)">
-            <template #icon><AddIcon /></template> {{ t("commandcode.config.addModel") }}
-          </Button>
-          <div class="commandcode-form-hint">{{ t("commandcode.config.modelIdHint") }}</div>
-        </div>
       </div>
     </Dialog>
 
-    <!-- 编辑供应商弹窗（ID 固定；模型内嵌编辑，未知字段自动保留） -->
+    <!-- 编辑供应商弹窗（ID 固定；模型不在此处编辑） -->
     <Dialog
       v-model:visible="editDialog"
       :header="t('commandcode.config.editProvider')"
-      width="760px"
+      width="600px"
       :confirm-btn="{ content: t('common.save'), theme: 'primary' }"
       @confirm="handleSaveProvider"
     >
@@ -492,64 +546,74 @@ onMounted(refresh);
           <label>{{ t("commandcode.config.headersLabel") }}</label>
           <DynamicKvEditor v-model="editForm.headers" :show-add="true" />
         </div>
-
-        <div class="commandcode-form-item">
-          <label>{{ t("commandcode.config.modelsTitle") }}</label>
-          <div v-for="(m, idx) in editForm.models" :key="idx" class="commandcode-model-block">
-            <div class="commandcode-model-block-header">
-              <span class="commandcode-model-block-title">{{ m.id || t("commandcode.config.addModelTitle") }}</span>
-              <span class="commandcode-model-row-del" @click="removeModelRow(editForm, idx)"><DeleteIcon size="14px" /></span>
-            </div>
-            <div class="commandcode-form-item">
-              <label>{{ t("commandcode.config.modelIdLabel") }}</label>
-              <Input v-model="m.id" :placeholder="t('commandcode.config.modelIdLabel')" />
-              <div class="commandcode-form-hint">{{ t("commandcode.config.modelIdHint") }}</div>
-            </div>
-            <div class="commandcode-form-item">
-              <label>{{ t("common.name") }}</label>
-              <Input v-model="m.name" :placeholder="t('commandcode.config.namePlaceholder')" />
-            </div>
-            <ModelLimitsFields
-              v-model:context="m.contextWindow"
-              v-model:output="m.maxOutput"
-              item-class="commandcode-form-item"
-            />
-            <div class="commandcode-form-item">
-              <label>{{ t("commandcode.config.reasoningEffortsLabel") }}</label>
-              <CheckboxGroup v-model="m.reasoningEfforts" :options="effortOptions" />
-              <div class="commandcode-form-hint">{{ t("commandcode.config.reasoningEffortsHint") }}</div>
-            </div>
-            <div class="commandcode-form-item">
-              <label>{{ t("commandcode.config.costLabel") }}</label>
-              <div class="commandcode-cost-grid">
-                <InputNumber v-model="m.cost.input" :min="0" :placeholder="t('commandcode.config.costInput')" />
-                <InputNumber v-model="m.cost.output" :min="0" :placeholder="t('commandcode.config.costOutput')" />
-                <InputNumber v-model="m.cost.cacheRead" :min="0" :placeholder="t('commandcode.config.costCacheRead')" />
-                <InputNumber v-model="m.cost.cacheWrite" :min="0" :placeholder="t('commandcode.config.costCacheWrite')" />
-              </div>
-            </div>
-            <div class="commandcode-form-item">
-              <label>{{ t("commandcode.config.optionsLabel") }}</label>
-              <DynamicKvEditor v-model="m.options" :show-add="true" />
-              <div class="commandcode-form-hint">{{ t("commandcode.config.optionsHint") }}</div>
-            </div>
-            <div class="commandcode-form-item">
-              <label>{{ t("commandcode.config.apiLabel") }}</label>
-              <Select
-                v-model="m.api"
-                :options="[{ label: t('commandcode.config.inheritApi'), value: '' }, ...apiSelectOptions]"
-              />
-              <div class="commandcode-form-hint">{{ t("commandcode.config.apiDefaultHint") }}</div>
-            </div>
-          </div>
-          <Button size="small" variant="outline" @click="addModelRow(editForm)">
-            <template #icon><AddIcon /></template> {{ t("commandcode.config.addModel") }}
-          </Button>
-        </div>
-
         <div class="commandcode-form-item">
           <Checkbox v-model="editForm.disabled">{{ t("common.disabled") }}</Checkbox>
           <div class="commandcode-form-hint">{{ t("commandcode.config.modelsDisabledHint") }}</div>
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- 添加 / 编辑模型弹窗 -->
+    <Dialog
+      v-model:visible="modelDialog"
+      :header="modelMode === 'create' ? t('commandcode.config.addModelTitle') : t('commandcode.config.editModelTitle')"
+      width="560px"
+      :confirm-btn="{ content: modelMode === 'create' ? t('common.add') : t('common.save'), theme: 'primary' }"
+      @confirm="submitModel"
+    >
+      <div class="commandcode-edit-form">
+        <div class="commandcode-model-dialog-tip">
+          <span>{{ t("commandcode.config.modelInProvider", { name: modelProviderLabel }) }}</span>
+          <span class="commandcode-model-dialog-tip-sub">
+            {{ t("commandcode.config.modelFollowsProviderApi", { api: modelProviderApi }) }}
+          </span>
+        </div>
+        <div class="commandcode-form-item">
+          <label>{{ t("commandcode.config.modelIdLabel") }} <span class="commandcode-form-required">*</span></label>
+          <Input v-model="modelForm.id" :placeholder="t('commandcode.config.modelIdLabel')" />
+          <div class="commandcode-form-hint">{{ t("commandcode.config.modelIdHint") }}</div>
+          <div v-if="modelMode === 'edit'" class="commandcode-form-hint">{{ t("commandcode.config.editIdSyncHint") }}</div>
+        </div>
+        <div class="commandcode-form-item">
+          <label>{{ t("common.name") }}</label>
+          <Input v-model="modelForm.name" :placeholder="t('commandcode.config.namePlaceholder')" />
+        </div>
+        <ModelLimitsFields
+          v-model:context="modelForm.contextWindow"
+          v-model:output="modelForm.maxOutput"
+          item-class="commandcode-form-item"
+        />
+        <div class="commandcode-form-item">
+          <label>{{ t("commandcode.config.reasoningEffortsLabel") }}</label>
+          <CheckboxGroup v-model="modelForm.reasoningEfforts" :options="effortOptions" />
+          <div class="commandcode-form-hint">{{ t("commandcode.config.reasoningEffortsHint") }}</div>
+        </div>
+        <div class="commandcode-form-item">
+          <label>{{ t("commandcode.config.costLabel") }}</label>
+          <div class="commandcode-cost-grid">
+            <div class="commandcode-cost-field">
+              <span class="commandcode-cost-field-label">{{ t("commandcode.config.costInput") }}</span>
+              <InputNumber v-model="modelForm.cost.input" :min="0" placeholder="0" />
+            </div>
+            <div class="commandcode-cost-field">
+              <span class="commandcode-cost-field-label">{{ t("commandcode.config.costOutput") }}</span>
+              <InputNumber v-model="modelForm.cost.output" :min="0" placeholder="0" />
+            </div>
+            <div class="commandcode-cost-field">
+              <span class="commandcode-cost-field-label">{{ t("commandcode.config.costCacheRead") }}</span>
+              <InputNumber v-model="modelForm.cost.cacheRead" :min="0" placeholder="0" />
+            </div>
+            <div class="commandcode-cost-field">
+              <span class="commandcode-cost-field-label">{{ t("commandcode.config.costCacheWrite") }}</span>
+              <InputNumber v-model="modelForm.cost.cacheWrite" :min="0" placeholder="0" />
+            </div>
+          </div>
+          <div class="commandcode-form-hint">{{ t("commandcode.config.costHint") }}</div>
+        </div>
+        <div class="commandcode-form-item">
+          <label>{{ t("commandcode.config.optionsLabel") }}</label>
+          <DynamicKvEditor v-model="modelForm.options" :show-add="true" />
+          <div class="commandcode-form-hint">{{ t("commandcode.config.optionsHint") }}</div>
         </div>
       </div>
     </Dialog>

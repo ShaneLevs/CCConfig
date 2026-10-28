@@ -314,6 +314,83 @@ check('taste 删除分类并清子目录', () => {
   assert.ok(!fs.existsSync(path.join(root, 'python')), '分类目录应删除')
 })
 
+check('未选项目目录时读取不抛错（页面首屏）', () => {
+  const pkgs = cc.getCommandCodeTastePackages(undefined)
+  assert.strictEqual(pkgs.project.exists, false)
+  assert.deepStrictEqual(pkgs.project.categories, [])
+  assert.strictEqual(pkgs.project.root, '')
+  assert.strictEqual(pkgs.global.exists, true, '全局包仍应正常读取')
+  const sum = cc.getCommandCodeTasteSummary(undefined)
+  assert.strictEqual(sum.scopes.project.entries, 0)
+  // 写路径仍然要报错（不能默默写到错误位置）
+  assert.throws(() => cc.addCommandCodeTasteCategory('project', undefined, 'x'))
+})
+
+// ==================== 项目发现 ====================
+check('listCommandCodeProjects 从会话首行 cwd 还原真实路径', () => {
+  const projectsDir = path.join(tmp, 'projects')
+  const slug = 'users-shane-documents-git-hub-demo-app'
+  const dir = path.join(projectsDir, slug)
+  fs.mkdirSync(dir, { recursive: true })
+  // slug 是有损编码，真实路径只在会话首行
+  const realRoot = path.join(tmp, 'demo-app')
+  fs.mkdirSync(realRoot, { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, 'session-1.jsonl'),
+    JSON.stringify({ type: 'session', version: 3, id: 's1', timestamp: '2026-10-28T09:00:00.000Z', cwd: realRoot }) + '\n' +
+    JSON.stringify({ type: 'message', id: 'm1', message: { role: 'user' } }) + '\n',
+  )
+  // 回滚点文件不应被当成会话
+  fs.writeFileSync(path.join(dir, 'session-1.checkpoints.jsonl'), '{"id":"x"}\n')
+
+  const list = cc.listCommandCodeProjects()
+  const found = list.find((p) => p.slug === slug)
+  assert.ok(found, '应发现该 slug 项目')
+  assert.strictEqual(found.root, realRoot, 'root 应来自会话 cwd 而非 slug')
+  assert.strictEqual(found.name, 'demo-app')
+  assert.strictEqual(found.hasTaste, false)
+})
+
+check('项目发现：cwd 已失效的项目被跳过', () => {
+  const projectsDir = path.join(tmp, 'projects')
+  const slug = 'gone-project'
+  const dir = path.join(projectsDir, slug)
+  fs.mkdirSync(dir, { recursive: true })
+  const goneRoot = path.join(tmp, 'already-deleted-dir')
+  fs.writeFileSync(
+    path.join(dir, 'session-1.jsonl'),
+    JSON.stringify({ type: 'session', version: 3, id: 's2', cwd: goneRoot }) + '\n',
+  )
+  assert.ok(!cc.listCommandCodeProjects().some((p) => p.slug === slug), '目录已不存在的项目不应列出')
+})
+
+check('项目发现：首行非 session 头时退化为 slug 目录且不抛错', () => {
+  const projectsDir = path.join(tmp, 'projects')
+  const slug = 'broken-project'
+  const dir = path.join(projectsDir, slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'session-1.jsonl'), '{"type":"message"}\n')
+  const list = cc.listCommandCodeProjects()
+  const found = list.find((p) => p.slug === slug)
+  assert.ok(found, '读不出 cwd 也要能列出（用 slug 目录兜底）')
+  assert.ok(found.root.endsWith(slug))
+})
+
+check('项目发现：hasTaste 跟随 .commandcode/taste/taste.md', () => {
+  const projectRoot = path.join(tmp, 'taste-demo')
+  fs.mkdirSync(projectRoot, { recursive: true })
+  cc.initCommandCodeTaste('project', projectRoot)
+  const slug = 'taste-demo-slug'
+  const dir = path.join(tmp, 'projects', slug)
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, 'session-1.jsonl'),
+    JSON.stringify({ type: 'session', version: 3, id: 's3', cwd: projectRoot }) + '\n',
+  )
+  const found = cc.listCommandCodeProjects().find((p) => p.slug === slug)
+  assert.strictEqual(found.hasTaste, true, '已有 taste.md 的项目应标记 hasTaste')
+})
+
 // ==================== 损坏文件 ====================
 check('providers.json 损坏时抛错而不是清空', () => {
   fs.writeFileSync(path.join(tmp, 'providers.json'), '{ broken')

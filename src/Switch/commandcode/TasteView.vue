@@ -5,8 +5,9 @@
 // 落盘规则（与服务层 persistTaste 一致，官方 lint 也认这套）：
 //   分类条目 <= 5 条内联在 taste.md；> 5 条拆到 <category>/taste.md，主档留 See 引用。
 // 条目格式：- 内容. Confidence: 0.90（置信度可省略）。
-// 项目目录来源：uTools 里取 cmd 的 cwd 不可靠，改用「Taste 包目录」让用户显式选择一次，
-// 之后缓存在本机（ccconfig_commandcode_taste_project_<nativeId>），避免每次进页面都要选。
+// 项目目录来源：自动列出本机用 cmd 打开过的所有项目（~/.commandcode/projects/<slug>
+// 的会话日志首行带 cwd，服务层解析成真实路径），下拉切换；仍保留手动选目录作为兜底。
+// 最后选中的项目缓存在本机（ccconfig_commandcode_taste_project_<nativeId>）。
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
@@ -27,13 +28,25 @@ const loading = ref(false);
 const packages = ref({ project: { root: "", exists: false, categories: [] }, global: { root: "", exists: false, categories: [] } });
 const summary = ref(null);
 const activeCategory = ref("");
-// 项目根目录（用户选择后缓存到本机 DB）
+// 自动发现的项目（按最近活跃倒序）+ 当前选中项目根目录
+const projects = ref([]);
 const projectRoot = ref("");
 
 const scopeOptions = computed(() => [
   { value: "project", label: t("commandcode.taste.scopeProject") },
   { value: "global", label: t("commandcode.taste.scopeGlobal") },
 ]);
+
+// ~ 缩写，下拉里显示更短
+const shortPath = (p) => String(p || "").replace(/^\/(?:Users|home)\/[^/]+/, "~");
+
+const projectOptions = computed(() =>
+  projects.value.map((p) => ({
+    value: p.root,
+    // 同名项目（不同目录同名文件夹）靠路径区分，所以路径一定要带上
+    label: `${p.name}  ${shortPath(p.root)}`,
+  }))
+);
 
 const currentPkg = computed(() => packages.value[scope.value] || { root: "", exists: false, categories: [] });
 const categories = computed(() => currentPkg.value.categories || []);
@@ -52,13 +65,13 @@ const ensureActiveCategory = () => {
 
 const PROJECT_DB_KEY = "ccconfig_commandcode_taste_project";
 
-const loadProjectRoot = () => {
+const readSavedRoot = () => {
   try {
     const nativeId = window.utools?.getNativeId?.() || "local";
     const doc = window.utools.db.get(`${PROJECT_DB_KEY}_${nativeId}`);
-    projectRoot.value = doc?.root || "";
+    return doc?.root || "";
   } catch {
-    projectRoot.value = "";
+    return "";
   }
 };
 
@@ -78,6 +91,27 @@ const saveProjectRoot = (root) => {
   }
 };
 
+// 拉取本机所有项目；优先保留上次选中的项目，其次选第一个（按最近活跃排序）。
+// 上次选中的目录作为 extra 传给服务层：它可能不是 cmd 打开过的项目（手动选的），
+// 但那正是用户当前在用的项目，必须留在下拉里。
+const loadProjects = () => {
+  const saved = readSavedRoot();
+  try {
+    projects.value = window.services.listCommandCodeProjects(saved ? [saved] : []) || [];
+  } catch (e) {
+    console.error("列出 Command Code 项目失败:", e);
+    projects.value = [];
+  }
+  const match = projects.value.find((p) => p.root === saved);
+  if (match) projectRoot.value = match.root;
+  else if (projects.value.length) {
+    // 上次选的项目已被删除/移动：落到最近活跃的那个，并把选择持久化
+    saveProjectRoot(projects.value[0].root);
+  } else {
+    projectRoot.value = "";
+  }
+};
+
 // uTools 的目录选择器；桌面版 bridge 也实现了 showOpenDialog
 const pickProjectRoot = () => {
   try {
@@ -87,18 +121,33 @@ const pickProjectRoot = () => {
     });
     const dir = Array.isArray(picked) ? picked[0] : picked;
     if (!dir) return;
-    if (saveProjectRoot(dir)) refresh();
+    // 先落库再重建列表：loadProjects 会把已保存目录作为 extra 并入下拉
+    if (!saveProjectRoot(dir)) return;
+    loadProjects();
+    activeCategory.value = "";
+    refresh();
   } catch (e) {
     MessagePlugin.error(e.message || t("common.saveFailed"));
   }
 };
 
+const onProjectChange = (root) => {
+  projectRoot.value = root;
+  saveProjectRoot(root);
+  activeCategory.value = "";
+  refresh();
+};
+
 // ==================== 数据加载 ====================
+
+// 项目作用域要把 root 作为最后一个参数传给服务层；全局作用域传 undefined。
+// 各方法签名不同（有的没有 root 参数），所以逐个显式拼，不做通用 …args 转发。
+const serviceRoot = () => (scope.value === "project" ? projectRoot.value || undefined : undefined);
 
 const refresh = () => {
   loading.value = true;
   try {
-    const root = scope.value === "project" ? projectRoot.value || undefined : undefined;
+    const root = serviceRoot();
     packages.value = window.services.getCommandCodeTastePackages(root) || packages.value;
     summary.value = window.services.getCommandCodeTasteSummary(root);
     ensureActiveCategory();
@@ -115,14 +164,9 @@ const onScopeChange = () => {
   refresh();
 };
 
-// 项目作用域要把 root 作为最后一个参数传给服务层；全局作用域传 undefined。
-// 各方法签名不同（有的没有 root 参数），所以逐个显式拼，不做通用 …args 转发。
-const serviceRoot = () => (scope.value === "project" ? projectRoot.value || undefined : undefined);
-
 const initializePackage = () => {
   try {
-    const root = scope.value === "project" ? projectRoot.value || undefined : undefined;
-    const file = window.services.initCommandCodeTaste(scope.value, root);
+    const file = window.services.initCommandCodeTaste(scope.value, serviceRoot());
     MessagePlugin.success(t("commandcode.taste.initialized", { path: file }));
     refresh();
   } catch (e) {
@@ -132,8 +176,7 @@ const initializePackage = () => {
 
 const openTasteDir = () => {
   try {
-    const root = scope.value === "project" ? projectRoot.value || undefined : undefined;
-    window.services.openCommandCodeTasteDir(scope.value, root);
+    window.services.openCommandCodeTasteDir(scope.value, serviceRoot());
   } catch (e) {
     MessagePlugin.error(e.message || t("commandcode.taste.openDirFailed"));
   }
@@ -271,24 +314,46 @@ const summaryBuckets = computed(() => summary.value?.buckets || { low: 0, mid: 0
 const duplicates = computed(() => summary.value?.duplicates || []);
 
 onMounted(() => {
-  loadProjectRoot();
+  loadProjects();
   refresh();
 });
 </script>
 
 <template>
   <div class="commandcode-taste-container">
-    <!-- 顶部：作用域切换 + 路径 + 操作 -->
+    <!-- 顶部：作用域切换 + 项目选择 + 操作 -->
     <div class="commandcode-taste-toolbar">
       <div class="commandcode-taste-toolbar-left">
         <RadioGroup v-model="scope" variant="default-filled" size="small" @change="onScopeChange">
           <RadioButton v-for="o in scopeOptions" :key="o.value" :value="o.value">{{ o.label }}</RadioButton>
         </RadioGroup>
-        <span class="commandcode-taste-path">
+        <template v-if="scope === 'project'">
+          <Select
+            v-if="projectOptions.length"
+            :value="projectRoot"
+            :options="projectOptions"
+            class="commandcode-taste-project-select"
+            size="small"
+            filterable
+            :placeholder="t('commandcode.taste.pickProjectTitle')"
+            @change="onProjectChange"
+          />
+          <Tooltip :content="t('commandcode.taste.pickOtherProject')" placement="top">
+            <Button size="small" variant="outline" @click="pickProjectRoot">
+              <template #icon><FolderOpen1Icon /></template>
+            </Button>
+          </Tooltip>
+        </template>
+        <span v-else class="commandcode-taste-path">
           <Link theme="primary" :underline="true" @click="openTasteDir">{{ currentPkg.root || "—" }}</Link>
         </span>
       </div>
       <div class="commandcode-taste-toolbar-right">
+        <Tooltip v-if="scope === 'project' && currentPkg.root" :content="t('commandcode.taste.openDir')" placement="top">
+          <Button size="small" variant="outline" @click="openTasteDir">
+            <template #icon><FolderOpen1Icon /></template>
+          </Button>
+        </Tooltip>
         <Button size="small" variant="outline" theme="primary" :disabled="!categories.length" @click="openAddEntry">
           <template #icon><AddIcon /></template> {{ t("commandcode.taste.addEntry") }}
         </Button>
@@ -305,9 +370,9 @@ onMounted(() => {
 
     <div class="commandcode-taste-tip">{{ t("commandcode.taste.tip") }}</div>
 
-    <!-- 项目作用域但还没选目录 -->
+    <!-- 项目作用域但没发现任何项目、也没手动选过 -->
     <div v-if="scope === 'project' && !projectRoot" class="commandcode-taste-projectpick">
-      <Empty :description="t('commandcode.taste.projectRootMissing')">
+      <Empty :description="t('commandcode.taste.noProjects')">
         <template #action>
           <Button theme="primary" @click="pickProjectRoot">
             <template #icon><FolderOpen1Icon /></template> {{ t("commandcode.taste.pickProjectTitle") }}

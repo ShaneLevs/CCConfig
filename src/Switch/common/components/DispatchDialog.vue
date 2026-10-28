@@ -3,8 +3,12 @@ import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Dialog, Cascader, CheckboxGroup, Checkbox, Tooltip, MessagePlugin } from "tdesign-vue-next";
 import { formatNumber } from "../../../utils/format";
+import { useAgentVisibility } from "../../../composables/useAgentVisibility";
+import { agentOptionsInOrder } from "../../../composables/agentMeta";
 
 const { t } = useI18n();
+// 目标 agent 顺序跟随设置里的 Agent 显示顺序（agentOrder），与切换器 / 侧栏一致
+const { agentOrder } = useAgentVisibility();
 
 // 下发到 Agent 弹窗：把通用库的供应商/模型写入各 agent 的模型配置。
 // 样式沿用 common/styles/ConfigView.css 全局类（本组件仅在通用配置页使用）。
@@ -21,23 +25,7 @@ const dialogVisible = computed({
   set: (v) => emit("update:visible", v),
 });
 
-const AGENT_DISPATCH_OPTIONS = [
-  { label: "Claude Code", value: "claude" },
-  { label: "OpenCode", value: "opencode" },
-  { label: "Pi Agent", value: "pi" },
-  { label: "omp", value: "omp" },
-  { label: "Reasonix", value: "reasonix" },
-  { label: "Codex", value: "codex" },
-  { label: "Kimi Code", value: "kimi" },
-  { label: "MiniMax Code", value: "minimax" },
-  { label: "Qoder", value: "qoder" },
-  { label: "ZCode", value: "zcode" },
-  { label: "Hermes", value: "hermes" },
-  { label: "DSH", value: "dsh" },
-  { label: "Grok Build", value: "grok" },
-  { label: "Cline", value: "cline" },
-  { label: "Command Code", value: "commandcode" },
-];
+const AGENT_DISPATCH_OPTIONS = computed(() => agentOptionsInOrder(agentOrder.value));
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
 const AGENT_PROTOCOLS = {
@@ -126,7 +114,7 @@ const handleDispatch = async () => {
     const totalOk = allResults.filter(r => r.ok).length;
     const total = allResults.length;
     Object.entries(byApp).forEach(([app, s]) => {
-      const label = (AGENT_DISPATCH_OPTIONS.find(o => o.value === app) || {}).label || app;
+      const label = (AGENT_DISPATCH_OPTIONS.value.find((o) => o.value === app) || {}).label || app;
       if (s.fail === 0) MessagePlugin.success(t('commonApp.dispatch.successLine', { label, count: s.ok }));
       else MessagePlugin.warning(t('commonApp.dispatch.partialLine', { label, ok: s.ok, fail: s.fail, error: s.err }));
     });

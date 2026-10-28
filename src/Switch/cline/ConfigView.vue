@@ -12,7 +12,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
-  Empty, Button, Tag, Dialog, Input, MessagePlugin, Popconfirm,
+  Empty, Button, Tag, Dialog, Input, MessagePlugin, Popconfirm, Select,
   Alert as TAlert, Tooltip, Link, Collapse, CollapsePanel, Checkbox, CheckboxGroup,
 } from "tdesign-vue-next";
 import {
@@ -99,6 +99,50 @@ const setDefaultModel = (p, m) => {
 };
 
 const isDefaultModel = (p, m) => p.model === m.id || p.defaultModelId === m.id;
+
+// ==================== 为什么「不生效」 ====================
+// Cline 只跑 lastUsedProvider 指向的那条配置；条目被 zod 判废或 lastUsedProvider 悬空时，
+// 它会静默回落到内置 cline 账号（表现为「模型配置不生效」），所以这两种情况必须显式提示。
+const invalidReasonText = (p) =>
+  t(`serviceAgent.cline.entryIssue.${p.invalidReason || "notObject"}`, { value: p.invalidValue || "" });
+
+const entryIssues = computed(() => providers.value.filter((p) => !p.valid));
+
+const danglingActive = computed(() => {
+  try {
+    return window.services.getClineDanglingActiveProvider() || "";
+  } catch {
+    return "";
+  }
+});
+
+const hasActive = computed(() => providers.value.some((p) => p.isActive));
+
+// ==================== 推理档位（settings.reasoning） ====================
+// 档位写错会让 Cline 丢弃整个供应商条目，所以只允许从固定清单里选。
+const reasoningOptions = computed(() => {
+  const list = (() => {
+    try {
+      return window.services.CLINE_REASONING_EFFORTS || [];
+    } catch {
+      return [];
+    }
+  })();
+  return [
+    { label: t("cline.config.reasoningUnset"), value: "" },
+    ...list.map((v) => ({ label: v, value: v })),
+  ];
+});
+
+const setReasoning = (p, effort) => {
+  try {
+    window.services.setClineReasoning(p.id, effort == null ? "" : effort);
+    MessagePlugin.success(t("cline.config.reasoningSaved"));
+  } catch (e) {
+    MessagePlugin.error(t("cline.config.reasoningSaveFailed", { message: e.message }));
+  }
+  refresh();
+};
 
 // ==================== 供应商弹窗 ====================
 
@@ -282,6 +326,32 @@ onMounted(() => setTimeout(refresh, 50));
       <TAlert :message="warningMsg" theme="warning" show-icon />
     </div>
 
+    <!-- 条目被判废 / 当前使用悬空：Cline 会静默回落内置 cline 账号，必须显式说明 -->
+    <div v-if="!loading && providers.length > 0 && entryIssues.length > 0" class="cline-config-warning">
+      <TAlert theme="error" show-icon>
+        <template #message>
+          <div class="cline-issue-list">
+            <div>{{ t("cline.config.entryInvalidTitle") }}</div>
+            <div v-for="p in entryIssues" :key="p.id" class="cline-issue-item">
+              <span class="mono">{{ p.id }}</span> — {{ invalidReasonText(p) }}
+            </div>
+          </div>
+        </template>
+      </TAlert>
+    </div>
+
+    <div v-if="!loading && providers.length > 0 && !hasActive" class="cline-config-warning">
+      <TAlert
+        :message="
+          t('cline.config.noActiveWarning', {
+            id: danglingActive || '—',
+          })
+        "
+        theme="warning"
+        show-icon
+      />
+    </div>
+
     <div v-if="!installed" class="cline-config-warning">
       <TAlert :message="t('cline.config.notInstalled')" theme="info" show-icon />
     </div>
@@ -306,8 +376,11 @@ onMounted(() => setTimeout(refresh, 50));
                 <Tag v-if="p.isActive" size="small" theme="success" variant="light">
                   {{ t("cline.config.activeTag") }}
                 </Tag>
+                <Tag v-else-if="!p.valid" size="small" theme="danger" variant="light">
+                  {{ t("cline.config.invalidTag") }}
+                </Tag>
                 <Tag size="small" variant="outline">
-                  {{ t("cline.providerType.openaiCompatible") }}
+                  {{ p.providerType || t("cline.providerType.openaiCompatible") }}
                 </Tag>
                 <span class="cline-model-count">{{ t("cline.config.modelCount", { count: p.models.length }) }}</span>
               </div>
@@ -315,7 +388,7 @@ onMounted(() => setTimeout(refresh, 50));
             <template #headerRightContent>
               <div class="cline-provider-header-right" @click.stop>
                 <Tooltip v-if="!p.isActive" :content="t('cline.config.setActiveTooltip')" placement="top">
-                  <Button size="small" theme="success" variant="text" @click="setActive(p)">
+                  <Button size="small" theme="success" variant="text" :disabled="!p.valid" @click="setActive(p)">
                     <template #icon><CheckCircleFilledIcon /></template>
                   </Button>
                 </Tooltip>
@@ -340,6 +413,13 @@ onMounted(() => setTimeout(refresh, 50));
 
             <template #content>
               <div class="cline-provider-body">
+                <TAlert
+                  v-if="!p.valid"
+                  :message="t('cline.config.entryInvalidHint', { reason: invalidReasonText(p) })"
+                  theme="error"
+                  show-icon
+                  class="cline-provider-invalid"
+                />
                 <div class="cline-provider-details">
                   <div class="cline-detail-item">
                     <span class="cline-detail-label">Provider ID</span>
@@ -359,6 +439,19 @@ onMounted(() => setTimeout(refresh, 50));
                   <div class="cline-detail-item">
                     <span class="cline-detail-label">Updated</span>
                     <span class="cline-detail-value mono">{{ p.updatedAt || "—" }}</span>
+                  </div>
+                  <!-- 推理档位：写进 providers.json 的 settings.reasoning，Cline 下一次会话读取 -->
+                  <div class="cline-detail-item">
+                    <span class="cline-detail-label">{{ t("cline.config.reasoningLabel") }}</span>
+                    <Select
+                      :value="p.reasoningEnabled === false ? 'none' : p.reasoningEffort"
+                      :options="reasoningOptions"
+                      size="small"
+                      @change="(v) => setReasoning(p, v)"
+                    />
+                    <span v-if="p.reasoningInvalid" class="cline-detail-hint cline-detail-hint-error">
+                      {{ t("cline.config.reasoningInvalidHint") }}
+                    </span>
                   </div>
                 </div>
 

@@ -488,10 +488,14 @@ window.services = {
   // 供应商（providers.json）
   getClineProviderList: cline.getClineProviderList,
   getClineActiveProvider: cline.getClineActiveProvider,
+  getClineDanglingActiveProvider: cline.getClineDanglingActiveProvider,
   addClineProvider: cline.addClineProvider,
   updateClineProvider: cline.updateClineProvider,
   deleteClineProvider: cline.deleteClineProvider,
   setClineActiveProvider: cline.setClineActiveProvider,
+  // 推理档位（providers.json settings.reasoning；写错会被 Cline 整条丢弃）
+  setClineReasoning: cline.setClineReasoning,
+  CLINE_REASONING_EFFORTS: cline.CLINE_REASONING_EFFORTS,
   // 模型（models.json）
   getClineModelList: cline.getClineModelList,
   addClineModel: cline.addClineModel,
@@ -558,6 +562,8 @@ window.services = {
   deleteCommandCodeTasteEntry: commandCode.deleteCommandCodeTasteEntry,
   initCommandCodeTaste: commandCode.initCommandCodeTaste,
   openCommandCodeTasteDir: commandCode.openCommandCodeTasteDir,
+  // 项目发现（Taste 项目作用域下拉，来源 ~/.commandcode/projects/<slug> 的会话 cwd）
+  listCommandCodeProjects: commandCode.listCommandCodeProjects,
   // 使用统计（~/.commandcode/projects/<slug>/<session>.jsonl）
   readCommandCodeUsage: commandCode.readCommandCodeUsage,
   readCommandCodeUsageFromHistory: commandCode.readCommandCodeUsageFromHistory,

@@ -15,12 +15,20 @@ const { t } = require('./i18n')
 // 目录解析（与 @cline/shared 的 resolveClineDir / resolveClineDataDir 一致）：
 //   CLINE_DIR 覆盖 ~/.cline；CLINE_DATA_DIR 覆盖 ~/.cline/data
 //
-// ⚠️ 写入纪律（已用 Cline 自带 ProviderSettingsManager 实测验证，破坏任一条 Cline 会静默丢弃整档）：
+// ⚠️ 写入纪律（已用 Cline 3.0.74 CLI 实测验证，破坏任一条 Cline 会静默丢弃整条目或整档）：
 //   - providers.json 的 version 必须是字面量 1
 //   - 每个 provider 的 updatedAt 必须是 ISO datetime（toISOString）
 //   - tokenSource 只能是 manual | oauth | migration，不能自造
 //   - 文件权限 0600（Cline 自己也按 0600 写）
 //   - 解析失败必须抛错中止，绝不「读成空 → 全量写回」（否则用户所有供应商配置一次清零）
+//   - settings.reasoning 必须通过 zod 校验，否则**这一个 provider 会被静默丢弃**：
+//     effort 只能是 none | minimal | low | medium | high | xhigh | max（`default`、`turbo`、大写都算非法）；
+//     enabled 取不到布尔值、budgetTokens 不是正整数同样判废。判废后 lastUsedProvider 指向不存在的条目，
+//     Cline 会静默回落内置 cline 账号，表现就是「模型配置不生效」。
+//   - settings.protocol / client 来自枚举（openai-chat / openai-responses / openai-r1 / anthropic / gemini / ai-sdk
+//     与 ai-sdk / ai-sdk-community / openai / openai-compatible / openai-r1 / gemini / bedrock / custom / fetch / vertex），
+//     非法值同样整条目丢弃。
+//   - 读入时 resolve：条目缺失 / settings.provider 与键不一致 → 视为未配置（见 effectiveLastUsedProvider）
 // 已知取舍：JSON 重写不保留原文件的键顺序与缩进（Cline 自身也是整档序列化）。
 
 const clineDir = () => process.env.CLINE_DIR || path.join(os.homedir(), '.cline')
@@ -46,6 +54,16 @@ const getClineSessionsDir = sessionsDir
 const toNumber = (v) => (typeof v === 'bigint' ? Number(v) : v == null ? 0 : Number(v) || 0)
 const PROVIDER_ID_RE = /^[\w.:\-/]+$/
 const MODEL_ID_RE = /^[\w.:\-/@]+$/
+// Cline 的 provider 标识（zod: 小写字母数字开头、只含字母数字与中划线）
+const PROVIDER_TYPE_RE = /^[a-z0-9][a-z0-9-]*$/i
+// zod 的 z.string().datetime()：必须带时间与时区
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+// settings.protocol / settings.client 的合法枚举（@cline/llms）。写错任一个 → Cline 整条目丢弃。
+const CLINE_PROTOCOLS = ['anthropic', 'gemini', 'openai-chat', 'openai-responses', 'openai-r1', 'ai-sdk']
+const CLINE_CLIENTS = [
+  'anthropic', 'ai-sdk', 'ai-sdk-community', 'openai', 'openai-compatible', 'openai-r1',
+  'gemini', 'bedrock', 'custom', 'fetch', 'vertex',
+]
 
 // ==================== 通用 JSON 读写 ====================
 
@@ -127,6 +145,30 @@ const writeProvidersDoc = (doc) => {
   return writeJsonFile(providersPath(), out)
 }
 
+// settings.reasoning —— Cline 的 { enabled?: boolean, effort?: 档位, budgetTokens?: 正整数 }
+// 校验规则与 Cline 的 zod 一致：
+//   - effort 必须是 CLINE_REASONING_EFFORTS 之一（否则整条目被判废）
+//   - enabled 取不到布尔值、budgetTokens 不是正整数，同样判废
+//   - Cline 自己的选择器关掉思考时写 { enabled: false }，此时 effort 会被忽略
+// 返回规范化对象，非法时返回 null。
+const normalizeReasoning = (raw) => {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out = {}
+  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return null
+  if (raw.enabled !== undefined) out.enabled = raw.enabled
+  if (raw.effort !== undefined) {
+    if (!CLINE_REASONING_EFFORTS.includes(raw.effort)) return null
+    out.effort = raw.effort
+  }
+  if (raw.budgetTokens !== undefined) {
+    if (!Number.isInteger(raw.budgetTokens) || raw.budgetTokens <= 0) return null
+    out.budgetTokens = raw.budgetTokens
+  }
+  // 多余字段 Cline 的 zod 会剥掉；这里只保留上面三个，避免写进无意义的键
+  return out
+}
+
 const normalizeProviderSettings = (entry) => {
   const raw = entry && typeof entry === 'object' ? entry : {}
   const settings = raw.settings && typeof raw.settings === 'object' && !Array.isArray(raw.settings)
@@ -146,6 +188,8 @@ const normalizeProviderSettings = (entry) => {
         ? settings.headers
         : {},
     },
+    // 只在读到合法对象时给出；非法时返回 null，由调用方决定「保留原样」还是「重置」
+    reasoning: normalizeReasoning(settings.reasoning),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
     tokenSource: raw.tokenSource === 'oauth' || raw.tokenSource === 'migration' ? raw.tokenSource : 'manual',
     _extra: extra,
@@ -162,7 +206,55 @@ const buildProviderSettings = (cfg) => {
     if (String(k).trim()) headers[String(k).trim()] = String(v == null ? '' : v)
   }
   if (Object.keys(headers).length) s.headers = headers
+  // reasoning 不在这里写：它由 setClineReasoning 单独维护，避免每次保存供应商都把它抹掉
   return { ...(cfg._extra || {}), ...s }
+}
+
+// Cline 的推理档位（@cline/shared REASONING_LEVELS）。写错一个字母，Cline 的 zod 会把**整个 provider**
+// 丢掉——lastUsedProvider 随之悬空，Cline 静默回落到内置 cline 账号，用户看到的就是「配置不生效」。
+const CLINE_REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+// 判断 provider 条目是否会被 Cline 的 zod `StoredProviderSettingsEntrySchema` 接受。
+// 只覆盖配置侧（settings + updatedAt + tokenSource）；profile / OAuth 凭据等字段读不动也不改。
+// 返回 { ok: true } 或 { ok: false, reason }（reason 为 i18n key 后缀，见 getClineProviderIssues）。
+const checkProviderEntry = (pid, entry) => {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return { ok: false, reason: 'notObject' }
+  const s = entry.settings
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return { ok: false, reason: 'noSettings' }
+  // storage.provider 必须存在且是合法 id（Cline 的 kf = 小写字母数字 + 中划线）
+  if (typeof s.provider !== 'string' || !PROVIDER_TYPE_RE.test(s.provider)) {
+    return { ok: false, reason: 'providerTypeInvalid', value: String(s.provider) }
+  }
+  // settings.provider 与条目键不一致时 Cline 会把它当「未配置」
+  if (s.provider !== pid) return { ok: false, reason: 'providerMismatch', value: s.provider }
+  if (typeof entry.updatedAt !== 'string' || !entry.updatedAt || Number.isNaN(Date.parse(entry.updatedAt)) || !ISO_DATETIME_RE.test(entry.updatedAt)) {
+    return { ok: false, reason: 'updatedAtInvalid', value: String(entry.updatedAt) }
+  }
+  if (entry.tokenSource !== 'manual' && entry.tokenSource !== 'oauth' && entry.tokenSource !== 'migration') {
+    return { ok: false, reason: 'tokenSourceInvalid', value: String(entry.tokenSource) }
+  }
+  if (s.reasoning !== undefined && normalizeReasoning(s.reasoning) === null) {
+    return { ok: false, reason: 'reasoningInvalid', value: JSON.stringify(s.reasoning) }
+  }
+  if (s.protocol !== undefined && !CLINE_PROTOCOLS.includes(s.protocol)) {
+    return { ok: false, reason: 'protocolInvalid', value: String(s.protocol) }
+  }
+  if (s.client !== undefined && !CLINE_CLIENTS.includes(s.client)) {
+    return { ok: false, reason: 'clientInvalid', value: String(s.client) }
+  }
+  if (s.baseUrl !== undefined && typeof s.baseUrl !== 'string') {
+    return { ok: false, reason: 'baseUrlInvalid', value: typeof s.baseUrl }
+  }
+  return { ok: true }
+}
+
+// 当前实际生效的 provider（Cline 的 resolveLastUsedProviderId 语义）：
+// lastUsedProvider 指向不存在 / 被判废的条目时 Cline 视为「没配置」，静默回落内置 cline，所以这里返回 ''。
+const effectiveLastUsedProvider = (doc) => {
+  const pid = doc && typeof doc.lastUsedProvider === 'string' ? doc.lastUsedProvider : ''
+  if (!pid) return ''
+  if (!doc.providers || !doc.providers[pid]) return ''
+  return checkProviderEntry(pid, doc.providers[pid]).ok ? pid : ''
 }
 
 // ==================== models.json ====================
@@ -249,7 +341,8 @@ const modelsOfProvider = (modelsDoc, providerId) => {
 const getClineProviderList = () => {
   const doc = readProvidersDoc()
   const modelsDoc = readModelsDoc()
-  const activeId = doc.lastUsedProvider || ''
+  // isActive 用「Cline 里真正生效的那个」：lastUsedProvider 悬空时 Cline 会静默回落内置 cline 账号
+  const activeId = effectiveLastUsedProvider(doc)
   return Object.entries(doc.providers)
     .filter(([, v]) => v && typeof v === 'object')
     .map(([id, raw]) => {
@@ -263,6 +356,7 @@ const getClineProviderList = () => {
             .map(([mid, m]) => normalizeModelEntry(mid, m))
             .sort((a, b) => a.id.localeCompare(b.id))
         : []
+      const check = checkProviderEntry(id, raw)
       return {
         id,
         // settings.provider 是 Cline 的供应商类型；对外叫 providerType，避免与「供应商」概念混淆
@@ -274,7 +368,16 @@ const getClineProviderList = () => {
         headers: n.settings.headers,
         updatedAt: n.updatedAt,
         tokenSource: n.tokenSource,
-        isActive: activeId === id,
+        isActive: !!activeId && activeId === id,
+        // Cline 只会在条目被判废时静默跳过它，页面上必须显式提示，否则用户永远搞不清「为什么不生效」
+        valid: check.ok,
+        invalidReason: check.ok ? '' : check.reason,
+        invalidValue: check.ok ? '' : (check.value || ''),
+        // 推理档位（settings.reasoning）：effort 为 '' 表示未设置；enabled=false 表示 Cline 里关掉了思考
+        reasoningEffort: n.reasoning && n.reasoning.enabled !== false ? (n.reasoning.effort || '') : '',
+        reasoningEnabled: n.reasoning ? n.reasoning.enabled !== false : true,
+        // 文件里的 reasoning 存在但不合法（会被 Cline 判废），页面提示用户重选一次
+        reasoningInvalid: !!raw.settings && raw.settings.reasoning !== undefined && n.reasoning === null,
         displayName: typeof catalog.name === 'string' ? catalog.name : '',
         defaultModelId: typeof catalog.defaultModelId === 'string' ? catalog.defaultModelId : '',
         models,
@@ -284,13 +387,27 @@ const getClineProviderList = () => {
     .sort((a, b) => a.id.localeCompare(b.id))
 }
 
+// 当前实际生效的供应商（悬空 / 判废时返回 ''，与 Cline 的回落行为一致）
 const getClineActiveProvider = () => {
   try {
-    return readProvidersDoc().lastUsedProvider || ''
+    return effectiveLastUsedProvider(readProvidersDoc())
   } catch (e) {
     return ''
   }
 }
+
+// lastUsedProvider 写着但 Cline 用不上（条目缺失 / 被判废）时，返回那个悬空的 id，否则 ''
+const getClineDanglingActiveProvider = () => {
+  try {
+    const doc = readProvidersDoc()
+    const pid = typeof doc.lastUsedProvider === 'string' ? doc.lastUsedProvider : ''
+    if (!pid) return ''
+    return effectiveLastUsedProvider(doc) ? '' : pid
+  } catch (e) {
+    return ''
+  }
+}
+
 
 // ==================== 供应商 写入 ====================
 
@@ -310,17 +427,32 @@ const setClineProvider = (id, cfg) => {
   for (const k of Object.keys(prevRaw)) {
     if (k !== 'settings' && k !== 'updatedAt' && k !== 'tokenSource') topExtra[k] = prevRaw[k]
   }
+  // settings 里的未识别字段：不做任何改写（Cline 的 zod 会剥掉不认识的键，但这里照旧往返，
+  // 万一官方新增字段，用户手写的值不会被我们抹掉）
+  const settingsExtra = { ...prevNorm._extra }
+  // reasoning 属于「已识别但受 zod 严格校验」的字段：能规范化就规范化，不能就原样保留
+  // （原样保留时条目仍会被 Cline 判废，页面上用 reasoningInvalid 提示，不静默改用户数据）
+  const prevReasoning = prevRaw.settings && typeof prevRaw.settings === 'object'
+    && prevRaw.settings.reasoning !== undefined && prevRaw.settings.reasoning !== null
+    ? prevRaw.settings.reasoning
+    : undefined
+
+  const settings = buildProviderSettings({
+    // 默认用条目键当 settings.provider：Cline 用 `providers[key].settings.provider === key` 判断「是否已配置」，
+    // 两者不一致时整条配置会被无视（v1.1.x 里新建的 alt / router 条目就是这样永远不生效的）
+    provider: c.providerType || (PROVIDER_TYPE_RE.test(pid) ? pid : DEFAULT_PROVIDER_TYPE),
+    apiKey: c.apiKey !== undefined ? c.apiKey : prevNorm.settings.apiKey,
+    model: c.model !== undefined ? c.model : prevNorm.settings.model,
+    baseUrl: c.baseUrl !== undefined ? c.baseUrl : prevNorm.settings.baseUrl,
+    headers: c.headers !== undefined ? c.headers : prevNorm.settings.headers,
+    _extra: settingsExtra,
+  })
+  if (prevReasoning !== undefined) settings.reasoning = prevReasoning
+
   providersDoc.providers[pid] = {
     ...topExtra,
-    settings: buildProviderSettings({
-      provider: c.providerType || prevNorm.settings.provider || DEFAULT_PROVIDER_TYPE,
-      apiKey: c.apiKey !== undefined ? c.apiKey : prevNorm.settings.apiKey,
-      model: c.model !== undefined ? c.model : prevNorm.settings.model,
-      baseUrl: c.baseUrl !== undefined ? c.baseUrl : prevNorm.settings.baseUrl,
-      headers: c.headers !== undefined ? c.headers : prevNorm.settings.headers,
-      _extra: prevNorm._extra,
-    }),
-    // updatedAt 必须是 ISO datetime，Cline 的 zod 会校验（格式错 → 整档被丢弃）
+    settings,
+    // updatedAt 必须是 ISO datetime，Cline 的 zod 会校验（格式错 → 整条目被丢弃）
     updatedAt: new Date().toISOString(),
     tokenSource: prevNorm.tokenSource,
   }
@@ -351,10 +483,11 @@ const addClineProvider = (cfg) => {
   if (providersDoc.providers[pid]) {
     throw new Error(t('serviceAgent.cline.providerExists', { id: pid }))
   }
-  const isFirst = Object.keys(providersDoc.providers).length === 0
+  // 当前没有「实际生效」的供应商时（首次添加，或 lastUsedProvider 悬空 / 被判废）自动设为当前使用：
+  // 否则新建完成后 Cline 仍停在「无配置 → 回落内置 cline 账号」的状态，看起来就是配置不生效
+  const needActivate = !effectiveLastUsedProvider(providersDoc)
   setClineProvider(pid, c)
-  // 这是唯一供应商时自动设为当前使用，避免新建后 Cline 处于「无当前供应商」状态
-  if (isFirst) setClineActiveProvider(pid)
+  if (needActivate) setClineActiveProvider(pid)
   return pid
 }
 
@@ -389,16 +522,50 @@ const deleteClineProvider = (id) => {
   return true
 }
 
-// 切换当前使用的供应商（Cline 的 lastUsedProvider）
+// 切换当前使用的供应商（Cline 的 lastUsedProvider）。
+// 条目能被 Cline 接受才允许切换：否则 lastUsedProvider 悬空，Cline 静默回落内置 cline 账号，
+// 用户会以为是本工具没写进去。
 const setClineActiveProvider = (id) => {
   const pid = assertProviderId(id)
   const doc = readProvidersDoc()
   if (!doc.providers[pid]) {
     throw new Error(t('serviceAgent.cline.providerNotFound', { id: pid }))
   }
+  const check = checkProviderEntry(pid, doc.providers[pid])
+  if (!check.ok) {
+    throw new Error(t('serviceAgent.cline.providerInvalid', {
+      id: pid,
+      reason: t(`serviceAgent.cline.entryIssue.${check.reason}`, { value: String(check.value || '') }),
+    }))
+  }
   doc.lastUsedProvider = pid
   writeProvidersDoc(doc)
   return pid
+}
+
+// 设置推理档位（settings.reasoning）。effort 传 '' 表示不写（交给 Cline 的默认），
+// 传 'none' 写成 Cline 选择器关掉思考时的形状 { enabled: false }：
+// 带 effort 的 { enabled: false } 会被 Cline 忽略 effort（实读为「关闭」），写清楚才不会让人误解。
+const setClineReasoning = (providerId, effort) => {
+  const pid = assertProviderId(providerId)
+  const v = String(effort == null ? '' : effort).trim()
+  if (v && !CLINE_REASONING_EFFORTS.includes(v)) {
+    throw new Error(t('serviceAgent.cline.reasoningEffortInvalid', { value: v, options: CLINE_REASONING_EFFORTS.join(' | ') }))
+  }
+  const doc = readProvidersDoc()
+  const p = doc.providers[pid]
+  if (!p) throw new Error(t('serviceAgent.cline.providerNotFound', { id: pid }))
+  if (!p.settings || typeof p.settings !== 'object' || Array.isArray(p.settings)) p.settings = {}
+  if (!v) {
+    delete p.settings.reasoning
+  } else if (v === 'none') {
+    p.settings.reasoning = { enabled: false }
+  } else {
+    p.settings.reasoning = { enabled: true, effort: v }
+  }
+  p.updatedAt = new Date().toISOString()
+  writeProvidersDoc(doc)
+  return v
 }
 
 // ==================== 模型 写入 / 读取 ====================
@@ -517,7 +684,9 @@ const deleteClineModel = (providerId, modelId) => {
   return true
 }
 
-// 把某个模型设为该供应商的默认模型（同时写 settings.model 与目录 defaultModelId）
+// 把某个模型设为该供应商的默认模型（同时写 settings.model 与目录 defaultModelId）。
+// Cline 里「模型」只有通过 providers.json 的 settings.model 才会被下一次会话读到，
+// 所以只改 models.json 的 defaultModelId 是不够的（models.json 只是模型目录/能力声明）。
 const setClineDefaultModel = (providerId, modelId) => {
   const pid = assertProviderId(providerId)
   const mid = assertModelId(modelId)
@@ -535,6 +704,12 @@ const setClineDefaultModel = (providerId, modelId) => {
   if (!p.settings || typeof p.settings !== 'object') p.settings = {}
   p.settings.model = mid
   p.updatedAt = new Date().toISOString()
+  // 模型目录里已有条目但 settings.provider 与键不一致 → 顺手改成键本身，否则 Cline 视为未配置
+  if (PROVIDER_TYPE_RE.test(pid) && p.settings.provider !== pid) {
+    // 只有原本 settings.provider 是「同一类协议」（openai-compatible）时才纠正，
+    // 其他值（官方内置供应商）不动，避免把用户的 anthropic / bedrock 配置改成 openai-compatible
+    if (!p.settings.provider || p.settings.provider === DEFAULT_PROVIDER_TYPE) p.settings.provider = pid
+  }
   writeProvidersDoc(providersDoc)
   return mid
 }
@@ -1036,12 +1211,17 @@ const providerKeyFor = (name) => {
   return cleaned || 'cline-provider'
 }
 
-// 把通用库的 provider + model 合并写入 providers.json 与 models.json
+// 把通用库的 provider + model 合并写入 providers.json 与 models.json。
+// 注意 settings.provider 必须与条目键相同（providers.<key>.settings.provider === <key>）：
+// Cline 的 resolveProviderSettings 拿它当「是否已配置」的判据，两者不一致时整条配置被无视。
+// Cline 只要求 provider 标识合法（字母数字 + 中划线），不要求是内置 id：
+// 用 openai-compatible 会与用户自己的同名条目撞车（读改写会连带改坏对方的 model / baseUrl）。
 const upsertClineProvider = (key, cfg) => {
   const pid = assertProviderId(key)
   const c = cfg && typeof cfg === 'object' ? cfg : {}
+  const providerType = PROVIDER_TYPE_RE.test(pid) ? pid : DEFAULT_PROVIDER_TYPE
   setClineProvider(pid, {
-    providerType: DEFAULT_PROVIDER_TYPE,
+    providerType,
     apiKey: c.apiKey,
     baseUrl: c.baseUrl,
     displayName: c.name,
@@ -1097,7 +1277,9 @@ module.exports = {
   getClineGlobalSettingsPath, getClineMcpSettingsPath, getClineSkillsPath, getClineSessionsDir,
   // 供应商
   readProvidersDoc, writeProvidersDoc, getClineProviderList, getClineActiveProvider,
+  getClineDanglingActiveProvider, checkProviderEntry, effectiveLastUsedProvider,
   addClineProvider, updateClineProvider, deleteClineProvider, setClineActiveProvider, setClineProvider,
+  setClineReasoning, normalizeReasoning, CLINE_REASONING_EFFORTS,
   // 模型
   readModelsDoc, writeModelsDoc, getClineModelList,
   addClineModel, updateClineModel, deleteClineModel, setClineDefaultModel,

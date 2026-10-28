@@ -8,7 +8,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Empty } from "tdesign-vue-next";
-import { agentLabel } from "../../composables/agentMeta";
+import { agentLabel, AGENT_META } from "../../composables/agentMeta";
 
 const { t, locale } = useI18n();
 
@@ -50,6 +50,11 @@ const formatExact = (num) =>
   (num || 0).toLocaleString(locale.value, { maximumFractionDigits: 0 });
 
 const categoryLabel = (key) => (props.dimension === "agent" ? agentLabel(key) : key);
+
+// 图例左侧标识：按 Agent 维度时用该 Agent 的图标（agentMeta 里的静态资源），
+// 模型维度与「其他」聚合行仍用颜色方块（模型没有图标）。
+const legendIconOf = (key) =>
+  props.dimension === "agent" ? AGENT_META[key]?.icon || "" : "";
 
 // ==================== 时间分桶 ====================
 const weekKeyOf = (dateStr) => {
@@ -359,7 +364,13 @@ const hideTip = () => {
 
     <div class="token-chart-legend">
       <div v-for="row in legendRows" :key="row.key" class="token-chart-legend-row">
-        <span class="token-chart-legend-dot" :style="{ background: row.color }"></span>
+        <img
+          v-if="legendIconOf(row.key)"
+          class="token-chart-legend-icon"
+          :src="legendIconOf(row.key)"
+          :alt="row.label"
+        />
+        <span v-else class="token-chart-legend-dot" :style="{ background: row.color }"></span>
         <div class="token-chart-legend-main">
           <div class="token-chart-legend-head">
             <span class="token-chart-legend-name" :title="row.label">{{ row.label }}</span>
@@ -510,6 +521,15 @@ const hideTip = () => {
   border-radius: 2px;
   margin-top: 5px;
   flex-shrink: 0;
+}
+
+.token-chart-legend-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .token-chart-legend-main {
