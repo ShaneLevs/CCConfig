@@ -36,6 +36,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "DSH", value: "dsh" },
   { label: "Grok Build", value: "grok" },
   { label: "Cline", value: "cline" },
+  { label: "Command Code", value: "commandcode" },
 ];
 
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
@@ -49,6 +50,7 @@ const AGENT_PROTOCOLS = {
   grok: ["openai-completions", "openai-responses", "anthropic-messages"],
   // Cline 侧第三方端点只有 openai-compatible（OpenAI Chat Completions），其余协议需先接网关
   cline: ["openai-completions"],
+  commandcode: ["openai-completions", "openai-responses", "anthropic-messages"],
 };
 
 const modelKeys = ref([]);

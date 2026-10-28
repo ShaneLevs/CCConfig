@@ -7,7 +7,8 @@
       "plugin": "Plugin",
       "usage": "统计",
       "gateway": "网关",
-      "subscription": "订阅"
+      "subscription": "订阅",
+      "taste": "Taste"
     },
     "title": {
       "configSwitch": "配置切换",
@@ -20,7 +21,8 @@
       "extensionManage": "扩展管理",
       "usage": "使用统计",
       "gateway": "网关",
-      "subscription": "订阅用量"
+      "subscription": "订阅用量",
+      "taste": "Taste 偏好"
     }
   }
 }

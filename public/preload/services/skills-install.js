@@ -8,6 +8,7 @@ const opencode = require("./opencode");
 const common = require("./common");
 const grok = require("./grok");
 const cline = require("./cline");
+const commandCode = require("./command-code");
 const { t } = require("./i18n");
 
 // ==================== SkillHub API 辅助 ====================
@@ -341,6 +342,15 @@ const completeClineSkillInstall = (skillName, extractDir) =>
   completeInstall(cline.getClineSkillsDir(), skillName, extractDir);
 const cancelClineSkillInstall = () => cancelInstall();
 
+// Command Code → ~/.commandcode/skills（调用时取，同 OpenCode 的惰性求值）
+const installCommandCodeSkill = (slug, version, namespace, onProgress) =>
+  installFromSkillhub(commandCode.getCommandCodeSkillsDir(), slug, version, namespace, onProgress);
+const installCommandCodeSkillFromModelScope = (skillPath, onProgress) =>
+  installFromModelScope(commandCode.getCommandCodeSkillsDir(), skillPath, onProgress);
+const completeCommandCodeSkillInstall = (skillName, extractDir) =>
+  completeInstall(commandCode.getCommandCodeSkillsDir(), skillName, extractDir);
+const cancelCommandCodeSkillInstall = () => cancelInstall();
+
 // 通用 → ~/.agents/skills
 const installCommonSkill = (slug, version, namespace, onProgress) =>
   installFromSkillhub(common.COMMON_SKILLS_DIR(), slug, version, namespace, onProgress);
@@ -375,4 +385,8 @@ module.exports = {
   installClineSkillFromModelScope,
   completeClineSkillInstall,
   cancelClineSkillInstall,
+  installCommandCodeSkill,
+  installCommandCodeSkillFromModelScope,
+  completeCommandCodeSkillInstall,
+  cancelCommandCodeSkillInstall,
 };

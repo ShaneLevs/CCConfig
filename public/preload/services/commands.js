@@ -40,6 +40,7 @@ const CMDS = {
   dshConfig: ["dsh配置", "DeepSeek Harness配置", "dsh config", "DeepSeek Harness config"],
   grokConfig: ["Grok配置", "Grok Build配置", "Grok config", "Grok Build config"],
   clineConfig: ["Cline配置", "Cline config"],
+  commandcodeConfig: ["Command Code配置", "Command Code config"],
 };
 
 function getFeatureDefinitions() {
@@ -170,6 +171,12 @@ function getFeatureDefinitions() {
       icon: "icon-cline.svg",
       cmds: CMDS.clineConfig,
     },
+    commandcodeConfig: {
+      code: "commandcodeConfig",
+      explain: t("service.commands.explain.commandcodeConfig"),
+      icon: "icon-commandcode.svg",
+      cmds: CMDS.commandcodeConfig,
+    },
   };
 }
 
@@ -190,6 +197,7 @@ const AGENT_FEATURES = {
   dsh: ["dshConfig"],
   grok: ["grokConfig"],
   cline: ["clineConfig"],
+  commandcode: ["commandcodeConfig", "installCommandCodeSkill"],
 };
 
 // 启停状态按设备区分同步（_<nativeId> 后缀，同 heatmap/mcp_disabled 先例）：

@@ -1,0 +1,10 @@
+.commandcode-mcp-container { display: flex; flex-direction: column; gap: 12px; padding-top: 0; }
+
+.commandcode-mcp-header { display: flex; justify-content: space-between; align-items: center; }
+.commandcode-mcp-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.commandcode-mcp-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.commandcode-mcp-empty { padding: 60px 0; }
+.commandcode-mcp-list { display: flex; flex-direction: column; gap: 12px; }
+
+.commandcode-mcp-info-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.commandcode-mcp-summary { color: var(--td-text-color-secondary); font-size: 13px; font-family: monospace; word-break: break-all; }

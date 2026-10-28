@@ -190,6 +190,10 @@ const readGrokUsageAsync = (force) =>
 
 const readClineUsageAsync = (force) =>
   withFallback("cline", force, () => require("./cline").readClineUsage(force));
+const readCommandCodeUsageAsync = (force) =>
+  withFallback("commandcode", force, () =>
+    require("./command-code").readCommandCodeUsage(force),
+  );
 
 module.exports = {
   readClaudeUsageAsync,
@@ -199,5 +203,6 @@ module.exports = {
   readDshUsageAsync,
   readGrokUsageAsync,
   readClineUsageAsync,
+  readCommandCodeUsageAsync,
   readAgentUsageFromHistory,
 };

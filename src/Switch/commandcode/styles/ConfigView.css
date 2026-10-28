@@ -1,0 +1,93 @@
+.commandcode-config-container { display: flex; flex-direction: column; gap: 14px; padding-top: 0; }
+
+/* ===== 顶部工具栏 ===== */
+.commandcode-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.commandcode-toolbar-left { min-width: 0; flex: 1; }
+.commandcode-toolbar-tip { font-size: 13px; color: var(--td-text-color-secondary); display: flex; align-items: baseline; gap: 6px; }
+.commandcode-toolbar-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.commandcode-toolbar-right { display: flex; gap: 4px; }
+
+.commandcode-config-warning { margin-bottom: 0; }
+.commandcode-config-empty { margin-top: 32px; }
+
+/* ===== 供应商列表（TDesign Collapse 手风琴） ===== */
+.commandcode-provider-list { display: flex; flex-direction: column; gap: 8px; }
+.commandcode-provider-collapse { border-radius: var(--td-radius-default); overflow: hidden; }
+.commandcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header { padding: 10px 14px; }
+.commandcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__header:hover { background: var(--td-bg-color-container-hover); }
+.commandcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__body { background: var(--td-bg-color-container); }
+.commandcode-provider-collapse .t-collapse-panel__wrapper .t-collapse-panel__content { padding: 0 14px 14px; }
+
+.commandcode-provider-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.commandcode-provider-header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.commandcode-provider-name { font-weight: 600; font-size: 14px; color: var(--td-text-color-primary); word-break: break-all; }
+.commandcode-model-count { font-size: 12px; color: var(--td-text-color-placeholder); white-space: nowrap; }
+
+/* 供应商展开内容 */
+.commandcode-provider-body { padding: 10px 0 4px; }
+.commandcode-provider-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  margin-bottom: 10px;
+}
+.commandcode-detail-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.commandcode-detail-label { font-size: 11px; color: var(--td-text-color-placeholder); text-transform: uppercase; letter-spacing: 0.3px; }
+.commandcode-detail-value { font-size: 13px; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* 模型子区（星标 = 写入 settings.json 的 modelProvider / model） */
+.commandcode-models-section { border-top: 1px solid var(--td-border-level-1-color); padding-top: 8px; }
+.commandcode-models-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: var(--td-text-color-placeholder); margin-bottom: 8px; }
+.commandcode-models-empty { font-size: 12px; color: var(--td-text-color-placeholder); padding: 8px 0; }
+.commandcode-model-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.commandcode-model-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: var(--td-bg-color-container-hover);
+  border-radius: var(--td-radius-default);
+  border: 1px solid var(--td-border-level-1-color);
+  transition: border-color 0.15s;
+}
+.commandcode-model-tag:hover { border-color: var(--td-brand-color); }
+.commandcode-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
+.commandcode-model-tag-sub { font-size: 11px; color: var(--td-text-color-placeholder); }
+.commandcode-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.commandcode-model-tag-star:hover { background: var(--td-warning-color-1); }
+
+/* ===== 表单弹窗 ===== */
+.commandcode-edit-form { display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.commandcode-form-item { display: flex; flex-direction: column; gap: 4px; }
+.commandcode-form-item label { font-size: 13px; color: var(--td-text-color-secondary); }
+.commandcode-form-hint { font-size: 12px; color: var(--td-text-color-placeholder); }
+.commandcode-form-required { color: var(--td-error-color); }
+.commandcode-clear-key { margin-top: 2px; }
+.mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+
+/* 模型行编辑器 */
+.commandcode-model-row { display: flex; gap: 6px; align-items: center; }
+.commandcode-model-row-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 4px; border-radius: var(--td-radius-small); flex-shrink: 0; }
+.commandcode-model-row-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
+
+/* 编辑弹窗内的模型区块 */
+.commandcode-model-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: var(--td-radius-default);
+  background: var(--td-bg-color-secondarycontainer);
+  margin-bottom: 8px;
+}
+.commandcode-model-block-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.commandcode-model-block-title { font-size: 13px; font-weight: 500; color: var(--td-text-color-primary); word-break: break-all; }
+
+/* 单价四列 */
+.commandcode-cost-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+/* 深色主题：模型区块底色与手风琴头部的对比度 */
+:root[theme-mode="dark"] .commandcode-model-block { background: var(--td-bg-color-container-hover); }
+:root[theme-mode="dark"] .commandcode-provider-details { background: var(--td-bg-color-container-hover); }

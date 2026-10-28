@@ -312,6 +312,43 @@ Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文�
     写入形态 = providers.json settings（provider/baseUrl/apiKey）+ models.json 模型条目 + 可选
     settings.model / defaultModelId / lastUsedProvider
   网关下发：走 openai-completions + `http://127.0.0.1:<port>/v1`（Cline 自行追加 /chat/completions，不补 /v1）
+
+Command Code（cmd，~/.commandcode/，COMMANDCODE_HOME 可覆盖）：
+  providers.json  { provider: { "<id>": { name, api, baseURL, apiKey, headers, models{}, disabled } } }
+                   api 三值（省略 = 默认）：openai-completions / openai-responses / anthropic-messages
+                   apiKey 只接受引用语法（"$ENV" / "{env:VAR}" / "!命令" / false），明文会被官方拒绝；
+                   本插件恒写 false，真实 key 落 auth.json（见下）
+                   models 为字典 { "<模型ID>": { name, contextWindow, maxOutput, reasoning, reasoningEfforts,
+                   cost{input,output,cacheRead,cacheWrite}, options, api, baseURL } }，条目可为 {}
+                   别名兼容：limit.context / limit.output 读作 contextWindow / maxOutput，cost 的 cache_read /
+                   cache_write 归一为 cacheRead / cacheWrite；未知键经 _extra 原样往返
+                   provider id 必须是 slug（^[a-z0-9][a-z0-9-]*$）：它同时是 settings.json 里模型的前缀
+  settings.json   { modelProvider, model: "<providerId>/<modelId>", hooks, skills, disabledSkills, ... }
+                   其余键读改写原样保留。模型 ID 自身可含 /，解析时只剥首个 provider 前缀
+  auth.json       { "<providerId>": { apiKey }, apiKey, userId, userName, keyName, authenticatedAt }
+                   ** 顶层 apiKey 是账号登录 key，与供应商 key 不同层**：写入必须 read-modify-write 单项，
+                   绝不整体替换，写完 chmod 0600；读失败直接抛错（不能退化成 {} 后整体覆盖，会毁掉登录态）
+  mcp.json        { mcpServers: { "<name>": { transport: "stdio"|"http", enabled, command, args, env, url, headers } } }
+                   仅 user scope；local scope（projects/<slug>/mcp.json）与 project scope（<项目>/.mcp.json）不碰
+                   oauth 等未知键经 _extra 原样往返；开关写条目 enabled（不删条目）
+  config.json     localOnly 等少量开关（本插件不写）
+  Skill：~/.commandcode/skills/<name>/SKILL.md；启停 = 物理移动目录到 .disabled/（同其它 agent）。
+    官方另有 settings.json.disabledSkills 数组也能停用，本插件不写它，避免两套状态打架
+  Taste（本项目独有，其它 agent 没有）：<项目>/.commandcode/taste/ + ~/.commandcode/taste/（global）
+                   taste.md 用 `# 分类` 分节，条目形如 `- 内容. Confidence: 0.90`；
+                   <= 5 条内联主档，> 5 条拆到 <category>/taste.md 并在主档留 `See [x/taste.md](./x/taste.md)`
+                   读：引用子文件时正文取子文件；子目录存在但主档未引用时按 orphan 补进来
+                   写：整包重写，超过阈值的分类写子文件+留引用，回落 <=5 条时把子文件并回主档并删目录；
+                   删除分类时清理其子目录（只 rmdir 空目录，不留误删用户文件的可能）
+                   置信度越界（<0 或 >1）直接报错，不静默夹紧
+  使用统计：~/.commandcode/projects/<项目slug>/<会话ID>.jsonl，逐行 JSON：
+     { type:"message", timestamp, model, usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }, message }
+     只取带 usage 的行（同一条消息可能拆多行，各自带增量），跳过 *.checkpoints.jsonl；
+     日期取 timestamp 的本地日期；口径同其它 agent（输入含缓存 = input + cacheRead + cacheWrite，输出 = output）
+     历史落库：ccconfig_agent_usage_commandcode_<nativeId>，源文件被清理后回放历史不归零
+  通用库下发：协议一一对应（不做转换，三种 wire 官方都支持）；供应商名经 providerKeyFor 清洗为 slug；
+    key 写 auth.json，providers.json 只记 false；contextWindow / maxOutput / reasoningEfforts / cost 写在模型条目上
+  网关下发：api 仍按通用库协议（默认 openai-completions），baseUrl 带 /v1（cmd 自己只追加端点路径）
 ```
 
 ### 订阅用量（通用 → 订阅）

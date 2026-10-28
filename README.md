@@ -44,6 +44,7 @@
 | DSH（DeepSeek Harness） | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
 | Grok Build（xAI 官方 CLI） | `~/.grok/config.toml` |
 | Cline | `~/.cline/data/settings/providers.json` + `models.json`（MCP 在 `cline_mcp_settings.json`） |
+| Command Code | `~/.commandcode/providers.json` + `settings.json`（key 在 `auth.json`，MCP 在 `mcp.json`，Taste 在 `taste/`） |
 
 各应用的字段级规则见 [docs/architecture.md](docs/architecture.md)。
 

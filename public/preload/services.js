@@ -21,6 +21,7 @@ const dshUsage = require("./services/dsh-usage");
 const codex = require("./services/codex");
 const grok = require("./services/grok");
 const cline = require("./services/cline");
+const commandCode = require("./services/command-code");
 const common = require("./services/common");
 const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
@@ -240,6 +241,10 @@ window.services = {
       const s = cline.readClineUsage()
       collected.cline = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Cline 采集失败:', e); collected.cline = false }
+    try {
+      const s = commandCode.readCommandCodeUsage()
+      collected.commandcode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Command Code 采集失败:', e); collected.commandcode = false }
     return collected
   },
   // 「通用」统计页异步版：采集在后台线程串行执行，完成后纯读 DB 合并；
@@ -263,6 +268,7 @@ window.services = {
       tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
       tryCollect('grok', () => usageAsync.readGrokUsageAsync()),
       tryCollect('cline', () => usageAsync.readClineUsageAsync()),
+      tryCollect('commandcode', () => usageAsync.readCommandCodeUsageAsync()),
     ])
     return collected
   },
@@ -514,6 +520,53 @@ window.services = {
   getClineSessionsDir: cline.getClineSessionsDir,
   openClineSessionsDir: cline.openClineSessionsDir,
 
+  // ==================== Command Code（~/.commandcode/{providers,settings,auth}.json + mcp.json + taste） ====================
+  getCommandCodeHome: commandCode.getCommandCodeHome,
+  getCommandCodeProvidersPath: commandCode.getCommandCodeProvidersPath,
+  CC_APIS: commandCode.CC_APIS,
+  CC_EFFORTS: commandCode.CC_EFFORTS,
+  // Provider / Model（providers.json）+ API Key（auth.json）
+  getCommandCodeProviderList: commandCode.getCommandCodeProviderList,
+  addCommandCodeProvider: commandCode.addCommandCodeProvider,
+  updateCommandCodeProvider: commandCode.updateCommandCodeProvider,
+  deleteCommandCodeProvider: commandCode.deleteCommandCodeProvider,
+  addCommandCodeModel: commandCode.addCommandCodeModel,
+  updateCommandCodeModel: commandCode.updateCommandCodeModel,
+  deleteCommandCodeModel: commandCode.deleteCommandCodeModel,
+  getCommandCodeDefaultModel: commandCode.getCommandCodeDefaultModel,
+  setCommandCodeDefaultModel: commandCode.setCommandCodeDefaultModel,
+  setCommandCodeApiKey: commandCode.setCommandCodeApiKey,
+  clearCommandCodeApiKey: commandCode.clearCommandCodeApiKey,
+  // MCP（~/.commandcode/mcp.json，仅 user scope）
+  getCommandCodeMcpServers: commandCode.getCommandCodeMcpServers,
+  setCommandCodeMcpServer: commandCode.setCommandCodeMcpServer,
+  setCommandCodeMcpEnabled: commandCode.setCommandCodeMcpEnabled,
+  deleteCommandCodeMcpServer: commandCode.deleteCommandCodeMcpServer,
+  getCommandCodeMcpConfigFor: commandCode.getCommandCodeMcpConfigFor,
+  // Skill（~/.commandcode/skills + .disabled）
+  getCommandCodeSkills: commandCode.getCommandCodeSkills,
+  setCommandCodeSkillEnabled: commandCode.setCommandCodeSkillEnabled,
+  deleteCommandCodeSkill: commandCode.deleteCommandCodeSkill,
+  getCommandCodeSkillsDir: commandCode.getCommandCodeSkillsDir,
+  // Taste（项目 .commandcode/taste + 全局 ~/.commandcode/taste）
+  getCommandCodeTastePackages: commandCode.getCommandCodeTastePackages,
+  getCommandCodeTasteSummary: commandCode.getCommandCodeTasteSummary,
+  addCommandCodeTasteCategory: commandCode.addCommandCodeTasteCategory,
+  deleteCommandCodeTasteCategory: commandCode.deleteCommandCodeTasteCategory,
+  addCommandCodeTasteEntry: commandCode.addCommandCodeTasteEntry,
+  updateCommandCodeTasteEntry: commandCode.updateCommandCodeTasteEntry,
+  deleteCommandCodeTasteEntry: commandCode.deleteCommandCodeTasteEntry,
+  initCommandCodeTaste: commandCode.initCommandCodeTaste,
+  openCommandCodeTasteDir: commandCode.openCommandCodeTasteDir,
+  // 使用统计（~/.commandcode/projects/<slug>/<session>.jsonl）
+  readCommandCodeUsage: commandCode.readCommandCodeUsage,
+  readCommandCodeUsageFromHistory: commandCode.readCommandCodeUsageFromHistory,
+  getCommandCodeProjectsDir: commandCode.getCommandCodeProjectsDir,
+  // 目录 / 检测
+  openCommandCodeDir: commandCode.openCommandCodeDir,
+  openCommandCodeConfigFile: commandCode.openCommandCodeConfigFile,
+  isCommandCodeInstalled: commandCode.isCommandCodeInstalled,
+
   // ==================== Hermes（~/.hermes/config.yaml，仅模型配置） ====================
   getHermesConfigPath: hermes.getHermesConfigPath,
   getHermesProviderList: hermes.getHermesProviderList,
@@ -579,6 +632,7 @@ window.services = {
       dsh: false,
       grok: false,
       cline: false,
+      commandcode: false,
     };
     // claude：settings.json 有 managed env 字段，或 DB 有已存配置
     try {
@@ -687,6 +741,12 @@ window.services = {
     // cline：providers.json 有供应商，或 cline_mcp_settings.json 有 MCP 服务器
     try {
       hasData.cline = cline.hasClineConfig();
+    } catch (e) {
+      /* ignore */
+    }
+    // commandcode：providers.json 有自定义供应商（原生账号登录不算「已配置」）
+    try {
+      hasData.commandcode = commandCode.hasCommandCodeConfig();
     } catch (e) {
       /* ignore */
     }

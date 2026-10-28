@@ -44,6 +44,7 @@ It gives fourteen AI coding CLIs a single place to manage API providers, models,
 | DSH (DeepSeek Harness) | `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` |
 | Grok Build | `~/.grok/config.toml` |
 | Cline | `~/.cline/data/settings/providers.json` + `models.json` (MCP in `cline_mcp_settings.json`) |
+| Command Code | `~/.commandcode/providers.json` + `settings.json` (keys in `auth.json`, MCP in `mcp.json`, taste in `taste/`) |
 
 Field-level rules for every app are documented in [docs/architecture.md](docs/architecture.md) (Chinese).
 

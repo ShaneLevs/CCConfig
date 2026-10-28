@@ -26,6 +26,7 @@ const AGENT_DISPATCH_OPTIONS = [
   { label: "DSH", value: "dsh" },
   { label: "Grok Build", value: "grok" },
   { label: "Cline", value: "cline" },
+  { label: "Command Code", value: "commandcode" },
 ];
 
 const loading = ref(false);
