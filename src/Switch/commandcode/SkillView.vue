@@ -10,6 +10,7 @@ import { Empty, Button, Tag, Tooltip, Switch, Popconfirm, Space, MessagePlugin, 
 import { DownloadIcon, DeleteIcon, FolderOpen1Icon, RefreshIcon } from "tdesign-icons-vue-next";
 import SkillInstallDialog from "../../components/SkillInstallDialog.vue";
 import SkillCard from "../../components/SkillCard.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/SkillView.css";
 
 const { t } = useI18n();
@@ -70,6 +71,9 @@ const loadSkills = () => {
   }
 };
 
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("commandcode", "skill", loadSkills);
+
 const enabledSkills = computed(() => skills.value.filter((s) => !s.disabled));
 const disabledSkills = computed(() => skills.value.filter((s) => s.disabled));
 
@@ -129,7 +133,7 @@ const openInstallWithUrl = (url) => {
 
 defineExpose({ openInstallWithUrl });
 
-onMounted(() => setTimeout(loadSkills, 50));
+onMounted(() => setTimeout(refreshNow, 50));
 </script>
 
 <template>
@@ -144,7 +148,7 @@ onMounted(() => setTimeout(loadSkills, 50));
           <template #icon><DownloadIcon /></template> {{ t("commandcode.skill.install") }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" @click="loadSkills">
+          <Button size="small" variant="outline" :loading="autoRefreshing" @click="refreshNow">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

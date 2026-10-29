@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const yaml = require('js-yaml')
+const usage = require('./usage')
 const { t } = require("./i18n")
 
 // MiniMax Code（CLI `mcode` / Desktop）：模型配置在 <data-dir>/config.yaml，默认数据目录 ~/.minimax。
@@ -33,7 +34,9 @@ const PROVIDER_KEY_RE = /^[A-Za-z0-9_-]+$/
 // 模型 ID：官方命名含点/中划线（MiniMax-M2.7-highspeed），兼容 org/model 风格
 const MODEL_ID_RE = /^[\w.:\-/]+$/
 // 推理等级选项（thinking.effortOptions，桌面 UI「推理等级」；枚举取自 CLI 包常量）
-const EFFORT_VALUES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+// 'default' 是官方首档（M3.1-Flash 官方配置 effortOptions 以 default 打头，defaultEffort: default），
+// 不可省略：白名单过滤时漏掉它会静默抹掉这一档
+const EFFORT_VALUES = ['default', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 // 文本之外的输入模态（modalities.input + attachment，桌面 UI「支持的附件」图片/PDF/视频/音频；
 // 桌面实测写入字面量 image/pdf/video，CLI 枚举含 audio）
 const INPUT_MODALITY_VALUES = ['image', 'pdf', 'video', 'audio']
@@ -387,6 +390,8 @@ const upsertMinimaxModel = (providerId, modelId, opts = {}) => {
   if (Number(opts.outputWindow) > 0) merged.outputWindow = Number(opts.outputWindow)
   // 输入模态：通用库 model.input（含 text）过滤为非文本模态后重建 modalities；不传 = 不动
   if (Array.isArray(opts.inputTypes)) merged.inputTypes = opts.inputTypes.filter((x) => INPUT_MODALITY_VALUES.includes(x))
+  // 推理等级：通用库 model.reasoningEfforts → thinking.effortOptions；不传 = 不动（保留既有档位）
+  if (Array.isArray(opts.effortOptions)) merged.effortOptions = opts.effortOptions.filter((x) => EFFORT_VALUES.includes(x))
   models[id] = buildModelYaml(merged, id)
   provider.models = models
   writeMinimaxConfig(doc)
@@ -445,6 +450,184 @@ const setMinimaxDefaultModel = (ref) => {
   return true
 }
 
+// ==================== 使用统计 ====================
+// MiniMax Code 会话日志：<MINIMAX_HOME>/v2/sessions/<YYYY>/<MM>/<DD>/<会话目录>/messages.jsonl
+// 每行 { message_id, turn_id, message }；assistant 消息的 message.usage 形如
+//   { input, output, cacheRead, cacheWrite, totalTokens, cost: { input, output, cacheRead, cacheWrite, total } }
+// 与 Pi Agent 的 JSONL 形状一致（usage 字段同名同义），可直接复用 usage.calculateStats。
+// 注意两点与 Pi 的差异：
+//   1. 时间戳是 epoch 毫秒（message.timestamp），不是 ISO 字符串 → 需转 ISO 再取日期
+//   2. 会话日志不记录工作目录（cwd），project 用会话日期目录名兜底（recentSessions 展示用，
+//      UsagePage 不消费该字段，不影响统计口径）
+const MINIMAX_SESSIONS_DIR = () => path.join(MINIMAX_HOME(), 'v2', 'sessions')
+const getMinimaxSessionsDir = MINIMAX_SESSIONS_DIR
+
+// 递归收集会话目录（目录内含 messages.jsonl 即为会话目录）
+// 层级：sessions/<YYYY>/<MM>/<DD>/<会话目录> → 深度 6 足够（留余量防布局再变）
+const collectSessionDirs = (dir, out, depth = 0) => {
+  if (depth > 6) return out
+  let entries = []
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const p = path.join(dir, entry.name)
+    if (fs.existsSync(path.join(p, 'messages.jsonl'))) out.push(p)
+    else collectSessionDirs(p, out, depth + 1)
+  }
+  return out
+}
+
+// 会话 id：优先读 manifest.json 的 sessionId；缺失则从目录名尾部 session_<base64> 解码
+const readSessionId = (sessionDir) => {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(sessionDir, 'manifest.json'), 'utf-8'))
+    if (manifest && manifest.sessionId) return String(manifest.sessionId)
+  } catch {
+    /* manifest 缺失或损坏 → 走目录名回退 */
+  }
+  const m = path.basename(sessionDir).match(/session_([A-Za-z0-9_-]+)$/)
+  if (m) {
+    try {
+      return Buffer.from(m[1], 'base64').toString('utf-8')
+    } catch {
+      /* 解码失败 → 用目录名 */
+    }
+  }
+  return path.basename(sessionDir)
+}
+
+// epoch 毫秒 → ISO 字符串（无时间戳时返回空串）
+const epochToIso = (ts) => {
+  const n = Number(ts)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  try {
+    return new Date(n).toISOString()
+  } catch {
+    return ''
+  }
+}
+
+const readMinimaxUsage = () => {
+  const root = MINIMAX_SESSIONS_DIR()
+  if (!fs.existsSync(root)) return emptyUsageResult()
+
+  const messageRecords = []
+  const sessionMap = new Map()
+
+  for (const sessionDir of collectSessionDirs(root, [])) {
+    const sessionId = readSessionId(sessionDir)
+    // 项目名：会话日志无 cwd，用日期目录名（YYYY-MM-DD）兜底
+    const project = path.basename(path.dirname(path.dirname(sessionDir)))
+    let content = ''
+    try {
+      content = fs.readFileSync(path.join(sessionDir, 'messages.jsonl'), 'utf-8')
+    } catch {
+      continue
+    }
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue
+      let d
+      try {
+        d = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const m = d && d.message
+      if (!m || m.role !== 'assistant' || !m.usage) continue
+      const u = m.usage
+      const input = Number(u.input) || 0
+      const output = Number(u.output) || 0
+      const cacheRead = Number(u.cacheRead) || 0
+      const cacheWrite = Number(u.cacheWrite) || 0
+      const total = Number(u.totalTokens) || input + output + cacheRead + cacheWrite
+      const iso = epochToIso(m.timestamp)
+      if (!iso) continue
+      const date = iso.split('T')[0]
+      const model = m.model || 'unknown'
+
+      messageRecords.push({
+        sessionId,
+        model,
+        project,
+        projectPath: sessionDir,
+        timestamp: iso,
+        date,
+        inputTokens: input,
+        outputTokens: output,
+        cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
+        cacheCreationTokens: 0,
+        totalTokens: total,
+        cost: (u.cost && Number(u.cost.total)) || 0,
+      })
+
+      if (!sessionMap.has(sessionId)) {
+        sessionMap.set(sessionId, {
+          sessionId,
+          timestamp: iso,
+          cwd: sessionDir,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheCreationTokens: 0,
+          totalCost: 0,
+        })
+      }
+      const s = sessionMap.get(sessionId)
+      s.inputTokens += input
+      s.outputTokens += output
+      s.cacheReadTokens += cacheRead
+      s.cacheWriteTokens += cacheWrite
+      s.totalCost += (u.cost && Number(u.cost.total)) || 0
+      if (iso > s.timestamp) s.timestamp = iso
+    }
+  }
+
+  const stats = usage.calculateStats(messageRecords, sessionMap, { includeCost: true })
+  // 「通用」统计统一落库
+  usage.saveAgentUsage('minimax', stats.contributions)
+  return stats
+}
+
+// 无会话目录时的空统计（贡献数组补齐 365 天，页面热力图不塌）
+const emptyUsageResult = () => {
+  const now = new Date()
+  const contributions = []
+  for (let i = 364; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    contributions.push({
+      date: d.toISOString().split('T')[0],
+      tokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      models: {},
+    })
+  }
+  return {
+    summary: {
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheCreationTokens: 0,
+      totalCost: 0,
+      messageCount: 0,
+      sessionCount: 0,
+    },
+    modelStats: [],
+    contributions,
+    avgTokensPerSession: 0,
+    recentSessions: [],
+  }
+}
+
 // ==================== 目录操作 ====================
 
 const openMinimaxDir = () => {
@@ -463,6 +646,7 @@ module.exports = {
   addMinimaxModel, updateMinimaxModel, deleteMinimaxModel, upsertMinimaxModel,
   getMinimaxDefaultModel, setMinimaxDefaultModel, isMinimaxDefaultModel,
   parseMinimaxModelRef, buildModelRef,
+  readMinimaxUsage, getMinimaxSessionsDir,
   openMinimaxDir, isMinimaxInstalled,
   MINIMAX_API_FORMATS, CUSTOM_PREFIX, EFFORT_VALUES, INPUT_MODALITY_VALUES,
 }

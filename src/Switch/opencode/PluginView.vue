@@ -6,6 +6,7 @@ import {
   Card, Empty, Tag, Button, Tooltip, Dialog, Input, MessagePlugin, Space, Popconfirm, Loading,
 } from "tdesign-vue-next";
 import { RefreshIcon, AddIcon, DeleteIcon, SearchIcon } from "tdesign-icons-vue-next";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/PluginView.css";
 
 const { t } = useI18n();
@@ -36,6 +37,9 @@ const refresh = () => {
   loading.value = true;
   setTimeout(() => { loadPlugins(); loading.value = false; }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("opencode", "plugin", refresh);
 
 const openAddDialog = () => {
   newPluginName.value = "";
@@ -90,7 +94,7 @@ const pickPlugin = (name) => {
   showSearch.value = false
 }
 
-onMounted(loadPlugins);
+onMounted(refresh);
 
 </script>
 
@@ -105,7 +109,7 @@ onMounted(loadPlugins);
           <template #icon><AddIcon /></template> {{ t("opencode.plugin.add") }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="refresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

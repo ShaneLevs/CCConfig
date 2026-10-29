@@ -37,8 +37,8 @@ const CMDS = {
   qoderConfig: ["Qoder配置", "Qoder config"],
   zcodeConfig: ["ZCode配置", "ZCode config"],
   hermesConfig: ["Hermes配置", "Hermes config"],
-  dshConfig: ["dsh配置", "DeepSeek Harness配置", "dsh config", "DeepSeek Harness config"],
-  grokConfig: ["Grok配置", "Grok Build配置", "Grok config", "Grok Build config"],
+  dshConfig: ["dsh配置", "dsh config"],
+  grokConfig: ["Grok Build配置", "Grok Build config"],
   clineConfig: ["Cline配置", "Cline config"],
   commandcodeConfig: ["Command Code配置", "Command Code config"],
 };
@@ -261,6 +261,44 @@ function syncAgentCommands(visible) {
   return { ok: failed.length === 0, removed, registered, failed };
 }
 
+// 通用 Skill 场景：一条动态功能指令承载全部场景名（text 指令命中时 payload 就是那条文案），
+// 用户搜索「场景：写作」/「Scene: Writing」即可切换；场景增删改后由 common.js 重新注册。
+// 不再提供「场景：关闭」（手动模式已从界面与指令里移除）。
+const SKILL_SCENE_FEATURE_CODE = "switchSkillScene";
+
+function getSkillSceneFeature() {
+  let scenes = [];
+  try {
+    scenes = require("./common").getSkillScenes().scenes || [];
+  } catch (e) {
+    console.error("[commands] 读取 Skill 场景失败:", e);
+  }
+  if (!scenes.length) return null;
+  const cmds = [];
+  for (const scene of scenes) {
+    cmds.push(`场景：${scene.name}`, `Scene: ${scene.name}`);
+  }
+  return {
+    code: SKILL_SCENE_FEATURE_CODE,
+    explain: t("service.commands.explain.switchSkillScene"),
+    icon: "gen.svg",
+    cmds,
+  };
+}
+
+// 重新注册场景指令：无场景时移除（避免搜索框里残留空指令）
+function syncSkillSceneFeature() {
+  try {
+    const feature = getSkillSceneFeature();
+    if (feature) window.utools.setFeature(feature);
+    else window.utools.removeFeature(SKILL_SCENE_FEATURE_CODE);
+    return { ok: true, feature };
+  } catch (e) {
+    console.error("[commands] 同步 Skill 场景指令失败:", e);
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
 // 从 uTools DB 读取本机启停状态并同步（preload 装载 / onPluginEnter 自愈调用）
 function initFromDb() {
   try {
@@ -277,11 +315,13 @@ function initFromDb() {
     } catch (e) {
       /* ignore */
     }
-    return syncAgentCommands(visible);
+    const result = syncAgentCommands(visible);
+    syncSkillSceneFeature();
+    return result;
   } catch (e) {
     console.error("[commands] initFromDb 失败:", e);
     return { ok: false, error: String((e && e.message) || e) };
   }
 }
 
-module.exports = { syncAgentCommands, initFromDb };
+module.exports = { syncAgentCommands, syncSkillSceneFeature, initFromDb };

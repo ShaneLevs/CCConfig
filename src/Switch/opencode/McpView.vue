@@ -11,6 +11,7 @@ import {
 import McpToolDrawer from "../../components/McpToolDrawer.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/McpView.css";
 
 const { t } = useI18n();
@@ -76,6 +77,9 @@ const refresh = () => {
   loading.value = true;
   setTimeout(() => { loadServers(); loading.value = false; }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("opencode", "mcp", refresh);
 
 // ---------- 添加/编辑弹窗（通用组件） ----------
 const mcpDialogRef = ref(null);
@@ -150,7 +154,7 @@ const openConfigFile = () => {
 const getTypeTag = (config) => (config.type === 'http' ? 'HTTP' : 'STDIO');
 const getTypeTagTheme = (config) => (config.type === 'http' ? 'primary' : 'success');
 
-onMounted(loadServers);
+onMounted(refresh);
 
 </script>
 
@@ -165,7 +169,7 @@ onMounted(loadServers);
           <template #icon><AddIcon /></template> {{ t("opencode.mcp.add") }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="refresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

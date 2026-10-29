@@ -25,6 +25,7 @@ const sessionsDir = (() => {
 
 <template>
   <UsagePage
+    page-app="grok"
     :tip="t('grok.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

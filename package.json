@@ -1,6 +1,6 @@
 {
   "name": "ccconfig",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes, DSH, Grok Build and Command Code. Ships as a uTools plugin and a standalone desktop app (macOS / Windows).",
   "license": "MIT",
   "repository": {

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Checkbox } from "tdesign-vue-next";
 import { GripVertical } from "@lucide/vue";
@@ -11,6 +11,23 @@ import { useAgentVisibility } from "../composables/useAgentVisibility";
 const { t } = useI18n();
 const { activeApp } = useAppContext();
 const { agentOrder, AGENT_META, visibleAgents } = useAgentVisibility();
+
+// 每行右侧的安装状态 / 版本：服务层异步探测 CLI（桌面版走 sidecar 异步通道），
+// 组件挂载时拉一次，检测期间显示「检测中…」。
+const installInfo = ref({});
+const checking = ref(false);
+
+onMounted(async () => {
+  if (!window.services?.getAgentInstallInfo) return;
+  checking.value = true;
+  try {
+    installInfo.value = (await window.services.getAgentInstallInfo()) || {};
+  } catch (e) {
+    console.error("检测 Agent 安装状态失败:", e);
+  } finally {
+    checking.value = false;
+  }
+});
 
 // 拖拽排序用 Pointer Events：HTML5 DnD 在桌面版（Tauri 窗口接管原生拖放）里收不到 drag 事件。
 // 拖动期间渲染一份草稿顺序，指针落到哪一项就把它插到那一项的位置（实时重排），松手才写回 agentOrder。
@@ -95,6 +112,17 @@ onBeforeUnmount(stopDrag);
         <img :src="AGENT_META[app].icon" class="agent-visibility-icon" alt="" />
         <span class="agent-visibility-name">{{ AGENT_META[app].name }}</span>
         <span v-if="app === activeApp" class="agent-visibility-tag">{{ t('agents.visibility.current') }}</span>
+        <span
+          v-if="installInfo[app]"
+          class="agent-visibility-status"
+          :class="installInfo[app].installed ? 'is-installed' : 'is-missing'"
+        >
+          <template v-if="installInfo[app].installed">
+            {{ t('agents.visibility.installed') }}<template v-if="installInfo[app].version"> · v{{ installInfo[app].version }}</template>
+          </template>
+          <template v-else>{{ t('agents.visibility.notInstalled') }}</template>
+        </span>
+        <span v-else-if="checking" class="agent-visibility-status">{{ t('agents.visibility.checking') }}</span>
         <Checkbox
           v-model="visibleAgents[app]"
           class="agent-visibility-checkbox"
@@ -122,9 +150,9 @@ onBeforeUnmount(stopDrag);
   line-height: 1.5;
 }
 .agent-visibility-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 6px;
 }
 .agent-visibility-item {
@@ -171,6 +199,23 @@ onBeforeUnmount(stopDrag);
   background: var(--td-success-color-1);
   padding: 1px 6px;
   border-radius: 4px;
+}
+.agent-visibility-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--td-text-color-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.agent-visibility-status.is-installed {
+  color: var(--td-success-color);
+}
+/* 暗色下 --td-success-color 是深绿，11px 小字对比度不够，用同一色阶的亮端 */
+:root[theme-mode="dark"] .agent-visibility-status.is-installed {
+  color: var(--td-success-color-7);
+}
+.agent-visibility-status.is-missing {
+  color: var(--td-text-color-placeholder);
 }
 /* agent 显示复选框绿色由 main.css 全局规则统一处理 */
 :global(body.agent-sorting) {

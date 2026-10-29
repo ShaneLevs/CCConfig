@@ -356,8 +356,16 @@ const installCommonSkill = (slug, version, namespace, onProgress) =>
   installFromSkillhub(common.COMMON_SKILLS_DIR(), slug, version, namespace, onProgress);
 const installCommonSkillFromModelScope = (skillPath, onProgress) =>
   installFromModelScope(common.COMMON_SKILLS_DIR(), skillPath, onProgress);
-const completeCommonSkillInstall = (skillName, extractDir) =>
-  completeInstall(common.COMMON_SKILLS_DIR(), skillName, extractDir);
+const completeCommonSkillInstall = (skillName, extractDir) => {
+  const done = completeInstall(common.COMMON_SKILLS_DIR(), skillName, extractDir);
+  // 当前有生效场景时，新装的 Skill 也遵守白名单（未绑定则立即禁用）
+  try {
+    common.enforceActiveSkillScene();
+  } catch (e) {
+    console.error("[skill-scene] 安装后应用场景失败:", e);
+  }
+  return done;
+};
 const cancelCommonSkillInstall = () => cancelInstall();
 
 module.exports = {

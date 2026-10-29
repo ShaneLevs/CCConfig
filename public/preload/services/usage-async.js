@@ -175,6 +175,10 @@ const readOpencodeUsageAsync = () =>
 const readPiUsageAsync = () =>
   withFallback("pi", false, () => require("./pi").readPiUsage());
 
+// MiniMax Code：会话 JSONL 解析走后台线程（同 Pi），不阻塞渲染层
+const readMinimaxUsageAsync = () =>
+  withFallback("minimax", false, () => require("./minimax").readMinimaxUsage());
+
 // 快速路径：纯读落库历史重建统计（不解析源文件），供统计页进页面先展示；无历史返回 null
 const readAgentUsageFromHistory = (agent) =>
   require("./usage").readAgentUsageFromHistory(agent);
@@ -199,6 +203,7 @@ module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
   readPiUsageAsync,
+  readMinimaxUsageAsync,
   readZcodeUsageAsync,
   readDshUsageAsync,
   readGrokUsageAsync,

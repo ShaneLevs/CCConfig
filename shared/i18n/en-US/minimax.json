@@ -81,6 +81,11 @@
       "deleted": "Model {id} deleted",
       "deleteFailed": "Delete failed: {message}",
       "defaultSet": "Default model set to {id}"
+    },
+    "usage": {
+      "tip": "MiniMax Code usage statistics (parsed from session messages.jsonl)",
+      "emptyDescription": "No usage data yet. It will appear here after you use MiniMax Code",
+      "emptyHint": "Session log directory not found: {path}. Refresh this page after a session is created"
     }
   }
 }

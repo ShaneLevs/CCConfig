@@ -23,6 +23,7 @@ import ReasonixConfigView from "./reasonix/ConfigView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
+import MinimaxUsageView from "./minimax/UsageView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
 import ZcodeConfigView from "./zcode/ConfigView.vue";
 import ZcodeUsageView from "./zcode/UsageView.vue";
@@ -54,9 +55,11 @@ import AppearanceSettings from "../components/AppearanceSettings.vue";
 import GeneralSettings from "../components/GeneralSettings.vue";
 import AboutSettings from "../components/AboutSettings.vue";
 import AgentSideRail from "../components/AgentSideRail.vue";
+import OverlayScrollbar from "../components/OverlayScrollbar.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
+import { providePageContext } from "../composables/usePageRefresh";
 import { APP_TABS, DEEP_LINK_ROUTES } from "./appTabs";
 
 const props = defineProps({
@@ -73,6 +76,10 @@ const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
 // 设置弹窗页签：general = 通用（语言），agents = Agent 显示，appearance = 外观（主题 + 特效）
 const settingsTab = ref("general");
+// Agent 显示页单列展示 + 行内安装状态，需要更宽；其它页签保持原宽度
+const settingsDialogWidth = computed(() =>
+  settingsTab.value === "agents" ? "min(720px, 92vw)" : "540px",
+);
 const showSettings = ref(false);
 
 // 左侧 agent 快速切换栏：窗口 ≥ 1000px（= 800 + 2×100）时显示；此时侧栏+内容总占位
@@ -88,6 +95,8 @@ const updateAgentRail = () => {
 const ASSET_BASE = import.meta.env.BASE_URL;
 
 const activeTab = ref("config");
+// 各页面视图通过 usePageRefresh 订阅：切到自己的 agent + 页签时自动刷新一次
+providePageContext(activeTab);
 const skillViewRef = ref(null);
 const ocSkillViewRef = ref(null);
 const commonSkillViewRef = ref(null);
@@ -379,9 +388,13 @@ onUnmounted(() => {
         <KimiConfigView v-if="activeApp === 'kimi' && activeTab === 'config'" />
       </template>
 
-      <!-- MiniMax Code views（仅模型配置） -->
+      <!-- MiniMax Code views（模型配置 + 使用统计） -->
       <template v-if="isAppReady('minimax')">
         <MinimaxConfigView v-if="activeApp === 'minimax' && activeTab === 'config'" />
+        <MinimaxUsageView
+          v-if="isTabVisited('minimax', 'usage')"
+          v-show="activeApp === 'minimax' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- Qoder views（仅模型配置） -->
@@ -472,7 +485,7 @@ onUnmounted(() => {
         v-model:visible="showSettings"
         :header="t('settings.title')"
         :footer="false"
-        width="540px"
+        :width="settingsDialogWidth"
         placement="center"
       >
         <div class="settings-body">
@@ -490,6 +503,8 @@ onUnmounted(() => {
         </div>
       </Dialog>
     </div>
+    <!-- 页面级浮层滚动条：不占布局宽度，避免切换页面时内容左右跳 -->
+    <OverlayScrollbar />
   </div>
 </template>
 

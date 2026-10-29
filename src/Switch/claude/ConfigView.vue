@@ -399,7 +399,15 @@ const copyModelName = (name) => {
   MessagePlugin.success(t('claude.copied', { name }));
 };
 
-onMounted(() => { loadCurrentConfig(); checkFirstOpen(); loadSavedConfigs(); loadExtraFieldKeys(); loadGroupOrder(); loadSkipLogin(); });
+// 刷新按钮：loadSavedConfigs 是同步读库，保留一段最短加载态，进页面时也能看到反馈
+const loading = ref(false);
+const refresh = () => {
+  loading.value = true;
+  loadSavedConfigs();
+  setTimeout(() => { loading.value = false; }, 300);
+};
+
+onMounted(() => { loadCurrentConfig(); checkFirstOpen(); refresh(); loadExtraFieldKeys(); loadGroupOrder(); loadSkipLogin(); });
 </script>
 
 <template>
@@ -410,7 +418,7 @@ onMounted(() => { loadCurrentConfig(); checkFirstOpen(); loadSavedConfigs(); loa
         <Button size="small" variant="outline" @click="handleExportAsString"><template #icon><DownloadIcon /></template> {{ t('claude.config.export') }}</Button>
         <Button size="small" variant="outline" @click="openImportStringDialog"><template #icon><UploadIcon /></template> {{ t('claude.config.import') }}</Button>
         <Button size="small" theme="primary" @click="openCreateDialog"><template #icon><AddIcon /></template> {{ t('claude.config.create') }}</Button>
-        <Tooltip :content="t('common.refresh')" placement="top"><Button size="small" variant="outline" @click="loadSavedConfigs"><template #icon><RefreshIcon /></template></Button></Tooltip>
+        <Tooltip :content="t('common.refresh')" placement="top"><Button size="small" variant="outline" :loading="loading" @click="refresh"><template #icon><RefreshIcon /></template></Button></Tooltip>
       </Space>
     </div>
 

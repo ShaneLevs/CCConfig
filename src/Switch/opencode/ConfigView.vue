@@ -141,6 +141,14 @@ const loadProviders = () => {
   }
 };
 
+// 刷新按钮：loadProviders 是同步读库，保留一段最短加载态，进页面时也能看到反馈
+const loading = ref(false);
+const refresh = () => {
+  loading.value = true;
+  loadProviders();
+  setTimeout(() => { loading.value = false; }, 300);
+};
+
 // ==================== Dialog Actions ====================
 
 const createEmptyModel = () => ({
@@ -479,7 +487,7 @@ const getNpmShortLabel = (npm) => {
 };
 
 onMounted(() => {
-  loadProviders();
+  refresh();
 });
 
 </script>
@@ -502,7 +510,7 @@ onMounted(() => {
           <template #icon><AddIcon /></template> {{ t("opencode.config.newConfig") }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" @click="loadProviders">
+          <Button size="small" variant="outline" :loading="loading" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

@@ -26,8 +26,22 @@ body {
   background: transparent;
 }
 
+/* 页面滚动条改为浮层（src/components/OverlayScrollbar.vue）：
+   `overflow: overlay` 已被 Chromium 移除（按 auto 处理，仍占 8px 布局宽度），
+   导致切换有/无滚动条的页面时整页内容宽度跳变。这里把原生页面滚动条隐藏，
+   由浮层组件在不占布局的前提下显示滑块；嵌套滚动区域仍用下方 8px 自定义滚动条。 */
 body {
-  overflow-y: overlay;
+  overflow-y: auto;
+}
+/* 必须同时作用在 html 上：body 的 overflow 会传播给视口，真正的页面滚动条挂在根元素，
+   只写 body 无法隐藏它。 */
+html,
+body {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
 ::-webkit-scrollbar {

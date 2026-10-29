@@ -27,6 +27,7 @@ import { getScopeLabel, getScopeTheme } from "./components/pluginMeta";
 import ClaudeComponentBadges from "./components/ClaudeComponentBadges.vue";
 import ClaudeMarketplaceManager from "./components/ClaudeMarketplaceManager.vue";
 import ClaudePluginDetailDialog from "./components/ClaudePluginDetailDialog.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/PluginView.css";
 
 const { t } = useI18n();
@@ -228,8 +229,11 @@ const handleRefresh = async () => {
   loading.value = false;
 };
 
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("claude", "plugin", handleRefresh);
+
 onMounted(() => {
-  setTimeout(() => refreshAll(), 50);
+  setTimeout(() => refreshNow(), 50);
 });
 </script>
 
@@ -245,7 +249,7 @@ onMounted(() => {
           <Button
             size="small"
             variant="outline"
-            :loading="loading"
+            :loading="loading || autoRefreshing"
             @click="handleRefresh"
           >
             <template #icon><RefreshIcon /></template>

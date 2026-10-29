@@ -25,6 +25,7 @@ const sessionsRoot = (() => {
 
 <template>
   <UsagePage
+    page-app="dsh"
     :tip="t('dsh.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

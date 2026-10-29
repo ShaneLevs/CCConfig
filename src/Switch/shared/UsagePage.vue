@@ -12,11 +12,14 @@ import {
 } from "tdesign-icons-vue-next";
 import ContributionGrid from "./ContributionGrid.vue";
 import UsageTokenChart from "./UsageTokenChart.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/UsagePage.css";
 
 const { t } = useI18n();
 
 const props = defineProps({
+  // 所属 agent（由各 UsageView 传入）：切回本页时据此自动刷新
+  pageApp: { type: String, default: "" },
   // 头部提示文案
   tip: { type: String, default: "" },
   // 数据加载函数：(force) => { summary, modelStats, contributions }（同步或 Promise 均可）
@@ -214,7 +217,10 @@ const handleRefresh = () => {
   loadData(true);
 };
 
-onMounted(() => loadData(true));
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）；保留用户已选的日期区间
+const { autoRefreshing, refreshNow } = usePageRefresh(props.pageApp, "usage", () => loadData(true));
+
+onMounted(refreshNow);
 
 defineExpose({ loadData });
 </script>
@@ -236,7 +242,7 @@ defineExpose({ loadData });
           :placeholder="t('usage.datePlaceholder')"
         />
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="handleRefresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="handleRefresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

@@ -31,6 +31,12 @@
       "downloadTooSmall": "下载文件过小，可能下载失败",
       "fetchFailed": "获取失败"
     },
+    "skillScene": {
+      "notFound": "场景不存在",
+      "nameRequired": "场景名称不能为空",
+      "nameInvalid": "场景名称不能包含冒号，且不能使用「关闭」「手动」",
+      "nameDuplicate": "场景名称已存在：{name}"
+    },
     "mcp": {
       "notFound": "MCP 配置不存在",
       "dbNotFound": "DB 中未找到该 MCP 配置",
@@ -122,7 +128,8 @@
         "dshConfig": "DSH（DeepSeek Harness）模型配置管理工具",
         "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具",
         "clineConfig": "Cline（CLI / 桌面版）供应商 / 模型 / MCP / Skill 配置管理工具",
-        "commandcodeConfig": "Command Code 模型 / MCP / Skill / Taste 配置管理工具"
+        "commandcodeConfig": "Command Code 模型 / MCP / Skill / Taste 配置管理工具",
+        "switchSkillScene": "切换通用 Skill 场景（只启用该场景绑定的 Skill）"
       },
       "label": {
         "installClaudeSkill": "安装 Claude Code Skill",

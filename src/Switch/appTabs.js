@@ -45,7 +45,10 @@ export const APP_TABS = {
   reasonix: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon }],
   codex: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
   kimi: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
-  minimax: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
+  minimax: [
+    { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
+    { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
+  ],
   qoder: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
   zcode: [
     { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
@@ -84,4 +87,5 @@ export const DEEP_LINK_ROUTES = [
   { route: "installCommonSkill", app: "common", tab: "skill", refKey: "commonSkillViewRef", method: "openInstallWithUrl" },
   { route: "installPiExtension", app: "pi", tab: "plugin", refKey: "piPluginViewRef", method: "installFromUrl" },
   { route: "installCommandCodeSkill", app: "commandcode", tab: "skill", refKey: "commandCodeSkillViewRef", method: "openInstallWithUrl" },
+  { route: "switchSkillScene", app: "common", tab: "skill", refKey: "commonSkillViewRef", method: "applySceneFromCommand" },
 ];

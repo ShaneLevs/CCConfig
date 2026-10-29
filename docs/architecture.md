@@ -67,11 +67,12 @@ Claude:
   供应商/模型主数据 → 本地数据库（ccconfig_common_providers，API Key 加密）
   通用 MCP → 云端为唯一主档存全量服务器（ccconfig_common_mcp）；本机启停名单存 ccconfig_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccconfig_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
+    Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 .disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名> / Scene: <名>，不再有「场景：关闭」），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
   汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
     通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
-    通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；价格 / 速度 / 请求数等未落库口径不展示
+    通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；悬浮某一天的某个分类时其余分类与其余天同步置灰，tooltip 只显示该分类当天用量；价格 / 速度 / 请求数等未落库口径不展示
     DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
   本地网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
@@ -98,6 +99,7 @@ Claude:
     连接生命周期（长时间常驻必须）：每个入站请求一个上游守卫，客户端一旦断开（含只发出请求、还没收到响应头的阶段）立刻 destroy 它名下所有在途上游并记 499；等响应头超过 10 分钟视为上游卡死，销毁请求回 504（不重试，只覆盖响应头之前，不影响已开始的流式响应；注意流式的响应头 = 首字节 TTFT，非流式要等整段生成完才发头，两者共用同一阈值）；所有在途上游登记在 pendingUpstreams，停网关时一并销毁（server.closeAllConnections 管不到出站 socket）
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
     配置存本地数据库（ccconfig_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
+    桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库
 
 OpenCode:
   ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  本地数据库
@@ -161,9 +163,21 @@ MiniMax Code:
   models 的 limit{context,output}、name、enabled 外，另显式管理 thinking.effortOptions（推理等级）
     与 modalities.input+attachment（支持附件 图片/PDF/视频/音频 → image/pdf/video/audio，text 隐含）；
     thinking 其他子键 / variants / reasoning 等官方字段 _raw 合并保留原样往返
+  推理等级档位枚举 = default / minimal / low / medium / high / xhigh / max；
+    'default' 是官方首档（M3.1-Flash 官方 effortOptions 以 default 打头、defaultEffort: default），
+    白名单过滤时不得漏掉它，否则保存一次即静默抹档；非法档位照常丢弃
   供应商/模型改 ID 时 defaultModel 引用同步；删除默认模型时清理悬挂引用；API 格式三协议：anthropic-messages / openai-completions / openai-responses
   通用库下发：provider 键经 providerKeyFor 确定性 ASCII 清洗（中文/符号名 → 骨架+稳定哈希，同名恒同键，upsert 幂等）；
-    下发刷新 limit/名称/输入模态（model.input 过滤非 text 并入 modalities+attachment），未传字段保留既有值；google 协议供应商拒绝下发
+    下发刷新 limit/名称/输入模态（model.input 过滤非 text 并入 modalities+attachment）与推理档位
+    （model.reasoningEfforts → thinking.effortOptions），未传字段保留既有值；google 协议供应商拒绝下发
+  使用统计：~/.minimax/v2/sessions/<YYYY>/<MM>/<DD>/<会话目录>/messages.jsonl（会话 JSONL，形状同 Pi）：
+    每行 { message_id, turn_id, message }，只取 message.role=assistant 且带 usage 的行；
+    usage = { input, output, cacheRead, cacheWrite, totalTokens, cost:{input,output,cacheRead,cacheWrite,total} }
+    两处与 Pi 的差异：① 时间戳是 epoch 毫秒（message.timestamp，需转 ISO 再取日期）；
+    ② 会话日志不记录 cwd，project 用日期目录名兜底（UsagePage 不消费该字段，不影响统计口径）
+    会话 id 取 manifest.json 的 sessionId，manifest 缺失时从目录名尾部 session_<base64> 解码
+    落库：ccconfig_agent_usage_minimax_<nativeId>，源文件被清理后回放历史不归零
+    重统计走后台线程（usage-worker.js 的 minimax runner），不阻塞渲染层
 
 Hermes:
   ~/.hermes/config.yaml（HERMES_HOME 优先，Windows %LOCALAPPDATA%\hermes，macOS/Linux ~/.hermes）→ js-yaml 读写（解析失败抛错阻断写回）
@@ -481,7 +495,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
       每张卡片右上角有手动刷新（refreshSubscription 单条，绕过 5 分钟节流），失败只短暂提示、保留缓存；
       刷新失败保留缓存，不打扰用户
   两个界面同源（同一份 `ccconfig_subscriptions_<nativeId>`），但**视图各自持有内存副本**：
-      托盘每次展开都重读 + 刷新一次；订阅页保持挂载（v-if + v-show），所以必须在
+      托盘每次展开都重读库；只有切到「用量」页签（或展开时正停在该页签）才按 5 分钟节流打一次接口，网关页签不发起订阅请求；订阅页保持挂载（v-if + v-show），所以必须在
       「页签变可见 / 窗口重新聚焦或可见」时重读库（只读，不联网），否则会出现「托盘已刷新、
       页面还是旧值」。只有首次挂载才按 5 分钟节流打一次接口。
   冒烟测试：node tests/smoke-subscriptions.cjs（不联网，覆盖存储脱敏/托盘数据/窗口与倒计时换算）

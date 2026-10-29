@@ -14,6 +14,7 @@ const quickFetcher = () => window.services.readAgentUsageFromHistory("pi");
 
 <template>
   <UsagePage
+    page-app="pi"
     :tip="t('pi.usage.tip')"
     :fetcher="fetcher"
     :empty-description="t('pi.usage.emptyDescription')"

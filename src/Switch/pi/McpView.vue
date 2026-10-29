@@ -6,6 +6,7 @@ import {
   Card, Empty, Tag, Button, Tooltip, MessagePlugin,
 } from "tdesign-vue-next";
 import { RefreshIcon } from "tdesign-icons-vue-next";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/McpView.css";
 
 const { t } = useI18n();
@@ -26,6 +27,9 @@ const refresh = () => {
   loading.value = true;
   loadServers().finally(() => { loading.value = false; });
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("pi", "mcp", refresh);
 
 const openPiConfig = () => {
   try {
@@ -69,9 +73,7 @@ const toolsText = (srv) => srv.tools?.length ? srv.tools.join(", ") : "—";
 
 const toolsCountText = (srv) => t("pi.mcp.toolsCount", { count: srv.tools?.length || 0 });
 
-onMounted(() => {
-  loadServers().finally(() => { loading.value = false; });
-});
+onMounted(refreshNow);
 
 </script>
 
@@ -82,7 +84,7 @@ onMounted(() => {
         {{ t("pi.mcp.tipPrefix") }}<code class="hint-link" @click="openPiConfig">pi mcp</code>{{ t("pi.mcp.tipSuffix") }}
       </span>
       <Tooltip :content="t('pi.mcp.refresh')" placement="top">
-        <Button size="small" variant="outline" :loading="loading" @click="refresh">
+        <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
           <template #icon><RefreshIcon /></template>
         </Button>
       </Tooltip>

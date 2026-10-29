@@ -79,6 +79,19 @@ const refreshStatus = () => {
   now.value = Date.now();
 };
 
+// 桌面版托盘弹窗也能改网关配置（接入模式 / 模型 / 映射）：主窗口重新获得焦点时
+// 重读一次配置，避免托盘改完后这里的表单还是旧值。只读库，不重启网关。
+const reloadConfig = () => {
+  try {
+    config.value = window.services.readAutoRouteConfig();
+    autoRouteEnabled.value = !!config.value.enabled;
+    selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
+    portDraft.value = config.value.port;
+  } catch (e) {
+    /* 读失败保持当前表单，下一次进入页面会再读 */
+  }
+};
+
 // 级联选中（含父级=供应商）→ 扁平 selection；父级展开为该供应商当前全部模型
 const flattenSelection = (keys) => {
   const entries = [];
@@ -363,10 +376,12 @@ onMounted(() => {
   loading.value = true;
   loadAll();
   loading.value = false;
+  window.addEventListener("focus", reloadConfig);
   // 1s 轮询：getAutoRouteStatus 是 preload 内存读取，开销可忽略；配合「进行中」行做到准实时
   logTimer = setInterval(refreshStatus, 1000);
 });
 onUnmounted(() => {
+  window.removeEventListener("focus", reloadConfig);
   if (logTimer) clearInterval(logTimer);
 });
 </script>

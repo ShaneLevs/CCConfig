@@ -17,6 +17,7 @@ const quickFetcher = () => window.services.readCommonUsage();
 
 <template>
   <UsagePage
+    page-app="common"
     :tip="t('usage.commonTip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

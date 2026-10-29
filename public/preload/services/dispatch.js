@@ -434,6 +434,8 @@ const dispatchToMinimax = (provider, model, opts) => {
     contextWindow: model.contextWindow,
     outputWindow: model.maxTokens,
     inputTypes: Array.isArray(model.input) ? model.input : undefined,
+    // 推理等级：通用库 model.reasoningEfforts → thinking.effortOptions（不传 = 保留既有）
+    effortOptions: Array.isArray(model.reasoningEfforts) ? model.reasoningEfforts : undefined,
   })
   let suffix = ''
   if (opts.setDefault) {

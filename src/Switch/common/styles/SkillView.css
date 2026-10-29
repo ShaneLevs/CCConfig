@@ -5,12 +5,234 @@
   padding-top: 0;
 }
 
+/* 场景下拉与安装 / 刷新同处 section-header 一行 */
+.skill-scene-select {
+  width: 160px;
+}
+
+/* 场景管理弹窗：只固定高度上下限，实际高度按视口百分比取（clamp） */
+.scene-manager {
+  --scene-dialog-h-min: 460px;
+  --scene-dialog-h-max: 700px;
+  display: flex;
+  gap: 16px;
+  height: clamp(var(--scene-dialog-h-min), 70vh, var(--scene-dialog-h-max));
+  min-height: var(--scene-dialog-h-min);
+  max-height: var(--scene-dialog-h-max);
+}
+
+.scene-manager-list {
+  width: 240px;
+  flex: none;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid var(--td-component-border);
+}
+
+.scene-manager-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: var(--td-radius-default);
+  cursor: pointer;
+}
+
+.scene-manager-item:hover {
+  background: var(--td-bg-color-container-hover);
+}
+
+.scene-manager-item.is-active {
+  background: var(--td-bg-color-container-active);
+}
+
+.scene-manager-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--td-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-inline-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.scene-inline-action {
+  flex: none;
+}
+
+/* Skill 数量常显；编辑按钮占位但只在 hover 时出现，避免悬停时列表跳动 */
+.scene-manager-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scene-manager-count {
+  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+  white-space: nowrap;
+}
+
+.scene-edit-btn {
+  flex: none;
+  width: 24px;
+  color: var(--td-text-color-placeholder);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.scene-manager-item:hover .scene-edit-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scene-edit-btn:hover {
+  color: var(--td-brand-color);
+}
+
+.scene-manager-add {
+  align-self: flex-start;
+  position: sticky;
+  bottom: 0;
+  background: var(--td-bg-color-container);
+}
+
+.scene-manager-detail {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scene-manager-empty-detail {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--td-text-color-placeholder);
+  text-align: center;
+}
+
+.scene-manager-skills-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--td-text-color-secondary);
+}
+
+/* 右栏：已选 / 未选 两列，已选在前；两列各自滚动 */
+.scene-skill-columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scene-skill-column {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default);
+}
+
+.scene-skill-column-head {
+  flex: none;
+  padding: 2px 4px 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--td-text-color-secondary);
+}
+
+.scene-skill-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+
+.scene-skill-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--td-radius-default);
+}
+
+.scene-skill-item:hover {
+  background: var(--td-bg-color-container-hover);
+}
+
+.scene-skill-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--td-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-skill-empty {
+  padding: 12px 6px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}
+
+.scene-manager-hint {
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+}
+
+.scene-manager-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--td-component-border);
+}
+
+.scene-manager-actions-right {
+  display: flex;
+  gap: 8px;
+}
+
 .section-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 0;
   margin-top: 0;
+}
+
+.section-header .t-space {
+  margin-left: auto;
 }
 
 .skill-tip {

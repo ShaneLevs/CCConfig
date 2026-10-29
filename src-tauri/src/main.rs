@@ -35,7 +35,7 @@ const TRAY_ID: &str = "ccconfig-tray";
 /// 托盘弹窗（WebView 面板，不是原生 NSMenu）
 const TRAY_POPUP: &str = "tray-popup";
 /// 弹窗宽度（逻辑像素）
-const POPUP_WIDTH: f64 = 360.0;
+const POPUP_WIDTH: f64 = 400.0;
 const POPUP_MIN_HEIGHT: f64 = 120.0;
 const POPUP_MAX_HEIGHT: f64 = 560.0;
 /// 弹窗与托盘图标之间的间距

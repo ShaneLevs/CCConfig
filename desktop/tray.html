@@ -13,6 +13,10 @@
   数据由页面自己走 sidecar HTTP /rpc 拉（含异步任务的 /rpc-poll 通道），
   因此刷新、错误处理都在这一层完成，Rust 只负责窗口与背景。
 
+  两个页签：
+  - 网关：运行状态 + 统计口径 + 数据卡片 + 接入模式配置（模型直连 / 模型映射，改动即时落库）+ Skill 场景
+  - 用量：通用统计的 Token 柱状图（按模型 / Agent）+ 订阅用量
+
   背景不在这里画：macOS 是 NSVisualEffectView（Popover 材质），Windows 是亚克力。
   页面只铺一层很淡的叠层保证可读性，所以 html/body 必须保持透明。
 -->
@@ -41,6 +45,7 @@
     --warn-ring: rgba(255, 159, 10, 0.18);
     --bad-ring: rgba(255, 59, 48, 0.18);
     --off-ring: rgba(142, 142, 147, 0.18);
+    --tip-bg: rgba(32, 32, 35, 0.94);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -65,6 +70,7 @@
       --warn-ring: rgba(255, 159, 10, 0.2);
       --bad-ring: rgba(255, 69, 58, 0.2);
       --off-ring: rgba(152, 152, 157, 0.2);
+      --tip-bg: rgba(58, 58, 62, 0.96);
     }
   }
 
@@ -94,14 +100,50 @@
     outline-offset: -0.5px;
   }
 
-  /* 动作条固定在底部，订阅很多时只让内容区滚动（原生菜单也不会把「退出」藏起来） */
+  /* ---------- 页签（网关 / 用量） ---------- */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin: 10px 14px 0;
+    padding: 2px;
+    border-radius: 9px;
+    background: var(--track);
+  }
+  .tabs button {
+    flex: 1 1 0;
+    margin: 0;
+    padding: 4px 0 5px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on {
+    background: var(--pill);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+
+  /* 动作条固定在底部，内容多时只让内容区滚动（原生菜单也不会把「退出」藏起来） */
   #scroll {
-    max-height: 452px;
+    max-height: 470px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 14px 14px 10px;
+    padding: 11px 14px 10px;
   }
   #scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  .pane[hidden] { display: none; }
 
   /* ---------- 网关状态（右侧是重启网关） ---------- */
   .status-row {
@@ -241,7 +283,7 @@
     text-overflow: ellipsis;
   }
 
-  /* ---------- 订阅 ---------- */
+  /* ---------- 段落标题 ---------- */
   .section { margin-top: 14px; }
   .section[hidden] { display: none; }
   .section-head {
@@ -255,6 +297,633 @@
     color: var(--muted);
     letter-spacing: 0.02em;
   }
+  .section-head .section-note {
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--faint);
+  }
+
+  /* ---------- 接入模式 ---------- */
+  .mode-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 2px;
+    margin-bottom: 7px;
+  }
+  .mode-head .section-head {
+    padding: 0;
+    margin: 0;
+  }
+  .segment {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 7px;
+    background: var(--track);
+  }
+  .segment button {
+    margin: 0;
+    padding: 2px 8px 3px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .segment button:hover { color: var(--text); }
+  .segment button.on {
+    background: var(--pill);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+
+  .model-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 9px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .model-summary:hover { background: var(--hover); }
+  .model-summary-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .model-summary .chev {
+    flex: none;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    transition: transform 0.15s ease;
+  }
+  .model-summary.open .chev { transform: rotate(90deg); }
+
+  .picker {
+    margin-top: 6px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 9px;
+    background: var(--card);
+    overflow: hidden;
+  }
+  .picker[hidden] { display: none; }
+  .picker-search {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 7px 9px;
+    border: 0;
+    border-bottom: 0.5px solid var(--divider);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .picker-search::placeholder { color: var(--faint); }
+  .picker-list {
+    max-height: 214px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+  }
+  .picker-list::-webkit-scrollbar { width: 0; }
+
+  .picker-group + .picker-group { margin-top: 3px; }
+  .picker-group-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 5px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .picker-group-head:hover { background: var(--hover); }
+  .picker-group-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .picker-group-count {
+    flex: none;
+    font-size: 10.5px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .picker-group .chev {
+    flex: none;
+    width: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    text-align: center;
+    transition: transform 0.15s ease;
+  }
+  .picker-group.is-open .chev { transform: rotate(90deg); }
+
+  .check {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    border-radius: 3.5px;
+    border: 1px solid var(--faint);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    background: transparent;
+  }
+  .check.on {
+    border-color: var(--good);
+    background: var(--good);
+  }
+  .check.part {
+    border-color: var(--good);
+    background: var(--good);
+    opacity: 0.55;
+  }
+
+  .picker-models { padding: 1px 0 3px 18px; }
+  .picker-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    margin: 0;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .picker-item:hover { background: var(--hover); }
+  .picker-model-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .picker-empty {
+    padding: 10px 8px;
+    font-size: 11.5px;
+    color: var(--faint);
+    text-align: center;
+  }
+
+  /* ---------- 模型映射 ---------- */
+  .mapping-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+  }
+  .mapping-row:first-child { margin-top: 0; }
+  .mapping-alias {
+    flex: none;
+    width: 76px;
+    margin: 0;
+    padding: 5px 7px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-size: 11.5px;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mapping-alias::placeholder { color: var(--faint); }
+  .mapping-alias:focus { border-color: var(--good); }
+  .mapping-target {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 5px 7px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mapping-target:hover { background: var(--hover); }
+  .mapping-target.has-value { color: var(--text); }
+  .mapping-target .chev { flex: none; color: var(--faint); font-size: 11px; }
+  .mapping-target-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mapping-del {
+    flex: none;
+    width: 21px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--faint);
+    font: inherit;
+    font-size: 15px;
+    line-height: 1;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mapping-del:hover { background: var(--hover); color: var(--bad); }
+
+  .mapping-picker {
+    margin: 5px 0 2px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 8px;
+    background: var(--card);
+    overflow: hidden;
+  }
+  .mapping-options {
+    max-height: 176px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+  }
+  .mapping-options::-webkit-scrollbar { width: 0; }
+  .mapping-group-label {
+    padding: 5px 6px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--faint);
+    letter-spacing: 0.02em;
+  }
+  .mapping-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    margin: 0;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mapping-option:hover { background: var(--hover); }
+  .mapping-option.is-current { background: var(--track); }
+  .mapping-option-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mapping-option-id {
+    flex: none;
+    max-width: 42%;
+    font-size: 10px;
+    color: var(--faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mapping-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 7px;
+    padding: 0 1px;
+  }
+  .add-mapping {
+    margin: 0;
+    padding: 3px 8px;
+    border: 0.5px dashed var(--faint);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .add-mapping:hover { border-color: var(--good); color: var(--text); }
+  .add-mapping[disabled] { opacity: 0.45; pointer-events: none; }
+  .mapping-count {
+    font-size: 10.5px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ---------- Skill 场景（标签按钮，点哪个亮哪个） ---------- */
+  .scene-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 1px 2px 2px;
+  }
+  .scene-tag {
+    max-width: 100%;
+    margin: 0;
+    padding: 3px 9px 4px;
+    border: 0.5px solid var(--card-edge);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  }
+  .scene-tag:hover { background: var(--hover); color: var(--text); }
+  .scene-tag:active { background: var(--press); }
+  .scene-tag.on {
+    background: var(--good-ring);
+    border-color: transparent;
+    color: var(--good);
+    font-weight: 600;
+  }
+
+  /* ---------- Token 柱状图 ---------- */
+  .usage-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 2px;
+    margin-bottom: 4px;
+  }
+  .usage-head .section-head {
+    padding: 0;
+    margin: 0;
+    justify-content: flex-start;
+  }
+  .usage-range {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: var(--faint);
+    letter-spacing: 0;
+    margin-left: 5px;
+  }
+
+  .chart-wrap { margin-top: 2px; }
+  .chart-wrap[hidden] { display: none; }
+  .chart-plot {
+    position: relative;
+    height: 138px;
+    padding-left: 34px;
+  }
+  .chart-gridline {
+    position: absolute;
+    left: 34px;
+    right: 0;
+    border-top: 1px dashed var(--divider);
+  }
+  .chart-gridlabel {
+    position: absolute;
+    left: -34px;
+    top: -7px;
+    width: 29px;
+    text-align: right;
+    font-size: 9.5px;
+    line-height: 14px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-cols {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 4px;
+    height: 100%;
+  }
+  .chart-col {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .chart-stack {
+    width: 8px;
+    max-width: 8px;
+    display: flex;
+    flex-direction: column-reverse;
+    min-height: 1px;
+    border-radius: 2.5px 2.5px 0 0;
+    overflow: hidden;
+    transition: width 0.15s ease;
+  }
+  .chart-col:hover .chart-stack { width: 10px; }
+  .chart-seg {
+    width: 100%;
+    min-height: 1px;
+    transition: opacity 0.14s ease, filter 0.14s ease;
+  }
+  .chart-seg.is-dim {
+    opacity: 0.22;
+    filter: grayscale(1);
+  }
+  .chart-xaxis {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    padding-left: 34px;
+    margin-top: 5px;
+  }
+  .chart-xlabel {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 9px;
+    text-align: center;
+    color: var(--faint);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-tip {
+    position: absolute;
+    z-index: 8;
+    min-width: 128px;
+    max-width: 220px;
+    padding: 7px 9px;
+    border-radius: 7px;
+    background: var(--tip-bg);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+  .chart-tip[hidden] { display: none; }
+  .tip-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.66);
+    white-space: nowrap;
+  }
+  .tip-line {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    line-height: 1.55;
+    white-space: nowrap;
+  }
+  .tip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    flex: none;
+  }
+  .tip-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tip-value {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.88;
+  }
+  .tip-sub {
+    margin-top: 2px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-top: 8px;
+    padding: 0 2px;
+  }
+  .legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    font-size: 10.5px;
+    color: var(--muted);
+    transition: opacity 0.14s ease;
+  }
+  .legend-chip.is-dim { opacity: 0.34; }
+  .legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    flex: none;
+  }
+  .legend-name {
+    max-width: 108px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .legend-value {
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-empty {
+    padding: 26px 0 22px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--faint);
+  }
+
+  /* ---------- 订阅 ---------- */
   .sub {
     background: var(--card);
     border: 0.5px solid var(--card-edge);
@@ -347,6 +1016,36 @@
     color: var(--faint);
   }
 
+  /* ---------- 离线提示 / 轻提示 ---------- */
+  .offline-note {
+    margin: 9px 14px 0;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: var(--bad-ring);
+    color: var(--bad);
+    font-size: 11.5px;
+    text-align: center;
+  }
+  .offline-note[hidden] { display: none; }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 44px;
+    z-index: 20;
+    transform: translateX(-50%);
+    max-width: 280px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--tip-bg);
+    color: #fff;
+    font-size: 11.5px;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  }
+  .toast[hidden] { display: none; }
+
   /* ---------- 底部动作（右下角小字） ---------- */
   .footer {
     display: flex;
@@ -376,29 +1075,97 @@
 </head>
 <body>
 <div id="panel">
+  <div class="tabs" id="tabs">
+    <button type="button" class="on" data-tab="gateway"></button>
+    <button type="button" data-tab="usage"></button>
+  </div>
+
+  <div class="offline-note" id="offline-note" hidden></div>
+
   <div id="scroll">
-    <div class="status-row">
-      <div class="status">
-        <span class="dot" id="dot"></span>
-        <span class="status-text" id="status-text"></span>
+    <!-- ==================== 网关 ==================== -->
+    <div class="pane" id="gateway-pane">
+      <div class="status-row">
+        <div class="status">
+          <span class="dot" id="dot"></span>
+          <span class="status-text" id="status-text"></span>
+        </div>
+        <button class="text-button" type="button" data-action="restart-gateway"></button>
       </div>
-      <button class="text-button" type="button" data-action="restart-gateway"></button>
+
+      <div class="scope-row" id="scope-row" hidden>
+        <div class="scope" id="scope">
+          <button type="button" data-scope="session"></button>
+          <button type="button" data-scope="today"></button>
+          <button type="button" data-scope="month"></button>
+          <button type="button" data-scope="total"></button>
+        </div>
+      </div>
+
+      <div class="stats" id="stats" hidden></div>
+
+      <div class="section" id="mode-section">
+        <div class="mode-head">
+          <span class="section-head" id="mode-title"></span>
+          <div class="segment" id="mode-segment">
+            <button type="button" data-mode="direct"></button>
+            <button type="button" data-mode="mapping"></button>
+          </div>
+        </div>
+
+        <div id="direct-pane">
+          <button type="button" class="model-summary" id="model-summary">
+            <span class="model-summary-text" id="model-summary-text"></span>
+            <span class="chev" aria-hidden="true">›</span>
+          </button>
+          <div class="picker" id="model-picker" hidden>
+            <input type="text" class="picker-search" id="model-search" spellcheck="false" autocomplete="off" />
+            <div class="picker-list" id="model-list"></div>
+          </div>
+        </div>
+
+        <div id="mapping-pane" hidden>
+          <div id="mapping-list"></div>
+          <div class="mapping-foot">
+            <button type="button" class="add-mapping" id="add-mapping"></button>
+            <span class="mapping-count" id="mapping-count"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section" id="scene-section" hidden>
+        <div class="section-head"><span id="scene-title"></span></div>
+        <div class="scene-tags" id="scenes"></div>
+      </div>
     </div>
 
-    <div class="scope-row" id="scope-row" hidden>
-      <div class="scope" id="scope">
-        <button type="button" data-scope="session"></button>
-        <button type="button" data-scope="today"></button>
-        <button type="button" data-scope="month"></button>
-        <button type="button" data-scope="total"></button>
+    <!-- ==================== 用量 ==================== -->
+    <div class="pane" id="usage-pane" hidden>
+      <div class="usage-head">
+        <span class="section-head" id="usage-title">
+          <span id="usage-title-text"></span><span class="usage-range" id="usage-range"></span>
+        </span>
+        <div class="segment" id="usage-dim">
+          <button type="button" data-dim="model"></button>
+          <button type="button" data-dim="agent"></button>
+        </div>
       </div>
-    </div>
 
-    <div class="stats" id="stats" hidden></div>
+      <div class="chart-empty" id="chart-empty" hidden></div>
+      <div class="chart-wrap" id="chart-wrap">
+        <div class="chart-plot" id="chart-plot">
+          <div id="chart-grid"></div>
+          <div class="chart-cols" id="chart-cols"></div>
+          <div class="chart-tip" id="chart-tip" hidden></div>
+        </div>
+        <div class="chart-xaxis" id="chart-xaxis"></div>
+      </div>
+      <div class="chart-legend" id="chart-legend"></div>
 
-    <div class="section" id="subs-section" hidden>
-      <div class="section-head"><span id="subs-title"></span></div>
-      <div id="subs"></div>
+      <div class="section" id="subs-section" hidden>
+        <div class="section-head"><span id="subs-title"></span></div>
+        <div id="subs"></div>
+      </div>
     </div>
   </div>
 
@@ -406,6 +1173,8 @@
     <button type="button" data-action="show-main"></button>
     <button type="button" data-action="quit"></button>
   </div>
+
+  <div class="toast" id="toast" hidden></div>
 </div>
 
 <script>
@@ -414,14 +1183,49 @@
 
   const $ = (id) => document.getElementById(id)
   const panel = $('panel')
+  const tabs = $('tabs')
+  const tabButtons = Array.from(tabs.querySelectorAll('[data-tab]'))
+  const offlineNote = $('offline-note')
+  const gatewayPane = $('gateway-pane')
+  const usagePane = $('usage-pane')
   const dotEl = $('dot')
   const statusEl = $('status-text')
   const scopeRow = $('scope-row')
   const scopeEl = $('scope')
   const statsEl = $('stats')
+  const modeSection = $('mode-section')
+  const modeTitle = $('mode-title')
+  const modeSegment = $('mode-segment')
+  const modeButtons = Array.from(modeSegment.querySelectorAll('[data-mode]'))
+  const directPane = $('direct-pane')
+  const mappingPane = $('mapping-pane')
+  const modelSummary = $('model-summary')
+  const modelSummaryText = $('model-summary-text')
+  const modelPicker = $('model-picker')
+  const modelSearch = $('model-search')
+  const modelList = $('model-list')
+  const mappingList = $('mapping-list')
+  const addMappingButton = $('add-mapping')
+  const mappingCount = $('mapping-count')
+  const sceneSection = $('scene-section')
+  const sceneTitle = $('scene-title')
+  const scenesEl = $('scenes')
+  const usageTitleText = $('usage-title-text')
+  const usageRange = $('usage-range')
+  const usageDimEl = $('usage-dim')
+  const usageDimButtons = Array.from(usageDimEl.querySelectorAll('[data-dim]'))
+  const chartEmpty = $('chart-empty')
+  const chartWrap = $('chart-wrap')
+  const chartPlot = $('chart-plot')
+  const chartGrid = $('chart-grid')
+  const chartCols = $('chart-cols')
+  const chartXAxis = $('chart-xaxis')
+  const chartLegend = $('chart-legend')
+  const chartTip = $('chart-tip')
   const subsSection = $('subs-section')
   const subsTitle = $('subs-title')
   const subsEl = $('subs')
+  const toastEl = $('toast')
   const restartButton = document.querySelector('[data-action="restart-gateway"]')
   const footerButtons = Array.from(document.querySelectorAll('.footer [data-action]'))
   const scopeButtons = Array.from(scopeEl.querySelectorAll('[data-scope]'))
@@ -430,6 +1234,7 @@
   const port = () => window.__CCCONFIG_PORT__
   const token = () => window.__CCCONFIG_TOKEN__ || ''
   const i18n = () => window.__CC_TRAY_I18N__ || {}
+  const locale = () => window.__CC_LOCALE__ || 'zh-CN'
 
   function t(key, vars) {
     const dict = i18n()
@@ -498,6 +1303,18 @@
     rpc('__utools.diag.log', [kind, text.slice(0, 4000)]).catch(() => {})
   }
 
+  let toastTimer = 0
+  function toast(message) {
+    toastEl.textContent = message
+    toastEl.hidden = false
+    reportHeight()
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => {
+      toastEl.hidden = true
+      reportHeight()
+    }, 2600)
+  }
+
   // ---------- 格式化 ----------
   const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
   function fmtTokens(n) {
@@ -519,7 +1336,10 @@
   // ---------- 状态 ----------
   let lastStatus = {}
   let lastEnabled = false
+  let lastConfig = { enabled: false, port: 17877, selection: [], mode: 'direct', mappings: [] }
   let lastSubs = []
+  let lastScenes = { scenes: [], activeId: '' }
+  let sceneBusy = false
   let restarting = false
   // sidecar 掉线后，迟到的刷新结果不能再把订阅区画回来
   let offline = false
@@ -528,7 +1348,73 @@
   let scope = 'today'
   let scopeTouched = false
 
-  // ---------- 渲染 ----------
+  let activeTab = 'gateway'
+
+  // 网关配置：供应商 → 模型清单（不含 apiKey），只在托盘里做选择
+  let routeOptions = []
+  let selectedKeys = new Set()
+  let modelPickerOpen = false
+  let modelSearchText = ''
+  let expandedProviders = new Set()
+  let openTarget = -1
+  let targetSearchText = ''
+
+  // 用量柱状图
+  const CHART_DAYS = 14
+  const MAX_CATEGORIES = 5
+  // 与主窗口统计页同一套配色（细柱 + 低饱和色，暗色下也够区分）
+  const PALETTE = ['#6366f1', '#14b8a6', '#f59e0b', '#ec4899', '#0ea5e9']
+  const OTHER_COLOR = '#94a3b8'
+  const OTHER_KEY = '__other'
+  const AGENT_LABELS = {
+    claude: 'Claude Code',
+    opencode: 'OpenCode',
+    pi: 'Pi Agent',
+    dsh: 'DSH',
+    zcode: 'ZCode',
+    grok: 'Grok Build',
+    cline: 'Cline',
+    commandcode: 'Command Code',
+  }
+  let usageDays = []
+  let usageDimension = 'model'
+  let chartData = null // renderUsage 缓存的当前维度数据，供 hover 读取
+  let focusCategory = ''
+  let focusDay = ''
+
+  // ---------- 渲染：页签 / 静态文案 ----------
+  function setTab(tab) {
+    activeTab = tab === 'usage' ? 'usage' : 'gateway'
+    for (const button of tabButtons) button.classList.toggle('on', button.dataset.tab === activeTab)
+    gatewayPane.hidden = activeTab !== 'gateway'
+    usagePane.hidden = activeTab !== 'usage'
+    reportHeight()
+  }
+
+  function renderStaticLabels() {
+    const tabLabels = { gateway: t('tabGateway'), usage: t('tabUsage') }
+    for (const button of tabButtons) button.textContent = tabLabels[button.dataset.tab] || ''
+    modeTitle.textContent = t('accessMode')
+    const modeLabels = { direct: t('modeDirect'), mapping: t('modeMapping') }
+    for (const button of modeButtons) {
+      button.textContent = modeLabels[button.dataset.mode] || ''
+      button.classList.toggle('on', button.dataset.mode === lastConfig.mode)
+    }
+    const dimLabels = { model: t('chartByModel'), agent: t('chartByAgent') }
+    for (const button of usageDimButtons) {
+      button.textContent = dimLabels[button.dataset.dim] || ''
+      button.classList.toggle('on', button.dataset.dim === usageDimension)
+    }
+    usageTitleText.textContent = t('tokenUsage')
+    usageRange.textContent = ''
+    modelSearch.placeholder = t('searchModels')
+    sceneTitle.textContent = t('skillScene')
+    subsTitle.textContent = t('subscription')
+    addMappingButton.textContent = t('addMapping')
+    chartEmpty.textContent = t('usageEmpty')
+    offlineNote.textContent = t('localServiceOffline')
+  }
+
   function setStatus(text, tone) {
     statusEl.textContent = text
     dotEl.className = 'dot' + (tone ? ' ' + tone : '')
@@ -558,6 +1444,48 @@
     }
   }
 
+  // ---------- 渲染：Skill 场景 ----------
+  // 场景：标签按钮，当前生效的那个高亮；不再提供「手动（不限制）」入口。
+  // 没有生效场景（旧数据 / 删除当前场景）时没有标签高亮，点任意标签即可启用。
+  function renderScenes() {
+    const list = Array.isArray(lastScenes && lastScenes.scenes) ? lastScenes.scenes : []
+    const activeId = (lastScenes && lastScenes.activeId) || ''
+    sceneSection.hidden = list.length === 0
+    if (!list.length) {
+      scenesEl.innerHTML = ''
+      return
+    }
+    scenesEl.innerHTML = list.map((scene) => {
+      const id = String(scene.id || '')
+      const on = id === activeId
+      const count = (scene.skillDirs || []).length
+      return (
+        '<button class="scene-tag' + (on ? ' on' : '') + '" type="button" data-scene="' + esc(id) + '"' +
+          ' title="' + esc(scene.name + ' · ' + t('skillSceneCount', { count })) + '">' +
+          esc(scene.name) +
+        '</button>'
+      )
+    }).join('')
+  }
+
+  async function switchScene(id) {
+    if (!id || id === ((lastScenes && lastScenes.activeId) || '') || sceneBusy) return
+    sceneBusy = true
+    try {
+      await rpc('switchSkillScene', [id])
+      const data = await rpc('getSkillScenes')
+      lastScenes = data && Array.isArray(data.scenes) ? data : { scenes: [], activeId: '' }
+      renderScenes()
+      reportHeight()
+    } catch (error) {
+      diag('tray-scene', error)
+      toast(t('saveFailed'))
+    } finally {
+      sceneBusy = false
+    }
+  }
+
+  // ---------- 渲染：统计 ----------
   const scopeStats = () => {
     const history = lastStatus.history || {}
     if (scope === 'session') return lastStatus.stats || {}
@@ -592,6 +1520,585 @@
     )).join('')
   }
 
+  // ---------- 配置写入 ----------
+  // 连续点击模型 / 快速改映射时排队落库，避免多个读改写交错导致后一次改动被前一次覆盖
+  let configWriteChain = Promise.resolve()
+  function writeConfig(patch) {
+    const run = configWriteChain.then(() => rpc('writeAutoRouteConfig', [patch]))
+    configWriteChain = run.catch(() => {})
+    return run
+  }
+
+  // ---------- 渲染：接入模式 ----------
+  const routeKey = (provider, modelId) => provider + '::' + modelId
+
+  const allModelKeys = () => {
+    const keys = []
+    for (const provider of routeOptions) {
+      for (const model of provider.models || []) keys.push(routeKey(provider.name, model.id))
+    }
+    return keys
+  }
+
+  function applyConfig(config) {
+    if (!config) return
+    lastConfig = config
+    selectedKeys = new Set((config.selection || []).map((s) => routeKey(s.provider, s.modelId)))
+  }
+
+  function buildSelection() {
+    const selection = []
+    for (const provider of routeOptions) {
+      for (const model of provider.models || []) {
+        if (selectedKeys.has(routeKey(provider.name, model.id))) {
+          selection.push({ provider: provider.name, modelId: model.id })
+        }
+      }
+    }
+    return selection
+  }
+
+  async function saveSelection() {
+    try {
+      lastConfig = await writeConfig({ selection: buildSelection() })
+      selectedKeys = new Set((lastConfig.selection || []).map((s) => routeKey(s.provider, s.modelId)))
+      renderModelSummary()
+    } catch (error) {
+      diag('tray-models', error)
+      toast(t('saveFailed'))
+      await reloadConfig()
+    }
+  }
+
+  async function reloadConfig() {
+    try {
+      applyConfig(await rpc('readAutoRouteConfig'))
+      renderGatewayConfig()
+    } catch (error) {
+      diag('tray-config', error)
+    }
+  }
+
+  function toggleModel(key) {
+    if (selectedKeys.has(key)) selectedKeys.delete(key)
+    else selectedKeys.add(key)
+    renderModelSummary()
+    renderModelList()
+    saveSelection()
+  }
+
+  function toggleProvider(provider) {
+    const keys = (provider.models || []).map((m) => routeKey(provider.name, m.id))
+    const allSelected = keys.length > 0 && keys.every((key) => selectedKeys.has(key))
+    for (const key of keys) {
+      if (allSelected) selectedKeys.delete(key)
+      else selectedKeys.add(key)
+    }
+    renderModelSummary()
+    renderModelList()
+    saveSelection()
+  }
+
+  function renderModelSummary() {
+    const count = (lastConfig.selection || []).length
+    modelSummaryText.textContent = t('selectedModels', { count })
+    modelSummary.classList.toggle('open', modelPickerOpen)
+    modelPicker.hidden = !modelPickerOpen
+    if (modelPickerOpen) renderModelList()
+  }
+
+  function filteredProviders() {
+    const query = modelSearchText.trim().toLowerCase()
+    return routeOptions
+      .map((provider) => {
+        const models = (provider.models || []).filter((model) => {
+          if (!query) return true
+          return (
+            provider.name.toLowerCase().includes(query) ||
+            String(model.name || '').toLowerCase().includes(query) ||
+            String(model.id || '').toLowerCase().includes(query)
+          )
+        })
+        return { ...provider, models }
+      })
+      .filter((provider) => provider.models.length > 0)
+  }
+
+  function renderModelList() {
+    if (!modelPickerOpen) return
+    const providers = filteredProviders()
+    if (!providers.length) {
+      modelList.innerHTML = '<div class="picker-empty">' + esc(routeOptions.length ? t('noMatch') : t('noRoutes')) + '</div>'
+      return
+    }
+    const searching = modelSearchText.trim().length > 0
+    modelList.innerHTML = providers.map((provider) => {
+      const total = provider.models.length
+      const selected = provider.models.filter((m) => selectedKeys.has(routeKey(provider.name, m.id))).length
+      const allSelected = total > 0 && selected === total
+      const isOpen = searching || expandedProviders.has(provider.name)
+      const checkClass = allSelected ? 'check on' : selected > 0 ? 'check part' : 'check'
+      const head = (
+        '<div class="picker-group' + (isOpen ? ' is-open' : '') + '" data-group="' + esc(provider.name) + '">' +
+          '<button class="picker-group-head" type="button" data-expand="' + esc(provider.name) + '">' +
+            '<span class="' + checkClass + '" data-check="' + esc(provider.name) + '">' + (allSelected ? '✓' : '') + '</span>' +
+            '<span class="picker-group-name" title="' + esc(provider.name) + '">' + esc(provider.name) + '</span>' +
+            '<span class="picker-group-count">' + selected + '/' + total + '</span>' +
+            '<span class="chev" aria-hidden="true">›</span>' +
+          '</button>'
+      )
+      if (!isOpen) return head + '</div>'
+      const items = provider.models.map((model) => {
+        const key = routeKey(provider.name, model.id)
+        const on = selectedKeys.has(key)
+        return (
+          '<button class="picker-item" type="button" data-model="' + esc(key) + '" title="' + esc(model.id) + '">' +
+            '<span class="check' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>' +
+            '<span class="picker-model-name">' + esc(model.name || model.id) + '</span>' +
+          '</button>'
+        )
+      }).join('')
+      return head + '<div class="picker-models">' + items + '</div></div>'
+    }).join('')
+  }
+
+  function targetLabel(mapping) {
+    const provider = routeOptions.find((p) => p.name === mapping.provider)
+    const model = provider && (provider.models || []).find((m) => m.id === mapping.modelId)
+    return model ? (model.name || model.id) : ''
+  }
+
+  function renderMappings() {
+    const mappings = Array.isArray(lastConfig.mappings) ? lastConfig.mappings : []
+    mappingCount.textContent = t('mappingCount', {
+      ready: mappings.filter((m) => m.alias && m.provider && m.modelId).length,
+      total: mappings.length,
+      max: 10,
+    })
+    addMappingButton.disabled = mappings.length >= 10
+    if (!mappings.length) {
+      mappingList.innerHTML = '<div class="picker-empty">' + esc(t('mappingEmpty')) + '</div>'
+      return
+    }
+    const query = targetSearchText.trim().toLowerCase()
+    mappingList.innerHTML = mappings.map((mapping, index) => {
+      const label = targetLabel(mapping)
+      const row = (
+        '<div class="mapping-row">' +
+          '<input class="mapping-alias" type="text" spellcheck="false" autocomplete="off"' +
+            ' data-alias="' + index + '" value="' + esc(mapping.alias || '') + '"' +
+            ' placeholder="' + esc(t('mappingAlias')) + '" />' +
+          '<button class="mapping-target' + (label ? ' has-value' : '') + '" type="button" data-target="' + index + '"' +
+            (label ? ' title="' + esc(mapping.provider + ' / ' + mapping.modelId) + '"' : '') + '>' +
+            '<span class="mapping-target-name">' + esc(label || t('selectTarget')) + '</span>' +
+            '<span class="chev" aria-hidden="true">›</span>' +
+          '</button>' +
+          '<button class="mapping-del" type="button" data-del="' + index + '"' +
+            ' title="' + esc(t('removeMapping')) + '" aria-label="' + esc(t('removeMapping')) + '">×</button>' +
+        '</div>'
+      )
+      if (openTarget !== index) return row
+
+      const groups = routeOptions
+        .map((provider) => ({
+          name: provider.name,
+          models: (provider.models || []).filter((model) => {
+            if (!query) return true
+            return (
+              provider.name.toLowerCase().includes(query) ||
+              String(model.name || '').toLowerCase().includes(query) ||
+              String(model.id || '').toLowerCase().includes(query)
+            )
+          }),
+        }))
+        .filter((provider) => provider.models.length > 0)
+      const options = groups.length
+        ? groups.map((provider) => (
+            '<div class="mapping-group-label">' + esc(provider.name) + '</div>' +
+            provider.models.map((model) => {
+              const current = mapping.provider === provider.name && mapping.modelId === model.id
+              return (
+                '<button class="mapping-option' + (current ? ' is-current' : '') + '" type="button"' +
+                  ' data-pick="' + index + '" data-provider="' + esc(provider.name) + '"' +
+                  ' data-model-id="' + esc(model.id) + '">' +
+                  '<span class="mapping-option-name">' + esc(model.name || model.id) + '</span>' +
+                  (model.name && model.name !== model.id
+                    ? '<span class="mapping-option-id">' + esc(model.id) + '</span>'
+                    : '') +
+                '</button>'
+              )
+            }).join('')
+          )).join('')
+        : '<div class="picker-empty">' + esc(routeOptions.length ? t('noMatch') : t('noRoutes')) + '</div>'
+      return row +
+        '<div class="mapping-picker">' +
+          '<input class="picker-search" type="text" spellcheck="false" autocomplete="off" data-target-search="' + index + '"' +
+            ' placeholder="' + esc(t('searchModels')) + '" value="' + esc(targetSearchText) + '" />' +
+          '<div class="mapping-options">' + options + '</div>' +
+        '</div>'
+    }).join('')
+  }
+
+  async function saveMappings(mappings, options) {
+    try {
+      lastConfig = await writeConfig({ mappings })
+      if (!options || options.render !== false) renderMappings()
+      reportHeight()
+      return true
+    } catch (error) {
+      diag('tray-mappings', error)
+      toast(t('saveFailed'))
+      await reloadConfig()
+      return false
+    }
+  }
+
+  function addMapping() {
+    const mappings = Array.isArray(lastConfig.mappings) ? [...lastConfig.mappings] : []
+    if (mappings.length >= 10) return
+    const used = new Set(mappings.map((m) => m.alias))
+    const preset = ['flash', 'plus', 'pro'].find((alias) => !used.has(alias))
+    openTarget = mappings.length
+    targetSearchText = ''
+    saveMappings([...mappings, { alias: preset || '', provider: '', modelId: '' }]).then((ok) => {
+      if (ok) focusTargetSearch()
+    })
+  }
+
+  // 目标选择面板常出现在滚动区底部：展开后把输入框滚进可视区
+  function focusTargetSearch() {
+    requestAnimationFrame(() => {
+      const input = mappingList.querySelector('[data-target-search]')
+      if (!input) return
+      input.focus({ preventScroll: true })
+      const picker = input.closest('.mapping-picker')
+      if (picker && picker.scrollIntoView) picker.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
+  function removeMapping(index) {
+    const mappings = (lastConfig.mappings || []).filter((_, i) => i !== index)
+    if (openTarget === index) openTarget = -1
+    else if (openTarget > index) openTarget -= 1
+    saveMappings(mappings)
+  }
+
+  async function changeAlias(index, value) {
+    const mappings = (lastConfig.mappings || []).map((m, i) => (
+      i === index ? { ...m, alias: String(value || '').trim() } : m
+    ))
+    // 输入框还在焦点里：只落库、不重画，避免光标被 innerHTML 重建吞掉
+    await saveMappings(mappings, { render: false })
+  }
+
+  async function pickTarget(index, provider, modelId) {
+    const mappings = (lastConfig.mappings || []).map((m, i) => (
+      i === index ? { ...m, provider, modelId } : m
+    ))
+    openTarget = -1
+    targetSearchText = ''
+    await saveMappings(mappings)
+  }
+
+  async function setMode(mode) {
+    if (mode === lastConfig.mode) return
+    try {
+      lastConfig = await writeConfig({ mode })
+      renderGatewayConfig()
+      reportHeight()
+    } catch (error) {
+      diag('tray-mode', error)
+      toast(t('saveFailed'))
+    }
+  }
+
+  function renderGatewayConfig() {
+    for (const button of modeButtons) {
+      button.classList.toggle('on', button.dataset.mode === lastConfig.mode)
+    }
+    const direct = lastConfig.mode !== 'mapping'
+    directPane.hidden = !direct
+    mappingPane.hidden = direct
+    if (direct) {
+      renderModelSummary()
+    } else {
+      renderMappings()
+    }
+  }
+
+  // ---------- 渲染：用量柱状图 ----------
+  const pairKey = () => (usageDimension === 'agent' ? 'agents' : 'models')
+  const categoryLabel = (key) => {
+    if (key === OTHER_KEY) return t('chartOther')
+    return usageDimension === 'agent' ? AGENT_LABELS[key] || key : key
+  }
+  const dayTotal = (day) => day[pairKey()].reduce((sum, [, tokens]) => sum + tokens, 0)
+
+  // 以「最后一个有用量的日期」为终点取 14 天窗口；全是零时展示最近 14 天，
+  // 这样用户停了几天也不会只剩一排空柱。
+  function usageWindow() {
+    if (!usageDays.length) return []
+    let last = -1
+    for (let i = usageDays.length - 1; i >= 0; i--) {
+      if (dayTotal(usageDays[i]) > 0) {
+        last = i
+        break
+      }
+    }
+    if (last < 0) return usageDays.slice(-CHART_DAYS)
+    return usageDays.slice(Math.max(0, last - CHART_DAYS + 1), last + 1)
+  }
+
+  const niceTop = (value) => {
+    if (!(value > 0)) return 1
+    const exponent = Math.floor(Math.log10(value))
+    const base = 10 ** exponent
+    const ratio = value / base
+    const pick = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((m) => ratio <= m) || 10
+    return pick * base
+  }
+
+  function buildChartData() {
+    const days = usageWindow()
+    if (!days.length) return null
+    const totals = new Map()
+    for (const day of days) {
+      for (const [key, tokens] of day[pairKey()]) {
+        totals.set(key, (totals.get(key) || 0) + tokens)
+      }
+    }
+    if (!totals.size) return null
+    const ranked = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])
+    const categories = ranked.slice(0, MAX_CATEGORIES).map(([key, tokens], index) => ({
+      key,
+      label: categoryLabel(key),
+      color: PALETTE[index % PALETTE.length],
+      order: index,
+      tokens,
+    }))
+    const otherTokens = ranked.slice(MAX_CATEGORIES).reduce((sum, [, tokens]) => sum + tokens, 0)
+    if (otherTokens > 0) {
+      categories.push({
+        key: OTHER_KEY,
+        label: t('chartOther'),
+        color: OTHER_COLOR,
+        order: MAX_CATEGORIES,
+        tokens: otherTokens,
+      })
+    }
+    const orderOf = new Map(categories.map((c) => [c.key, c.order]))
+    const colorOf = new Map(categories.map((c) => [c.key, c.color]))
+    const maxTotal = days.reduce((max, day) => Math.max(max, dayTotal(day)), 0)
+    const top = niceTop(maxTotal)
+
+    const columns = days.map((day) => {
+      const total = dayTotal(day)
+      const merged = new Map()
+      for (const [key, tokens] of day[pairKey()]) {
+        const catKey = orderOf.has(key) ? key : OTHER_KEY
+        merged.set(catKey, (merged.get(catKey) || 0) + tokens)
+      }
+      const segments = Array.from(merged.entries())
+        .filter(([, tokens]) => tokens > 0)
+        .sort((a, b) => (orderOf.get(a[0]) || 0) - (orderOf.get(b[0]) || 0))
+        .map(([key, tokens]) => ({
+          key,
+          tokens,
+          label: categoryLabel(key),
+          color: colorOf.get(key) || OTHER_COLOR,
+          height: total > 0 ? (tokens / total) * 100 : 0,
+        }))
+      return { date: day.date, total, height: top > 0 ? (total / top) * 100 : 0, segments }
+    })
+
+    return {
+      categories,
+      columns,
+      ticks: [1, 2, 3].map((i) => ({ value: (top / 3) * i, pct: (i / 3) * 100 })),
+    }
+  }
+
+  const shortDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00')
+    return (date.getMonth() + 1) + '/' + date.getDate()
+  }
+
+  const longDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00')
+    return date.toLocaleDateString(locale(), { month: 'short', day: 'numeric', weekday: 'short' })
+  }
+
+  function renderUsage() {
+    renderStaticLabels()
+    const data = buildChartData()
+    chartData = data
+    chartEmpty.hidden = !!data
+    chartWrap.hidden = !data
+    chartLegend.hidden = !data
+    chartTip.hidden = true
+    focusCategory = ''
+    focusDay = ''
+    if (!data) {
+      chartGrid.innerHTML = ''
+      chartCols.innerHTML = ''
+      chartXAxis.innerHTML = ''
+      chartLegend.innerHTML = ''
+      return
+    }
+
+    // 数据可能不是截至今天（托盘只读已落库的统计），用实际日期区间比「近 14 天」更准确
+    usageRange.textContent = shortDate(data.columns[0].date) + ' – ' + shortDate(data.columns[data.columns.length - 1].date)
+
+    chartGrid.innerHTML = data.ticks.map((tick) => (
+      '<div class="chart-gridline" style="bottom:' + tick.pct + '%">' +
+        '<span class="chart-gridlabel">' + esc(fmtTokens(Math.round(tick.value))) + '</span>' +
+      '</div>'
+    )).join('') + '<div class="chart-gridline" style="bottom:0"></div>'
+
+    chartCols.innerHTML = data.columns.map((col) => {
+      const stack = col.segments.map((seg) => (
+        '<div class="chart-seg" data-cat="' + esc(seg.key) + '"' +
+          ' style="height:' + seg.height + '%;background:' + seg.color + '"></div>'
+      )).join('')
+      return (
+        '<div class="chart-col" data-day="' + esc(col.date) + '" data-total="' + col.total + '">' +
+          '<div class="chart-stack" style="height:' + Math.max(0, Math.min(100, col.height)) + '%">' + stack + '</div>' +
+        '</div>'
+      )
+    }).join('')
+
+    const step = data.columns.length > 7 ? 2 : 1
+    const lastIndex = data.columns.length - 1
+    chartXAxis.innerHTML = data.columns.map((col, index) => {
+      // 最后一列固定显示；离它太近的刻度让位，避免「10/28」和「10/29」叠在一起
+      const show = index === lastIndex || (index % step === 0 && lastIndex - index >= step)
+      return (
+        '<span class="chart-xlabel">' + esc(show ? shortDate(col.date) : '') + '</span>'
+      )
+    }).join('')
+
+    chartLegend.innerHTML = data.categories.map((cat) => (
+      '<span class="legend-chip" data-cat="' + esc(cat.key) + '">' +
+        '<span class="legend-dot" style="background:' + cat.color + '"></span>' +
+        '<span class="legend-name" title="' + esc(cat.label) + '">' + esc(cat.label) + '</span>' +
+        '<span class="legend-value">' + esc(fmtTokens(cat.tokens)) + '</span>' +
+      '</span>'
+    )).join('')
+    bindLegend()
+  }
+
+  function applyChartFocus() {
+    const dimmed = focusCategory.length > 0
+    for (const seg of chartCols.querySelectorAll('.chart-seg')) {
+      seg.classList.toggle('is-dim', dimmed && seg.dataset.cat !== focusCategory)
+    }
+    for (const chip of chartLegend.querySelectorAll('.legend-chip')) {
+      chip.classList.toggle('is-dim', dimmed && chip.dataset.cat !== focusCategory)
+    }
+  }
+
+  function hideChartTip() {
+    chartTip.hidden = true
+    focusCategory = ''
+    focusDay = ''
+    applyChartFocus()
+  }
+
+  function tipHtml(column, category) {
+    if (!category) {
+      const lines = column.segments.slice(0, 4).map((seg) => (
+        '<div class="tip-line">' +
+          '<span class="tip-dot" style="background:' + seg.color + '"></span>' +
+          '<span class="tip-name">' + esc(seg.label) + '</span>' +
+          '<span class="tip-value">' + esc(fmtTokens(seg.tokens)) + '</span>' +
+        '</div>'
+      )).join('')
+      return (
+        '<div class="tip-head"><span>' + esc(longDate(column.date)) + '</span>' +
+        '<span>' + esc(fmtTokens(column.total)) + '</span></div>' + lines
+      )
+    }
+    const seg = column.segments.find((item) => item.key === category.key)
+    return (
+      '<div class="tip-head"><span>' + esc(longDate(column.date)) + '</span>' +
+      '<span>' + esc(fmtTokens(column.total)) + '</span></div>' +
+      '<div class="tip-line">' +
+        '<span class="tip-dot" style="background:' + category.color + '"></span>' +
+        '<span class="tip-name">' + esc(category.label) + '</span>' +
+        '<span class="tip-value">' + esc(fmtTokens(seg ? seg.tokens : 0)) + '</span>' +
+      '</div>' +
+      '<div class="tip-sub">' + esc(t('usageShare', { percent: fmtPct(seg ? seg.tokens : 0, column.total) })) + '</div>'
+    )
+  }
+
+  function positionChartTip(event, columnEl) {
+    const plotRect = chartPlot.getBoundingClientRect()
+    if (!plotRect.width) return
+    const colRect = columnEl.getBoundingClientRect()
+    const half = chartTip.offsetWidth / 2
+    const center = colRect.left - plotRect.left + colRect.width / 2
+    const x = Math.min(Math.max(center, half + 2), plotRect.width - half - 2)
+    const pointerY = Math.min(Math.max(event.clientY - plotRect.top, 2), plotRect.height - 2)
+    chartTip.style.left = x + 'px'
+    chartTip.style.top = '0px'
+    const height = chartTip.offsetHeight
+    let top = pointerY - height - 8
+    if (top < 2) top = Math.min(pointerY + 12, Math.max(plotRect.height - height - 2, 2))
+    chartTip.style.top = Math.max(2, top) + 'px'
+  }
+
+  function onChartMove(event) {
+    if (!chartData) return
+    const columnEl = event.target.closest ? event.target.closest('.chart-col') : null
+    if (!columnEl) return // 柱间 4px 缝隙：保持上一帧，避免移动时闪烁
+    const column = chartData.columns.find((col) => col.date === columnEl.dataset.day)
+    if (!column || !column.segments.length) {
+      hideChartTip()
+      return
+    }
+    // 用指针的纵向位置在柱子里找所属分段：柱宽只有 8px，靠元素命中太挑手感
+    let categoryKey = ''
+    const stackEl = columnEl.querySelector('.chart-stack')
+    if (stackEl) {
+      for (const segEl of stackEl.children) {
+        const rect = segEl.getBoundingClientRect()
+        if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+          categoryKey = segEl.dataset.cat || ''
+          break
+        }
+      }
+    }
+    if (categoryKey && categoryKey !== focusCategory) {
+      focusCategory = categoryKey
+      applyChartFocus()
+    } else if (!categoryKey && focusCategory) {
+      focusCategory = ''
+      applyChartFocus()
+    }
+    focusDay = column.date
+    const category = categoryKey
+      ? chartData.categories.find((cat) => cat.key === categoryKey) || null
+      : null
+    chartTip.innerHTML = tipHtml(column, category)
+    chartTip.hidden = false
+    positionChartTip(event, columnEl)
+  }
+
+  // 图例悬停也聚焦同一颜色，鼠标离开恢复
+  function bindLegend() {
+    for (const chip of chartLegend.querySelectorAll('.legend-chip')) {
+      chip.addEventListener('mouseenter', () => {
+        focusCategory = chip.dataset.cat || ''
+        applyChartFocus()
+      })
+      chip.addEventListener('mouseleave', () => {
+        focusCategory = ''
+        applyChartFocus()
+      })
+    }
+  }
+
+  // ---------- 渲染：订阅 ----------
   const REFRESH_ICON =
     '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" ' +
     'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -654,9 +2161,17 @@
   function renderOffline() {
     offline = true
     setStatus(t('localServiceOffline'), 'bad')
+    offlineNote.hidden = false
     renderStats(false)
     subsSection.hidden = true
     subsEl.innerHTML = ''
+    sceneSection.hidden = true
+    scenesEl.innerHTML = ''
+    modeSection.hidden = true
+    chartWrap.hidden = true
+    chartLegend.hidden = true
+    chartEmpty.hidden = true
+    chartTip.hidden = true
     restartButton.disabled = true
     reportHeight()
   }
@@ -678,18 +2193,30 @@
     const shouldRefresh = !options || options.refresh !== false
     const seq = ++renderSeq
     renderActionLabels()
+    renderStaticLabels()
     let status
     let config
     let subs
+    let scenes
+    let routes
+    let usage
     try {
+      // 刚改完配置就重新展开时，先等排队的写入落地，避免读到旧配置把界面回滚一下
+      await configWriteChain
       const results = await Promise.all([
         rpc('getAutoRouteStatus'),
         rpc('readAutoRouteConfig'),
         rpc('getSubscriptionsTray'),
+        rpc('getSkillScenes'),
+        rpc('getGatewayRouteOptions'),
+        rpc('readCommonUsageForTray', [60]),
       ])
       status = results[0] || {}
       config = results[1] || {}
       subs = Array.isArray(results[2]) ? results[2] : []
+      scenes = results[3] || { scenes: [], activeId: '' }
+      routes = Array.isArray(results[4]) ? results[4] : []
+      usage = Array.isArray(results[5]) ? results[5] : []
     } catch (error) {
       if (seq === renderSeq) renderOffline()
       return null
@@ -697,11 +2224,16 @@
     if (seq !== renderSeq) return null
 
     offline = false
+    offlineNote.hidden = true
+    modeSection.hidden = false
     const enabled = !!config.enabled
     const running = !!status.running
     const gatewayPort = Number(status.port || config.port || 0)
     lastStatus = status
     lastEnabled = enabled
+    routeOptions = routes
+    usageDays = usage
+    applyConfig(config)
     restartButton.disabled = !enabled || restarting
     if (restarting) {
       setStatus(t('restarting'), 'warn')
@@ -726,20 +2258,25 @@
     }
 
     lastSubs = subs
+    lastScenes = scenes && Array.isArray(scenes.scenes) ? scenes : { scenes: [], activeId: '' }
     const historyTotal = (status.history && status.history.total) || {}
     const hasAny = requestsOf(historyTotal) > 0 || requestsOf(status.stats) > 0
+    renderScenes()
     renderStats(hasAny || (enabled && running))
+    renderGatewayConfig()
     renderSubs(subs)
+    renderUsage()
+    setTab(activeTab)
     reportHeight()
 
-    if (shouldRefresh) refreshSubscriptions(seq)
+    if (shouldRefresh && activeTab === 'usage') refreshSubscriptions(seq)
     return status
   }
 
   // 先展示缓存快照，再后台请求一次（service 层有 5 分钟节流）。
   // 结果回来时只重画订阅区，不动统计（避免整体闪一下）。
   async function refreshSubscriptions(seq) {
-    if (refreshing) return
+    if (refreshing || offline) return
     refreshing = true
     try {
       await rpc('refreshSubscriptions', [{ force: false }])
@@ -813,6 +2350,7 @@
   // Rust 在每次展开时调用；首次加载（窗口隐藏）只渲染缓存，不联网
   window.__ccTrayReload = () => reload({ refresh: true })
 
+  // ---------- 事件 ----------
   footerButtons.forEach((button) => {
     button.addEventListener('click', () => {
       invoke('tray_popup_action', { action: button.dataset.action }).catch((error) => diag('tray-action', error))
@@ -831,11 +2369,160 @@
     })
   })
 
+  tabs.addEventListener('click', (event) => {
+    const button = event.target.closest ? event.target.closest('[data-tab]') : null
+    if (!button) return
+    const next = button.dataset.tab
+    if (next === activeTab) return
+    setTab(next)
+    if (activeTab === 'usage') refreshSubscriptions(renderSeq)
+  })
+
+  modeSegment.addEventListener('click', (event) => {
+    const button = event.target.closest ? event.target.closest('[data-mode]') : null
+    if (button) setMode(button.dataset.mode)
+  })
+
+  usageDimEl.addEventListener('click', (event) => {
+    const button = event.target.closest ? event.target.closest('[data-dim]') : null
+    if (!button || button.dataset.dim === usageDimension) return
+    usageDimension = button.dataset.dim
+    renderStaticLabels()
+    renderUsage()
+    reportHeight()
+  })
+
+  modelSummary.addEventListener('click', () => {
+    modelPickerOpen = !modelPickerOpen
+    renderModelSummary()
+    reportHeight()
+  })
+
+  modelSearch.addEventListener('input', () => {
+    modelSearchText = modelSearch.value
+    renderModelList()
+    reportHeight()
+  })
+
+  modelList.addEventListener('click', (event) => {
+    const target = event.target
+    const check = target.closest ? target.closest('[data-check]') : null
+    if (check) {
+      event.stopPropagation()
+      const provider = routeOptions.find((p) => p.name === check.dataset.check)
+      if (provider) toggleProvider(provider)
+      return
+    }
+    const expand = target.closest ? target.closest('[data-expand]') : null
+    if (expand) {
+      const name = expand.dataset.expand
+      if (expandedProviders.has(name)) expandedProviders.delete(name)
+      else expandedProviders.add(name)
+      renderModelList()
+      reportHeight()
+      return
+    }
+    const item = target.closest ? target.closest('[data-model]') : null
+    if (item) toggleModel(item.dataset.model)
+  })
+
+  mappingList.addEventListener('click', (event) => {
+    const target = event.target
+    const del = target.closest ? target.closest('[data-del]') : null
+    if (del) {
+      removeMapping(Number(del.dataset.del))
+      return
+    }
+    const pick = target.closest ? target.closest('[data-pick]') : null
+    if (pick) {
+      pickTarget(Number(pick.dataset.pick), pick.dataset.provider, pick.dataset.modelId)
+      return
+    }
+    const open = target.closest ? target.closest('[data-target]') : null
+    if (open) {
+      const index = Number(open.dataset.target)
+      openTarget = openTarget === index ? -1 : index
+      targetSearchText = ''
+      renderMappings()
+      reportHeight()
+      if (openTarget >= 0) focusTargetSearch()
+    }
+  })
+
+  mappingList.addEventListener('change', (event) => {
+    const input = event.target.closest ? event.target.closest('[data-alias]') : null
+    if (input) changeAlias(Number(input.dataset.alias), input.value)
+  })
+
+  mappingList.addEventListener('keydown', (event) => {
+    const input = event.target.closest ? event.target.closest('[data-alias]') : null
+    if (input && event.key === 'Enter') {
+      event.preventDefault()
+      input.blur()
+    }
+  })
+
+  mappingList.addEventListener('input', (event) => {
+    const input = event.target.closest ? event.target.closest('[data-target-search]') : null
+    if (!input) return
+    targetSearchText = input.value
+    // 只重画候选列表，输入框与光标保留
+    const panelEl = input.closest('.mapping-picker')
+    const optionsEl = panelEl && panelEl.querySelector('.mapping-options')
+    if (!optionsEl) return
+    const query = targetSearchText.trim().toLowerCase()
+    const index = Number(input.dataset.targetSearch)
+    const mapping = (lastConfig.mappings || [])[index] || {}
+    const groups = routeOptions
+      .map((provider) => ({
+        name: provider.name,
+        models: (provider.models || []).filter((model) => {
+          if (!query) return true
+          return (
+            provider.name.toLowerCase().includes(query) ||
+            String(model.name || '').toLowerCase().includes(query) ||
+            String(model.id || '').toLowerCase().includes(query)
+          )
+        }),
+      }))
+      .filter((provider) => provider.models.length > 0)
+    optionsEl.innerHTML = groups.length
+      ? groups.map((provider) => (
+          '<div class="mapping-group-label">' + esc(provider.name) + '</div>' +
+          provider.models.map((model) => {
+            const current = mapping.provider === provider.name && mapping.modelId === model.id
+            return (
+              '<button class="mapping-option' + (current ? ' is-current' : '') + '" type="button"' +
+                ' data-pick="' + index + '" data-provider="' + esc(provider.name) + '"' +
+                ' data-model-id="' + esc(model.id) + '">' +
+                '<span class="mapping-option-name">' + esc(model.name || model.id) + '</span>' +
+                (model.name && model.name !== model.id
+                  ? '<span class="mapping-option-id">' + esc(model.id) + '</span>'
+                  : '') +
+              '</button>'
+            )
+          }).join('')
+        )).join('')
+      : '<div class="picker-empty">' + esc(routeOptions.length ? t('noMatch') : t('noRoutes')) + '</div>'
+    reportHeight()
+  })
+
+  addMappingButton.addEventListener('click', addMapping)
+
   subsEl.addEventListener('click', (event) => {
     const target = event.target
     const button = target && target.closest ? target.closest('[data-refresh]') : null
     if (button) refreshSub(button.dataset.refresh)
   })
+
+  scenesEl.addEventListener('click', (event) => {
+    const target = event.target
+    const button = target && target.closest ? target.closest('[data-scene]') : null
+    if (button) switchScene(button.dataset.scene || '')
+  })
+
+  chartPlot.addEventListener('mousemove', onChartMove)
+  chartPlot.addEventListener('mouseleave', hideChartTip)
 
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') invoke('tray_popup_hide').catch(() => {})

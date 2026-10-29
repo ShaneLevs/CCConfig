@@ -8,6 +8,7 @@ const os = require('node:os')
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'usage-async-test-'))
 process.env.DSH_HOME = tmp
+process.env.MINIMAX_DATA_DIR = tmp
 
 // 伪造 ~/.claude/projects/<proj>/conv.jsonl（一条 assistant 消息）
 const projDir = path.join(tmp, '.claude', 'projects', '-tmp-proj')
@@ -81,6 +82,25 @@ const ok = (cond, name) => {
   ok(!!claudeDoc && claudeDoc.days[day4.date]?.tokens === 180, 'worker 落库写队列重放到主线程 DB')
   ok(!!savedDocs.get('ccconfig_heatmap_test-native'), '热力图历史落库重放')
   ok(!!savedDocs.get('ccconfig_usage_cache_test-native'), 'usage 缓存落库重放')
+
+  // ==================== MiniMax Code：真实会话 JSONL 解析 + 落库写队列重放 ====================
+  // 会话目录 <tmp>/v2/sessions/<YYYY>/<MM>/<DD>/<会话目录>/messages.jsonl
+  const mmDir = path.join(tmp, 'v2', 'sessions', '2026', '10', '29', '08-02-30-207-session_x')
+  fs.mkdirSync(mmDir, { recursive: true })
+  fs.writeFileSync(path.join(mmDir, 'messages.jsonl'), JSON.stringify({
+    message_id: 'm1', turn_id: 't1',
+    message: {
+      role: 'assistant', model: 'mm-test', provider: 'minimax',
+      timestamp: Date.UTC(2026, 9, 29, 1, 2, 3),
+      usage: { input: 100, output: 20, cacheRead: 50, cacheWrite: 0, totalTokens: 170 },
+    },
+  }) + '\n', 'utf-8')
+  const stats5 = await usageAsync.readMinimaxUsageAsync()
+  const day5 = stats5.contributions.find(d => d.tokens > 0)
+  ok(!!day5 && day5.tokens === 170, `MiniMax worker 真实解析会话 JSONL（tokens=${day5 && day5.tokens}）`)
+  ok(day5 && day5.date === '2026-10-29', `epoch 毫秒换算日期正确（got=${day5 && day5.date}）`)
+  const mmDoc = savedDocs.get('ccconfig_agent_usage_minimax_test-native')
+  ok(!!mmDoc && mmDoc.days[day5.date]?.tokens === 170, 'MiniMax worker 落库写队列重放到主线程 DB')
 
   console.log(`\n${passed} passed, ${failed} failed`)
   fs.rmSync(tmp, { recursive: true, force: true })

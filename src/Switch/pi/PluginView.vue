@@ -6,6 +6,7 @@ import {
 } from "tdesign-vue-next";
 import { AddIcon, DeleteIcon, RefreshIcon, LinkIcon, SearchIcon, DownloadIcon, CloudDownloadIcon } from "tdesign-icons-vue-next";
 import PiPluginDetailDialog from "./components/PiPluginDetailDialog.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/PluginView.css";
 
 const { t } = useI18n();
@@ -29,6 +30,9 @@ const refresh = () => {
   loading.value = true;
   setTimeout(() => { loadPlugins(); loading.value = false; }, 50);
 };
+
+// 切回本页时自动刷新已安装列表（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("pi", "plugin", refresh);
 
 const openAddDialog = () => {
   newPluginName.value = "";
@@ -292,7 +296,7 @@ const resourceBadges = [
 ];
 
 onMounted(() => {
-  setTimeout(() => { loadPlugins(); loading.value = false; }, 50);
+  setTimeout(refresh, 50);
 });
 
 const installFromUrl = (payload) => {
@@ -326,7 +330,7 @@ defineExpose({ installFromUrl });
             <template #icon><AddIcon /></template> {{ t("pi.plugin.addExtension") }}
           </Button>
           <Tooltip :content="t('common.refresh')" placement="top">
-            <Button size="small" variant="outline" :loading="loading" @click="refresh">
+            <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
               <template #icon><RefreshIcon /></template>
             </Button>
           </Tooltip>

@@ -31,6 +31,12 @@
       "downloadTooSmall": "Downloaded file is too small; the download may have failed",
       "fetchFailed": "Fetch failed"
     },
+    "skillScene": {
+      "notFound": "Scene not found",
+      "nameRequired": "Scene name is required",
+      "nameInvalid": "Scene names cannot contain a colon or use \"Off\" / \"Manual\"",
+      "nameDuplicate": "A scene named \"{name}\" already exists"
+    },
     "mcp": {
       "notFound": "MCP config not found",
       "dbNotFound": "MCP config not found in DB",
@@ -122,7 +128,8 @@
         "dshConfig": "Manage DSH (DeepSeek Harness) model configuration",
         "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager",
         "clineConfig": "Cline (CLI / desktop) provider / model / MCP / skill configuration manager",
-        "commandcodeConfig": "Command Code model / MCP / skill / taste configuration manager"
+        "commandcodeConfig": "Command Code model / MCP / skill / taste configuration manager",
+        "switchSkillScene": "Switch the common Skill scene (enables only its bound skills)"
       },
       "label": {
         "installClaudeSkill": "Install Claude Code Skill",

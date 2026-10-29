@@ -6,6 +6,7 @@ import { DownloadIcon, DeleteIcon, FileExportIcon, FolderOpen1Icon, RefreshIcon 
 import SkillInstallDialog from "../../components/SkillInstallDialog.vue";
 import SkillCard from "../../components/SkillCard.vue";
 import { formatLastUsed } from "../../utils/time";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/SkillView.css";
 
 const { t } = useI18n();
@@ -65,6 +66,9 @@ const selectedSkill = ref(null);
 const loadSkills = () => {
   skills.value = window.services.getSkills();
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("claude", "skill", loadSkills);
 
 // 通用安装弹窗（SkillHub / 魔搭社区），service 方法用 Claude 默认实现
 const installDialogRef = ref(null);
@@ -155,7 +159,7 @@ const openProjectDir = (projectPath) => {
   window.services.openProjectSkillsDir(projectPath);
 };
 
-onMounted(() => setTimeout(() => loadSkills(), 50));
+onMounted(() => setTimeout(refreshNow, 50));
 </script>
 
 <template>
@@ -167,7 +171,7 @@ onMounted(() => setTimeout(() => loadSkills(), 50));
           <template #icon><DownloadIcon /></template> {{ t('skill.install.title') }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" @click="loadSkills">
+          <Button size="small" variant="outline" :loading="autoRefreshing" @click="refreshNow">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

@@ -72,9 +72,9 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
 // 各 agent 统计页打开时在「计算完成」处落库（Claude 另有自己的热力图历史档），
 // DSH 反过来把这份落库数据当历史档用：会话日志被清理后，已消失日期仍能参与统计。
 
-// claude / opencode / pi / dsh / zcode / grok / cline / commandcode：「通用」统计页合并这些 agent；
+// claude / opencode / pi / dsh / zcode / grok / cline / commandcode / minimax：「通用」统计页合并这些 agent；
 // dsh / zcode / grok / cline / commandcode 另用它做历史合并（源数据被清理后回放历史，不归零）
-const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh', 'zcode', 'grok', 'cline', 'commandcode']
+const AGENT_USAGE_IDS = ['claude', 'opencode', 'pi', 'dsh', 'zcode', 'grok', 'cline', 'commandcode', 'minimax']
 
 const agentUsageDocId = (agent) => `ccconfig_agent_usage_${agent}_${getNativeId()}`
 
@@ -253,4 +253,26 @@ const readAgentUsageFromHistory = (agent) => {
   }
 }
 
-module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAgentUsageFromHistory, readAllAgentUsage }
+// 桌面版托盘弹窗：只回最近 N 天、按模型 / Agent 拆好的 Token 用量。
+// 统计口径与「通用统计」柱状图一致（模型 = input + output + cacheRead + cacheCreation，
+// Agent = 该 agent 当天的 tokens），页面直接画柱，不再传 365 天全量贡献。
+const readCommonUsageForTray = (days = 60) => {
+  const range = Math.max(1, Math.min(365, Number(days) || 60))
+  const { contributions } = readAllAgentUsage()
+  return contributions.slice(-range).map((day) => {
+    const models = []
+    for (const [name, m] of Object.entries(day.models || {})) {
+      const tokens =
+        (m.inputTokens || 0) + (m.outputTokens || 0) +
+        (m.cacheReadTokens || 0) + (m.cacheCreationTokens || 0)
+      if (tokens > 0) models.push([name, tokens])
+    }
+    const agents = []
+    for (const [id, group] of Object.entries(day.agentModels || {})) {
+      if (group.tokens > 0) agents.push([id, group.tokens])
+    }
+    return { date: day.date, models, agents }
+  })
+}
+
+module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAgentUsageFromHistory, readAllAgentUsage, readCommonUsageForTray }

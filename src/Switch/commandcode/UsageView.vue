@@ -25,6 +25,7 @@ const sessionsDir = (() => {
 
 <template>
   <UsagePage
+    page-app="commandcode"
     :tip="t('commandcode.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

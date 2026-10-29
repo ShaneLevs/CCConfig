@@ -22,6 +22,7 @@ import McpToolDrawer from "../../components/McpToolDrawer.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
 import { formatLastUsed } from "../../utils/time";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/McpView.css";
 
 const { t } = useI18n();
@@ -76,6 +77,9 @@ const handleRefresh = () => {
     mcpLoading.value = false;
   }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("claude", "mcp", handleRefresh);
 
 // 加载 MCP 使用统计（只在挂载时加载一次，拨动开关不刷新此数据）
 const loadMcpUsage = () => {
@@ -172,7 +176,7 @@ const openToolDrawer = (server) => {
 };
 
 onMounted(() => {
-  loadMcpServers();
+  refreshNow();
   setTimeout(() => loadMcpUsage(), 50);
 });
 </script>
@@ -186,7 +190,7 @@ onMounted(() => {
           <template #icon><AddIcon /></template> {{ t('claude.mcpView.add') }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="mcpLoading" @click="handleRefresh">
+          <Button size="small" variant="outline" :loading="mcpLoading || autoRefreshing" @click="handleRefresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

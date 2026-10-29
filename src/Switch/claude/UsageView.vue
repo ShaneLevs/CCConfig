@@ -18,6 +18,7 @@ const quickFetcher = () => window.services.readPersistedUsage();
 
 <template>
   <UsagePage
+    page-app="claude"
     :tip="t('claude.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

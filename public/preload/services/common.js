@@ -90,6 +90,22 @@ const readCommonProviders = () => {
   };
 };
 
+// 托盘弹窗的网关配置只需要供应商名与模型清单：单独出一份脱敏结构，
+// 不让解密后的 apiKey 跟着 readCommonProviders 走一遍本地 HTTP。
+const getGatewayRouteOptions = () => {
+  const { providers } = readCommonProviders();
+  return providers
+    .filter((p) => (p.models || []).length > 0)
+    .map((p) => ({
+      name: p.name,
+      models: (p.models || []).map((m) => ({
+        id: m.id,
+        name: m.name || m.id,
+        contextWindow: Number(m.contextWindow) || 0,
+      })),
+    }));
+};
+
 const writeCommonProviders = (data) => {
   const providers = (
     data && Array.isArray(data.providers) ? data.providers : []
@@ -544,6 +560,231 @@ const DISABLED_DIR_NAME = ".disabled";
 const getDisabledSkillsDir = () =>
   path.join(COMMON_SKILLS_DIR(), DISABLED_DIR_NAME);
 
+// ==================== Skill 场景（按用途绑定一组 Skill） ====================
+// 场景是「当前只启用这些 Skill」的白名单：切换场景时把绑定内的目录移回
+// ~/.agents/skills，把其余 Skill 移进 .disabled/（复用上面的物理启停机制）。
+// 场景与当前场景按机器隔离（ccconfig_skill_scenes_<nativeId>）：
+// 同一账号不同机器安装的 Skill 不同，绑定关系不应互相覆盖。
+// activeId 为空 = 手动模式（不限制），此时启停完全由用户逐项控制。
+const DOC_SKILL_SCENES = "ccconfig_skill_scenes";
+const RESERVED_SCENE_NAMES = new Set(["关闭", "手动", "off", "manual"]);
+
+const skillScenesDocId = () =>
+  `${DOC_SKILL_SCENES}_${window.utools.getNativeId() || ""}`;
+
+const normalizeSkillScenes = (data) => {
+  const list = data && Array.isArray(data.scenes) ? data.scenes : [];
+  const scenes = list
+    .filter((s) => s && typeof s === "object" && s.id && s.name)
+    .map((s) => ({
+      id: String(s.id),
+      name: String(s.name),
+      skillDirs: [
+        ...new Set(
+          (Array.isArray(s.skillDirs) ? s.skillDirs : []).filter(
+            (n) => typeof n === "string" && n,
+          ),
+        ),
+      ],
+      updatedAt: Number(s.updatedAt) || 0,
+    }));
+  let activeId = data && typeof data.activeId === "string" ? data.activeId : "";
+  if (activeId && !scenes.some((s) => s.id === activeId)) activeId = "";
+  return { scenes, activeId };
+};
+
+const getSkillScenes = () =>
+  normalizeSkillScenes(readDoc(skillScenesDocId(), null));
+
+const writeSkillScenes = (scenes, activeId) =>
+  writeDoc(skillScenesDocId(), { scenes, activeId: activeId || "" });
+
+// 场景增删改后重注册 uTools 指令（一条功能指令承载全部场景名，payload 即命中的文案）。
+// 惰性 require 避免 common ↔ commands 的顶层循环依赖。
+const syncSkillSceneCommands = () => {
+  try {
+    require("./commands").syncSkillSceneFeature();
+  } catch (e) {
+    console.error("[skill-scene] 同步指令失败", e);
+  }
+};
+
+const newSkillSceneId = () =>
+  `scene_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeSkillSceneName = (name, scenes, selfId) => {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) throw new Error(t("service.skillScene.nameRequired"));
+  if (/[:：\r\n]/.test(trimmed) || RESERVED_SCENE_NAMES.has(trimmed.toLowerCase()))
+    throw new Error(t("service.skillScene.nameInvalid"));
+  if (
+    scenes.some(
+      (s) => s.id !== selfId && s.name.toLowerCase() === trimmed.toLowerCase(),
+    )
+  )
+    throw new Error(t("service.skillScene.nameDuplicate", { name: trimmed }));
+  return trimmed;
+};
+
+const readSkillDirNames = () => {
+  const root = COMMON_SKILLS_DIR();
+  const disabledDir = getDisabledSkillsDir();
+  const collect = (dir) => {
+    const out = new Set();
+    if (!fs.existsSync(dir)) return out;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if (!fs.existsSync(path.join(dir, entry.name, "SKILL.md"))) continue;
+      out.add(entry.name);
+    }
+    return out;
+  };
+  return {
+    enabled: collect(root),
+    disabled: collect(disabledDir),
+  };
+};
+
+// 让目录状态与场景绑定一致：绑定的启用，未绑定的禁用。
+// 不存在的绑定项记入 missing（例如场景先建好、Skill 后安装），下次切换/安装后自动补上。
+const applySkillSceneDirs = (scene) => {
+  const root = COMMON_SKILLS_DIR();
+  const disabledDir = getDisabledSkillsDir();
+  const desired = new Set(scene.skillDirs);
+  const { enabled: enabledNames, disabled: disabledNames } = readSkillDirNames();
+  const enabled = [];
+  const disabled = [];
+  const missing = [];
+  const failed = [];
+
+  const move = (from, to) => fs.renameSync(from, to);
+
+  for (const name of enabledNames) {
+    if (desired.has(name)) {
+      enabled.push(name);
+      continue;
+    }
+    try {
+      if (!fs.existsSync(disabledDir))
+        fs.mkdirSync(disabledDir, { recursive: true });
+      move(path.join(root, name), path.join(disabledDir, name));
+      disabled.push(name);
+    } catch (e) {
+      failed.push({ name, action: "disable", error: e.message });
+    }
+  }
+
+  for (const name of scene.skillDirs) {
+    if (enabledNames.has(name)) {
+      if (!enabled.includes(name)) enabled.push(name);
+      continue;
+    }
+    if (!disabledNames.has(name)) {
+      missing.push(name);
+      continue;
+    }
+    try {
+      move(path.join(disabledDir, name), path.join(root, name));
+      enabled.push(name);
+    } catch (e) {
+      failed.push({ name, action: "enable", error: e.message });
+    }
+  }
+
+  return { enabled, disabled, missing, failed };
+};
+
+const enforceActiveSkillScene = () => {
+  const doc = getSkillScenes();
+  if (!doc.activeId) return null;
+  const scene = doc.scenes.find((s) => s.id === doc.activeId);
+  if (!scene) {
+    writeSkillScenes(doc.scenes, "");
+    return null;
+  }
+  return applySkillSceneDirs(scene);
+};
+
+// 手动勾选时同步当前场景的绑定，避免「刚启用的 Skill 下次切场景又被关掉」
+const updateActiveSceneBinding = (skillName, enabled) => {
+  const doc = getSkillScenes();
+  if (!doc.activeId) return;
+  const scene = doc.scenes.find((s) => s.id === doc.activeId);
+  if (!scene) return;
+  const has = scene.skillDirs.includes(skillName);
+  if (enabled && !has) scene.skillDirs.push(skillName);
+  if (!enabled && has)
+    scene.skillDirs = scene.skillDirs.filter((n) => n !== skillName);
+  scene.updatedAt = Date.now();
+  writeSkillScenes(doc.scenes, doc.activeId);
+};
+
+const removeSkillFromScenes = (skillName) => {
+  const doc = getSkillScenes();
+  let dirty = false;
+  for (const scene of doc.scenes) {
+    if (!scene.skillDirs.includes(skillName)) continue;
+    scene.skillDirs = scene.skillDirs.filter((n) => n !== skillName);
+    scene.updatedAt = Date.now();
+    dirty = true;
+  }
+  if (dirty) writeSkillScenes(doc.scenes, doc.activeId);
+};
+
+// 新建或更新场景；id 为空表示新建。更新的是当前场景时立即重新生效。
+const saveSkillScene = (scene) => {
+  const doc = getSkillScenes();
+  const id = scene && scene.id ? String(scene.id) : newSkillSceneId();
+  const existing = doc.scenes.find((s) => s.id === id);
+  const name = normalizeSkillSceneName(scene && scene.name, doc.scenes, id);
+  const entry = {
+    id,
+    name,
+    skillDirs: [
+      ...new Set(
+        (scene && Array.isArray(scene.skillDirs) ? scene.skillDirs : []).filter(
+          (n) => typeof n === "string" && n,
+        ),
+      ),
+    ],
+    updatedAt: Date.now(),
+  };
+  const scenes = existing
+    ? doc.scenes.map((s) => (s.id === id ? entry : s))
+    : [...doc.scenes, entry];
+  writeSkillScenes(scenes, doc.activeId);
+  const applied = doc.activeId === id ? applySkillSceneDirs(entry) : null;
+  syncSkillSceneCommands();
+  return { scene: entry, activeId: doc.activeId, applied };
+};
+
+const deleteSkillScene = (id) => {
+  const doc = getSkillScenes();
+  const scenes = doc.scenes.filter((s) => s.id !== id);
+  if (scenes.length === doc.scenes.length)
+    throw new Error(t("service.skillScene.notFound"));
+  // 删除当前场景只回到手动模式，不恢复/禁用任何 Skill
+  writeSkillScenes(scenes, doc.activeId === id ? "" : doc.activeId);
+  syncSkillSceneCommands();
+  return { success: true, activeId: doc.activeId === id ? "" : doc.activeId };
+};
+
+// 切换场景：id 为空 = 手动模式（只清 activeId，不动目录）
+const switchSkillScene = (id) => {
+  const doc = getSkillScenes();
+  if (!id) {
+    writeSkillScenes(doc.scenes, "");
+    syncSkillSceneCommands();
+    return { success: true, activeId: "", applied: null };
+  }
+  const scene = doc.scenes.find((s) => s.id === id);
+  if (!scene) throw new Error(t("service.skillScene.notFound"));
+  writeSkillScenes(doc.scenes, id);
+  const applied = applySkillSceneDirs(scene);
+  syncSkillSceneCommands();
+  return { success: true, activeId: id, applied };
+};
+
 // 设置通用 Skill 启用/禁用（物理移动目录到 .disabled / 移回）
 const setCommonSkillEnabled = (skillName, enabled) => {
   if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
@@ -559,6 +800,7 @@ const setCommonSkillEnabled = (skillName, enabled) => {
   try {
     if (!enabled) fs.mkdirSync(disabledDir, { recursive: true });
     fs.renameSync(sourceDir, targetDir);
+    updateActiveSceneBinding(skillName, enabled);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -576,6 +818,7 @@ const deleteCommonSkill = (skillName) => {
   if (!dir) return { success: false, error: t("service.skill.dirMissing") };
   try {
     fs.rmSync(dir, { recursive: true, force: true });
+    removeSkillFromScenes(skillName);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -713,6 +956,7 @@ const getCommonSkillsPath = () => {
 module.exports = {
   COMMON_SKILLS_DIR,
   readCommonProviders,
+  getGatewayRouteOptions,
   writeCommonProviders,
   getCommonProviderList,
   addCommonProvider,
@@ -738,4 +982,9 @@ module.exports = {
   getCommonSkillsPath,
   setCommonSkillEnabled,
   deleteCommonSkill,
+  getSkillScenes,
+  saveSkillScene,
+  deleteSkillScene,
+  switchSkillScene,
+  enforceActiveSkillScene,
 };

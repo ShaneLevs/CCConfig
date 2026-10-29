@@ -17,6 +17,7 @@ import {
 import {
   RefreshIcon, AddIcon, DeleteIcon, EditIcon, FolderOpen1Icon, ChevronRightIcon,
 } from "tdesign-icons-vue-next";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/TasteView.css";
 
 const { t } = useI18n();
@@ -158,6 +159,9 @@ const refresh = () => {
     loading.value = false;
   }
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing, refreshNow } = usePageRefresh("commandcode", "taste", refresh);
 
 const onScopeChange = () => {
   activeCategory.value = "";
@@ -315,7 +319,7 @@ const duplicates = computed(() => summary.value?.duplicates || []);
 
 onMounted(() => {
   loadProjects();
-  refresh();
+  refreshNow();
 });
 </script>
 
@@ -361,7 +365,7 @@ onMounted(() => {
           <template #icon><AddIcon /></template> {{ t("commandcode.taste.addCategory") }}
         </Button>
         <Tooltip :content="t('commandcode.taste.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="refresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refreshNow">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

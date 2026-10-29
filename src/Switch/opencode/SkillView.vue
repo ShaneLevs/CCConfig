@@ -6,6 +6,7 @@ import { Empty, Button, Tag, Tooltip, Dialog, Popconfirm, Space, MessagePlugin }
 import { RefreshIcon, FolderOpen1Icon, DownloadIcon, DeleteIcon } from "tdesign-icons-vue-next";
 import SkillInstallDialog from "../../components/SkillInstallDialog.vue";
 import SkillCard from "../../components/SkillCard.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/SkillView.css";
 
 const { t } = useI18n();
@@ -72,6 +73,9 @@ const loadSkills = () => {
   setTimeout(() => { loading.value = false; }, 50);
 };
 
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("opencode", "skill", loadSkills);
+
 // 通用安装弹窗（SkillHub / 魔搭社区）
 const installDialogRef = ref(null);
 const SKILL_INSTALL_CONFIG = {
@@ -134,7 +138,7 @@ onMounted(loadSkills);
 
         <Tooltip :content="t('common.refresh')" placement="top">
 
-          <Button size="small" variant="outline" :loading="loading" @click="loadSkills">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="loadSkills">
           <template #icon><RefreshIcon /></template>
         </Button>
 

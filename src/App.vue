@@ -78,6 +78,6 @@ onMounted(() => {
       :transparent="false"
       :mouse-interaction="false"
     />
-    <Switch v-if="['claudeConfig', 'opencodeConfig', 'piConfig', 'ompConfig', 'reasonixConfig', 'codexConfig', 'kimiConfig', 'minimaxConfig', 'qoderConfig', 'zcodeConfig', 'hermesConfig', 'dshConfig', 'grokConfig', 'clineConfig', 'commandcodeConfig', 'commonConfig', 'installClaudeSkill', 'installOpencodeSkill', 'installCommonSkill', 'installPiExtension', 'installCommandCodeSkill'].includes(route)" :route="route" :payload="payload" />
+    <Switch v-if="['claudeConfig', 'opencodeConfig', 'piConfig', 'ompConfig', 'reasonixConfig', 'codexConfig', 'kimiConfig', 'minimaxConfig', 'qoderConfig', 'zcodeConfig', 'hermesConfig', 'dshConfig', 'grokConfig', 'clineConfig', 'commandcodeConfig', 'commonConfig', 'installClaudeSkill', 'installOpencodeSkill', 'installCommonSkill', 'installPiExtension', 'installCommandCodeSkill', 'switchSkillScene'].includes(route)" :route="route" :payload="payload" />
   </ConfigProvider>
 </template>

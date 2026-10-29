@@ -29,6 +29,7 @@ const i18n = require("./services/i18n");
 const autoroute = require("./services/autoroute");
 const subscriptions = require("./services/subscriptions");
 const dbMigrate = require("./services/db-migrate");
+const agentInfo = require("./services/agent-info");
 
 const {
   readClaudeSettings,
@@ -226,6 +227,10 @@ window.services = {
       collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
     try {
+      const s = minimax.readMinimaxUsage()
+      collected.minimax = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] MiniMax 采集失败:', e); collected.minimax = false }
+    try {
       const s = dshUsage.readDshUsage()
       collected.dsh = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] DSH 采集失败:', e); collected.dsh = false }
@@ -264,6 +269,7 @@ window.services = {
       tryCollect('claude', () => usageAsync.readClaudeUsageAsync(true)),
       tryCollect('opencode', () => usageAsync.readOpencodeUsageAsync()),
       tryCollect('pi', () => usageAsync.readPiUsageAsync()),
+      tryCollect('minimax', () => usageAsync.readMinimaxUsageAsync()),
       tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
       tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
       tryCollect('grok', () => usageAsync.readGrokUsageAsync()),
@@ -273,6 +279,11 @@ window.services = {
     return collected
   },
   readCommonUsage: usage.readAllAgentUsage,
+  // 桌面版托盘弹窗：最近 N 天按模型 / Agent 拆好的柱状图数据
+  readCommonUsageForTray: usage.readCommonUsageForTray,
+  // 各 agent 统计页的快速路径：纯读落库历史重建统计（不解析源文件），无历史返回 null
+  // （pi / opencode 统计页此前直接调用本方法但未在此暴露，快速路径一直静默失败）
+  readAgentUsageFromHistory: usageAsync.readAgentUsageFromHistory,
   openPiDir: pi.openPiDir,
   openPiExtDir: pi.openPiExtDir,
   resolvePiPath: pi.resolvePiPath,
@@ -318,6 +329,8 @@ window.services = {
   // ==================== 通用配置（主数据库） ====================
 
   readCommonProviders: common.readCommonProviders,
+  // 托盘弹窗的网关模型选择：只给供应商名与模型清单（不含 apiKey）
+  getGatewayRouteOptions: common.getGatewayRouteOptions,
   writeCommonProviders: common.writeCommonProviders,
   getCommonProviderList: common.getCommonProviderList,
   addCommonProvider: common.addCommonProvider,
@@ -345,6 +358,11 @@ window.services = {
   getCommonSkillsPath: common.getCommonSkillsPath,
   setCommonSkillEnabled: common.setCommonSkillEnabled,
   deleteCommonSkill: common.deleteCommonSkill,
+  // 通用 Skill 场景：按用途绑定一组 Skill，切换后只启用绑定的那些
+  getSkillScenes: common.getSkillScenes,
+  saveSkillScene: common.saveSkillScene,
+  deleteSkillScene: common.deleteSkillScene,
+  switchSkillScene: common.switchSkillScene,
   // 通用库 provider + model → 各 Agent 模型配置下发
   dispatchCommonModel: dispatch.dispatchCommonModel,
   // 自动网关：本地模型代理（配置 / 启停 / 状态 / 下发）
@@ -408,6 +426,8 @@ window.services = {
   isMinimaxDefaultModel: minimax.isMinimaxDefaultModel,
   openMinimaxDir: minimax.openMinimaxDir,
   isMinimaxInstalled: minimax.isMinimaxInstalled,
+  readMinimaxUsageAsync: usageAsync.readMinimaxUsageAsync,
+  getMinimaxSessionsDir: minimax.getMinimaxSessionsDir,
   openKimiDir: kimi.openKimiDir,
   isKimiInstalled: kimi.isKimiInstalled,
 
@@ -759,6 +779,9 @@ window.services = {
     return hasData;
   },
 
+  // ==================== Agent 安装状态 / CLI 版本（设置 → Agent 显示） ====================
+  getAgentInstallInfo: agentInfo.getAgentInstallInfo,
+
   // ==================== 订阅用量（读本机浏览器登录态查第三方套餐用量） ====================
   getSubscriptionProviders: subscriptions.getProviders,
   getSubscriptions: subscriptions.getSubscriptions,
@@ -785,6 +808,8 @@ window.services = {
 const syncLifecycle = () => {
   // 必须最先跑：把旧命名（ccswitch）的文档 ID / 密文迁移完，后面所有读库才是新 ID
   try { dbMigrate.migrateLegacyData(); } catch (e) { console.error("[db-migrate] 迁移失败", e); }
+  // 生效中的 Skill 场景在每次装载/进入时重新落实，防止外部安装/手动移动目录绕过白名单
+  try { common.enforceActiveSkillScene(); } catch (e) { console.error("[skill-scene] 应用生效场景失败", e); }
   try { commands.initFromDb(); } catch (e) { console.error("[commands] 启停指令同步失败", e); }
   try { autoroute.startAutoRouteIfEnabled(); } catch (e) { console.error("[autoroute] 网关自启失败", e); }
 };

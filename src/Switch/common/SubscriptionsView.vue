@@ -11,6 +11,7 @@ import {
   FolderAddIcon, CloseIcon,
 } from "tdesign-icons-vue-next";
 import { useAppContext } from "../../composables/useAppContext";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/SubscriptionsView.css";
 
 const { t } = useI18n();
@@ -361,10 +362,9 @@ const reloadWithRefresh = (force = false) => {
   if (items.value.length) refreshAll(force);
 };
 
-// 页签变可见：只读库。托盘刚刷新过的结果立刻就能看到，也不额外打接口。
-watch(isVisible, (visible) => {
-  if (visible) reloadFromStore();
-});
+// 页签变可见：先读库，再按服务层的 5 分钟节流打一次接口（与进页面同一套动作）。
+// 切回本页时自动刷新，并让右上角刷新按钮保持加载态。
+const { autoRefreshing, refreshNow } = usePageRefresh("common", "subscription", () => reloadWithRefresh(false));
 
 // 窗口重新聚焦 / 重新可见：桌面版主窗口被托盘「打开主窗口」show 出来时 WebView 不重建，
 // watch 不会触发，只能靠这两个事件补。
@@ -378,7 +378,7 @@ onMounted(() => {
   } catch (e) {
     providers.value = [{ id: "open-design", label: "Open Design" }];
   }
-  reloadWithRefresh(false);
+  refreshNow();
   window.addEventListener("focus", onWindowWake);
   document.addEventListener("visibilitychange", onWindowWake);
 });
@@ -398,7 +398,7 @@ onUnmounted(() => {
           <template #icon><AddIcon /></template> {{ t('commonApp.subscription.add') }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="refreshingAll" @click="refreshAll(true)">
+          <Button size="small" variant="outline" :loading="refreshingAll || autoRefreshing" @click="refreshAll(true)">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

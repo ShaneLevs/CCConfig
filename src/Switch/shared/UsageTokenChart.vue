@@ -5,7 +5,7 @@
 // - 分桶随时段自适应：跨度 ≤ 30 天按天（每根柱一天），> 30 天按周（周日为起点，与热力图对齐）
 // - 分类：按区间总量降序，前 MAX_SEGMENTS 个单独着色，其余合并成「其他」
 // - 叠放顺序固定按全局排名（颜色在各柱间对得上），柱高以该柱自身合计为分母
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Empty } from "tdesign-vue-next";
 import { agentLabel, AGENT_META } from "../../composables/agentMeta";
@@ -25,8 +25,9 @@ const MAX_SEGMENTS = 6;
 const DAY_THRESHOLD_DAYS = 30;
 const MAX_X_LABELS = 10;
 
-const PALETTE = ["#8b8bf5", "#58c4f2", "#4dd0a5", "#f5c542", "#f2789f", "#f79a5b"];
-const OTHER_COLOR = "#8a8a95";
+// 低饱和现代色：暗色卡片上也够区分，不靠高亮荧光色抢注意力
+const PALETTE = ["#6366f1", "#14b8a6", "#f59e0b", "#ec4899", "#0ea5e9", "#8b5cf6"];
+const OTHER_COLOR = "#94a3b8";
 const OTHER_KEY = "__other";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -219,10 +220,12 @@ const columns = computed(() => {
   });
 });
 
-// x 轴文字抽稀：最多 MAX_X_LABELS 个，保留最后一列
+// x 轴文字抽稀：最多 MAX_X_LABELS 个，保留最后一列并让它前面的相邻刻度让位
 const xLabelStep = computed(() => Math.max(1, Math.ceil(columns.value.length / MAX_X_LABELS)));
-const showXLabel = (index) =>
-  index === columns.value.length - 1 || index % xLabelStep.value === 0;
+const showXLabel = (index) => {
+  const last = columns.value.length - 1;
+  return index === last || (index % xLabelStep.value === 0 && last - index >= xLabelStep.value);
+};
 
 const legendRows = computed(() => {
   const rows = categoryRank.value
@@ -257,24 +260,32 @@ const TIP_PADDING_Y = 8;
 const TIP_LINE_HEIGHT = 21.6;
 const TIP_HEADER_HEIGHT = 30;
 
-// 浮层高度按行数估（行数固定，误差小）：标题 + 每个分类一行
-const tipHeightOf = (col) =>
-  TIP_PADDING_Y * 2 + TIP_HEADER_HEIGHT + col.segments.length * TIP_LINE_HEIGHT;
+// 浮层高度按当前展示的行数估：标题 + 全部分类（未聚焦）或只展示聚焦的那一行
+const tipHeightOf = (col, focusKey) =>
+  TIP_PADDING_Y * 2 + TIP_HEADER_HEIGHT +
+  (focusKey ? TIP_LINE_HEIGHT : col.segments.length * TIP_LINE_HEIGHT);
 
 const plotRef = ref(null);
-const hover = ref(null); // { col, x, y }
+const hover = ref(null); // { col, x, y, focusKey }
+// 聚焦的分类：悬浮到某一段后，所有柱只保留该颜色，其余置灰
+const focusKey = computed(() => hover.value?.focusKey || "");
+const focusSegment = computed(() => {
+  if (!hover.value || !focusKey.value) return null;
+  return hover.value.col.segments.find((seg) => seg.key === focusKey.value) || null;
+});
 
-const showTip = (col, event) => {
+const showTip = (col, segKey, event) => {
   if (!col.segments.length) {
     hover.value = null;
     return;
   }
   const plotRect = plotRef.value?.getBoundingClientRect();
   if (!plotRect) return;
-  const colRect = event.currentTarget.getBoundingClientRect();
+  const columnEl = event.currentTarget.closest?.(".token-chart-col") || event.currentTarget;
+  const colRect = columnEl.getBoundingClientRect();
   const half = TIP_WIDTH / 2;
   const centerX = colRect.left - plotRect.left + colRect.width / 2;
-  const tipHeight = tipHeightOf(col);
+  const tipHeight = tipHeightOf(col, segKey);
   // 纵向夹在绘图区内：优先放指针上方，上方不够就压到指针下方，仍超出则整体上移
   const pointerY = Math.min(Math.max(event.clientY - plotRect.top, 4), plotRect.height - 4);
   const placeBelow = pointerY - tipHeight - 10 < 0;
@@ -283,6 +294,7 @@ const showTip = (col, event) => {
     : pointerY - tipHeight - 10;
   hover.value = {
     col,
+    focusKey: segKey || "",
     x: Math.min(Math.max(centerX, half + 4), plotRect.width - half - 4),
     y: top,
   };
@@ -291,6 +303,15 @@ const showTip = (col, event) => {
 const hideTip = () => {
   hover.value = null;
 };
+
+// 维度 / 数据一旦变化，悬浮层里的旧分类与柱引用就失效了：直接收起，
+// 否则切到 Agent 后仍按模型 key 置灰，会出现整张图全灰
+watch(
+  () => [props.dimension, props.days],
+  () => {
+    hover.value = null;
+  }
+);
 </script>
 
 <template>
@@ -314,14 +335,21 @@ const hideTip = () => {
             v-for="(col, index) in columns"
             :key="col.key + index"
             class="token-chart-col"
-            @mouseenter="showTip(col, $event)"
+            @mouseenter="showTip(col, '', $event)"
           >
-            <div class="token-chart-stack" :style="{ height: col.heightPct + '%' }">
+            <div
+              class="token-chart-stack"
+              :style="{ height: col.heightPct + '%' }"
+              @mouseleave="showTip(col, '', $event)"
+            >
               <div
                 v-for="seg in col.segments"
                 :key="seg.key"
                 class="token-chart-seg"
+                :data-cat="seg.key"
+                :class="{ 'is-dim': focusKey && seg.key !== focusKey }"
                 :style="{ height: seg.heightPct + '%', background: seg.color }"
+                @mouseenter="showTip(col, seg.key, $event)"
               ></div>
             </div>
           </div>
@@ -341,15 +369,24 @@ const hideTip = () => {
             <span>{{ hover.col.label }}</span>
             <span>{{ hover.col.totalText }}</span>
           </div>
-          <div
-            v-for="seg in hover.col.segments"
-            :key="seg.key"
-            class="token-chart-tip-line"
-          >
-            <span class="token-chart-tip-dot" :style="{ background: seg.color }"></span>
-            <span class="token-chart-tip-name">{{ seg.label }}</span>
-            <span class="token-chart-tip-value">{{ formatExact(seg.tokens) }}</span>
-          </div>
+          <template v-if="focusSegment">
+            <div class="token-chart-tip-line">
+              <span class="token-chart-tip-dot" :style="{ background: focusSegment.color }"></span>
+              <span class="token-chart-tip-name">{{ focusSegment.label }}</span>
+              <span class="token-chart-tip-value">{{ formatExact(focusSegment.tokens) }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div
+              v-for="seg in hover.col.segments"
+              :key="seg.key"
+              class="token-chart-tip-line"
+            >
+              <span class="token-chart-tip-dot" :style="{ background: seg.color }"></span>
+              <span class="token-chart-tip-name">{{ seg.label }}</span>
+              <span class="token-chart-tip-value">{{ formatExact(seg.tokens) }}</span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -363,7 +400,12 @@ const hideTip = () => {
     </div>
 
     <div class="token-chart-legend">
-      <div v-for="row in legendRows" :key="row.key" class="token-chart-legend-row">
+      <div
+        v-for="row in legendRows"
+        :key="row.key"
+        class="token-chart-legend-row"
+        :class="{ 'is-dim': focusKey && row.key !== focusKey }"
+      >
         <img
           v-if="legendIconOf(row.key)"
           class="token-chart-legend-icon"
@@ -442,38 +484,42 @@ const hideTip = () => {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   height: 100%;
 }
 
 .token-chart-col {
   flex: 1 1 0;
-  min-width: 3px;
-  max-width: 72px;
+  min-width: 2px;
+  max-width: 30px;
   height: 100%;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   cursor: default;
 }
 
 .token-chart-stack {
   width: 100%;
+  max-width: 18px;
   display: flex;
   flex-direction: column-reverse;
   min-height: 1px;
-  border-radius: 3px 3px 0 0;
+  border-radius: 2px 2px 0 0;
   overflow: hidden;
-  transition: opacity 0.15s;
-}
-
-.token-chart-col:hover .token-chart-stack {
-  opacity: 0.85;
 }
 
 .token-chart-seg {
   width: 100%;
   min-height: 1px;
   box-sizing: border-box;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+/* 悬浮到某个分类后，其他天 / 其他分类同步置灰，只留下同一种颜色 */
+.token-chart-seg.is-dim {
+  opacity: 0.2;
+  filter: grayscale(1);
 }
 
 /* 段间缝隙：用卡片底色分割（叠放视觉与参考图一致），不影响总高 */
@@ -484,7 +530,7 @@ const hideTip = () => {
 .token-chart-xaxis {
   display: flex;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   padding-left: 52px;
   margin-top: 6px;
 }
@@ -492,7 +538,7 @@ const hideTip = () => {
 .token-chart-xlabel {
   flex: 1 1 0;
   min-width: 0;
-  max-width: 72px;
+  max-width: 30px;
   font-size: 11px;
   text-align: center;
   color: var(--td-text-color-placeholder);
@@ -513,7 +559,10 @@ const hideTip = () => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  transition: opacity 0.15s ease;
 }
+
+.token-chart-legend-row.is-dim { opacity: 0.38; }
 
 .token-chart-legend-dot {
   width: 10px;

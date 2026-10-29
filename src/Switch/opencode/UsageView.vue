@@ -14,6 +14,7 @@ const quickFetcher = () => window.services.readAgentUsageFromHistory("opencode")
 
 <template>
   <UsagePage
+    page-app="opencode"
     :tip="t('opencode.usage.tip')"
     :fetcher="fetcher"
     :empty-description="t('opencode.usage.emptyDescription')"

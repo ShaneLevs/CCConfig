@@ -32,7 +32,8 @@ const apiSelectOptions = computed(() =>
 
 // 推理等级（thinking.effortOptions）与支持附件（modalities.input），与服务层枚举一致；
 // 与桌面版模型编辑界面同组：推理等级 + 支持的附件（图片/PDF/视频/音频）
-const effortOptions = ["minimal", "low", "medium", "high", "xhigh", "max"].map((v) => ({ label: v, value: v }));
+// 'default' 为官方首档（M3.1-Flash 官方配置以 default 打头），与服务层 EFFORT_VALUES 保持一致
+const effortOptions = ["default", "minimal", "low", "medium", "high", "xhigh", "max"].map((v) => ({ label: v, value: v }));
 const attachmentOptions = [
   { labelKey: "minimax.config.attachment.image", value: "image" },
   { labelKey: "minimax.config.attachment.pdf", value: "pdf" },

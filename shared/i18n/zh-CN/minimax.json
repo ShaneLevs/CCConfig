@@ -81,6 +81,11 @@
       "deleted": "模型 {id} 已删除",
       "deleteFailed": "删除失败: {message}",
       "defaultSet": "默认模型已设为 {id}"
+    },
+    "usage": {
+      "tip": "MiniMax Code 使用统计（从会话日志 messages.jsonl 解析）",
+      "emptyDescription": "暂无使用数据，使用 MiniMax Code 后会在此处显示",
+      "emptyHint": "未找到会话日志目录：{path}；产生会话后重新进入本页或点刷新即可统计"
     }
   }
 }

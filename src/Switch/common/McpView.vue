@@ -13,6 +13,7 @@ import {
 import McpToolDrawer from "../../components/McpToolDrawer.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpServerCard from "../../components/McpServerCard.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/McpView.css";
 
 const { t } = useI18n();
@@ -83,6 +84,9 @@ const refresh = () => {
     loading.value = false;
   }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("common", "mcp", refresh);
 
 // ---------- 本地存放位置设置（齿轮弹窗） ----------
 const targetsDialogVisible = ref(false);
@@ -217,7 +221,7 @@ const openToolDrawer = (item) => {
 };
 
 onMounted(() => {
-  loadServers();
+  refresh();
 });
 </script>
 
@@ -237,7 +241,7 @@ onMounted(() => {
           <template #icon><AddIcon /></template> {{ t('common.add') }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="refresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

@@ -11,6 +11,7 @@ import { AddIcon, RefreshIcon, ToolsIcon, EditIcon, DeleteIcon } from "tdesign-i
 import McpServerCard from "../../components/McpServerCard.vue";
 import McpServerDialog from "../../components/McpServerDialog.vue";
 import McpToolDrawer from "../../components/McpToolDrawer.vue";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/McpView.css";
 
 const { t } = useI18n();
@@ -33,6 +34,9 @@ const refresh = () => {
   loadServers();
   setTimeout(() => { loading.value = false; }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("commandcode", "mcp", refresh);
 
 const openConfigFile = () => {
   try { window.services.openCommandCodeDir(); } catch { /* ignore */ }
@@ -145,7 +149,7 @@ onMounted(refresh);
           <template #icon><AddIcon /></template> {{ t("commandcode.mcp.add") }}
         </Button>
         <Tooltip :content="t('common.refresh')" placement="top">
-          <Button size="small" variant="outline" :loading="loading" @click="refresh">
+          <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="refresh">
             <template #icon><RefreshIcon /></template>
           </Button>
         </Tooltip>

@@ -25,6 +25,7 @@ const dbPath = (() => {
 
 <template>
   <UsagePage
+    page-app="zcode"
     :tip="t('zcode.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

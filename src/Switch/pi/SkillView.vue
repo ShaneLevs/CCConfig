@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { Card, Empty, Tag, Button, Tooltip } from "tdesign-vue-next";
 import { RefreshIcon, FolderOpen1Icon } from "tdesign-icons-vue-next";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/SkillView.css";
 
 const { t } = useI18n();
@@ -20,6 +21,9 @@ const loadSkills = () => {
   }
   setTimeout(() => { loading.value = false; }, 50);
 };
+
+// 切回本页时自动刷新（页面用 v-show 保活，onMounted 不会再跑）
+const { autoRefreshing } = usePageRefresh("pi", "skill", loadSkills);
 
 const openPiSkillsDir = () => {
   try {
@@ -51,7 +55,7 @@ onMounted(loadSkills);
 
       <Tooltip :content="t('common.refresh')" placement="top">
 
-        <Button size="small" variant="outline" :loading="loading" @click="loadSkills">
+        <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="loadSkills">
         <template #icon><RefreshIcon /></template>
       </Button>
 

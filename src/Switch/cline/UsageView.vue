@@ -26,6 +26,7 @@ const sessionsDir = (() => {
 
 <template>
   <UsagePage
+    page-app="cline"
     :tip="t('cline.usage.tip')"
     :fetcher="fetcher"
     :quick-fetcher="quickFetcher"

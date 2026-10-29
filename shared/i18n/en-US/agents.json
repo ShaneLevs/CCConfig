@@ -4,7 +4,10 @@
     "visibility": {
       "title": "Agent visibility",
       "desc": "Choose which agents appear in the switcher. Drag to reorder. Hidden agents are removed from the side rail, dropdown, and usage groups, and their uTools commands are unregistered.",
-      "current": "Current"
+      "current": "Current",
+      "installed": "Installed",
+      "notInstalled": "Not installed",
+      "checking": "Checking…"
     }
   }
 }
