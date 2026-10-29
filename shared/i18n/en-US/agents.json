@@ -7,7 +7,9 @@
       "current": "Current",
       "installed": "Installed",
       "notInstalled": "Not installed",
-      "checking": "Checking…"
+      "checking": "Checking…",
+      "formCli": "CLI",
+      "formDesktop": "App"
     }
   }
 }

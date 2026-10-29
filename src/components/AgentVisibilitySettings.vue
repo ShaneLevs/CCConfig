@@ -88,6 +88,24 @@ const startDrag = (event, app) => {
   window.addEventListener("pointercancel", stopDrag);
 };
 
+// 安装形态摘要：Reasonix 这类「CLI + 桌面客户端」双形态的 Agent 分别回传各自状态，
+// 这里把已安装的形态并排展示（如 CLI v1.2.3 · 客户端 v2.55.0），避免只看到其中一个的版本。
+// 单形态 Agent（forms 只有一段）返回空串，模板退回原来的「已安装 · vX」。
+const formSummary = (app) => {
+  const info = installInfo.value[app];
+  const forms = info?.forms || {};
+  const keys = Object.keys(forms);
+  if (keys.length < 2) return "";
+  const labels = {
+    cli: t("agents.visibility.formCli"),
+    desktop: t("agents.visibility.formDesktop"),
+  };
+  return keys
+    .filter((k) => forms[k]?.installed)
+    .map((k) => `${labels[k] || k}${forms[k].version ? ` v${forms[k].version}` : ""}`)
+    .join(" · ");
+};
+
 onBeforeUnmount(stopDrag);
 </script>
 
@@ -118,7 +136,10 @@ onBeforeUnmount(stopDrag);
           :class="installInfo[app].installed ? 'is-installed' : 'is-missing'"
         >
           <template v-if="installInfo[app].installed">
-            {{ t('agents.visibility.installed') }}<template v-if="installInfo[app].version"> · v{{ installInfo[app].version }}</template>
+            <template v-if="formSummary(app)">{{ formSummary(app) }}</template>
+            <template v-else>
+              {{ t('agents.visibility.installed') }}<template v-if="installInfo[app].version"> · v{{ installInfo[app].version }}</template>
+            </template>
           </template>
           <template v-else>{{ t('agents.visibility.notInstalled') }}</template>
         </span>

@@ -7,7 +7,9 @@
       "current": "当前",
       "installed": "已安装",
       "notInstalled": "未安装",
-      "checking": "检测中…"
+      "checking": "检测中…",
+      "formCli": "CLI",
+      "formDesktop": "客户端"
     }
   }
 }

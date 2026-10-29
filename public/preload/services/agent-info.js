@@ -3,10 +3,12 @@
 // 判定口径（唯一来源：可执行程序）：
 //   installed = CLI 可执行文件存在，或该 Agent 的桌面版应用已安装
 //   version   = CLI `--version` 输出里第一个语义化版本；只有桌面版时读应用自身版本
+//   forms     = 该 Agent 同时有 CLI 与桌面版两种形态时，分别回传各自的 installed / version，
+//               供设置页把「CLI vX · 客户端 vY」一起显示（任一形态缺失就只显示存在的那个）
 //
 // 不再用配置目录判断：配置/数据目录在卸载后仍然存在，会把已卸载的 Agent 误判为已安装。
-// 桌面版白名单只有 Qoder / ZCode / Kimi Code / MiniMax Code / DSH（应用名 DeepSeek Harness）：
-// 这几个 Agent 的桌面版本身就是一种安装形态，CLI 不在 PATH 时仍应算已安装。
+// 带桌面版的 Agent：Kimi Code / MiniMax Code / Qoder / ZCode / DSH（应用名 DeepSeek Harness）/
+// Reasonix（应用名 Reasonix Studio，与 CLI 是两条独立的安装路径，都要探测）。
 //
 // 全部返回 Promise：uTools 里 execFile 异步、不阻塞渲染；桌面版走 sidecar 异步任务通道，
 // 避免多个 `--version` 子进程卡住主线程。
@@ -182,7 +184,9 @@ const AGENTS = [
   { id: 'opencode', cli: ['opencode'] },
   { id: 'pi', cli: ['pi'] },
   { id: 'omp', cli: ['omp'] },
-  { id: 'reasonix', cli: ['reasonix'] },
+  // Reasonix 的两种形态是独立安装路径：CLI（npm i -g reasonix 等）与
+  // 桌面客户端 Reasonix Studio（Electron，版本读应用包），任一存在即算已安装
+  { id: 'reasonix', cli: ['reasonix'], desktop: ['Reasonix Studio', 'ReasonixStudio'] },
   { id: 'codex', cli: ['codex'] },
   // Kimi Code 的 CLI 命令固定为 kimi（npm 包名 kimi-code，但 bin 名是 kimi）
   { id: 'kimi', cli: ['kimi'], desktop: ['Kimi Code', 'KimiCode'] },
@@ -224,16 +228,30 @@ const probeCli = (cmd, env) =>
     )
   })
 
+// 探测单个 Agent。CLI 与桌面版是两条独立安装路径，两者都跑（并行，避免逐个串行等待超时），
+// 结果汇总成：
+//   forms.cli     = { installed, version }（该 Agent 无 CLI 命令时不出现）
+//   forms.desktop = { installed, version }（无桌面版白名单时不出现）
+//   installed     = 任一形态存在；version 优先取 CLI，其次桌面版（与原口径一致）
 const probeAgent = async (agent, env) => {
-  for (const cmd of agent.cli) {
-    const hit = await probeCli(cmd, env)
-    if (hit) return hit
-  }
-  if (agent.desktop) {
-    const app = await desktopApp(agent.desktop)
-    if (app) return app
-  }
-  return { installed: false, version: '' }
+  const [cli, desktop] = await Promise.all([
+    (async () => {
+      for (const cmd of agent.cli || []) {
+        const hit = await probeCli(cmd, env)
+        if (hit) return hit
+      }
+      return null
+    })(),
+    agent.desktop ? desktopApp(agent.desktop) : Promise.resolve(null),
+  ])
+
+  const forms = {}
+  if ((agent.cli || []).length) forms.cli = cli || { installed: false, version: '' }
+  if (agent.desktop) forms.desktop = desktop || { installed: false, version: '' }
+
+  const hit = cli || desktop
+  if (!hit) return { installed: false, version: '', forms }
+  return { installed: true, version: hit.version || '', forms }
 }
 
 let cache = null
@@ -265,4 +283,4 @@ const getAgentInstallInfo = ({ force = false } = {}) => {
   return pending
 }
 
-module.exports = { getAgentInstallInfo }
+module.exports = { getAgentInstallInfo, AGENTS, probeAgent, probeCli }
