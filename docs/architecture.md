@@ -93,6 +93,10 @@ Claude:
       Cline: input 含 image → images、reasoning → reasoning（streaming/tools 恒开）
       Command Code: options / baseURL / api / reasoningEfforts / cost 写入模型条目
   汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode / grok / cline / commandcode / minimax / kimi / reasonix / omp；days 按日期存 tokens/input/output/models，全零跳过防误清）
+    **日期键全仓库唯一实现 = usage.localDayKey（本地日期）**：热力图按本地日期铺格子，
+      reader 里不得再写 ts.split('T')[0] / toISOString().split('T')[0]（那是 UTC 日期），
+      否则东八区 00:00–08:00 的用量被记到「昨天」、热力图「今日」恒为 0。
+      365 天空骨架同样必须用 usage.emptyContributions()（也为本地日期），两者口径不一致会互相覆盖。
     通用统计页纯读这些 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；悬浮某一天的某个分类时其余分类与其余天同步置灰，tooltip 只显示该分类当天用量；价格 / 速度 / 请求数等未落库口径不展示
@@ -117,7 +121,7 @@ Claude:
       （三个 FrameWriter 都只从 start 事件取 model，所以只改那一处）。关掉即恢复字节级透传——客户端按响应模型名
       推断上下文窗口 / 定价时（映射名不在其内置表里会退化成默认值）可用它自救。网关自己的请求日志不受影响：仍记真实模型 ID + alias
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
-    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页默认累积，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
+    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
       同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
       跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
@@ -167,6 +171,12 @@ Pi Agent:
   ~/.pi/agent/settings.json + models.json + extensions  ←→  本地数据库
   ~/.pi/agent/sessions/**/*.jsonl  →  解析 & 聚合  →  使用统计
   特殊 schema：cost 必须含 {input, output, cacheRead, cacheWrite} 四项；contextWindow 为 0 则省略
+  使用统计的会话目录是**递归**扫描的：项目目录下除 <会话>.jsonl 还能有子会话
+    （pi-subagents 写 sessions/<项目>/<父会话名>/<runId>/run-N/*.jsonl，fork 另有 forks/<runId>/）
+    只扫一层会漏掉所有「派 agent」的用量；递归深度上限 MAX_SESSION_DEPTH，目录判定走 fs-utils.isDirEntry
+    fork 子会话会复制父会话历史 → 按 (sessionId, timestamp, 用量) 去重，否则派一次 agent 父会话被重复计一遍
+  **日期一律本地日期（usage.localDayKey）**：会话 timestamp 是 UTC ISO 串，直接 split('T')[0] 得到 UTC 日期，
+    东八区 00:00–08:00 会把当天（含当次派出的子 agent）用量记到「昨天」，热力图「今日」恒为 0
 
 omp:
   <agentDir>/config.yml modelRoles  →  js-yaml 直接读写（load → 改 modelRoles → dump 写回）

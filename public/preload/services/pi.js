@@ -7,6 +7,7 @@ const http = require("node:http");
 const https = require("node:https");
 const { execSync } = require("node:child_process");
 const usage = require("./usage");
+const { isDirEntry } = require("./fs-utils");
 const { t } = require("./i18n");
 const {
   PI_DIR,
@@ -393,6 +394,31 @@ const decodePiSessionPath = (encodedDir) => {
   }
 };
 
+// 递归收集项目目录下的会话 JSONL。pi-subagents 把子会话（派 agent）写在更深层：
+//   sessions/<项目>/<父会话名>/<runId>/run-N/*.jsonl（并行 / 链式还有 parallel-N）
+//   sessions/<项目>/<父会话名>/forks/<runId>/*.jsonl（fork 上下文）
+// 以前只扫一层 *.jsonl，子会话用量永远漏计 —— 这也是「派 agent 的统计对不上」的根因之一。
+// 跟随软链（isDirEntry），但限制递归深度，避免异常目录树把界面拖死。
+const MAX_SESSION_DEPTH = 6;
+const collectSessionJsonl = (dir, depth = 0, out = []) => {
+  if (depth > MAX_SESSION_DEPTH) return out;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (isDirEntry(dir, entry)) {
+      collectSessionJsonl(full, depth + 1, out);
+    } else if (entry.name.endsWith(".jsonl")) {
+      out.push(full);
+    }
+  }
+  return out;
+};
+
 const readPiUsage = () => {
   const sessionsDir = PI_SESSIONS_DIR();
   if (!fs.existsSync(sessionsDir)) return emptyResult();
@@ -404,14 +430,17 @@ const readPiUsage = () => {
 
   const messageRecords = [];
   const sessionMap = new Map();
+  // fork 出来的子会话会把父会话历史作为前缀复制一份：同一 (sessionId, timestamp) 只记一次，
+  // 否则派一次 agent 会把父会话的历史用量再多算一遍。
+  const seenMessages = new Set();
 
   for (const encodedDir of sessionDirs) {
     const dirPath = path.join(sessionsDir, encodedDir);
     const projectPath = decodePiSessionPath(encodedDir);
-    const files = fs.readdirSync(dirPath).filter((f) => f.endsWith(".jsonl"));
+    const files = collectSessionJsonl(dirPath);
     for (const file of files) {
       try {
-        const content = fs.readFileSync(path.join(dirPath, file), {
+        const content = fs.readFileSync(file, {
           encoding: "utf-8",
         });
         const lines = content.split("\n").filter((l) => l.trim());
@@ -438,6 +467,10 @@ const readPiUsage = () => {
               const u = d.message.usage;
               const model = d.message.model || d.model || "unknown";
               const ts = d.timestamp || "";
+              // fork 子会话会复制父会话历史：同一 (会话, 时间戳, 用量) 只记一次
+              const dedupeKey = `${sessionId}\u0000${ts}\u0000${u.totalTokens || u.input || 0}\u0000${u.output || 0}`;
+              if (seenMessages.has(dedupeKey)) continue;
+              seenMessages.add(dedupeKey);
               const input = u.input || 0;
               const output = u.output || 0;
               const cacheRead = u.cacheRead || 0;
@@ -451,7 +484,7 @@ const readPiUsage = () => {
                 project: path.basename(projectPath),
                 projectPath,
                 timestamp: ts,
-                date: ts.split("T")[0],
+                date: usage.localDayKey(ts),
                 inputTokens: input,
                 outputTokens: output,
                 cacheReadTokens: cacheRead,
@@ -489,19 +522,6 @@ const readPiUsage = () => {
 };
 
 const emptyResult = () => {
-  const now = new Date();
-  const contributions = [];
-  for (let i = 364; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    contributions.push({
-      date: d.toISOString().split("T")[0],
-      tokens: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      models: {},
-    });
-  }
   return {
     summary: {
       totalTokens: 0,
@@ -514,7 +534,7 @@ const emptyResult = () => {
       sessionCount: 0,
     },
     modelStats: [],
-    contributions,
+    contributions: usage.emptyContributions(),
     avgTokensPerSession: 0,
     recentSessions: [],
   };

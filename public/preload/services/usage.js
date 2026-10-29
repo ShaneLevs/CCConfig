@@ -8,11 +8,30 @@ const { getNativeId } = require('./config')
 // 以前这里用 toISOString 生成 365 天的骨架：东八区 00:00–08:00 之间本地已是新的一天，
 // UTC 还在前一天，本地日期那条数据就永远落不进窗口，当天的用量被静默丢弃。
 // 现在骨架按本地日期生成，并把窗口外的已有日期一并追加（排序后返回），任何口径的数据都不丢。
-const localDayKey = (date) => {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+//
+// localDayKey 是全仓库统一的「日期键」唯一实现：接受 Date / 毫秒时间戳 / ISO 字符串，
+// 一律转成本地日期。**不要在 reader 里再写 `ts.split('T')[0]` 或 `toISOString().split('T')[0]`** ——
+// 那两条取的是 UTC 日期，东八区 00:00–08:00 会把当天的用量记到「昨天」，热力图「今日」恒为 0。
+const localDayKey = (value) => {
+  if (!value) return ''
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// 365 天空骨架（本地日期）：各 reader 的空结果兜底共用，避免再各写一份 toISOString 版本
+const emptyContributions = (totalDays = 365) => {
+  const now = new Date()
+  const out = []
+  for (let i = totalDays - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    out.push({ date: localDayKey(d), tokens: 0, inputTokens: 0, outputTokens: 0, models: {} })
+  }
+  return out
 }
 
 const fillEmptyContributions = (contributions) => {
@@ -299,4 +318,4 @@ const readCommonUsageForTray = (days = 60) => {
   })
 }
 
-module.exports = { fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAgentUsageFromHistory, readAllAgentUsage, readCommonUsageForTray }
+module.exports = { localDayKey, emptyContributions, fillEmptyContributions, calculateStats, saveAgentUsage, readAgentUsage, readAgentUsageFromHistory, readAllAgentUsage, readCommonUsageForTray }

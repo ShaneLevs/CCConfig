@@ -218,7 +218,7 @@ const collectRecords = () => {
         const cacheWrite = toNumber(u.cacheWriteTokens)
         const total = toNumber(u.totalTokens) || input + output + cacheRead + cacheWrite
         const timeMs = toNumber(event.time)
-        const date = new Date(timeMs || Date.now()).toISOString().split('T')[0]
+        const date = usage.localDayKey(timeMs || Date.now())
 
         messageRecords.push({
           sessionId,
@@ -249,23 +249,10 @@ const collectRecords = () => {
 }
 
 const emptyResult = () => {
-  const contributions = []
-  const now = new Date()
-  for (let i = 364; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    contributions.push({
-      date: d.toISOString().split('T')[0],
-      tokens: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      models: {},
-    })
-  }
   return {
     summary: { totalTokens: 0, inputTokens: 0, outputTokens: 0, messageCount: 0, sessionCount: 0 },
     modelStats: [],
-    contributions,
+    contributions: usage.emptyContributions(),
     avgTokensPerSession: 0,
     sessionCount: 0,
     messageCount: 0,

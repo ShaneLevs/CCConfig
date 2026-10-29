@@ -66,12 +66,10 @@ const loadAll = () => {
     autoRouteEnabled.value = !!config.value.enabled;
     loadProviders();
     refreshStatus();
-    // 首次打开：有累积数据就看累积；只有本次有数据（历史刚上线/无落库）就先看本次
+    // 首次进入默认看今日；用户手动切过口径后，后续刷新保留其选择
     if (!statsScopeTouched.value) {
       statsScopeTouched.value = true;
-      const total = (status.value.history && status.value.history.total && status.value.history.total.requests) || 0;
-      const session = (status.value.stats && status.value.stats.requests) || 0;
-      statsScope.value = total > 0 || !session ? "total" : "session";
+      statsScope.value = "today";
     }
     selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
     portDraft.value = config.value.port;
@@ -436,7 +434,7 @@ const formatNumber = (n) => {
 
 // 网关统计口径：本次来自 preload 内存（getAutoRouteStatus.stats），
 // 今日 / 本月 / 累积来自按天落库的 history（随轮询刷新，间隔 1s）
-const statsScope = ref("total");
+const statsScope = ref("today");
 const statsScopeTouched = ref(false);
 const onStatsScopeChange = () => {
   statsScopeTouched.value = true;

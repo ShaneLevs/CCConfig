@@ -1507,23 +1507,10 @@ const aggregate = (contributions, messageCount, sessionCount) => {
 }
 
 const emptyResult = () => {
-  const contributions = []
-  const now = new Date()
-  for (let i = 364; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    contributions.push({
-      date: d.toISOString().split('T')[0],
-      tokens: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      models: {},
-    })
-  }
   return {
     summary: { totalTokens: 0, inputTokens: 0, outputTokens: 0, messageCount: 0, sessionCount: 0 },
     modelStats: [],
-    contributions,
+    contributions: require('./usage').emptyContributions(),
     sessionCount: 0,
     messageCount: 0,
   }

@@ -763,7 +763,7 @@ const buildZcodeStats = (rows) => {
       project: r.directory || 'unknown',
       projectPath: r.directory || 'unknown',
       timestamp: ts,
-      date: ts.split('T')[0],
+      date: usage.localDayKey(ts),
       // calculateStats 的 modelStats/inputTokens 走未缓存输入，含缓存口径在 aggregate 阶段重算（同 dsh-usage）
       inputTokens: input - (r.cache_read_input_tokens || 0) - (r.cache_creation_input_tokens || 0),
       outputTokens: output,

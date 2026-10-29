@@ -16,21 +16,7 @@ const { t } = require("./i18n");
 let _mcpUsageCache = null;
 
 function _emptyResult() {
-  const now = new Date();
-  const totalDays = 365;
-  const emptyContributions = [];
-  for (let i = totalDays - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const dateKey = d.toISOString().split("T")[0];
-    emptyContributions.push({
-      date: dateKey,
-      tokens: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      models: {},
-    });
-  }
+  const emptyContributions = usage.emptyContributions();
   return {
     summary: {
       inputTokens: 0,
@@ -111,11 +97,11 @@ function _processSingleJsonlFile(
         const data = JSON.parse(line);
         if (data.type !== "assistant" || !data.message?.usage) continue;
 
-        const usage = data.message.usage;
-        const inputTokens = usage.input_tokens || 0;
-        const outputTokens = usage.output_tokens || 0;
-        const cacheReadTokens = usage.cache_read_input_tokens || 0;
-        const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+        const messageUsage = data.message.usage;
+        const inputTokens = messageUsage.input_tokens || 0;
+        const outputTokens = messageUsage.output_tokens || 0;
+        const cacheReadTokens = messageUsage.cache_read_input_tokens || 0;
+        const cacheCreationTokens = messageUsage.cache_creation_input_tokens || 0;
         const model = data.message.model || "unknown";
         const sessionId = data.sessionId || "unknown";
 
@@ -126,7 +112,7 @@ function _processSingleJsonlFile(
             project: projectName,
             projectPath,
             timestamp: data.timestamp,
-            date: data.timestamp.split("T")[0],
+            date: usage.localDayKey(data.timestamp),
             inputTokens,
             outputTokens,
             cacheReadTokens,
@@ -250,27 +236,8 @@ function _processAllUsageData(projectsDir) {
 }
 
 function _fillEmptyContributions(contributions) {
-  const now = new Date();
-  const totalDays = 365;
-  const dateMap = new Map();
-  for (const day of contributions) dateMap.set(day.date, day);
-
-  const result = [];
-  for (let i = totalDays - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const dateKey = d.toISOString().split("T")[0];
-    result.push(
-      dateMap.get(dateKey) || {
-        date: dateKey,
-        tokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        models: {},
-      },
-    );
-  }
-  return result;
+  // 骨架必须与数据同一口径（本地日期），否则跨时区当天数据落不进窗口
+  return usage.fillEmptyContributions(contributions);
 }
 
 function readClaudeUsage(forceRefresh = false) {
@@ -436,34 +403,19 @@ function readPersistedUsage() {
       (a, b) => b.tokens - a.tokens,
     );
 
-    // 补齐 365 天
-    const now = new Date();
-    const totalDays = 365;
-    const contributions = [];
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().split("T")[0];
-      const dayData = history[dateKey];
-      contributions.push(
-        dayData
-          ? {
-              date: dateKey,
-              tokens: dayData.tokens,
-              inputTokens: dayData.inputTokens,
-              outputTokens: dayData.outputTokens,
-              models: dayData.models || {},
-            }
-          : {
-              date: dateKey,
-              tokens: 0,
-              inputTokens: 0,
-              outputTokens: 0,
-              models: {},
-            },
-      );
-    }
-
+    // 补齐 365 天（骨架按本地日期，与 messageRecords 的 date 同口径）
+    const contributions = usage.emptyContributions().map((day) => {
+      const dayData = history[day.date]
+      return dayData
+        ? {
+            date: day.date,
+            tokens: dayData.tokens,
+            inputTokens: dayData.inputTokens,
+            outputTokens: dayData.outputTokens,
+            models: dayData.models || {},
+          }
+        : day
+    })
     return {
       summary: { totalTokens, inputTokens, outputTokens },
       modelStats,

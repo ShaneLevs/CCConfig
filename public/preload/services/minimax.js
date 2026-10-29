@@ -546,7 +546,7 @@ const readMinimaxUsage = () => {
       const total = Number(u.totalTokens) || input + output + cacheRead + cacheWrite
       const iso = epochToIso(m.timestamp)
       if (!iso) continue
-      const date = iso.split('T')[0]
+      const date = usage.localDayKey(iso)
       const model = m.model || 'unknown'
 
       messageRecords.push({
@@ -596,19 +596,6 @@ const readMinimaxUsage = () => {
 
 // 无会话目录时的空统计（贡献数组补齐 365 天，页面热力图不塌）
 const emptyUsageResult = () => {
-  const now = new Date()
-  const contributions = []
-  for (let i = 364; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    contributions.push({
-      date: d.toISOString().split('T')[0],
-      tokens: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      models: {},
-    })
-  }
   return {
     summary: {
       totalTokens: 0,
@@ -622,7 +609,7 @@ const emptyUsageResult = () => {
       sessionCount: 0,
     },
     modelStats: [],
-    contributions,
+    contributions: usage.emptyContributions(),
     avgTokensPerSession: 0,
     recentSessions: [],
   }
