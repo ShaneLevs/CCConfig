@@ -10,7 +10,9 @@ const claudeUsage = require("./services/claude-usage");
 const usageAsync = require("./services/usage-async");
 const pi = require("./services/pi");
 const omp = require("./services/omp");
+const ompUsage = require("./services/omp-usage");
 const reasonix = require("./services/reasonix");
+const reasonixUsage = require("./services/reasonix-usage");
 const kimi = require("./services/kimi");
 const kimiUsage = require("./services/kimi-usage");
 const minimax = require("./services/minimax");
@@ -228,6 +230,10 @@ window.services = {
       collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
     try {
+      const s = ompUsage.readOmpUsage()
+      collected.omp = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] omp 采集失败:', e); collected.omp = false }
+    try {
       const s = kimiUsage.readKimiUsage()
       collected.kimi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Kimi 采集失败:', e); collected.kimi = false }
@@ -255,6 +261,10 @@ window.services = {
       const s = commandCode.readCommandCodeUsage()
       collected.commandcode = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Command Code 采集失败:', e); collected.commandcode = false }
+    try {
+      const s = reasonixUsage.readReasonixUsage()
+      collected.reasonix = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Reasonix 采集失败:', e); collected.reasonix = false }
     return collected
   },
   // 「通用」统计页异步版：采集在后台线程串行执行，完成后纯读 DB 合并；
@@ -274,6 +284,7 @@ window.services = {
       tryCollect('claude', () => usageAsync.readClaudeUsageAsync(true)),
       tryCollect('opencode', () => usageAsync.readOpencodeUsageAsync()),
       tryCollect('pi', () => usageAsync.readPiUsageAsync()),
+      tryCollect('omp', () => usageAsync.readOmpUsageAsync()),
       tryCollect('kimi', () => usageAsync.readKimiUsageAsync()),
       tryCollect('minimax', () => usageAsync.readMinimaxUsageAsync()),
       tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
@@ -281,6 +292,7 @@ window.services = {
       tryCollect('grok', () => usageAsync.readGrokUsageAsync()),
       tryCollect('cline', () => usageAsync.readClineUsageAsync()),
       tryCollect('commandcode', () => usageAsync.readCommandCodeUsageAsync()),
+      tryCollect('reasonix', () => usageAsync.readReasonixUsageAsync()),
     ])
     return collected
   },
@@ -296,6 +308,8 @@ window.services = {
 
   // ==================== omp ====================
 
+  getOmpDir: omp.getOmpDir,
+  getOmpSessionsDir: ompUsage.getOmpSessionsDir,
   readOmpModelRoles: omp.readOmpModelRoles,
   writeOmpModelRoles: omp.writeOmpModelRoles,
   parseOmpModelRef: omp.parseOmpModelRef,
@@ -399,6 +413,7 @@ window.services = {
   deleteReasonixProvider: reasonix.deleteReasonixProvider,
   addReasonixModel: reasonix.addReasonixModel,
   deleteReasonixModel: reasonix.deleteReasonixModel,
+  setReasonixModelOverride: reasonix.setReasonixModelOverride,
   getReasonixDefaultModel: reasonix.getReasonixDefaultModel,
   setReasonixDefaultModel: reasonix.setReasonixDefaultModel,
   readReasonixEnv: reasonix.readReasonixEnv,
@@ -408,6 +423,10 @@ window.services = {
   generateReasonixApiKeyEnv: reasonix.generateReasonixApiKeyEnv,
   openReasonixDir: reasonix.openReasonixDir,
   isReasonixInstalled: reasonix.isReasonixInstalled,
+  readReasonixUsageAsync: usageAsync.readReasonixUsageAsync,
+  readReasonixUsageFromHistory: usageAsync.readReasonixUsageFromHistory,
+  getReasonixStatsDir: reasonixUsage.getReasonixStatsDir,
+  openReasonixStatsDir: reasonixUsage.openReasonixStatsDir,
   // ==================== Kimi Code（~/.kimi-code/config.toml，模型配置 + 使用统计） ====================
   getKimiConfigPath: kimi.getKimiConfigPath,
   readKimiConfig: kimi.readKimiConfig,

@@ -175,6 +175,10 @@ const readOpencodeUsageAsync = () =>
 const readPiUsageAsync = () =>
   withFallback("pi", false, () => require("./pi").readPiUsage());
 
+// omp：会话 JSONL（含 gc 归档的 .jsonl.gz）解析走后台线程
+const readOmpUsageAsync = () =>
+  withFallback("omp", false, () => require("./omp-usage").readOmpUsage());
+
 // Kimi Code：wire.jsonl 解析（只扫 usage.record 行）走后台线程
 const readKimiUsageAsync = () =>
   withFallback("kimi", false, () => require("./kimi-usage").readKimiUsage());
@@ -203,10 +207,21 @@ const readCommandCodeUsageAsync = (force) =>
     require("./command-code").readCommandCodeUsage(force),
   );
 
+// Reasonix：stats/<日期>.jsonl 逐请求结算行解析走后台线程
+const readReasonixUsageAsync = () =>
+  withFallback("reasonix", false, () =>
+    require("./reasonix-usage").readReasonixUsage(),
+  );
+
+// 快速路径（单 agent 页）：纯读落库历史重建统计，不解析源文件
+const readReasonixUsageFromHistory = () =>
+  require("./reasonix-usage").readReasonixUsageFromHistory();
+
 module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
   readPiUsageAsync,
+  readOmpUsageAsync,
   readKimiUsageAsync,
   readMinimaxUsageAsync,
   readZcodeUsageAsync,
@@ -214,5 +229,7 @@ module.exports = {
   readGrokUsageAsync,
   readClineUsageAsync,
   readCommandCodeUsageAsync,
+  readReasonixUsageAsync,
+  readReasonixUsageFromHistory,
   readAgentUsageFromHistory,
 };

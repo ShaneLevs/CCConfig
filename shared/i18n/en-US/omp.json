@@ -90,6 +90,11 @@
         "task": "Task",
         "advisor": "Advisor"
       }
+    },
+    "usage": {
+      "tip": "omp usage statistics (parsed from session JSONL, including subagents and gc archives)",
+      "emptyDescription": "No usage data yet. It will appear here after you use omp",
+      "emptyHint": "omp session directory not found: {path}; reopen this page or refresh after a session is created"
     }
   }
 }

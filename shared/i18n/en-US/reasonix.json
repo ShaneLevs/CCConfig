@@ -85,6 +85,21 @@
       "valueLabel": "Variable value",
       "valuePlaceholder": "API Key or any value",
       "addHint": "Written to ~/.reasonix/.env for the Reasonix CLI and providers' api_key_env references"
+    },
+    "usage": {
+      "tip": "Source: per-request settlement rows in ~/.reasonix/stats/<date>.jsonl (shared by the CLI and the desktop app)",
+      "emptyDescription": "No Reasonix usage recorded yet; it will appear here once you use Reasonix",
+      "emptyHint": "No stats files under {path}. Enable metrics under [desktop] in config.toml, or run a turn with Reasonix first.",
+      "modelHint": "Per-request settlement: uncached input + cache read + output (Reasonix has no cache-write billing field)"
+    },
+    "override": {
+      "title": "Per-model overrides",
+      "editTooltip": "Edit this model's context / max-output overrides",
+      "scopeHint": "Writes providers.model_overrides.{model} in config.toml (provider {provider}). Leave blank to inherit the provider-level fallback.",
+      "blankHint": "Blank (0) = no override, inherit the provider-level value",
+      "extraKept": "Other overrides on this model are kept as-is: {keys}",
+      "saved": "Overrides saved for model {id}",
+      "saveFailed": "Save failed: {message}"
     }
   }
 }

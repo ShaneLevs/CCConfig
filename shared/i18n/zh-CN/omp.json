@@ -90,6 +90,11 @@
         "task": "任务",
         "advisor": "顾问"
       }
+    },
+    "usage": {
+      "tip": "omp 使用统计（从会话 JSONL 解析，含子 agent 与 gc 归档）",
+      "emptyDescription": "暂无使用数据，使用 omp 后会在此处显示",
+      "emptyHint": "未找到 omp 会话目录：{path}；产生会话后重新进入本页或点刷新即可统计"
     }
   }
 }

@@ -33,8 +33,8 @@
 | Claude Code | `~/.claude/settings.json`（MCP 在 `~/.claude.json`） |
 | OpenCode | `~/.config/opencode.json` / `opencode.jsonc` |
 | Pi Agent | `~/.pi/agent/settings.json` + `models.json` |
-| omp | `~/.omp/agent/models.yml` + `config.yml` |
-| Reasonix | `~/.reasonix/config.toml` |
+| omp | `~/.omp/agent/models.yml` + `config.yml`（统计读 `sessions/**` 与 `archive/sessions/**`）|
+| Reasonix | `~/.reasonix/config.toml` + `.env`（统计读 `stats/**/*.jsonl`） |
 | Codex | `~/.codex/config.toml` + `models.json` |
 | Kimi Code | `~/.kimi-code/config.toml` |
 | MiniMax Code | `~/.minimax/config.yaml` |

@@ -85,6 +85,21 @@
       "valueLabel": "变量值",
       "valuePlaceholder": "API Key 或任意值",
       "addHint": "写入 ~/.reasonix/.env，供 Reasonix CLI 与各供应商 api_key_env 引用"
+    },
+    "usage": {
+      "tip": "统计源：~/.reasonix/stats/<日期>.jsonl 的逐请求结算记录（CLI 与桌面版共用）",
+      "emptyDescription": "暂无 Reasonix 使用记录，使用后会在此处显示",
+      "emptyHint": "未找到统计文件 {path}；需在 config.toml 的 [desktop] 里开启 metrics，或先用 Reasonix 跑一轮对话",
+      "modelHint": "逐请求结算：未缓存输入 + 缓存读 + 输出（Reasonix 无缓存写入计费字段）"
+    },
+    "override": {
+      "title": "逐模型覆盖",
+      "editTooltip": "编辑该模型的上下文 / 最大输出覆盖",
+      "scopeHint": "写入 config.toml 的 providers.model_overrides.{model}（属于供应商 {provider}）。留空表示沿用供应商级的兜底值。",
+      "blankHint": "留空（0）= 不覆盖，沿用供应商级设置",
+      "extraKept": "该模型下还有其它覆盖项会原样保留：{keys}",
+      "saved": "模型 {id} 的覆盖已保存",
+      "saveFailed": "保存失败: {message}"
     }
   }
 }

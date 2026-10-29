@@ -19,6 +19,39 @@ const props = defineProps({
   contributions: { type: Array, default: () => [] },
 });
 
+// 单元格 tooltip 的位置自适应。
+// 内容高度随当天命中的 agent / 模型数变化，固定 placement="top" 时，热力图正在页面上边缘或
+// 下边缘的那几行会被顶出可视区。popper 自带的 flip 在 base placement（无 -start/-end 变体）下
+// 兜底列表只有「对向」一个方向（top ↔ bottom），永远不会尝试左右，所以这里显式给出四向兜底
+// 顺序；再用 preventOverflow 的 altAxis 在次轴上夹紧（例如翻到左右后仍贴着页面上下边界）。
+const TOOLTIP_POPPER_OPTIONS = {
+  modifiers: [
+    {
+      name: "flip",
+      options: {
+        fallbackPlacements: [
+          "bottom",
+          "right",
+          "left",
+          "bottom-start",
+          "bottom-end",
+          "top-start",
+          "top-end",
+          "right-start",
+          "right-end",
+          "left-start",
+          "left-end",
+        ],
+        padding: 12,
+      },
+    },
+    {
+      name: "preventOverflow",
+      options: { altAxis: true, padding: 12 },
+    },
+  ],
+};
+
 const CELL_SIZE = 12;
 const CELL_GAP = 3;
 const WEEK_WIDTH = CELL_SIZE + CELL_GAP;
@@ -194,6 +227,7 @@ const monthLabels = computed(() => {
               v-if="day.date"
               placement="top"
               :show-arrow="true"
+              :popper-options="TOOLTIP_POPPER_OPTIONS"
             >
               <template #content>
                 <div class="tip-content">
@@ -355,6 +389,11 @@ const monthLabels = computed(() => {
 /* Tooltip content */
 .tip-content {
   min-width: 160px;
+  /* 四向 flip 只决定「往哪边弹」，解决不了「弹出来比视口还高」：agent 很多的极端日期仍会
+     超出一屏。这里把高度上限压到视口的一部分，超出部分在弹窗内部滚动。 */
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tip-header {

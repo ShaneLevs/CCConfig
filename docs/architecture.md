@@ -92,11 +92,11 @@ Claude:
       Grok: description / temperature / topP / extraHeaders 写入模型条目
       Cline: input 含 image → images、reasoning → reasoning（streaming/tools 恒开）
       Command Code: options / baseURL / api / reasoningEfforts / cost 写入模型条目
-  汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
-    通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
+  汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode / grok / cline / commandcode / minimax / kimi / reasonix / omp；days 按日期存 tokens/input/output/models，全零跳过防误清）
+    通用统计页纯读这些 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；悬浮某一天的某个分类时其余分类与其余天同步置灰，tooltip 只显示该分类当天用量；价格 / 速度 / 请求数等未落库口径不展示
-    DSH / ZCode 反向把该文档当历史档：源数据（会话日志 / 用量库）被清理后回放历史，同一天取较大值
+    DSH / ZCode / Grok / Cline / Command Code / Kimi / Reasonix 反向把该文档当历史档：源数据（会话日志 / 用量库 / 结算文件）被清理后回放历史
   本地网关 → 本地模型服务（http://127.0.0.1:<port>，默认 17877）：
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
@@ -182,6 +182,23 @@ omp:
   YAML 解析失败必须抛错中止（serviceAgent.omp.configParseFailed / modelsParseFailed）：
     读侧静默读成 {} 再整份写回会把用户手写的 symbolPreset / theme / display 等字段连同 API Key 一起抹掉
   纯文件读写，不依赖 omp 二进制 / bun 运行时
+  使用统计：<agentDir>/sessions/**/*.jsonl（+ archive/sessions/**/*.jsonl.gz、就地 .jsonl.gz）
+    omp 把 LLM 用量写进会话事件流（与它自己的 stats.db 同源），只取三种事件：
+      {"type":"session","id","timestamp","cwd"}                              会话头
+      {"type":"message","message":{role:"assistant",api,provider,model,
+        usage:{input,output,cacheRead,cacheWrite,totalTokens,cost:{...}}}}    一次回复
+      {"type":"model_usage",api,provider,model,usage,purpose,role}            对话外的模型调用
+        （标题 / 压缩 / 判分 / 子任务探针等；omp 自己的统计库同样计入）
+    子 agent 与顾问转录嵌在会话目录里（sessions/<project>/<会话目录>/<id>.jsonl、
+      __advisor.jsonl），按「目录名 → 父会话 id」映射回父会话，否则会话数会凭空多出假条目
+    omp gc 会把老会话压缩成 .jsonl.gz 或移到 archive/sessions/<project>/*.jsonl.gz，
+      两种位置都要读（zlib.gunzipSync），源文件被清理后回放落库历史不归零
+    去重按 entry id（归档副本 / 复制来的会话头会重复）；缺 id 的旧会话条目跳过
+      （omp 自己的 parser 出于同样原因跳过——entry_id 是 stats.db 主键）
+    口径：输入含缓存 = input + cacheRead + cacheWrite，输出 = output，总量 = 输入 + 输出；
+      cacheWrite 映射到 cacheCreationTokens；日期取时间戳的本地日期
+    落库：ccconfig_agent_usage_omp_<nativeId>（与「通用」统计页同源）
+    重统计走后台线程（usage-worker.js 的 omp runner）；冒烟测试：node tests/smoke-omp-usage-test.cjs
 
 Reasonix:
   ~/.reasonix/config.toml（Windows: %APPDATA%\reasonix\config.toml；REASONIX_HOME 可重定向）→ smol-toml 读写
@@ -200,6 +217,12 @@ Reasonix:
       删除模型时一并清掉它的 model_overrides 条目（避免死配置）
   通用库下发（dispatchToReasonix）把模型上下文/最大输出写进 model_overrides.<模型>（有值才写），
     重下发不抹该模型下其它手工覆盖项
+  使用统计：~/.reasonix/stats/<YYYY-MM-DD>.jsonl 的逐请求结算行
+    { ts, model, source, prompt, completion, cache_hit, cache_miss, total, requests, … }
+    CLI 与桌面版共用同一目录（config.toml 的 [desktop] metrics 开启时写）；prompt 已含缓存
+    （prompt = cache_hit + cache_miss）；口径同其它 agent：输入含缓存 / 输出单列 / 按本地时区分日；
+    没有会话 ID，sessionCount 表达「来源 + 活跃天」而非真实会话数
+    落库 ccconfig_agent_usage_reasonix_<nativeId>（「通用」统计页与历史回档同源）
 
 Codex:
   ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）

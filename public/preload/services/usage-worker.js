@@ -61,6 +61,7 @@ const RUNNERS = {
   claude: (force) => require("./claude-usage").readClaudeUsage(force),
   opencode: () => require("./opencode").readOpencodeUsage(),
   pi: () => require("./pi").readPiUsage(),
+  omp: () => require("./omp-usage").readOmpUsage(),
   kimi: () => require("./kimi-usage").readKimiUsage(),
   minimax: () => require("./minimax").readMinimaxUsage(),
   zcode: () => require("./zcode").readZcodeUsage(),
@@ -68,6 +69,7 @@ const RUNNERS = {
   grok: (force) => require("./grok").readGrokUsage(force),
   cline: (force) => require("./cline").readClineUsage(force),
   commandcode: (force) => require("./command-code").readCommandCodeUsage(force),
+  reasonix: () => require("./reasonix-usage").readReasonixUsage(),
 };
 
 parentPort.on("message", (msg) => {

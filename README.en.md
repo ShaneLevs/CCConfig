@@ -34,7 +34,7 @@ It gives fifteen AI coding CLIs a single place to manage API providers, models, 
 | OpenCode | `~/.config/opencode.json` / `opencode.jsonc` |
 | Pi Agent | `~/.pi/agent/settings.json` + `models.json` |
 | omp | `~/.omp/agent/models.yml` + `config.yml` |
-| Reasonix | `~/.reasonix/config.toml` |
+| Reasonix | `~/.reasonix/config.toml` + `.env` (usage read from `stats/**/*.jsonl`) |
 | Codex | `~/.codex/config.toml` + `models.json` |
 | Kimi Code | `~/.kimi-code/config.toml` |
 | MiniMax Code | `~/.minimax/config.yaml` |

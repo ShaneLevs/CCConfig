@@ -41,8 +41,14 @@ export const APP_TABS = {
     { key: "plugin", labelKey: "nav.tab.plugin", titleKey: "nav.title.extensionManage", icon: AppIcon },
     { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
   ],
-  omp: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon }],
-  reasonix: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon }],
+  omp: [
+    { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon },
+    { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
+  ],
+  reasonix: [
+    { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon },
+    { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
+  ],
   codex: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
   kimi: [
     { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },

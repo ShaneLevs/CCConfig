@@ -19,7 +19,9 @@ import OpenCodePluginView from "./opencode/PluginView.vue";
 import OpenCodeSkillView from "./opencode/SkillView.vue";
 import OpenCodeUsageView from "./opencode/UsageView.vue";
 import OmpConfigView from "./omp/ConfigView.vue";
+import OmpUsageView from "./omp/UsageView.vue";
 import ReasonixConfigView from "./reasonix/ConfigView.vue";
+import ReasonixUsageView from "./reasonix/UsageView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
 import KimiUsageView from "./kimi/UsageView.vue";
@@ -372,11 +374,19 @@ onUnmounted(() => {
       <!-- omp views -->
       <template v-if="isAppReady('omp')">
         <OmpConfigView v-if="activeApp === 'omp' && activeTab === 'config'" />
+        <OmpUsageView
+          v-if="isTabVisited('omp', 'usage')"
+          v-show="activeApp === 'omp' && activeTab === 'usage'"
+        />
       </template>
 
-      <!-- Reasonix views -->
+      <!-- Reasonix views（模型配置 + 使用统计） -->
       <template v-if="isAppReady('reasonix')">
         <ReasonixConfigView v-if="activeApp === 'reasonix' && activeTab === 'config'" />
+        <ReasonixUsageView
+          v-if="isTabVisited('reasonix', 'usage')"
+          v-show="activeApp === 'reasonix' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- Codex views（仅模型配置） -->
