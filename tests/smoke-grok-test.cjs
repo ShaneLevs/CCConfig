@@ -325,7 +325,16 @@ eq(usage.summary.inputTokens, 400, '输入含缓存')
 eq(usage.modelStats.map((m) => m.name).sort(), ['acme/opus', 'grok-4.6'], '模型分布按 turn 的 modelUsage 拆分')
 eq(usage.modelStats.find((m) => m.name === 'grok-4.6').tokens, 160, 'grok-4.6 = 100 + 40 + 20')
 eq(usage.sessionCount, 1, '会话数')
-const dayYesterday = usage.contributions.find((d) => d.date === new Date(Date.now() - 864e5).toISOString().split('T')[0])
+// 日期口径是「本地日期」（grok.js 的 dayKeyOf：toISOString 是 UTC，东八区凌晨会算到前一天），
+// 期望值也必须按本地日期算，否则东八区 00:00–08:00 跑测试会拿到 UTC 的昨天。
+const localDay = (ms) => {
+  const d = new Date(ms)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const dayYesterday = usage.contributions.find((d) => d.date === localDay(Date.now() - 864e5))
 ok(!!dayYesterday && dayYesterday.tokens === 300, '按 turn 的 endedAt 落到正确日期')
 // 落库：通用统计页文档
 const saved = JSON.parse(JSON.stringify(dbDocs.get('ccconfig_agent_usage_grok_test-native')))

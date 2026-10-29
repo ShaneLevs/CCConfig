@@ -3,15 +3,38 @@
 
 const { getNativeId } = require('./config')
 
+// 日期键必须是「本地日期」：热力图按本地日期铺格子，而各 agent 的日期口径有两套——
+// Claude / Pi 取 ISO 字符串的 UTC 日期，Kimi / MiniMax / Cline / Grok / omp 取本地日期。
+// 以前这里用 toISOString 生成 365 天的骨架：东八区 00:00–08:00 之间本地已是新的一天，
+// UTC 还在前一天，本地日期那条数据就永远落不进窗口，当天的用量被静默丢弃。
+// 现在骨架按本地日期生成，并把窗口外的已有日期一并追加（排序后返回），任何口径的数据都不丢。
+const localDayKey = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 const fillEmptyContributions = (contributions) => {
   const now = new Date()
   const dateMap = new Map()
   for (const d of contributions) dateMap.set(d.date, d)
   const result = []
+  const seen = new Set()
   for (let i = 364; i >= 0; i--) {
     const d = new Date(now); d.setDate(d.getDate() - i)
-    const key = d.toISOString().split('T')[0]
+    const key = localDayKey(d)
+    seen.add(key)
     result.push(dateMap.get(key) || { date: key, tokens: 0, inputTokens: 0, outputTokens: 0, models: {} })
+  }
+  // 窗口外的已有日期（UTC 口径在跨时区边界上可能落到前一天）照样保留，不静默丢弃
+  const extra = []
+  for (const [key, value] of dateMap) {
+    if (!seen.has(key)) extra.push(value)
+  }
+  if (extra.length) {
+    extra.sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    return [...extra, ...result].sort((a, b) => String(a.date).localeCompare(String(b.date)))
   }
   return result
 }
