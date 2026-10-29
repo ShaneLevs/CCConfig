@@ -558,6 +558,13 @@ const upsertZcodeModel = (providerId, modelId, opts = {}) => {
   if (opts.video === true) merged.video = true
   if (opts.audio === true) merged.audio = true
   if (opts.pdf === true) merged.pdf = true
+  // 能力类字段只增不减：未勾选时保留 ZCode 侧手工配置
+  if (opts.jsonSchema === true) merged.jsonSchema = true
+  if (opts.webSearch === true) merged.webSearch = true
+  if (opts.midSystem === true) merged.midSystem = true
+  if (Array.isArray(opts.reasoningLevels) && opts.reasoningLevels.length) {
+    merged.reasoningLevels = [...new Set(opts.reasoningLevels.map((v) => String(v).trim()).filter(Boolean))]
+  }
   const nextConfig = buildModelRuleConfig(merged)
   if (modelRule) modelRule.config = nextConfig
   else cfg.modelConfigRules.providerModelRules.push({ providerId, modelId: id, config: nextConfig })

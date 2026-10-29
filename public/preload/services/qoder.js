@@ -412,6 +412,13 @@ const upsertQoderModel = (providerId, modelId, opts = {}) => {
   if (opts.name) merged.displayName = String(opts.name).trim()
   if (Number(opts.contextWindow) > 0) merged.contextWindow = Number(opts.contextWindow)
   if (Number(opts.maxOutputTokens) > 0) merged.maxOutputTokens = Number(opts.maxOutputTokens)
+  // 能力相关字段按显式布尔写入：下发时通用库是模型能力的来源，允许关掉旧值
+  if (opts.vision !== undefined) merged.vision = opts.vision === true
+  if (opts.thinkingEnabled !== undefined) merged.thinkingEnabled = opts.thinkingEnabled === true
+  if (opts.supportsEffort !== undefined) merged.supportsEffort = opts.supportsEffort === true
+  if (Array.isArray(opts.effortLevels)) {
+    merged.effortLevels = opts.effortLevels.filter((x) => EFFORT_VALUES.includes(x))
+  }
   const entry = buildModelJson(merged)
   if (prevEntry) provider.models[provider.models.indexOf(prevEntry)] = entry
   else provider.models.push(entry)

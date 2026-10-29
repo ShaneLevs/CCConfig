@@ -14,17 +14,22 @@ import ModelFormDialog from "../../components/ModelFormDialog.vue";
 import BatchAddModelsDialog from "./components/BatchAddModelsDialog.vue";
 import DispatchDialog from "./components/DispatchDialog.vue";
 import { formatNumber } from "../../utils/format";
+import { MODEL_API_TYPE_OPTIONS } from "../../constants";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
 
 // 通用配置：跨 agent 的供应商/模型主数据库
-const API_TYPE_OPTIONS = [
-  { label: "OpenAI Chat Completions", value: "openai-completions" },
-  { label: "OpenAI Responses", value: "openai-responses" },
-  { label: "Anthropic Messages", value: "anthropic-messages" },
-  { label: "Google Generative AI", value: "google-generative-ai" },
-];
+const API_TYPE_OPTIONS = MODEL_API_TYPE_OPTIONS;
+
+// 模型列表里的模态短标签（text 隐含在输入类型里，不重复展示）
+const MODALITY_LABEL_KEYS = {
+  image: "model.modality.image",
+  audio: "model.modality.audio",
+  video: "model.modality.video",
+  pdf: "model.modality.pdf",
+};
+const modalityLabel = (value) => (MODALITY_LABEL_KEYS[value] ? t(MODALITY_LABEL_KEYS[value]) : value);
 
 // 常用请求头名（自动完成提示）
 const HEADER_KEY_OPTIONS = [
@@ -189,15 +194,37 @@ const openEditModelDialog = (provName, m) => {
 
 // 模型弹窗确认：添加 / 更新 / 重命名（删旧 + 建新）
 const handleModelFormConfirm = async (payload) => {
+  const oldModel = payload.mode === 'edit'
+    ? (providers.value.find((p) => p.name === payload.providerName)?.models || [])
+      .find((m) => m.id === payload.originalId)
+    : null;
+  // 保留旧对象里当前弹窗未管理的扩展字段；弹窗覆盖的字段以用户输入为准。
   const model = {
+    ...(oldModel || {}),
     id: payload.id,
     name: payload.name,
     contextWindow: payload.contextWindow,
     maxTokens: payload.maxTokens,
     reasoning: payload.reasoning,
     input: payload.input,
+    output: payload.output,
+    reasoningEfforts: payload.reasoningEfforts,
+    defaultEffort: payload.defaultEffort,
+    capabilities: payload.capabilities,
     cost: payload.cost,
     compat: payload.compat,
+    maxInputTokens: payload.maxInputTokens,
+    offEffort: payload.offEffort,
+    reasoningKey: payload.reasoningKey,
+    adaptiveThinking: payload.adaptiveThinking,
+    thinking: payload.thinking,
+    description: payload.description,
+    temperature: payload.temperature,
+    topP: payload.topP,
+    extraHeaders: payload.extraHeaders,
+    options: payload.options,
+    api: payload.api,
+    baseURL: payload.baseURL,
   };
   try {
     if (payload.mode === 'add') {
@@ -402,8 +429,18 @@ onMounted(refresh);
               <div class="common-model-meta">
                 <span class="common-model-stat">{{ t('commonApp.config.contextValue', { value: formatNumber(m.contextWindow) }) }}</span>
                 <span class="common-model-stat">{{ t('commonApp.config.maxOutputValue', { value: formatNumber(m.maxTokens) }) }}</span>
-                <span v-if="m.input && m.input.includes('image')" class="common-model-stat">{{ t('commonApp.config.imageTag') }}</span>
-                <span v-if="m.cost && m.cost.input != null" class="common-model-stat">
+                <span
+                  v-for="mod in (m.input || []).filter((x) => x !== 'text')"
+                  :key="mod"
+                  class="common-model-stat"
+                >{{ modalityLabel(mod) }}</span>
+                <span v-if="m.reasoningEfforts && m.reasoningEfforts.length" class="common-model-stat">
+                  {{ t('commonApp.config.effortValue', { value: m.reasoningEfforts.join(' / ') }) }}
+                </span>
+                <span v-if="m.capabilities && m.capabilities.length" class="common-model-stat">
+                  {{ t('commonApp.config.capabilitiesValue', { value: m.capabilities.join(' / ') }) }}
+                </span>
+                <span v-if="m.cost && (m.cost.input || m.cost.output || m.cost.cacheRead || m.cost.cacheWrite)" class="common-model-stat">
                   {{ t('commonApp.config.costValue', { input: m.cost.input, output: m.cost.output }) }}
                 </span>
               </div>

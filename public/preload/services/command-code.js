@@ -636,6 +636,10 @@ const upsertCommandCodeModel = (providerId, modelId, opts = {}) => {
   if (Array.isArray(opts.reasoningEfforts)) merged.reasoningEfforts = opts.reasoningEfforts
   if (isPlainObject(opts.cost)) merged.cost = opts.cost
   if (CC_APIS.includes(opts.api)) merged.api = opts.api
+  if (isPlainObject(opts.options) && Object.keys(opts.options).length) {
+    merged.options = { ...(merged.options || {}), ...opts.options }
+  }
+  if (String(opts.baseURL || '').trim()) merged.baseURL = String(opts.baseURL).trim()
   p.models[mid] = buildModelJson(merged)
   writeProvidersDoc(doc)
   return mid

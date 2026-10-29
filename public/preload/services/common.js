@@ -76,6 +76,44 @@ const writeDoc = (docId, data) => {
 
 const DEFAULT_PROVIDERS = { providers: [] };
 
+// 通用模型字段统一在这里补默认值：旧档缺字段时 UI / 下发都能按同一套结构消费。
+// 未知字段原样保留，方便后续扩展或手工导入。
+const asObject = (value) =>
+  value && typeof value === "object" && !Array.isArray(value) ? value : {};
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
+const normalizeCommonModel = (model) => {
+  const m = asObject(model);
+  const cost = asObject(m.cost);
+  return {
+    ...m,
+    input: asArray(m.input).length ? asArray(m.input) : ["text"],
+    output: asArray(m.output).length ? asArray(m.output) : ["text"],
+    reasoningEfforts: asArray(m.reasoningEfforts),
+    capabilities: asArray(m.capabilities),
+    cost: {
+      input: Number(cost.input) || 0,
+      output: Number(cost.output) || 0,
+      cacheRead: Number(cost.cacheRead) || 0,
+      cacheWrite: Number(cost.cacheWrite) || 0,
+    },
+    compat: asObject(m.compat),
+    options: asObject(m.options),
+    extraHeaders: asObject(m.extraHeaders),
+    thinking: asObject(m.thinking),
+    maxInputTokens: Number(m.maxInputTokens) || 0,
+    defaultEffort: typeof m.defaultEffort === "string" ? m.defaultEffort : "",
+    offEffort: typeof m.offEffort === "string" ? m.offEffort : "",
+    reasoningKey: typeof m.reasoningKey === "string" ? m.reasoningKey : "",
+    adaptiveThinking: typeof m.adaptiveThinking === "boolean" ? m.adaptiveThinking : null,
+    description: typeof m.description === "string" ? m.description : "",
+    temperature: typeof m.temperature === "number" ? m.temperature : null,
+    topP: typeof m.topP === "number" ? m.topP : null,
+    api: typeof m.api === "string" ? m.api : "",
+    baseURL: typeof m.baseURL === "string" ? m.baseURL : "",
+  };
+};
+
 const readCommonProviders = () => {
   const data = readDoc(DOC_PROVIDERS, null) || DEFAULT_PROVIDERS;
   const providers = Array.isArray(data.providers) ? data.providers : [];
@@ -85,7 +123,7 @@ const readCommonProviders = () => {
       ...p,
       apiKey: crypto.decrypt(p.apiKey || ""),
       headers: p.headers || {},
-      models: Array.isArray(p.models) ? p.models : [],
+      models: Array.isArray(p.models) ? p.models.map(normalizeCommonModel) : [],
     })),
   };
 };
@@ -127,7 +165,7 @@ const addCommonProvider = (provider) => {
     err.svcCode = "PROVIDER_EXISTS";
     throw err;
   }
-  providers.push({
+  const next = {
     name: provider.name,
     apiKey: "",
     baseUrl: "",
@@ -136,7 +174,9 @@ const addCommonProvider = (provider) => {
     authHeader: true,
     models: [],
     ...provider,
-  });
+  };
+  next.models = (Array.isArray(next.models) ? next.models : []).map(normalizeCommonModel);
+  providers.push(next);
   return writeCommonProviders({ providers });
 };
 
@@ -167,7 +207,7 @@ const addCommonModel = (providerName, model) => {
     err.svcCode = "MODEL_EXISTS";
     throw err;
   }
-  prov.models.push(model);
+  prov.models.push(normalizeCommonModel(model));
   return writeCommonProviders({ providers });
 };
 
@@ -188,7 +228,7 @@ const addCommonModels = (providerName, models) => {
       continue;
     }
     existing.add(model.id);
-    prov.models.push(model);
+    prov.models.push(normalizeCommonModel(model));
     added.push(model.id);
   }
   if (added.length > 0) writeCommonProviders({ providers });
@@ -203,7 +243,7 @@ const updateCommonModel = (providerName, modelId, patch) => {
   const idx = prov.models.findIndex((m) => m.id === modelId);
   if (idx === -1)
     throw new Error(t("service.provider.modelNotFound", { id: modelId }));
-  prov.models[idx] = { ...prov.models[idx], ...patch, id: patch.id || modelId };
+  prov.models[idx] = normalizeCommonModel({ ...prov.models[idx], ...patch, id: patch.id || modelId });
   return writeCommonProviders({ providers });
 };
 

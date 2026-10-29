@@ -540,6 +540,14 @@ const upsertGrokModel = (providerKey, modelId, opts = {}) => {
   if (Number(opts.contextWindow) > 0) next.context_window = Number(opts.contextWindow)
   if (Number(opts.maxTokens) > 0) next.max_completion_tokens = Number(opts.maxTokens)
   if (opts.apiBackend) next.api_backend = opts.apiBackend
+  // 模型级请求参数（通用库 description / temperature / topP / extraHeaders）
+  if (opts.description) next.description = String(opts.description).trim()
+  if (typeof opts.temperature === 'number' && opts.temperature >= 0) next.temperature = opts.temperature
+  if (typeof opts.topP === 'number' && opts.topP >= 0) next.top_p = opts.topP
+  if (opts.extraHeaders && typeof opts.extraHeaders === 'object') {
+    const headers = cleanHeaders(opts.extraHeaders)
+    if (Object.keys(headers).length) next.extra_headers = headers
+  }
   tables[id] = next
   // 尚无默认模型时自动指向刚写入的模型（不覆盖用户已设的默认）
   const models = getModelsSection(doc)

@@ -69,8 +69,11 @@ const batchFilteredModels = computed(() => {
 const batchColumns = computed(() => [
   { colKey: 'row-select', type: 'multiple', width: 46 },
   { colKey: 'id', title: t('model.id'), ellipsis: true },
-  { colKey: 'text', title: () => renderBatchColHeader('text', t('commonApp.batchAdd.textCol')), width: 64 },
-  { colKey: 'image', title: () => renderBatchColHeader('image', t('commonApp.batchAdd.imageCol')), width: 64 },
+  { colKey: 'text', title: () => renderBatchColHeader('text', t('commonApp.batchAdd.textCol')), width: 56 },
+  { colKey: 'image', title: () => renderBatchColHeader('image', t('commonApp.batchAdd.imageCol')), width: 56 },
+  { colKey: 'audio', title: () => renderBatchColHeader('audio', t('commonApp.batchAdd.audioCol')), width: 56 },
+  { colKey: 'video', title: () => renderBatchColHeader('video', t('commonApp.batchAdd.videoCol')), width: 56 },
+  { colKey: 'pdf', title: () => renderBatchColHeader('pdf', t('commonApp.batchAdd.pdfCol')), width: 56 },
   { colKey: 'reasoning', title: () => renderBatchColHeader('reasoning', t('commonApp.batchAdd.reasoningCol')), width: 64 },
   { colKey: 'contextWindow', title: () => renderBatchHeaderSelect('contextWindow', batchCtxOptions.value, t('common.contextWindow')), width: 130 },
   { colKey: 'maxTokens', title: () => renderBatchHeaderSelect('maxTokens', batchTokensOptions.value, t('common.maxOutput')), width: 130 },
@@ -187,8 +190,13 @@ const handleBatchAdd = async () => {
       maxTokens: Number(e.maxTokens) || 0,
       reasoning: 'reasoning' in e ? !!e.reasoning : !!fetched.reasoning,
       input: e.input && e.input.length > 0 ? e.input : ['text'],
+      output: ['text'],
+      reasoningEfforts: [],
+      capabilities: [],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       compat: {},
+      options: {},
+      extraHeaders: {},
     };
   });
   batchSubmitting.value = true;
@@ -228,7 +236,7 @@ watch(() => props.visible, (v) => {
   <Dialog
     v-model:visible="dialogVisible"
     :header="t('commonApp.batchAdd.title') + (provider ? ' — ' + provider.name : '')"
-    width="780px"
+    width="800px"
     dialog-class-name="common-batch-dialog"
     :confirm-btn="{ content: t('commonApp.batchAdd.confirm', { count: batchSelected.length }), theme: 'primary', loading: batchSubmitting, disabled: batchSelected.length === 0 }"
     @confirm="handleBatchAdd"
@@ -284,6 +292,27 @@ watch(() => props.visible, (v) => {
             class="common-batch-checkbox"
             :model-value="editOf(row).input.includes('image')"
             @change="(c) => setBatchFlag(row, 'image', c)"
+          />
+        </template>
+        <template #audio="{ row }">
+          <Checkbox
+            class="common-batch-checkbox"
+            :model-value="editOf(row).input.includes('audio')"
+            @change="(c) => setBatchFlag(row, 'audio', c)"
+          />
+        </template>
+        <template #video="{ row }">
+          <Checkbox
+            class="common-batch-checkbox"
+            :model-value="editOf(row).input.includes('video')"
+            @change="(c) => setBatchFlag(row, 'video', c)"
+          />
+        </template>
+        <template #pdf="{ row }">
+          <Checkbox
+            class="common-batch-checkbox"
+            :model-value="editOf(row).input.includes('pdf')"
+            @change="(c) => setBatchFlag(row, 'pdf', c)"
           />
         </template>
         <template #reasoning="{ row }">

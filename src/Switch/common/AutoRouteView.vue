@@ -5,6 +5,7 @@ import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Che
 import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../../composables/useAgentVisibility";
+import { usePageRefresh } from "../../composables/usePageRefresh";
 import "./styles/AutoRouteView.css";
 
 const { t } = useI18n();
@@ -54,11 +55,16 @@ const routeOptions = computed(() =>
     }))
 );
 
+// 模型级联的选项来自通用配置的供应商主数据，可能在其他页签里刚改过
+const loadProviders = () => {
+  providers.value = window.services.readCommonProviders().providers;
+};
+
 const loadAll = () => {
   try {
     config.value = window.services.readAutoRouteConfig();
     autoRouteEnabled.value = !!config.value.enabled;
-    providers.value = window.services.readCommonProviders().providers;
+    loadProviders();
     refreshStatus();
     // 首次打开：有累积数据就看累积；只有本次有数据（历史刚上线/无落库）就先看本次
     if (!statsScopeTouched.value) {
@@ -85,6 +91,7 @@ const reloadConfig = () => {
   try {
     config.value = window.services.readAutoRouteConfig();
     autoRouteEnabled.value = !!config.value.enabled;
+    loadProviders();
     selectionKeys.value = (config.value.selection || []).map((s) => `${s.provider}::${s.modelId}`);
     portDraft.value = config.value.port;
   } catch (e) {
@@ -372,6 +379,9 @@ const statsSummary = computed(() => {
 });
 
 let logTimer = null;
+// 页面用 v-show 保活，只在首次挂载读一次会看不到「配置」里新加的模型：
+// 每次切回本页签重读配置与供应商模型清单（只读库，不重启网关）
+usePageRefresh("common", "autoroute", loadAll);
 onMounted(() => {
   loading.value = true;
   loadAll();

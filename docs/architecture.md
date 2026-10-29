@@ -69,6 +69,29 @@ Claude:
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
     Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 .disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名> / Scene: <名>，不再有「场景：关闭」），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
+  模型主数据字段（ccconfig_common_providers.providers[].models[]，均为可选、旧档缺字段按默认值消费）：
+    id / name / contextWindow / maxTokens
+    input[] / output[]（text / image / audio / video / pdf；默认 [text]）
+    reasoning / reasoningEfforts[]（default / minimal / low / medium / high / xhigh / max）
+    defaultEffort / capabilities[]（streaming / tools / always_thinking / json_schema / web_search / mid_system）
+    cost{input,output,cacheRead,cacheWrite} / compat{} / options{} / extraHeaders{}
+    maxInputTokens / offEffort / reasoningKey / adaptiveThinking / thinking{mode,minLevel,maxLevel,type,budgetTokens}
+    description / temperature / topP / api / baseURL
+    下发映射（普通元数据有值才覆盖；能力类字段按各 Agent 语义合并或推导；各 Agent 只取自己认识的字段并过滤非法枚举）：
+      Claude / Codex / Reasonix 只写模型 ID（Codex 的 reasoningEffort 是全局配置）
+      OpenCode: input/output → modalities、defaultEffort → options.effort、
+        thinking.type/budgetTokens → options.thinking、options/temperature/topP 合并进模型 options、compat 平铺
+      Pi / omp: input 只保留 text/image；omp 的 thinking → 模型 thinking
+      Kimi: maxInputTokens → max_input_size、capabilities → capabilities、
+        reasoningEfforts → support_efforts、defaultEffort/offEffort/reasoningKey/adaptiveThinking 同名下发
+      MiniMax: input → modalities+attachment、reasoningEfforts → thinking.effortOptions
+      Qoder: input 含 image → capabilities.vision、reasoning/efforts → thinking.modes/supportedEffortLevels
+      ZCode: input → inputFormat、capabilities → properties、reasoningEfforts → optionSpecs.reasoningLevel.values
+      Hermes: contextWindow → context_length、name / maxTokens → name / max_tokens
+      DSH: description / reasoningEfforts / compat 写入官方或 pi-ai 模型条目
+      Grok: description / temperature / topP / extraHeaders 写入模型条目
+      Cline: input 含 image → images、reasoning → reasoning（streaming/tools 恒开）
+      Command Code: options / baseURL / api / reasoningEfforts / cost 写入模型条目
   汇总统计 → 各 agent 统计页计算后落库 ccconfig_agent_usage_<agent>_<nativeId>（agent = claude / opencode / pi / dsh / zcode；days 按日期存 tokens/input/output/models，全零跳过防误清）
     通用统计页纯读这五个 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）

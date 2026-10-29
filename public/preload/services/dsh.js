@@ -741,6 +741,29 @@ const upsertDshModel = (route, modelId, opts = {}) => {
   const key = providerRouteFor(route)
   const id = String(modelId || '').trim()
   if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
+
+  // 官方路由（llm-deepseek）与第三方路由（llm-pi-ai）的模型条目结构不同，分开写。
+  if (key === OFFICIAL_ROUTE) {
+    const official = getDshOfficial()
+    if (!official) throw new Error(t('serviceAgent.common.providerNotFound', { name: key }))
+    const models = [...(official.models || [])]
+    const idx = models.findIndex((m) => m.modelId === id)
+    const base = idx === -1
+      ? { modelId: id, name: '', contextWindow: 0, maxTokens: 0, image: false, _raw: {} }
+      : { ...models[idx] }
+    if (String(opts.name || '').trim()) base.name = String(opts.name).trim()
+    if (toNumber(opts.contextWindow) > 0) base.contextWindow = toNumber(opts.contextWindow)
+    if (toNumber(opts.maxTokens) > 0) base.maxTokens = toNumber(opts.maxTokens)
+    if (opts.image === true) base.image = true
+    if (String(opts.description || '').trim()) {
+      base._raw = { ...(base._raw || {}), description: String(opts.description).trim() }
+    }
+    if (idx === -1) models.push(base)
+    else models[idx] = base
+    saveDshOfficial({ models })
+    return id
+  }
+
   const list = getDshProviderList()
   const prev = list.find((p) => p.route === key)
   if (!prev) throw new Error(t('serviceAgent.common.providerNotFound', { name: key }))
@@ -753,6 +776,24 @@ const upsertDshModel = (route, modelId, opts = {}) => {
   if (toNumber(opts.contextWindow) > 0) base.contextWindow = toNumber(opts.contextWindow)
   if (toNumber(opts.maxTokens) > 0) base.maxTokens = toNumber(opts.maxTokens)
   if (opts.image === true) base.image = true
+  // pi-ai 路由模型可携带 reasoningEfforts / compat（官方文档字段，UI 不单独管理）
+  const raw = { ...(base._raw || {}) }
+  if (String(opts.description || '').trim()) raw.description = String(opts.description).trim()
+  if (Array.isArray(opts.reasoningEfforts) && opts.reasoningEfforts.length) {
+    // 兼容通用库数组形态：按同名映射写成 pi-ai 的 { 等级: 线上拼写 }
+    raw.reasoningEfforts = Object.fromEntries(
+      opts.reasoningEfforts.filter((v) => typeof v === 'string' && v).map((v) => [v, v]),
+    )
+  } else if (opts.reasoningEfforts && typeof opts.reasoningEfforts === 'object' && Object.keys(opts.reasoningEfforts).length) {
+    raw.reasoningEfforts = { ...opts.reasoningEfforts }
+  }
+  if (opts.compat && typeof opts.compat === 'object' && Object.keys(opts.compat).length) {
+    raw.compat = {
+      ...((raw.compat && typeof raw.compat === 'object') ? raw.compat : {}),
+      ...opts.compat,
+    }
+  }
+  if (Object.keys(raw).length) base._raw = raw
   if (idx === -1) models.push(base)
   else models[idx] = base
   const profile = buildProviderProfile({ ...prev, models })

@@ -61,6 +61,14 @@
 .common-form-required { color: var(--td-error-color); }
 .common-form-row { display: flex; gap: 12px; }
 .common-form-row .common-form-item { flex: 1; }
+.common-form-section-title {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--td-border-level-1-color);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+}
 
 .common-fetch-error { color: var(--td-error-color); }
 .common-fetch-retry {

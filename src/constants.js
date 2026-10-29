@@ -33,6 +33,58 @@ export const MODEL_LIMIT_PRESETS = {
   output: { options: TOKENS_OPTIONS, step: 1000, defaultCustom: 64000 },
 };
 
+// 通用模型主数据的跨 Agent 字段选项。值会原样写入配置，labelKey 只负责展示。
+export const MODEL_MODALITY_OPTIONS = [
+  { labelKey: "model.modality.text", value: "text" },
+  { labelKey: "model.modality.image", value: "image" },
+  { labelKey: "model.modality.audio", value: "audio" },
+  { labelKey: "model.modality.video", value: "video" },
+  { labelKey: "model.modality.pdf", value: "pdf" },
+];
+
+export const MODEL_EFFORT_OPTIONS = [
+  { label: "default", value: "default" },
+  { label: "minimal", value: "minimal" },
+  { label: "low", value: "low" },
+  { label: "medium", value: "medium" },
+  { label: "high", value: "high" },
+  { label: "xhigh", value: "xhigh" },
+  { label: "max", value: "max" },
+];
+
+export const MODEL_CAPABILITY_OPTIONS = [
+  { labelKey: "model.capability.streaming", value: "streaming" },
+  { labelKey: "model.capability.tools", value: "tools" },
+  { labelKey: "model.capability.alwaysThinking", value: "always_thinking" },
+  { labelKey: "model.capability.jsonSchema", value: "json_schema" },
+  { labelKey: "model.capability.webSearch", value: "web_search" },
+  { labelKey: "model.capability.midSystem", value: "mid_system" },
+];
+
+export const MODEL_API_TYPE_OPTIONS = [
+  { label: "OpenAI Chat Completions", value: "openai-completions" },
+  { label: "OpenAI Responses", value: "openai-responses" },
+  { label: "Anthropic Messages", value: "anthropic-messages" },
+  { label: "Google Generative AI", value: "google-generative-ai" },
+];
+
+// omp 的思考模式 / 档位
+export const MODEL_THINKING_MODE_OPTIONS = [
+  { label: "effort", value: "effort" },
+  { label: "auto", value: "auto" },
+];
+
+export const MODEL_THINKING_TYPE_OPTIONS = [
+  { labelKey: "model.thinkingTypeOption.enabled", value: "enabled" },
+  { labelKey: "model.thinkingTypeOption.adaptive", value: "adaptive" },
+  { labelKey: "model.thinkingTypeOption.disabled", value: "disabled" },
+];
+
+export const MODEL_THINKING_LEVEL_OPTIONS = ["low", "medium", "high", "xhigh", "max"].map((v) => ({
+  label: v,
+  value: v,
+}));
+
 // labelKey 只用于展示；key / trueValue / options[].value 会写入配置，永不翻译。
 export const envPresets = [
   { key: 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', labelKey: 'claude.env.teammates', type: 'boolean', trueValue: '1' },

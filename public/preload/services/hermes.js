@@ -369,6 +369,8 @@ const upsertHermesModel = (providerName, modelId, opts = {}) => {
   const prev = models[id] && typeof models[id] === 'object' ? models[id] : {}
   const next = { ...prev }
   if (Number(opts.contextLength) > 0) next.context_length = Number(opts.contextLength)
+  if (String(opts.name || '').trim()) next.name = String(opts.name).trim()
+  if (Number(opts.maxTokens) > 0) next.max_tokens = Number(opts.maxTokens)
   models[id] = next
   entry.models = models
   if (!String(entry.model || '').trim()) entry.model = id

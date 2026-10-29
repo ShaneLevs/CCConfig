@@ -12,6 +12,8 @@ const props = defineProps({
   keyPlaceholder: { type: String, default: "" },
   valuePlaceholder: { type: String, default: "" },
   showAdd: { type: Boolean, default: true },
+  // 标量值按 JSON 解析（true/false/数字/null）。默认关闭，headers 等字符串值必须原样往返。
+  parseScalars: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -49,6 +51,14 @@ const displayValue = (value) => {
 const parseValue = (str) => {
   const trimmed = (str ?? "").trim();
   if (trimmed === "") return "";
+  // parseScalars 供 compat / options 等结构化字段使用：true/false/数字要按原类型写入，
+  // headers 这类值保持字符串，因此默认不开启。
+  if (props.parseScalars) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed === null || typeof parsed !== "object") return parsed;
+    } catch { /* 不是 JSON 标量，继续走 YAML */ }
+  }
   try {
     const parsed = load(trimmed);
     if (parsed !== null && typeof parsed === "object") return parsed;

@@ -51,14 +51,34 @@ const normalizeCost = (cost) => {
   return c
 }
 
+// 通用模型字段 → 各 Agent 的合法枚举（非法值只过滤，不阻断整次下发）
+const INPUT_MODALITIES = ['text', 'image', 'audio', 'video', 'pdf']
+const QODER_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
+const listOf = (value) => (Array.isArray(value) ? value : [])
+const filtered = (value, allowed) => listOf(value).filter((v) => allowed.includes(v))
+const capabilitiesOf = (model) => new Set(listOf(model && model.capabilities))
+const inputModalities = (model) => filtered(model && model.input, INPUT_MODALITIES)
+
+// omp 的 thinking 只接受 mode/minLevel/maxLevel；空对象视为未配置
+const normalizeOmpThinking = (thinking) => {
+  if (!thinking || typeof thinking !== 'object') return null
+  const out = {}
+  if (thinking.mode === 'effort' || thinking.mode === 'auto') out.mode = thinking.mode
+  for (const key of ['minLevel', 'maxLevel']) {
+    if (typeof thinking[key] === 'string' && thinking[key]) out[key] = thinking[key]
+  }
+  return Object.keys(out).length ? out : null
+}
+
 // ==================== 各 Agent 写入实现 ====================
 
 // Pi / omp 模型条目写入（数组按 id 匹配）：新建直接 push；已存在则合并更新——
 // 与 OpenCode / MiniMax 下发语义对齐：通用库「非空才覆盖、空值不清旧」，
 // 通用库没有的字段（本地手加键、compat 未下发子键等）原样保留。
 // 返回 'added' | 'updated' 供结果文案区分。
-const upsertDispatchModel = (list, model) => {
+const upsertDispatchModel = (list, model, extra = {}) => {
   const hasCompat = model.compat && typeof model.compat === 'object' && Object.keys(model.compat).length
+  const input = filtered(model.input, ['text', 'image'])
   const idx = list.findIndex(m => m && m.id === model.id)
   if (idx === -1) {
     const cost = normalizeCost(model.cost)
@@ -68,10 +88,11 @@ const upsertDispatchModel = (list, model) => {
       contextWindow: model.contextWindow || undefined,
       maxTokens: model.maxTokens || undefined,
       reasoning: !!model.reasoning,
-      input: model.input || ['text'],
+      input: input.length ? input : ['text'],
     }
     if (cost) entry.cost = cost
     if (hasCompat) entry.compat = model.compat
+    if (extra.thinking) entry.thinking = { ...extra.thinking }
     list.push(entry)
     return 'added'
   }
@@ -83,10 +104,16 @@ const upsertDispatchModel = (list, model) => {
   if (context) next.contextWindow = context
   if (output) next.maxTokens = output
   if (model.reasoning) next.reasoning = true
-  if (Array.isArray(model.input) && model.input.length) next.input = [...model.input]
+  if (input.length) next.input = input
   const cost = normalizeCost(model.cost)
   if (cost) next.cost = cost
   if (hasCompat) next.compat = { ...(prev.compat && typeof prev.compat === 'object' ? prev.compat : {}), ...model.compat }
+  if (extra.thinking) {
+    next.thinking = {
+      ...(prev.thinking && typeof prev.thinking === 'object' ? prev.thinking : {}),
+      ...extra.thinking,
+    }
+  }
   list[idx] = next
   return 'updated'
 }
@@ -205,11 +232,17 @@ const dispatchToOpencode = (provider, model, opts) => {
     if (context) nextModel.limit.context = context
     if (output) nextModel.limit.output = output
   }
-  // 推理能力与输入模态透传（通用库 model.reasoning / model.input，值为 opencode modalities 子集；有值才写，不清 opencode 侧已有声明）
+  // 推理能力与输入/输出模态透传（值为 opencode modalities 子集；有值才写）
   if (model.reasoning) nextModel.reasoning = true
-  if (Array.isArray(model.input) && model.input.length) {
-    nextModel.modalities = { ...(prevModel.modalities || {}), input: [...model.input] }
+  const input = filtered(model.input, INPUT_MODALITIES)
+  const outputModalities = filtered(model.output, INPUT_MODALITIES)
+  const modalities = { ...(prevModel.modalities || {}) }
+  if (input.length) modalities.input = input
+  // 默认 [text] 不写回，避免重下发把 opencode 侧手工加的输出模态清掉
+  if (outputModalities.length && !(outputModalities.length === 1 && outputModalities[0] === 'text')) {
+    modalities.output = outputModalities
   }
+  if (Object.keys(modalities).length) nextModel.modalities = modalities
   // 费用透传（全 0 省略；opencode 配置为扁平 cache_read/cache_write 键）
   if (model.cost && typeof model.cost === 'object') {
     const c = Number(model.cost.input) || 0, o = Number(model.cost.output) || 0
@@ -218,6 +251,30 @@ const dispatchToOpencode = (provider, model, opts) => {
       nextModel.cost = { input: c, output: o, cache_read: cr, cache_write: cw }
     }
   }
+  // 模型级 SDK options：合并式写入，保留 opencode 侧已有键
+  const prevModelOptions = prevModel.options && typeof prevModel.options === 'object' ? prevModel.options : {}
+  const nextModelOptions = {
+    ...prevModelOptions,
+    ...(model.options && typeof model.options === 'object' ? model.options : {}),
+  }
+  if (model.defaultEffort) nextModelOptions.effort = model.defaultEffort
+  if (typeof model.temperature === 'number') nextModelOptions.temperature = model.temperature
+  if (typeof model.topP === 'number') nextModelOptions.topP = model.topP
+  const thinking = model.thinking && typeof model.thinking === 'object' ? model.thinking : {}
+  if (thinking.type || Number(thinking.budgetTokens) > 0) {
+    const prevThinking = prevModelOptions.thinking && typeof prevModelOptions.thinking === 'object'
+      ? prevModelOptions.thinking
+      : {}
+    const nextThinking = { ...prevThinking }
+    if (thinking.type) nextThinking.type = thinking.type
+    if (thinking.type === 'enabled' && Number(thinking.budgetTokens) > 0) {
+      nextThinking.budgetTokens = Number(thinking.budgetTokens)
+    } else if (thinking.type && thinking.type !== 'enabled') {
+      delete nextThinking.budgetTokens
+    }
+    nextModelOptions.thinking = nextThinking
+  }
+  if (Object.keys(nextModelOptions).length) nextModel.options = nextModelOptions
   // 兼容性字段（compat）平铺进模型条目，与 opencode 配置模型可携带自定义字段一致
   if (model.compat && typeof model.compat === 'object') {
     for (const [k, v] of Object.entries(model.compat)) nextModel[k] = v
@@ -291,7 +348,7 @@ const dispatchToOmp = (provider, model, opts) => {
     models: Array.isArray(prev.models) ? prev.models : [],
   }
   const list = models.providers[name].models
-  const act = upsertDispatchModel(list, model)
+  const act = upsertDispatchModel(list, model, { thinking: normalizeOmpThinking(model.thinking) })
   omp.writeOmpModels(models)
   return (
     t(
@@ -409,10 +466,16 @@ const dispatchToKimi = (provider, model, opts) => {
   const alias = kimi.upsertKimiModel(name, model.id, {
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
+    maxInputSize: Number(model.maxInputTokens) > 0 ? Number(model.maxInputTokens) : undefined,
     displayName: model.name || model.id,
     reasoning: model.reasoning,
     input: Array.isArray(model.input) ? model.input : undefined,
+    capabilities: Array.isArray(model.capabilities) ? model.capabilities : undefined,
     reasoningEfforts: Array.isArray(model.reasoningEfforts) ? model.reasoningEfforts : undefined,
+    defaultEffort: model.defaultEffort || undefined,
+    offEffort: model.offEffort || undefined,
+    reasoningKey: model.reasoningKey || undefined,
+    adaptiveThinking: typeof model.adaptiveThinking === 'boolean' ? model.adaptiveThinking : undefined,
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -483,10 +546,16 @@ const dispatchToQoder = (provider, model, opts) => {
   const name = opts.providerName || provider.name
   const key = qoder.providerKeyFor(name)
   qoder.upsertQoderProvider(key, { protocol, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
+  const input = inputModalities(model)
+  const efforts = filtered(model.reasoningEfforts, QODER_EFFORT_LEVELS)
   const modelId = qoder.upsertQoderModel(key, model.id, {
     name: model.name || model.id,
     contextWindow: model.contextWindow,
     maxOutputTokens: model.maxTokens,
+    vision: input.includes('image'),
+    thinkingEnabled: !!model.reasoning || efforts.length > 0,
+    supportsEffort: efforts.length > 0,
+    effortLevels: efforts,
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -526,7 +595,8 @@ const dispatchToZcode = (provider, model, opts) => {
   const name = opts.providerName || provider.name
   const id = zcode.providerIdFor(name)
   zcode.upsertZcodeProvider(id, { name, apiType, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
-  const input = Array.isArray(model.input) ? model.input : []
+  const input = inputModalities(model)
+  const caps = capabilitiesOf(model)
   const modelId = zcode.upsertZcodeModel(id, model.id, {
     contextWindow: model.contextWindow,
     maxOutputTokens: model.maxTokens,
@@ -534,6 +604,10 @@ const dispatchToZcode = (provider, model, opts) => {
     video: input.includes('video'),
     audio: input.includes('audio'),
     pdf: input.includes('pdf'),
+    jsonSchema: caps.has('json_schema'),
+    webSearch: caps.has('web_search'),
+    midSystem: caps.has('mid_system'),
+    reasoningLevels: listOf(model.reasoningEfforts).filter((v) => typeof v === 'string' && v),
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -574,7 +648,11 @@ const dispatchToHermes = (provider, model, opts) => {
   const name = opts.providerName || provider.name
   const key = hermes.providerKeyFor(name)
   hermes.upsertHermesProvider(key, { name, apiMode, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
-  const modelId = hermes.upsertHermesModel(key, model.id, { contextLength: model.contextWindow })
+  const modelId = hermes.upsertHermesModel(key, model.id, {
+    contextLength: model.contextWindow,
+    name: model.name || model.id,
+    maxTokens: model.maxTokens,
+  })
   let suffix = ''
   if (opts.setDefault) {
     hermes.setHermesDefaultModel(key, modelId)
@@ -613,12 +691,20 @@ const dispatchToDsh = (provider, model, opts) => {
     baseURL: provider.baseUrl || '',
     apiKey: provider.apiKey || '',
   })
-  const input = Array.isArray(model.input) ? model.input : []
+  const input = inputModalities(model)
+  // DSH 的 reasoningEfforts 是 { 等级: 线上拼写 } 或 false；通用库的数组按同名映射写入。
+  const dshEfforts = listOf(model.reasoningEfforts).filter((v) => typeof v === 'string' && v)
+  const reasoningEfforts = dshEfforts.length
+    ? Object.fromEntries(dshEfforts.map((v) => [v, v]))
+    : undefined
   const modelId = dsh.upsertDshModel(route, model.id, {
     name: model.name || model.id,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
     image: input.includes('image'),
+    description: model.description,
+    reasoningEfforts,
+    compat: model.compat && typeof model.compat === 'object' ? model.compat : undefined,
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -669,6 +755,10 @@ const dispatchToGrok = (provider, model, opts) => {
     name: model.name || model.id,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
+    description: model.description,
+    temperature: model.temperature,
+    topP: model.topP,
+    extraHeaders: model.extraHeaders,
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -708,11 +798,16 @@ const dispatchToCline = (provider, model, opts) => {
     baseUrl: provider.baseUrl || '',
     apiKey: provider.apiKey || '',
   })
+  const input = inputModalities(model)
+  const caps = ['streaming', 'tools']
+  if (input.includes('image')) caps.push('images')
+  if (model.reasoning) caps.push('reasoning')
   const modelId = cline.upsertClineModel(key, {
     id: model.id,
     name: model.name || model.id,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
+    capabilities: caps,
   })
   let suffix = ''
   if (opts.setDefault) {
@@ -764,6 +859,8 @@ const dispatchToCommandCode = (provider, model, opts) => {
     reasoningEfforts: model.reasoningEfforts,
     cost: model.cost,
     api: model.api,
+    options: model.options,
+    baseURL: model.baseURL,
   })
   let suffix = ''
   if (opts.setDefault) {
