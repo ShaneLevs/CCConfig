@@ -4,6 +4,18 @@ const os = require('node:os')
 const path = require('node:path')
 const assert = require('node:assert')
 
+// smol-toml 1.9+ 的 parse() 返回 null-prototype 对象（原型污染加固）。它与对象字面量���
+// assert.deepStrictEqual 会因原型不同而失败，这里递归还原成普通���象，只服务断言。
+const plain = (v) => {
+  if (Array.isArray(v)) return v.map(plain)
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === null) {
+    const out = {}
+    for (const k of Object.keys(v)) out[k] = plain(v[k])
+    return out
+  }
+  return v
+}
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-test-common-model-'))
 process.env.HOME = tmp
 process.env.USERPROFILE = tmp
@@ -99,7 +111,7 @@ check('Grok：description / temperature / topP / extraHeaders 落盘', () => {
   assert.strictEqual(m.description, 'M1 description')
   assert.strictEqual(m.temperature, 0.7)
   assert.strictEqual(m.topP, 0.9)
-  assert.deepStrictEqual(m.extraHeaders, { 'X-Model': '1' })
+  assert.deepStrictEqual(plain(m.extraHeaders), { 'X-Model': '1' })
 })
 
 check('Command Code：options / baseURL / api 落盘', () => {
@@ -115,7 +127,7 @@ check('Command Code：options / baseURL / api 落盘', () => {
   const m = commandCode.getCommandCodeProviderList().find((p) => p.id === 'relay').models.find((x) => x.id === 'm1')
   assert.strictEqual(m.api, 'openai-responses')
   assert.strictEqual(m.baseURL, 'https://override.example.com/v1')
-  assert.deepStrictEqual(m.options, { temperature: 0.5, custom: true })
+  assert.deepStrictEqual(plain(m.options), { temperature: 0.5, custom: true })
 })
 
 check('Hermes：name / max_tokens 写入模型字典', () => {
@@ -148,8 +160,8 @@ check('DSH：第三方路由的 description / reasoningEfforts / compat 写入 _
   assert.strictEqual(m.contextWindow, 200000)
   assert.strictEqual(m.image, true)
   assert.strictEqual(m._raw.description, 'M1 description')
-  assert.deepStrictEqual(m._raw.reasoningEfforts, { low: 'low', high: 'high' })
-  assert.deepStrictEqual(m._raw.compat, { thinkingFormat: 'openai' })
+  assert.deepStrictEqual(plain(m._raw.reasoningEfforts), { low: 'low', high: 'high' })
+  assert.deepStrictEqual(plain(m._raw.compat), { thinkingFormat: 'openai' })
 })
 
 check('DSH：官方路由的 description 写入模型 _raw', () => {

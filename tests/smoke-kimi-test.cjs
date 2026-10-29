@@ -6,6 +6,18 @@ const os = require('node:os')
 const path = require('node:path')
 const assert = require('node:assert')
 
+// smol-toml 1.9+ 的 parse() 返回 null-prototype 对象（原型污染加固）。它与对象字面量做
+// assert.deepStrictEqual 会因原型不同而失败，这里递归还原成普通对象，只服务断言。
+const plain = (v) => {
+  if (Array.isArray(v)) return v.map(plain)
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === null) {
+    const out = {}
+    for (const k of Object.keys(v)) out[k] = plain(v[k])
+    return out
+  }
+  return v
+}
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-test-kimi-'))
 process.env.KIMI_CODE_HOME = tmp
 
@@ -61,7 +73,7 @@ check('下发把模型参数写进 config.toml', () => {
   const doc = read()
   assert.strictEqual(doc.default_model, 'relay/k3')
   assert.strictEqual(doc.providers.relay.type, 'anthropic')
-  assert.deepStrictEqual(doc.providers.relay.custom_headers, { 'X-Trace': '1' }, 'headers → custom_headers')
+  assert.deepStrictEqual(plain(doc.providers.relay.custom_headers), { 'X-Trace': '1' }, 'headers → custom_headers')
   const m = doc.models['relay/k3']
   assert.strictEqual(m.max_context_size, 1048576)
   assert.strictEqual(m.max_output_size, 64000, 'maxTokens → max_output_size（anthropic）')
@@ -103,8 +115,8 @@ check('自定义头与既有头合并，provider 未知字段原样保留', () =
   kimi.writeKimiConfig(doc)
   dispatch.dispatchToKimi({ ...PROVIDER, headers: { 'X-New': '2' } }, MODEL, {})
   const p = read().providers.relay
-  assert.deepStrictEqual(p.custom_headers, { 'X-Keep': 'yes', 'X-New': '2' })
-  assert.deepStrictEqual(p.env, { KIMI_API_KEY: 'sk-env' })
+  assert.deepStrictEqual(plain(p.custom_headers), { 'X-Keep': 'yes', 'X-New': '2' })
+  assert.deepStrictEqual(plain(p.env), { KIMI_API_KEY: 'sk-env' })
 })
 
 check('下发不动其余配置节（thinking / secondary_model / 顶层未知键）', () => {
@@ -114,8 +126,8 @@ check('下发不动其余配置节（thinking / secondary_model / 顶层未知�
   )
   dispatch.dispatchToKimi(PROVIDER, MODEL, {})
   const doc = read()
-  assert.deepStrictEqual(doc.secondary_model, { default_model: 'relay/k3' })
-  assert.deepStrictEqual(doc.thinking, { enabled: true, effort: 'high' })
+  assert.deepStrictEqual(plain(doc.secondary_model), { default_model: 'relay/k3' })
+  assert.deepStrictEqual(plain(doc.thinking), { enabled: true, effort: 'high' })
 })
 
 // ==================== 读侧 / 编辑侧 ====================
