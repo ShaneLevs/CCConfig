@@ -17,16 +17,47 @@
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
 .autoroute-cascader { flex: 1; min-width: 320px; }
-/* 模型映射行：序号 + 映射名 + 箭头 + 目标模型下拉 + 删除 */
+/* 模型映射行：拖拽手柄（悬停显形） + 映射名 + 箭头 + 目标模型下拉 + 删除 */
 .autoroute-mapping-row { display: flex; align-items: center; gap: 8px; }
+.autoroute-mapping-row.is-dragging {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--td-radius-default);
+  background: var(--td-bg-color-container-hover);
+}
+/* 序号列同时是拖拽手柄：默认只显示数字，悬停/聚焦时数字淡出、手柄图标淡入并换成 grab 光标 */
 .autoroute-mapping-index {
+  position: relative;
   flex-shrink: 0;
   width: 20px;
-  text-align: center;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
   color: var(--td-text-color-placeholder);
   font-variant-numeric: tabular-nums;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
 }
+.autoroute-mapping-index-num,
+.autoroute-mapping-index-handle {
+  position: absolute;
+  transition: opacity 0.12s ease;
+}
+.autoroute-mapping-index-handle {
+  font-size: 15px;
+  opacity: 0;
+  pointer-events: none;
+}
+.autoroute-mapping-index:hover .autoroute-mapping-index-num,
+.autoroute-mapping-index:focus-visible .autoroute-mapping-index-num,
+.autoroute-mapping-row.is-dragging .autoroute-mapping-index-num { opacity: 0; }
+.autoroute-mapping-index:hover .autoroute-mapping-index-handle,
+.autoroute-mapping-index:focus-visible .autoroute-mapping-index-handle,
+.autoroute-mapping-row.is-dragging .autoroute-mapping-index-handle { opacity: 1; }
+.autoroute-mapping-row.is-dragging .autoroute-mapping-index { cursor: grabbing; }
 .autoroute-mapping-alias { width: 200px; flex-shrink: 0; }
 .autoroute-mapping-alias .t-input__inner { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); }
 .autoroute-mapping-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
@@ -96,3 +127,5 @@
 .autoroute-dispatch-agents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .autoroute-dispatch-agent { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: var(--td-radius-default); }
 .autoroute-dispatch-agent:hover { background: var(--td-bg-color-container-hover); }
+/* 拖拽映射行期间：整页光标保持抓取态、禁止选中文字（与 Agent 排序同一处理） */
+body.autoroute-sorting { cursor: grabbing; user-select: none; }

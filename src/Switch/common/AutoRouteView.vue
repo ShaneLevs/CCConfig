@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
-import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon } from "tdesign-icons-vue-next";
+import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon, DragMoveIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../../composables/useAgentVisibility";
 import { usePageRefresh } from "../../composables/usePageRefresh";
@@ -150,9 +150,12 @@ const MAX_MAPPINGS = 10;
 // 这里不再做成下拉选预设：映射名是可编辑的普通输入框，目标模型默认为空，用户自己选或删行
 const PRESET_ALIASES = ["flash", "plus", "pro"];
 
+// 保存后保留本地行对象（不换成服务返回的新克隆）：行的 key 由对象身份决定，
+// 每次写库都换一批新对象会让整张表重渲染，拖动/输入过程中输入框会被重建掉（丢焦点、丢半截输入）
 const saveMappings = (mappings) => {
   try {
-    config.value = window.services.writeAutoRouteConfig({ mappings });
+    const saved = window.services.writeAutoRouteConfig({ mappings });
+    config.value = { ...saved, mappings };
   } catch (e) {
     MessagePlugin.error(t('commonApp.autoRoute.saveMappingsFailed', { message: e.message }));
     loadAll();
@@ -183,6 +186,98 @@ const onAliasChange = (index, val) => {
 const onMappingTargetChange = (index, val) => {
   const [provider = "", modelId = ""] = String(val || "").split("::");
   const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, provider, modelId } : m));
+  saveMappings(mappings);
+};
+
+// ==================== 映射行手动排序 ====================
+// mappings 数组顺序就是下发顺序：dispatchAutoRoute 按 resolveAutoRouteModels 的返回顺序
+// 逐个模型写入 agent（数组顺序的 agent 保留原顺序，字典类的按写入先后排列），所以这里
+// 拖拽重排后直接落库，agent 侧的模型清单顺序与页面一致。
+// 用 Pointer Events 而不是 HTML5 DnD：桌面版（Tauri 窗口接管原生拖放）收不到 drag 事件，
+// 与设置里的 Agent 排序同一套做法。拖动期间渲染草稿顺序，松手才写库。
+const mappingDraft = ref(null);
+const draggingIndex = ref(-1);
+const dragRows = computed(() => mappingDraft.value || mappingRows.value);
+let mappingPress = null;
+// 拖拽重排时行不能按数组下标做 key，否则复用的输入框会串值（拖动中每一行的下标都在变）。
+// 行 id 挂在映射对象上（ROW_ID 键）：`{...m}` 克隆自动带上，写库前的 sanitizeConfig 只保留
+// alias/provider/modelId，所以它不会落库；从库读回来的行没有这个键 → 首次渲染时分配新 id。
+const ROW_ID = "__rowId";
+let rowSeq = 0;
+const rowKey = (row) => {
+  if (!row[ROW_ID]) row[ROW_ID] = ++rowSeq;
+  return row[ROW_ID];
+};
+
+const indexAtPoint = (x, y) => {
+  const el = document.elementFromPoint(x, y);
+  const row = el && el.closest ? el.closest(".autoroute-mapping-row") : null;
+  if (!row || row.dataset.index === undefined) return -1;
+  return Number(row.dataset.index);
+};
+
+const detachMappingDrag = () => {
+  window.removeEventListener("pointermove", onMappingPointerMove);
+  window.removeEventListener("pointerup", onMappingPointerUp);
+  window.removeEventListener("pointercancel", onMappingPointerUp);
+  const press = mappingPress;
+  if (press && press.handle.hasPointerCapture && press.handle.hasPointerCapture(press.pointerId)) {
+    try { press.handle.releasePointerCapture(press.pointerId); } catch (e) { /* ignore */ }
+  }
+  const draft = mappingDraft.value;
+  const moved = draggingIndex.value >= 0;
+  mappingPress = null;
+  mappingDraft.value = null;
+  draggingIndex.value = -1;
+  document.body.classList.remove("autoroute-sorting");
+  return moved ? draft : null;
+};
+
+const onMappingPointerUp = () => {
+  // 只有真正拖动过才落库：单击手柄不应触发一次写库
+  const draft = detachMappingDrag();
+  if (draft) saveMappings(draft);
+};
+
+const onMappingPointerMove = (event) => {
+  if (!mappingPress || event.pointerId !== mappingPress.pointerId) return;
+  if (draggingIndex.value < 0) {
+    // 超过 4px 才算拖动，避免误触打乱顺序
+    if (Math.hypot(event.clientX - mappingPress.x, event.clientY - mappingPress.y) < 4) return;
+    mappingDraft.value = [...mappingRows.value];
+    draggingIndex.value = mappingPress.index;
+    document.body.classList.add("autoroute-sorting");
+  }
+  event.preventDefault();
+  const target = indexAtPoint(event.clientX, event.clientY);
+  if (target < 0 || target === draggingIndex.value) return;
+  const order = [...mappingDraft.value];
+  const [moved] = order.splice(draggingIndex.value, 1);
+  order.splice(target, 0, moved);
+  mappingDraft.value = order;
+  draggingIndex.value = target;
+};
+
+const startMappingDrag = (event, index) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  try { event.currentTarget.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+  mappingPress = { index, x: event.clientX, y: event.clientY, pointerId: event.pointerId, handle: event.currentTarget };
+  window.addEventListener("pointermove", onMappingPointerMove);
+  window.addEventListener("pointerup", onMappingPointerUp);
+  window.addEventListener("pointercancel", onMappingPointerUp);
+};
+
+// 键盘等价操作：手柄可聚焦，↑/↓ 上下移动一行（纯鼠标排序会让键盘用户没法调整）
+const onMappingIndexKeydown = (event, index) => {
+  const delta = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+  if (!delta) return;
+  const target = index + delta;
+  if (target < 0 || target >= mappingRows.value.length) return;
+  event.preventDefault();
+  const mappings = [...mappingRows.value];
+  const [moved] = mappings.splice(index, 1);
+  mappings.splice(target, 0, moved);
   saveMappings(mappings);
 };
 
@@ -404,6 +499,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("focus", reloadConfig);
   if (logTimer) clearInterval(logTimer);
+  detachMappingDrag();
 });
 </script>
 
@@ -471,8 +567,25 @@ onUnmounted(() => {
       </template>
 
       <template v-else>
-        <div v-for="(m, i) in mappingRows" :key="i" class="autoroute-mapping-row">
-          <span class="autoroute-mapping-index">{{ i + 1 }}</span>
+        <div
+          v-for="(m, i) in dragRows"
+          :key="rowKey(m)"
+          class="autoroute-mapping-row"
+          :class="{ 'is-dragging': draggingIndex === i }"
+          :data-index="i"
+        >
+          <span
+            class="autoroute-mapping-index"
+            role="button"
+            tabindex="0"
+            :title="t('commonApp.autoRoute.dragMappingHint')"
+            :aria-label="t('commonApp.autoRoute.dragMappingHint')"
+            @pointerdown="startMappingDrag($event, i)"
+            @keydown="onMappingIndexKeydown($event, i)"
+          >
+            <span class="autoroute-mapping-index-num">{{ i + 1 }}</span>
+            <DragMoveIcon class="autoroute-mapping-index-handle" />
+          </span>
           <Input
             :value="m.alias"
             size="small"

@@ -103,6 +103,11 @@ Claude:
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；不校验 key（仅监听本机回环地址，Authorization Bearer / x-api-key 传任意值或留空均放行）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
+      **映射行顺序 = 下发顺序**：mappings 数组顺序即顺序，resolveAutoRouteModels 按序解析，dispatchAutoRoute 按序逐个写 agent，
+      因此网关页映射区的行首序号是拖拽手柄（悬停变手柄图标，上下拖动重排；↑/↓ 键等价），松手即落库；
+      数组型存储（pi / omp / dsh / reasonix 模型数组、qoder / zcode personalModelIds+modelOrder、Codex DB 模型列表、Claude 六个槽位）
+      严格跟随此顺序；字典型（opencode / minimax / hermes / kimi / cline / commandcode / grok 的 models 字典）
+      写入文件时按此顺序落键，但各 agent 自己的选择器可能另有排序（如 Grok 页面按 key 字母序），不保证展示顺序一致
       响应 model 改写（rewriteModel，默认 true，网关页映射区可关）：请求方向只把 model 换成真实模型 ID，上游返回的 model 仍是真名；
       而 agent 会把响应 model 记进自己的会话记录（Claude Code 的 assistant.message.model、Grok Build 的 usage.json modelUsage 键），
       「使用统计」读的正是这些记录 → 不改写就只能看到上游真实模型名。实现见 autoroute-convert/model-alias.js，只改三处结构化位置

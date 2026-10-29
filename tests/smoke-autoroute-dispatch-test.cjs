@@ -556,5 +556,70 @@ ok(manyRes.filter((r) => !r.ok).length === 2, 'claude：超出的 2 个模型报
 const manyDoc = window.utools.db.get(claudeDocId)
 eq([manyDoc.model, manyDoc.defaultHaikuModel, manyDoc.defaultSonnetModel, manyDoc.defaultOpusModel, manyDoc.defaultFableModel, manyDoc.subagentModel], ['m-1', 'm-2', 'm-3', 'm-4', 'm-5', 'm-6'], 'claude：六个槽位按网关顺序填满')
 
+// ==================== 19. 映射行顺序 = 下发顺序 ====================
+console.log('19. 映射顺序即下发顺序')
+// 网关页把映射行重排后落库的就是 mappings 数组顺序；这里直接按「重排后」的顺序写库，
+// 验证 resolveAutoRouteModels 与 dispatchAutoRoute 都严格按它写 agent（数组型存储）
+writeCommonProviders([makeProvider(['m-a', 'm-b', 'm-c'])])
+window.utools.db.put({
+  _id: 'ccconfig_autoroute_config_test-native',
+  data: {
+    enabled: true,
+    port: 17877,
+    key: 'sk-ccr-testkey',
+    mode: 'mapping',
+    selection: [],
+    mappings: [
+      { alias: 'pro', provider: 'gw-upstream', modelId: 'm-c' },
+      { alias: 'plus', provider: 'gw-upstream', modelId: 'm-b' },
+      { alias: 'flash', provider: 'gw-upstream', modelId: 'm-a' },
+    ],
+    mappingSeeded: true,
+  },
+})
+dispatchTo(['pi'])
+eq(
+  pi.readPiModels().providers.router.models.map((m) => m.id),
+  ['pro', 'plus', 'flash'],
+  'pi：router 模型顺序 = 映射行顺序（重排后）',
+)
+dispatchTo(['codex'])
+eq(codex.getCodexProviderModels('router'), ['pro', 'plus', 'flash'], 'codex：DB 模型列表顺序 = 映射行顺序')
+dispatchTo(['zcode'])
+const zcodeDocOrder = (() => {
+  const doc = JSON.parse(fs.readFileSync(path.join(tmp, '.zcode', 'v2', 'provider_config.json'), 'utf-8'))
+  const rule = doc.config.providerConfigRules.providerRules.find((r) => r.providerId === 'router')
+  return rule && rule.config.modelOrder
+})()
+eq(zcodeDocOrder, ['pro', 'plus', 'flash'], 'zcode：modelOrder 顺序 = 映射行顺序')
+// 再换一个顺序（模拟用户又把 pro 拖到最底下）：agent 侧清单跟着变
+window.utools.db.put({
+  ...window.utools.db.get('ccconfig_autoroute_config_test-native'),
+  data: {
+    ...window.utools.db.get('ccconfig_autoroute_config_test-native').data,
+    mappings: [
+      { alias: 'plus', provider: 'gw-upstream', modelId: 'm-b' },
+      { alias: 'flash', provider: 'gw-upstream', modelId: 'm-a' },
+      { alias: 'pro', provider: 'gw-upstream', modelId: 'm-c' },
+    ],
+  },
+})
+dispatchTo(['pi'])
+eq(pi.readPiModels().providers.router.models.map((m) => m.id), ['plus', 'flash', 'pro'], 'pi：再次重排后清单顺序随之更新')
+
+// 网关页给每行挂的本地 __rowId（拖拽重排时做 key，避免输入框串值）必须被 sanitizeConfig 丢掉
+const autoroute = require('../public/preload/services/autoroute')
+autoroute.writeAutoRouteConfig({
+  mappings: [
+    { alias: 'a', provider: 'gw-upstream', modelId: 'm-a', __rowId: 7 },
+    { alias: 'b', provider: 'gw-upstream', modelId: 'm-b', __rowId: 8 },
+  ],
+})
+eq(
+  Object.keys(autoroute.readAutoRouteConfig().mappings[0]).sort(),
+  ['alias', 'modelId', 'provider'],
+  'autoroute：页面本地行 id 不落库',
+)
+
 console.log(`\n通过 ${passed}/${passed + failed}`)
 process.exit(failed === 0 ? 0 : 1)
