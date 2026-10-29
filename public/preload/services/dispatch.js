@@ -373,22 +373,26 @@ const dispatchToOmp = (provider, model, opts) => {
 }
 
 // Reasonix：config.toml providers[] + .env key + 可选 default_model
+// 协议映射按官方 provider kind（internal/contract/config）：
+//   openai-completions / openai-responses → openai、anthropic-messages → anthropic、
+//   google-generative-ai → gemini（**不是 google**，写成 google 会被配置校验拒绝）
+const REASONIX_KIND_BY_API = {
+  'openai-completions': 'openai',
+  'openai-responses': 'openai',
+  'anthropic-messages': 'anthropic',
+  'google-generative-ai': 'gemini',
+}
+
 const dispatchToReasonix = (provider, model, opts) => {
   const name = opts.providerName || provider.name
   const doc = reasonix.readReasonixConfig()
   if (!Array.isArray(doc.providers)) doc.providers = []
   const prev = doc.providers.find(p => p.name === name)
-  const kindMap = {
-    'openai-completions': 'openai',
-    'openai-responses': 'openai',
-    'anthropic-messages': 'anthropic',
-    'google-generative-ai': 'google',
-  }
-  const kind = kindMap[provider.api] || (prev && prev.kind) || 'openai'
+  const kind = REASONIX_KIND_BY_API[provider.api] || (prev && prev.kind) || 'openai'
   let apiKeyEnv = (prev && prev.api_key_env) || ''
   if (!apiKeyEnv) apiKeyEnv = reasonix.generateReasonixApiKeyEnv(name)
   if (provider.apiKey) reasonix.writeReasonixEnvKey(apiKeyEnv, provider.apiKey)
-  // 保留原 provider 的扩展字段（model_overrides / price / extra_body 等）
+  // 保留原 provider 的扩展字段（price / extra_body / reasoning_protocol 等）
   const entry = {
     ...(prev || {}),
     name,
@@ -399,6 +403,22 @@ const dispatchToReasonix = (provider, model, opts) => {
   }
   delete entry.model // 统一为 models 数组
   if (!entry.models.includes(model.id)) entry.models.push(model.id)
+  // 通用库的模型元数据落到 model_overrides.<模型>：Reasonix 的 context_window /
+  // max_output_tokens 是 **provider 级兜底**，混合网关按模型区分窗口时必须逐模型覆盖。
+  // 只写有值的字段，并保留该模型下其它已有覆盖项（reasoning_protocol / vision 等）。
+  const ctx = Number(model.contextWindow) || 0
+  const out = Number(model.maxTokens) || 0
+  if (ctx || out) {
+    const overrides = (entry.model_overrides && typeof entry.model_overrides === 'object' && !Array.isArray(entry.model_overrides))
+      ? { ...entry.model_overrides }
+      : {}
+    const current = (overrides[model.id] && typeof overrides[model.id] === 'object') ? overrides[model.id] : {}
+    const next = { ...current }
+    if (ctx) next.context_window = ctx
+    if (out) next.max_output_tokens = out
+    overrides[model.id] = next
+    entry.model_overrides = overrides
+  }
   doc.providers = doc.providers.filter(p => p.name !== name)
   doc.providers.push(entry)
   let suffix = ''

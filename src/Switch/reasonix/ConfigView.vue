@@ -24,12 +24,12 @@ const expandedList = ref([]);
 // ==================== 弹窗状态 ====================
 
 const addProviderDialog = ref(false);
-const addProviderForm = ref({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
+const addProviderForm = ref({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", requestUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
 // 添加弹窗内 Key 环境变量名的提示（选择已有变量时显示是否已存 Key）
 const addApiKeyEnvHint = ref("");
 const editDialog = ref(false);
 const editingProvider = ref("");
-const editForm = ref({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
+const editForm = ref({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", requestUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
 // 编辑弹窗内 Key 环境变量名的提示（共享/已存 Key）
 const editEnvHint = ref("");
 
@@ -37,10 +37,14 @@ const addModelDialog = ref(false);
 const addModelProvider = ref("");
 const addModelId = ref("");
 
-// Reasonix 支持的 provider 协议类型（docs: GUIDE.md "Custom OpenAI-compatible providers"）
+// Reasonix 支持的 provider kind（官方 internal/contract/config 的三种实现）：
+//   openai    — OpenAI 兼容 /chat/completions（绝大多数中转站）
+//   anthropic — Anthropic 兼容 /v1/messages
+//   gemini    — Google Interactions API（官方标注实验性；写 "google" 会被配置校验拒绝）
 const kindOptions = [
   { label: "openai", value: "openai" },
   { label: "anthropic", value: "anthropic" },
+  { label: "gemini", value: "gemini" },
 ];
 // 编辑弹窗初始加载的 key，用于保存时判断是否被用户修改
 const originalApiKey = ref("");
@@ -209,7 +213,7 @@ const setDefaultModel = (providerName, modelId) => {
 
 // ==================== 供应商 CRUD ====================
 
-const emptyProviderForm = () => ({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
+const emptyProviderForm = () => ({ name: "", kind: "openai", baseUrl: "", chatUrl: "", modelsUrl: "", requestUrl: "", apiKeyEnv: "", apiKey: "", contextWindow: 0, maxOutputTokens: 0 });
 
 const buildProviderPayload = (form) => ({
   name: form.name,
@@ -217,6 +221,7 @@ const buildProviderPayload = (form) => ({
   baseUrl: form.baseUrl,
   chatUrl: form.chatUrl,
   modelsUrl: form.modelsUrl,
+  requestUrl: form.requestUrl,
   apiKeyEnv: form.apiKeyEnv,
   apiKey: form.apiKey,
   contextWindow: Number(form.contextWindow) || 0,
@@ -269,6 +274,7 @@ const handleEdit = (provider) => {
     baseUrl: provider.baseUrl || "",
     chatUrl: provider.chatUrl || "",
     modelsUrl: provider.modelsUrl || "",
+    requestUrl: provider.requestUrl || "",
     apiKeyEnv: provider.apiKeyEnv || "",
     apiKey: window.services.getReasonixApiKey(provider.apiKeyEnv) || "",
     contextWindow: provider.contextWindow || 0,
@@ -422,6 +428,53 @@ const handleDeleteModel = (providerName, modelId) => {
   }
 };
 
+// ==================== 逐模型覆盖（model_overrides） ====================
+
+const overrideDialog = ref(false);
+const overrideProvider = ref("");
+const overrideModel = ref("");
+const overrideForm = ref({ contextWindow: 0, maxOutputTokens: 0 });
+// 该模型下不受 UI 管理的其它覆盖项（reasoning_protocol / vision 等），仅提示不编辑
+const overrideExtraKeys = ref([]);
+
+const openOverrideDialog = (provider, modelId) => {
+  overrideProvider.value = provider.name;
+  overrideModel.value = modelId;
+  const ov = provider.modelOverrides?.[modelId] || {};
+  overrideForm.value = {
+    contextWindow: Number(ov.context_window) || 0,
+    maxOutputTokens: Number(ov.max_output_tokens) || 0,
+  };
+  overrideExtraKeys.value = Object.keys(ov).filter(
+    (k) => k !== "context_window" && k !== "max_output_tokens",
+  );
+  overrideDialog.value = true;
+};
+
+const handleSaveOverride = () => {
+  try {
+    window.services.setReasonixModelOverride(overrideProvider.value, overrideModel.value, {
+      contextWindow: Number(overrideForm.value.contextWindow) || 0,
+      maxOutputTokens: Number(overrideForm.value.maxOutputTokens) || 0,
+    });
+    MessagePlugin.success(t("reasonix.override.saved", { id: overrideModel.value }));
+    overrideDialog.value = false;
+    refresh();
+  } catch (e) {
+    MessagePlugin.error(t("reasonix.override.saveFailed", { message: e.message }));
+  }
+};
+
+// 模型上的覆盖摘要（只在真的配了逐模型上下文/输出时显示，避免每个 tag 都挂数字）
+const overrideLabel = (provider, modelId) => {
+  const ov = provider.modelOverrides?.[modelId];
+  if (!ov) return "";
+  const parts = [];
+  if (ov.context_window) parts.push(`C ${formatNumber(ov.context_window)}`);
+  if (ov.max_output_tokens) parts.push(`O ${formatNumber(ov.max_output_tokens)}`);
+  return parts.join(" · ");
+};
+
 const formatNumber = (n) => {
   if (!n) return "";
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
@@ -511,6 +564,10 @@ onMounted(refresh);
                 <span class="reasonix-detail-label">Base URL</span>
                 <span class="reasonix-detail-value">{{ p.baseUrl || "—" }}</span>
               </div>
+              <div v-if="p.requestUrl" class="reasonix-detail-item">
+                <span class="reasonix-detail-label">Request URL</span>
+                <span class="reasonix-detail-value">{{ p.requestUrl }}</span>
+              </div>
               <div v-if="p.chatUrl" class="reasonix-detail-item">
                 <span class="reasonix-detail-label">Chat URL</span>
                 <span class="reasonix-detail-value">{{ p.chatUrl }}</span>
@@ -545,9 +602,13 @@ onMounted(refresh);
               <div class="reasonix-model-tags">
                 <span v-for="m in p.models" :key="m" class="reasonix-model-tag">
                   <span class="reasonix-model-tag-name">{{ m }}</span>
+                  <Tag v-if="overrideLabel(p, m)" size="small" variant="light">{{ overrideLabel(p, m) }}</Tag>
                   <Tag v-if="isDefaultModel(p, m)" size="small" theme="success" variant="light">{{ t("common.default") }}</Tag>
                   <Tooltip v-if="!isDefaultModel(p, m)" :content="t('reasonix.model.setDefaultTooltip')" placement="top">
                     <span class="reasonix-model-tag-star" @click="setDefaultModel(p.name, m)"><StarIcon size="12px" /></span>
+                  </Tooltip>
+                  <Tooltip :content="t('reasonix.override.editTooltip')" placement="top">
+                    <span class="reasonix-model-tag-edit" @click="openOverrideDialog(p, m)"><EditIcon size="12px" /></span>
                   </Tooltip>
                   <Popconfirm :content="t('reasonix.model.deleteConfirm')" theme="danger" @confirm="handleDeleteModel(p.name, m)">
                     <span class="reasonix-model-tag-del"><DeleteIcon size="12px" /></span>
@@ -630,6 +691,11 @@ onMounted(refresh);
         <div class="reasonix-form-item"><label>{{ t("common.name") }} <span class="reasonix-form-required">*</span></label><Input v-model="addProviderForm.name" placeholder="deepseek" /></div>
         <div class="reasonix-form-item"><label>Kind</label><Select v-model="addProviderForm.kind" :options="kindOptions" creatable /></div>
         <div class="reasonix-form-item"><label>Base URL</label><Input v-model="addProviderForm.baseUrl" placeholder="https://api.deepseek.com" /></div>
+        <div class="reasonix-form-item">
+          <label>{{ t("reasonix.provider.requestUrlOptional") }}</label>
+          <Input v-model="addProviderForm.requestUrl" :placeholder="t('reasonix.provider.requestUrlPlaceholder')" />
+          <div class="reasonix-form-hint">{{ t("reasonix.provider.requestUrlHint") }}</div>
+        </div>
         <div class="reasonix-form-row">
           <div class="reasonix-form-item"><label>{{ t("reasonix.provider.chatUrlOptional") }}</label><Input v-model="addProviderForm.chatUrl" :placeholder="t('reasonix.provider.chatUrlPlaceholder')" /></div>
         </div>
@@ -659,6 +725,11 @@ onMounted(refresh);
         <div class="reasonix-form-item"><label>{{ t("common.name") }} <span class="reasonix-form-required">*</span></label><Input v-model="editForm.name" placeholder="deepseek" /></div>
         <div class="reasonix-form-item"><label>Kind</label><Select v-model="editForm.kind" :options="kindOptions" creatable /></div>
         <div class="reasonix-form-item"><label>Base URL</label><Input v-model="editForm.baseUrl" placeholder="https://api.deepseek.com" /></div>
+        <div class="reasonix-form-item">
+          <label>{{ t("reasonix.provider.requestUrlOptional") }}</label>
+          <Input v-model="editForm.requestUrl" :placeholder="t('reasonix.provider.requestUrlPlaceholder')" />
+          <div class="reasonix-form-hint">{{ t("reasonix.provider.requestUrlHint") }}</div>
+        </div>
         <div class="reasonix-form-item"><label>{{ t("reasonix.provider.chatUrlOptional") }}</label><Input v-model="editForm.chatUrl" /></div>
         <div class="reasonix-form-item"><label>{{ t("reasonix.provider.modelsUrlOptional") }}</label><Input v-model="editForm.modelsUrl" /></div>
         <div class="reasonix-form-item">
@@ -687,6 +758,25 @@ onMounted(refresh);
           <Input v-model="addModelId" placeholder="deepseek-v4-flash" @enter="handleAddModel" />
         </div>
         <div class="reasonix-form-hint">{{ t("reasonix.model.providerLabel", { provider: addModelProvider }) }}</div>
+      </div>
+    </Dialog>
+
+    <!-- 逐模型覆盖弹窗（model_overrides.<模型>） -->
+    <Dialog v-model:visible="overrideDialog" :header="t('reasonix.override.title')" width="460px" :confirm-btn="{ content: t('common.save'), theme: 'primary' }" @confirm="handleSaveOverride">
+      <div class="reasonix-edit-form">
+        <div class="reasonix-form-hint">{{ t("reasonix.override.scopeHint", { provider: overrideProvider, model: overrideModel }) }}</div>
+        <div class="reasonix-form-item">
+          <label>{{ t("common.contextWindow") }}</label>
+          <InputNumber v-model="overrideForm.contextWindow" :min="0" :step="1000" />
+          <div class="reasonix-form-hint">{{ t("reasonix.override.blankHint") }}</div>
+        </div>
+        <div class="reasonix-form-item">
+          <label>{{ t("common.maxOutput") }}</label>
+          <InputNumber v-model="overrideForm.maxOutputTokens" :min="0" :step="1000" />
+        </div>
+        <div v-if="overrideExtraKeys.length" class="reasonix-form-hint">
+          {{ t("reasonix.override.extraKept", { keys: overrideExtraKeys.join(t("common.listSeparator")) }) }}
+        </div>
       </div>
     </Dialog>
 

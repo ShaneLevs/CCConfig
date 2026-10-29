@@ -9,6 +9,8 @@ const { t } = require("./i18n")
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 const REASONIX_HOME = () => {
+  // REASONIX_HOME 可重定向主目录（与 Codex / Hermes / Grok / Kimi 同一先例）
+  if (process.env.REASONIX_HOME) return process.env.REASONIX_HOME
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
     return path.join(appData, 'reasonix')
@@ -49,13 +51,22 @@ const writeReasonixConfig = (doc) => {
 // ==================== Providers ====================
 
 // UI 认识并显式管理的字段（其余视为需要原样保留的扩展字段/子表）
+// request_url 是官方推荐的「完整请求地址」（openai / anthropic / responses 三种协议都认），
+// chat_url 是历史遗留的 OpenAI-only 字段 —— 两者都管理，写回时原值不动。
 const KNOWN_PROVIDER_FIELDS = [
-  'name', 'kind', 'base_url', 'chat_url', 'models_url', 'api_key_env',
-  'default', 'context_window', 'max_output_tokens', 'models', 'model',
+  'name', 'kind', 'base_url', 'chat_url', 'models_url', 'request_url', 'api_key_env',
+  'default', 'context_window', 'max_output_tokens', 'models', 'model', 'model_overrides',
 ]
 
+// Reasonix 官方的 provider kind 枚举（internal/contract/config）：
+//   openai    — OpenAI 兼容 /chat/completions
+//   anthropic — Anthropic 兼容 /v1/messages
+//   gemini    — Google Interactions API（实验性）
+// 注意不是 "google"：写成 google 会被配置校验拒绝（unsupported provider kind）。
+const REASONIX_KINDS = ['openai', 'anthropic', 'gemini']
+
 // 归一化一个 provider 条目供 UI 消费（models 始终为数组）
-// 未知字段（model_overrides / price / extra_body / proxy_bypass 等）原样收进 _extra，
+// 未知字段（price / extra_body / proxy_bypass / reasoning_protocol 等）原样收进 _extra，
 // 写回时由 buildProviderToml 还原，避免编辑一个字段导致整个子表丢失
 const normalizeProvider = (p) => {
   const extra = {}
@@ -68,13 +79,30 @@ const normalizeProvider = (p) => {
     baseUrl: p.base_url || '',
     chatUrl: p.chat_url || '',
     modelsUrl: p.models_url || '',
+    requestUrl: p.request_url || '',
     apiKeyEnv: p.api_key_env || '',
     default: p.default || '',
     contextWindow: toNumber(p.context_window),
     maxOutputTokens: toNumber(p.max_output_tokens),
     models: Array.isArray(p.models) ? p.models : (p.model ? [p.model] : []),
+    // 逐模型的上下文/输出覆盖（混合网关按模型区分窗口时用），未配置时为 {}
+    modelOverrides: normalizeModelOverrides(p.model_overrides),
     _extra: extra,
   }
+}
+
+// model_overrides 的值是子表：{ <model> = { context_window, max_output_tokens, ... } }。
+// 只规范化 UI 认识的两个数值字段，其余（reasoning_protocol / vision 等）原样保留。
+const normalizeModelOverrides = (raw) => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out = {}
+  for (const [model, ov] of Object.entries(raw)) {
+    if (!ov || typeof ov !== 'object' || Array.isArray(ov)) continue
+    out[model] = { ...ov }
+    if (ov.context_window !== undefined) out[model].context_window = toNumber(ov.context_window)
+    if (ov.max_output_tokens !== undefined) out[model].max_output_tokens = toNumber(ov.max_output_tokens)
+  }
+  return out
 }
 
 // 从 UI 结构构建写入 TOML 的 provider 对象（空字段不输出）
@@ -83,11 +111,24 @@ const buildProviderToml = (cfg) => {
   if (cfg.baseUrl) p.base_url = cfg.baseUrl
   if (cfg.chatUrl) p.chat_url = cfg.chatUrl
   if (cfg.modelsUrl) p.models_url = cfg.modelsUrl
+  if (cfg.requestUrl) p.request_url = cfg.requestUrl
   if (Array.isArray(cfg.models) && cfg.models.length) p.models = cfg.models
   if (cfg.default) p.default = cfg.default
   if (cfg.apiKeyEnv) p.api_key_env = cfg.apiKeyEnv
   if (cfg.contextWindow) p.context_window = Number(cfg.contextWindow)
   if (cfg.maxOutputTokens) p.max_output_tokens = Number(cfg.maxOutputTokens)
+  // 逐个模型的覆盖：空条目（没有任何字段）不写，避免留下 `[providers.model_overrides.x]` 空表
+  const overrides = normalizeModelOverrides(cfg.modelOverrides)
+  const kept = {}
+  for (const [model, ov] of Object.entries(overrides)) {
+    const entry = {}
+    for (const [k, v] of Object.entries(ov)) {
+      if (v === undefined || v === null || v === '') continue
+      entry[k] = v
+    }
+    if (Object.keys(entry).length) kept[model] = entry
+  }
+  if (Object.keys(kept).length) p.model_overrides = kept
   // 还原未被 UI 管理的扩展字段/子表
   for (const [k, v] of Object.entries(cfg._extra || {})) {
     if (v !== undefined) p[k] = v
@@ -221,11 +262,56 @@ const deleteReasonixModel = (providerName, modelId) => {
   prov.models = list.filter(m => m !== modelId)
   if (prov.model) delete prov.model
   if (clearedDefault) delete prov.default
+  // 逐模型覆盖随模型一起删除：留下 model_overrides.<已删模型> 只会是不再生效的死条目
+  if (prov.model_overrides && typeof prov.model_overrides === 'object' && prov.model_overrides[modelId] !== undefined) {
+    delete prov.model_overrides[modelId]
+    if (Object.keys(prov.model_overrides).length === 0) delete prov.model_overrides
+  }
   // 清理悬挂的 default_model 引用：完整引用（provider/model）或裸供应商名（解析到其默认模型）
   if (doc.default_model === `${providerName}/${modelId}` ||
       (clearedDefault && doc.default_model === providerName)) {
     doc.default_model = ''
   }
+  writeReasonixConfig(doc)
+  return true
+}
+
+// ==================== 逐模型覆盖（model_overrides） ====================
+// 官方语义：provider 级 context_window / max_output_tokens 是兜底，
+// model_overrides.<模型> 可逐模型替换（混合网关里不同模型窗口不同时必需）。
+// 这里只管理这两个数值字段，其它覆盖项（reasoning_protocol / vision 等）原样保留；
+// 两个字段都传 0 / 空时删除该模型条目，避免留下不再生效的空表。
+
+// 逐模型覆盖的写入语义：字段「未传（undefined）」= 不改，显式传 0 / 空 = 清除该字段。
+// 只有两个字段都被清空且没有其它覆盖项时才删除该模型条目。
+const setReasonixModelOverride = (providerName, modelId, { contextWindow, maxOutputTokens } = {}) => {
+  if (!providerName) throw new Error(t('serviceAgent.common.providerNameRequired'))
+  if (!modelId || typeof modelId !== 'string') throw new Error(t('serviceAgent.common.modelIdRequired'))
+  const doc = readReasonixConfig()
+  const prov = (doc.providers || []).find(p => p.name === providerName)
+  if (!prov) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerName }))
+  const list = Array.isArray(prov.models) ? prov.models : (prov.model ? [prov.model] : [])
+  if (!list.includes(modelId)) throw new Error(t('serviceAgent.common.modelNotFound', { id: modelId }))
+
+  const overrides = normalizeModelOverrides(prov.model_overrides)
+  const current = { ...(overrides[modelId] || {}) }
+  // 注意用 === undefined 而不是 falsy：0 是「清除」，不传才是「不改」
+  if (contextWindow !== undefined) {
+    const ctx = Number(contextWindow) || 0
+    if (ctx) current.context_window = ctx
+    else delete current.context_window
+  }
+  if (maxOutputTokens !== undefined) {
+    const out = Number(maxOutputTokens) || 0
+    if (out) current.max_output_tokens = out
+    else delete current.max_output_tokens
+  }
+
+  if (Object.keys(current).length) overrides[modelId] = current
+  else delete overrides[modelId]
+  if (Object.keys(overrides).length) prov.model_overrides = overrides
+  else delete prov.model_overrides
+
   writeReasonixConfig(doc)
   return true
 }
@@ -333,11 +419,11 @@ module.exports = {
   getReasonixHome, getReasonixConfigPath,
   readReasonixConfig, writeReasonixConfig,
   getReasonixProviderList, addReasonixProvider, updateReasonixProvider, deleteReasonixProvider,
-  addReasonixModel, deleteReasonixModel,
+  addReasonixModel, deleteReasonixModel, setReasonixModelOverride,
   getReasonixDefaultModel, setReasonixDefaultModel,
   readReasonixEnv, getReasonixApiKey, writeReasonixEnvKey, deleteReasonixEnvKey,
   generateReasonixApiKeyEnv,
   openReasonixDir, isReasonixInstalled,
   // 内部结构函数导出，供测试/复用
-  normalizeProvider, buildProviderToml,
+  normalizeProvider, normalizeModelOverrides, buildProviderToml, REASONIX_KINDS,
 }

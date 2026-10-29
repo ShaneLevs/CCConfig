@@ -56,6 +56,8 @@
 .reasonix-model-tag-name { font-size: 12px; color: var(--td-text-color-primary); }
 .reasonix-model-tag-star { cursor: pointer; color: var(--td-warning-color); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
 .reasonix-model-tag-star:hover { color: var(--td-warning-color); background: var(--td-warning-color-1); }
+.reasonix-model-tag-edit { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
+.reasonix-model-tag-edit:hover { color: var(--td-brand-color); background: var(--td-bg-color-container-hover); }
 .reasonix-model-tag-del { cursor: pointer; color: var(--td-text-color-placeholder); display: flex; align-items: center; padding: 2px; border-radius: var(--td-radius-small); }
 .reasonix-model-tag-del:hover { color: var(--td-error-color); background: var(--td-error-color-1); }
 

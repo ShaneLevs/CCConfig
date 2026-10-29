@@ -184,9 +184,22 @@ omp:
   纯文件读写，不依赖 omp 二进制 / bun 运行时
 
 Reasonix:
-  ~/.reasonix/config.toml（Windows: %APPDATA%\reasonix\config.toml）→ smol-toml 读写
+  ~/.reasonix/config.toml（Windows: %APPDATA%\reasonix\config.toml；REASONIX_HOME 可重定向）→ smol-toml 读写
+    解析失败抛错阻断写回（否则 {providers:[...]} 会抹掉 [ui]/[agent]/[tools]/[sandbox]/[[plugins]] 等节）
   ~/.reasonix/.env → API Key / 环境变量管理（掩码编辑，支持按 Reasonix 官方规则自动生成变量名）
-  供应商支持多种协议（openai 兼容等），未知扩展字段写回时原样保留
+  provider kind 只有三种（internal/contract/config）：openai / anthropic / gemini（Google Interactions API，实验性）。
+    写成 google 会被配置校验拒绝（unsupported provider kind）—— 通用库 google-generative-ai 下发映射到 gemini
+  受管字段：name / kind / base_url / chat_url / models_url / request_url / api_key_env /
+    default / context_window / max_output_tokens / models / model_overrides
+    request_url = 完整请求地址（openai / anthropic / responses 三种协议都认，官方推荐）；chat_url 是历史
+      OpenAI-only 字段，两者都原样往返；未受管字段（price / extra_body / reasoning_protocol / balance_url 等）进 _extra 写回
+    context_window / max_output_tokens 是 **provider 级兜底**；混合网关按模型区分窗口时用
+      model_overrides.<模型> = { context_window, max_output_tokens, … } 逐模型覆盖
+      UI 只编辑这两个数值字段，其它覆盖项（reasoning_protocol / vision 等）原样保留；
+      写入语义：字段不传 = 不改，显式传 0 = 清除该字段；两字段都清空且无其它覆盖项时删掉该模型条目；
+      删除模型时一并清掉它的 model_overrides 条目（避免死配置）
+  通用库下发（dispatchToReasonix）把模型上下文/最大输出写进 model_overrides.<模型>（有值才写），
+    重下发不抹该模型下其它手工覆盖项
 
 Codex:
   ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）

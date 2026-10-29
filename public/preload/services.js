@@ -311,6 +311,11 @@ window.services = {
   deleteOmpModel: omp.deleteOmpModel,
   openOmpDir: omp.openOmpDir,
   isOmpInstalled: omp.isOmpInstalled,
+  // omp 用量统计：读会话 JSONL（含 gc 归档）或只回放落库历史
+  readOmpUsageAsync: usageAsync.readOmpUsageAsync,
+  readOmpUsage: ompUsage.readOmpUsage,
+  readOmpUsageFromHistory: ompUsage.readOmpUsageFromHistory,
+  openOmpSessionsDir: ompUsage.openOmpSessionsDir,
 
   // ==================== Codex（Desktop / CLI 模型配置） ====================
 
