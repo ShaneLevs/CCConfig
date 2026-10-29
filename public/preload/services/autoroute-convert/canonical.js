@@ -29,6 +29,10 @@
 //   start / text_delta / reasoning_delta / reasoning_signature / tool_start / tool_delta / end / error
 // 媒体：目标协议载不了时降级成 [attachment …] 文本占位（绝不静默丢弃，模型至少知道有东西被略过）；
 // 同协议直通不受影响（不走 canonical，字节级转发）。
+// model 字段方向性：请求方向 canonical.model 是真实目标模型 ID（映射模式下由 alias 解析而来）；
+// 映射模式默认还会把响应方向回给客户端的 model 改写成映射名——转换路径靠 pipeStream 的
+// modelOverride 覆盖 start 事件（各 FrameWriter 只从 start 取 model）+ source.formatResponse 后
+// 覆盖顶层 model，透传路径见 model-alias.js，三条路径必须一起改才不出现口径不一致。
 
 const crypto = require("crypto");
 

@@ -96,6 +96,8 @@
       "removeMapping": "删除此映射",
       "addMapping": "添加映射",
       "mappingStatus": "{ready}/{total} 行已选目标（上限 {max}）。默认预置 flash / plus / pro；名字可改，同名取靠前的映射。",
+      "rewriteModel": "统计显示映射名",
+      "rewriteModelHint": "把响应里的 model 改写成映射名。agent 的会话记录（进而各应用的使用统计）才会显示映射名，而不是上游真实模型名；关闭则原样透传上游模型名。",
       "supportedEndpoints": "支持的接口",
       "statRequests": "调用次数",
       "statSuccessRate": "成功率",
@@ -133,7 +135,7 @@
       "dispatchFailed": "下发失败: {message}",
       "dispatchTitle": "下发自动网关到 Agent",
       "dispatch": "下发",
-      "dispatchHint": "写入虚拟供应商「router」（{baseUrl}，{scope}）；映射模式写入映射名，Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。",
+      "dispatchHint": "写入虚拟供应商「router」（{baseUrl}，{scope}）；每次下发整条覆盖该供应商的模型清单，原先生效的继续生效。映射模式写入映射名，Claude Code 用 Anthropic 协议，其余 OpenAI 兼容。",
       "scopeMappings": "全部 {count} 个映射",
       "scopeModels": "全部已启用的 {count} 个模型"
     },

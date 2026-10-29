@@ -103,6 +103,14 @@ Claude:
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；不校验 key（仅监听本机回环地址，Authorization Bearer / x-api-key 传任意值或留空均放行）
     模型映射（mapping 模式）：固定映射名 alias → 主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
+      响应 model 改写（rewriteModel，默认 true，网关页映射区可关）：请求方向只把 model 换成真实模型 ID，上游返回的 model 仍是真名；
+      而 agent 会把响应 model 记进自己的会话记录（Claude Code 的 assistant.message.model、Grok Build 的 usage.json modelUsage 键），
+      「使用统计」读的正是这些记录 → 不改写就只能看到上游真实模型名。实现见 autoroute-convert/model-alias.js，只改三处结构化位置
+      （顶层 model / message.model（Anthropic message_start）/ response.model（Responses 事件）），正文里的 "model" 字样不动；
+      四条出站路径都要改：透传非流式 rewriteJsonModel、透传流式 createSseModelRewriter（按行缓冲，支持半行分片与 CRLF，
+      与原先的 usage 旁路扫描并行）、转换非流式覆盖 formatResponse 的顶层 model、转换流式走 pipeStream 的 modelOverride
+      （三个 FrameWriter 都只从 start 事件取 model，所以只改那一处）。关掉即恢复字节级透传——客户端按响应模型名
+      推断上下文窗口 / 定价时（映射名不在其内置表里会退化成默认值）可用它自救。网关自己的请求日志不受影响：仍记真实模型 ID + alias
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
     统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页默认累积，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
@@ -123,6 +131,20 @@ Claude:
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
     配置存本地数据库（ccconfig_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
     桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库
+  网关下发到 agent（dispatch.dispatchAutoRoute）= **覆盖式重建 router 供应商**，不是合并：
+    名称固定 router（同时是 Codex 的 model_providers.<id>，TOML 裸键只能英文）；baseUrl 指向网关、key 为网关占位符
+    每次下发先清空该 agent 里的 router 条目与其全部模型，再按「当前网关模型清单」整条重写，
+    因此已从网关移除的模型不会残留（普通「通用模型下发」dispatchCommonModel 仍是合并语义）
+    AUTOROUTE_REBUILD 为每个 agent 提供 before / clear / after 三个钩子（apis 不匹配时完全不清理，避免先删再报协议错）：
+      继承生效状态：router 原本是该 agent 的当前/默认供应商 → 重建后继续生效（Claude 还要同步 settings.json 的托管 env）
+      继承默认模型：原默认模型仍在新清单里就沿用，否则取新清单第一个；ZCode 非首选时还会把 providerOrder 位置还回去
+      继承停用开关：MiniMax provider.enabled / Command Code provider.disabled / Cline 条目 enabled 原样保留
+      各 agent 的「生效点」：Claude 激活配置（ccconfig_active_config_id）、OpenCode 顶层 model、Pi defaultProvider、
+      omp modelRoles 引用（旧模型被删时改指新清单第一个，保留 :level）、Reasonix default_model、Codex 顶层 model_provider/model、
+      Kimi default_model 别名、MiniMax doc.defaultModel、Qoder provider.model、ZCode providerOrder[0]+modelOrder[0]、
+      Hermes 顶层 model.provider/default、DSH agent-default-model、Grok models.default、Cline lastUsedProvider、Command Code settings.model
+    清空时绕过 delete* 的「在用」守卫（生效中的供应商本来就删不掉）；Claude 只清空六个模型槽位、保留 _id/名称/额外字段；
+    重建后按各 agent 自己的写入路径（dispatchToXxx）重新生成模型条目，元数据映射规则不变
 
 OpenCode:
   ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  本地数据库

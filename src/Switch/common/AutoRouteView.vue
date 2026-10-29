@@ -18,7 +18,7 @@ const { visibleAgentOptions } = useAgentVisibility();
 const AGENT_DISPATCH_OPTIONS = visibleAgentOptions;
 
 const loading = ref(false);
-const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [] });
+const config = ref({ enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], rewriteModel: true });
 const status = ref({ running: false, port: 17877, baseUrl: "", logs: [], stats: null, history: null });
 const providers = ref([]);
 const selectionKeys = ref([]);
@@ -184,6 +184,17 @@ const onMappingTargetChange = (index, val) => {
   const [provider = "", modelId = ""] = String(val || "").split("::");
   const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, provider, modelId } : m));
   saveMappings(mappings);
+};
+
+// 响应 model 改写开关（映射模式）：agent 的用量统计读的是它自己会话记录里的模型名，
+// 这个开关决定记录的是映射名还是上游真实模型名
+const onRewriteModelChange = (val) => {
+  try {
+    config.value = window.services.writeAutoRouteConfig({ rewriteModel: !!val });
+  } catch (e) {
+    config.value.rewriteModel = !val;
+    MessagePlugin.error(e.message);
+  }
 };
 
 const onToggleEnabled = async (val) => {
@@ -498,6 +509,13 @@ onUnmounted(() => {
           </Button>
           <span class="autoroute-hint">
             {{ t('commonApp.autoRoute.mappingStatus', { ready: readyMappings, total: mappingRows.length, max: MAX_MAPPINGS }) }}
+          </span>
+        </div>
+        <div class="autoroute-form-row">
+          <span class="autoroute-label">{{ t('commonApp.autoRoute.rewriteModel') }}</span>
+          <Switch v-model="config.rewriteModel" @change="onRewriteModelChange" />
+          <span class="autoroute-hint autoroute-mode-hint">
+            {{ t('commonApp.autoRoute.rewriteModelHint') }}
           </span>
         </div>
       </template>

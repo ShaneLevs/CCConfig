@@ -24,7 +24,9 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
 // 返回规范 end 事件里的 usage（供网关统计），无则 null。
 // upstreamRes: 上游 IncomingMessage（已 200）；target: 出站适配器；source: 入站适配器；res: 客户端 ServerResponse
 // onClientGone: 客户端提前断开时回调（上游随之被中止，统计侧据此记 499）
-const pipeStream = async ({ upstreamRes, target, source, res, onClientGone }) => {
+// modelOverride: 非空时把 start 事件的 model（上游真实模型名）换成映射名，三个 FrameWriter 都从
+//   start 事件取 model，改这一处即可让整条流的响应 model 与 /v1/models 暴露的映射名一致
+const pipeStream = async ({ upstreamRes, target, source, res, onClientGone, modelOverride }) => {
   // 客户端在等待上游响应头的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
   if (res.destroyed || res.writableEnded) {
     try {
@@ -52,6 +54,7 @@ const pipeStream = async ({ upstreamRes, target, source, res, onClientGone }) =>
   let endUsage = null;
   try {
     for await (const event of target.readStream(upstreamRes)) {
+      if (modelOverride && event && event.type === "start") event.model = modelOverride;
       if (event.type === "end" && event.usage) endUsage = event.usage;
       if (closed) break;
       for (const frame of writer.push(event)) {

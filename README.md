@@ -18,7 +18,7 @@
 - **统一应用切换** — 十五个 AI CLI + 跨 agent 的「通用配置」，各自独立配置，一键切换
 - **API 配置管理** — 逐应用读取、保存、切换供应商配置，本工具不管理的字段原样保留（未知键往返不丢）
 - **供应商/模型主数据** — 共享的供应商与模型库（API Key AES-256-CBC 加密），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议，一键下发到任意受支持的 agent
-- **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）
+- **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）；「模型映射」模式下用固定映射名（如 `pro` / `plus`）对外，换上游只改映射，响应里的 model 也会改写成映射名（默认开，可关），所以各 agent 的使用统计显示的是映射名而不是上游真实模型名
 - **MCP 管理** — 逐应用 MCP Server 配置 + 实时工具发现画布；通用配置里的共享 MCP 按机器开关镜像写入本地 JSON 文件
 - **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill 并用 `.disabled` 机制启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
 - **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图；通用统计页另有按天/按周堆叠的 Token 柱状图，可按模型或 Agent 拆分看用量构成

@@ -96,6 +96,8 @@
       "removeMapping": "Remove this mapping",
       "addMapping": "Add mapping",
       "mappingStatus": "{ready}/{total} rows have a target (max {max}). Defaults are flash / plus / pro; names are editable and the first mapping with a duplicate name wins.",
+      "rewriteModel": "Show mapping name in stats",
+      "rewriteModelHint": "Rewrite the model field in responses to the mapping name, so agents record it and their usage stats show the mapping name instead of the upstream model name. Turn off to pass the upstream model name through unchanged.",
       "supportedEndpoints": "Supported endpoints",
       "statRequests": "Requests",
       "statSuccessRate": "Success rate",
@@ -133,7 +135,7 @@
       "dispatchFailed": "Dispatch failed: {message}",
       "dispatchTitle": "Dispatch gateway to Agent",
       "dispatch": "Dispatch",
-      "dispatchHint": "Writes the virtual provider \"router\" ({baseUrl}, {scope}); mapping mode writes mapping names. Claude Code uses the Anthropic protocol, the rest use OpenAI-compatible APIs.",
+      "dispatchHint": "Writes the virtual provider \"router\" ({baseUrl}, {scope}); each dispatch replaces that provider's whole model list, and keeps it active if it already was. Mapping mode writes mapping names. Claude Code uses the Anthropic protocol, the rest use OpenAI-compatible APIs.",
       "scopeMappings": "all {count} mappings",
       "scopeModels": "all {count} enabled models"
     },
