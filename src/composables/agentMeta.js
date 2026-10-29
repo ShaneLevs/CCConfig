@@ -27,7 +27,7 @@ export const AGENT_META = {
   opencode: { name: "OpenCode", icon: `${ASSET_BASE}icon-opencode.png` },
   pi: { name: "Pi Agent", icon: `${ASSET_BASE}icon-pi.png` },
   omp: { name: "omp", icon: `${ASSET_BASE}icon-omp.svg` },
-  reasonix: { name: "Reasonix", icon: `${ASSET_BASE}icon-reasonix.svg` },
+  reasonix: { name: "Reasonix", icon: `${ASSET_BASE}icon-reasonix.png` },
   codex: { name: "Codex", icon: `${ASSET_BASE}icon-codex.png` },
   kimi: { name: "Kimi Code", icon: `${ASSET_BASE}icon-kimi.svg` },
   minimax: { name: "MiniMax Code", icon: `${ASSET_BASE}icon-minimax.svg` },

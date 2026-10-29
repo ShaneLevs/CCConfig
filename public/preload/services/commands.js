@@ -114,7 +114,7 @@ function getFeatureDefinitions() {
     reasonixConfig: {
       code: "reasonixConfig",
       explain: t("service.commands.explain.reasonixConfig"),
-      icon: "icon-reasonix.svg",
+      icon: "icon-reasonix.png",
       cmds: CMDS.reasonixConfig,
     },
     codexConfig: {
