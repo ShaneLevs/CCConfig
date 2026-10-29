@@ -629,6 +629,17 @@ const deleteDshProvider = (route) => {
   return true
 }
 
+// 网关覆盖式下发专用：只删 llm-pi-ai.providers[route] 条目。
+// 与 deleteDshProvider 的区别：不级联默认模型指针、不删凭据 —— 调用方（dispatch.js）会在
+// 重建后把默认指针改回新模型，凭据名由路由确定性生成，重建时按同名字写回。
+const dropDshProviderEntry = (route) => {
+  const key = providerRouteFor(route)
+  if (!key) return true
+  if (!getDshProviderList().some((p) => p.route === key)) return true
+  commitProviders((providers) => { delete providers[key] })
+  return true
+}
+
 // -------- 默认模型（agent-default-model） --------
 
 // 供应商可用模型 ID：官方未显式配置时用内置目录；第三方无显式列表时返回空数组（来自已装目录，不校验）
@@ -872,7 +883,7 @@ module.exports = {
   getDshOfficial, saveDshOfficial, removeDshOfficial,
   // 第三方供应商
   getDshProviderList, addDshProvider, updateDshProvider, deleteDshProvider,
-  upsertDshProvider, providerRouteFor, apiKeyEnvFor, upsertDshModel,
+  upsertDshProvider, providerRouteFor, apiKeyEnvFor, upsertDshModel, dropDshProviderEntry,
   // 默认模型
   getDshDefaultModel, setDshDefaultModel,
   // 汇总 / 目录 / 检测

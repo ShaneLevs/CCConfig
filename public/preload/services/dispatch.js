@@ -21,6 +21,7 @@
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
 const crypto = require('./crypto')
+const claudeConfig = require('./config')
 const opencode = require('./opencode')
 const pi = require('./pi')
 const omp = require('./omp')
@@ -120,13 +121,23 @@ const upsertDispatchModel = (list, model, extra = {}) => {
 
 // Claude Code：下发 = 在 uTools DB 保存一份「以 provider 命名」的配置（ccconfig_config_dispatch_<provider>），
 // 与 Claude 配置页的配置列表互通（切换时由 useConfigSwitch 写入 settings.json）。
-// 一个 provider 一份配置；模型自动填入空闲槽位（默认 → Haiku → Sonnet → Opus → Subagent），
-// 已有同模型跳过，5 个槽位全满时报错提示（不覆盖已有模型）。
+// 一个 provider 一份配置；模型自动填入空闲槽位（默认 → Haiku → Sonnet → Opus → Fable → Subagent），
+// 已有同模型跳过，6 个槽位全满时报错提示（不覆盖已有模型）。
 // 仅接受 anthropic-messages 协议的供应商（激活后写入 ANTHROPIC_* env，其余协议不可用）。
 const DB_PREFIX = 'ccconfig_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
-const CLAUDE_MODEL_SLOTS = ['model', 'defaultHaikuModel', 'defaultSonnetModel', 'defaultOpusModel', 'subagentModel']
-const CLAUDE_SLOT_LABELS = { model: 'service.dispatch.slotDefault', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', subagentModel: 'Subagent' }
+// 槽位与 Claude 配置页 / 激活逻辑（useConfigSwitch）保持同一套顺序：默认 → Haiku → Sonnet → Opus →
+// Fable → Subagent（Fable 槽位是后加的，历史上网关下发漏了它，导致最多只能填 5 个模型）
+const CLAUDE_SLOT_ENVS = [
+  ['model', 'ANTHROPIC_MODEL'],
+  ['defaultHaikuModel', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
+  ['defaultSonnetModel', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
+  ['defaultOpusModel', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
+  ['defaultFableModel', 'ANTHROPIC_DEFAULT_FABLE_MODEL'],
+  ['subagentModel', 'CLAUDE_CODE_SUBAGENT_MODEL'],
+]
+const CLAUDE_MODEL_SLOTS = CLAUDE_SLOT_ENVS.map(([slot]) => slot)
+const CLAUDE_SLOT_LABELS = { model: 'service.dispatch.slotDefault', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', defaultFableModel: 'Fable', subagentModel: 'Subagent' }
 const claudeSlotLabel = (slot) =>
   slot === 'model' ? t(CLAUDE_SLOT_LABELS[slot]) : CLAUDE_SLOT_LABELS[slot]
 
@@ -155,6 +166,7 @@ const dispatchToClaude = (provider, model) => {
         defaultHaikuModel: '',
         defaultSonnetModel: '',
         defaultOpusModel: '',
+        defaultFableModel: '',
         subagentModel: '',
         extraFields: [],
         updatedAt: now,
@@ -958,6 +970,541 @@ const cleanupLegacyAutoRoute = (app) => {
   }
 };
 
+// ==================== 网关下发：router 供应商覆盖式重建 ====================
+// 网关下发代表「当前全量模型清单」，因此每次下发都把 router 供应商整条重建（连接信息 + 模型列表
+// 全部由网关重写），不在 agent 侧做合并——否则历次下发过的模型会沉淀成混合清单（旧模型删不掉、
+// 已下线的模型还在选择器里）。重建前后继承三件事（仅网关下发；通用模型下发仍是合并语义）：
+//   1. 生效状态：router 原本是当前生效/默认供应商 → 重建后继续生效
+//   2. 默认模型：原默认模型仍在新清单里就沿用，否则取新清单第一个
+//   3. 停用开关：agent 自己的供应商级 enabled / disabled（MiniMax / Command Code / Cline）保持原样
+// 每个 agent 一个 spec：
+//   apis   支持的协议。不匹配时不做任何清理（否则协议不兼容会先把 router 删空再报错）
+//   before 读状态，返回 null 表示当前没有 router 条目（无需清理）
+//   clear  删除 router 条目与其全部模型。**不依赖 delete* 的「在用」守卫**：生效中的供应商
+//          本来就删不掉，直接按文件结构清理
+//   after  恢复生效状态 / 默认模型 / 停用开关。applied = 本次成功写入的模型 ID（按下发顺序）
+const AUTOROUTE_ACTIVE_CLAUDE_DOC = 'ccconfig_active_config_id'
+const claudeRouterDocId = () => DISPATCH_DB_PREFIX + AUTOROUTE_PROVIDER_NAME
+const pickAppliedModel = (prior, applied) => (prior && applied.includes(prior.model) ? prior.model : applied[0])
+
+// 生效中的 Claude 配置被重建后同步 settings.json：只动托管 env 字段。
+// 全局额外字段是激活该配置时写入的，重建不改它们（与 useConfigSwitch 的托管字段清单一致）
+const syncClaudeRouterEnv = (doc) => {
+  const settings = claudeConfig.readClaudeSettings() || {}
+  if (!settings.env || typeof settings.env !== 'object') settings.env = {}
+  const authVar = doc.authVar === 'ANTHROPIC_API_KEY' ? 'ANTHROPIC_API_KEY' : 'ANTHROPIC_AUTH_TOKEN'
+  for (const v of ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
+    if (v !== authVar) delete settings.env[v]
+  }
+  settings.env[authVar] = crypto.decrypt(doc.key || '')
+  settings.env.ANTHROPIC_BASE_URL = doc.baseUrl || ''
+  for (const [slot, env] of CLAUDE_SLOT_ENVS) {
+    const value = String(doc[slot] || '').trim()
+    if (value) settings.env[env] = value
+    else delete settings.env[env]
+  }
+  claudeConfig.writeClaudeSettings(settings)
+}
+
+const AUTOROUTE_REBUILD = {
+  // Claude：router 是一份 DB 配置文档（6 个模型槽位），清空槽位后由 dispatchToClaude 按顺序重填
+  claude: {
+    apis: ['anthropic-messages'],
+    before() {
+      let doc = null
+      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return null }
+      if (!doc) return null
+      let activeId = ''
+      try {
+        const active = window.utools.db.get(AUTOROUTE_ACTIVE_CLAUDE_DOC)
+        activeId = (active && active.configId) || ''
+      } catch (e) { /* ignore */ }
+      return { active: activeId === doc._id, model: String(doc.model || '') }
+    },
+    clear() {
+      let doc = null
+      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return }
+      if (!doc) return
+      const next = { ...doc, key: '', baseUrl: '', updatedAt: Date.now() }
+      for (const slot of CLAUDE_MODEL_SLOTS) next[slot] = ''
+      const res = window.utools.db.put(next)
+      if (!res || !res.ok)
+        throw new Error(
+          res && res.message
+            ? t('service.dispatch.claudeSaveFailedReason', { message: res.message })
+            : t('service.dispatch.claudeSaveFailed'),
+        )
+    },
+    after(prior, applied) {
+      if (!applied.length) return
+      let doc = null
+      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return }
+      if (!doc) return
+      // 沿用原默认模型：它还在新槽位里就换回默认槽（两个槽位内容对调，不丢模型）
+      if (prior.model && doc.model !== prior.model) {
+        const other = CLAUDE_MODEL_SLOTS.find((slot) => slot !== 'model' && doc[slot] === prior.model)
+        if (other) {
+          const next = { ...doc, model: prior.model, [other]: doc.model, updatedAt: Date.now() }
+          const res = window.utools.db.put(next)
+          if (res && res.ok) doc = next
+        }
+      }
+      if (prior.active) syncClaudeRouterEnv(doc)
+    },
+  },
+
+  // OpenCode：provider[id] + 顶层 model（"<id>/<model>" 即当前生效模型）
+  opencode: {
+    before() {
+      const current = opencode.readOpencodeConfig()
+      const prev = current.provider && current.provider[AUTOROUTE_PROVIDER_NAME]
+      if (!prev) return null
+      const prefix = `${AUTOROUTE_PROVIDER_NAME}/`
+      const active = typeof current.model === 'string' && current.model.startsWith(prefix)
+      return { active, model: active ? current.model.slice(prefix.length) : '' }
+    },
+    clear() {
+      const current = opencode.readOpencodeConfig()
+      if (!current.provider || !current.provider[AUTOROUTE_PROVIDER_NAME]) return
+      delete current.provider[AUTOROUTE_PROVIDER_NAME]
+      opencode.writeOpencodeConfig(current)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      const current = opencode.readOpencodeConfig()
+      current.model = `${AUTOROUTE_PROVIDER_NAME}/${pickAppliedModel(prior, applied)}`
+      opencode.writeOpencodeConfig(current)
+    },
+  },
+
+  // Pi：models.json providers[name] + settings.json defaultProvider/defaultModel
+  pi: {
+    before() {
+      const models = pi.readPiModels()
+      if (!models.providers || !models.providers[AUTOROUTE_PROVIDER_NAME]) return null
+      const settings = pi.readPiSettings()
+      const active = settings.defaultProvider === AUTOROUTE_PROVIDER_NAME
+      return { active, model: active ? String(settings.defaultModel || '') : '' }
+    },
+    clear() {
+      const models = pi.readPiModels()
+      if (!models.providers || !models.providers[AUTOROUTE_PROVIDER_NAME]) return
+      delete models.providers[AUTOROUTE_PROVIDER_NAME]
+      pi.writePiModels(models)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      const settings = pi.readPiSettings()
+      settings.defaultProvider = AUTOROUTE_PROVIDER_NAME
+      settings.defaultModel = pickAppliedModel(prior, applied)
+      pi.writePiSettings(settings)
+    },
+  },
+
+  // omp：models.yml providers[name]（无默认供应商概念，modelRoles 的 "<provider>/<model>[:level]" 才是生效点）
+  omp: {
+    before() {
+      const models = omp.readOmpModels()
+      if (!models.providers || !models.providers[AUTOROUTE_PROVIDER_NAME]) return null
+      const refs = omp.getOmpModelRoleRefs().filter(({ ref }) => {
+        const parsed = omp.parseOmpModelRef(ref)
+        return parsed && parsed.provider === AUTOROUTE_PROVIDER_NAME
+      })
+      return { active: refs.length > 0, model: '', refs }
+    },
+    clear() {
+      const models = omp.readOmpModels()
+      if (!models.providers || !models.providers[AUTOROUTE_PROVIDER_NAME]) return
+      delete models.providers[AUTOROUTE_PROVIDER_NAME]
+      omp.writeOmpModels(models)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      // 角色引用的旧模型已不在新清单里 → 改指新清单第一个（保留 :level 后缀）
+      const roles = omp.readOmpModelRoles() || {}
+      let touched = false
+      for (const { role, ref } of prior.refs || []) {
+        const parsed = omp.parseOmpModelRef(ref)
+        if (!parsed || parsed.provider !== AUTOROUTE_PROVIDER_NAME) continue
+        if (applied.includes(parsed.model)) continue
+        roles[role] = `${AUTOROUTE_PROVIDER_NAME}/${pickAppliedModel(prior, applied)}${parsed.level ? `:${parsed.level}` : ''}`
+        touched = true
+      }
+      if (touched) omp.writeOmpModelRoles(roles)
+    },
+  },
+
+  // Reasonix：config.toml providers[] + 顶层 default_model（"<name>/<model>"）
+  reasonix: {
+    before() {
+      const doc = reasonix.readReasonixConfig()
+      const list = Array.isArray(doc.providers) ? doc.providers : []
+      if (!list.some((p) => p && p.name === AUTOROUTE_PROVIDER_NAME)) return null
+      const dm = String(doc.default_model || '')
+      const prefix = `${AUTOROUTE_PROVIDER_NAME}/`
+      const active = dm === AUTOROUTE_PROVIDER_NAME || dm.startsWith(prefix)
+      return { active, model: active && dm.startsWith(prefix) ? dm.slice(prefix.length) : '' }
+    },
+    clear() {
+      const doc = reasonix.readReasonixConfig()
+      if (!Array.isArray(doc.providers) || !doc.providers.some((p) => p && p.name === AUTOROUTE_PROVIDER_NAME)) return
+      doc.providers = doc.providers.filter((p) => !(p && p.name === AUTOROUTE_PROVIDER_NAME))
+      reasonix.writeReasonixConfig(doc)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      const doc = reasonix.readReasonixConfig()
+      doc.default_model = `${AUTOROUTE_PROVIDER_NAME}/${pickAppliedModel(prior, applied)}`
+      reasonix.writeReasonixConfig(doc)
+    },
+  },
+
+  // Codex：[model_providers.<id>] + 顶层 model_provider/model，模型列表另存 uTools DB
+  codex: {
+    apis: ['openai-completions', 'openai-responses'],
+    before() {
+      const doc = codex.readCodexConfig()
+      const tables = doc.model_providers && typeof doc.model_providers === 'object' ? doc.model_providers : {}
+      if (!tables[AUTOROUTE_PROVIDER_NAME]) return null
+      const active = doc.model_provider === AUTOROUTE_PROVIDER_NAME
+      return { active, model: active ? String(doc.model || '') : '' }
+    },
+    clear() {
+      const doc = codex.readCodexConfig()
+      const tables = doc.model_providers && typeof doc.model_providers === 'object' ? doc.model_providers : {}
+      if (!tables[AUTOROUTE_PROVIDER_NAME]) return
+      delete tables[AUTOROUTE_PROVIDER_NAME]
+      if (!Object.keys(tables).length) delete doc.model_providers
+      codex.writeCodexConfig(doc)
+      // DB 模型列表（Codex 页快捷切换 / models.json 目录的数据源）一并清空，否则旧模型留在选择器里
+      for (const id of codex.getCodexProviderModels(AUTOROUTE_PROVIDER_NAME)) {
+        codex.deleteCodexModel(AUTOROUTE_PROVIDER_NAME, id)
+      }
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      codex.setCodexDefaultModel(AUTOROUTE_PROVIDER_NAME, pickAppliedModel(prior, applied))
+    },
+  },
+
+  // Kimi Code：[providers.<name>] + [models."<name>/<id>"] + default_model（别名）
+  kimi: {
+    before() {
+      const provs = kimi.getKimiProviderList()
+      if (!provs.some((p) => p && p.name === AUTOROUTE_PROVIDER_NAME)) return null
+      const prefix = `${AUTOROUTE_PROVIDER_NAME}/`
+      const dm = String(kimi.getKimiDefaultModel() || '')
+      const active = dm.startsWith(prefix)
+      return { active, model: active ? dm.slice(prefix.length) : '' }
+    },
+    clear() {
+      const doc = kimi.readKimiConfig()
+      let touched = false
+      if (doc.providers && doc.providers[AUTOROUTE_PROVIDER_NAME]) {
+        delete doc.providers[AUTOROUTE_PROVIDER_NAME]
+        touched = true
+      }
+      if (doc.models && typeof doc.models === 'object') {
+        for (const [alias, entry] of Object.entries(doc.models)) {
+          if (entry && entry.provider === AUTOROUTE_PROVIDER_NAME) {
+            delete doc.models[alias]
+            touched = true
+          }
+        }
+      }
+      const prefix = `${AUTOROUTE_PROVIDER_NAME}/`
+      if (typeof doc.default_model === 'string' && doc.default_model.startsWith(prefix)) {
+        delete doc.default_model
+        touched = true
+      }
+      if (touched) kimi.writeKimiConfig(doc)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      kimi.setKimiDefaultModel(`${AUTOROUTE_PROVIDER_NAME}/${pickAppliedModel(prior, applied)}`)
+    },
+  },
+
+  // MiniMax Code：custom_provider.<key>（含 models 字典）+ defaultModel（custom_provider:<key>/<model>）
+  minimax: {
+    apis: minimax.MINIMAX_API_FORMATS,
+    before() {
+      const key = minimax.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = minimax.getMinimaxProviderList().find((p) => p.id === key && !p.managed)
+      if (!prev) return null
+      const prefix = `${minimax.CUSTOM_PREFIX}:${key}/`
+      const dm = String(minimax.getMinimaxDefaultModel() || '').split('#')[0]
+      const active = dm.startsWith(prefix)
+      return { key, active, model: active ? dm.slice(prefix.length) : '', enabled: prev.enabled !== false }
+    },
+    clear() {
+      const key = minimax.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = minimax.readMinimaxConfig()
+      let touched = false
+      if (doc.custom_provider && doc.custom_provider[key]) {
+        delete doc.custom_provider[key]
+        touched = true
+      }
+      const prefix = `${minimax.CUSTOM_PREFIX}:${key}/`
+      if (typeof doc.defaultModel === 'string' && doc.defaultModel.startsWith(prefix)) {
+        delete doc.defaultModel
+        touched = true
+      }
+      if (touched) minimax.writeMinimaxConfig(doc)
+    },
+    after(prior, applied) {
+      if (!applied.length) return
+      const key = prior.key
+      const doc = minimax.readMinimaxConfig()
+      const entry = doc.custom_provider && doc.custom_provider[key]
+      if (!entry) return
+      let touched = false
+      if (prior.enabled === false && entry.enabled !== false) {
+        entry.enabled = false
+        touched = true
+      }
+      if (prior.active) {
+        doc.defaultModel = `${minimax.CUSTOM_PREFIX}:${key}/${pickAppliedModel(prior, applied)}`
+        touched = true
+      }
+      if (touched) minimax.writeMinimaxConfig(doc)
+    },
+  },
+
+  // Qoder：settings.json providers.<key>（默认模型是 provider 顶层的 model 字段）
+  qoder: {
+    apis: ['openai-completions', 'openai-responses', 'anthropic-messages'],
+    before() {
+      const key = qoder.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = qoder.getQoderProviderList().find((p) => p.id === key)
+      if (!prev) return null
+      const model = String(qoder.getQoderDefaultModel(key) || '')
+      return { key, active: !!model, model }
+    },
+    clear() {
+      qoder.deleteQoderProvider(qoder.providerKeyFor(AUTOROUTE_PROVIDER_NAME))
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      qoder.setQoderDefaultModel(prior.key, pickAppliedModel(prior, applied))
+    },
+  },
+
+  // ZCode：providerRules[id] + providerModelRules + providerOrder（首个 = 首选供应商，其 modelOrder 首个 = 首选模型）
+  zcode: {
+    apis: ['openai-completions', 'openai-responses', 'anthropic-messages'],
+    before() {
+      const id = zcode.providerIdFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = zcode.getZcodeProviderList().find((p) => p.id === id)
+      if (!prev) return null
+      const def = zcode.getZcodeDefaultModel()
+      return {
+        id,
+        active: !!def && def.providerId === id,
+        model: def && def.providerId === id ? String(def.modelId || '') : '',
+        order: zcode.getZcodeProviderOrderIndex(id),
+      }
+    },
+    clear() {
+      zcode.deleteZcodeProvider(zcode.providerIdFor(AUTOROUTE_PROVIDER_NAME))
+    },
+    after(prior, applied) {
+      if (!applied.length) return
+      if (prior.active) {
+        zcode.setZcodeDefaultModel(prior.id, pickAppliedModel(prior, applied))
+        return
+      }
+      // 不是首选供应商：把原来的选择器位置还回去（重建时它被挤到了末尾）
+      if (prior.order > 0) zcode.reinsertZcodeProviderOrder(prior.id, prior.order)
+    },
+  },
+
+  // Hermes：custom_providers[]（含 models 字典）+ 顶层 model.provider/model.default
+  hermes: {
+    apis: ['openai-completions', 'openai-responses', 'anthropic-messages'],
+    before() {
+      const key = hermes.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = hermes.getHermesProviderList().find((p) => p.name === key && p.source === 'custom')
+      if (!prev) return null
+      const def = hermes.getHermesDefaultModel()
+      const active = def.provider === key
+      return { key, active, model: active ? String(def.modelId || '') : '' }
+    },
+    clear() {
+      const key = hermes.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = hermes.readHermesConfig()
+      let touched = false
+      if (Array.isArray(doc.custom_providers)) {
+        const rest = doc.custom_providers.filter((p) => !(p && p.name === key))
+        if (rest.length !== doc.custom_providers.length) {
+          doc.custom_providers = rest
+          touched = true
+        }
+      }
+      // 默认指针指向 router 时先清掉（重建后由 after 写回），避免悬空引用
+      if (doc.model && typeof doc.model === 'object' && doc.model.provider === key) {
+        delete doc.model.provider
+        delete doc.model.default
+        touched = true
+      }
+      if (touched) hermes.writeHermesConfig(doc)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      hermes.setHermesDefaultModel(prior.key, pickAppliedModel(prior, applied))
+    },
+  },
+
+  // DSH：cordis.patch.yml 的 llm-pi-ai.providers[route] + 模型数组 + agent-default-model
+  dsh: {
+    apis: dsh.DSH_PROTOCOLS,
+    before() {
+      const route = dsh.providerRouteFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = dsh.getDshProviderList().find((p) => p.route === route)
+      if (!prev) return null
+      const def = dsh.getDshDefaultModel()
+      const active = !!def && def.provider === route
+      return { route, active, model: active ? String(def.modelId || '') : '', reasoningEffort: active ? def.reasoningEffort : '' }
+    },
+    clear() {
+      // 只删 providers 条目：凭据名由路由确定性生成，重建时按同名字写回，默认指针由 after 收尾
+      dsh.dropDshProviderEntry(dsh.providerRouteFor(AUTOROUTE_PROVIDER_NAME))
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      dsh.setDshDefaultModel(prior.route, pickAppliedModel(prior, applied), prior.reasoningEffort || '')
+    },
+  },
+
+  // Grok Build：[model_providers.<key>] + [model.<id>]（model_provider 引用）+ [models].default
+  grok: {
+    apis: ['openai-completions', 'openai-responses', 'anthropic-messages'],
+    before() {
+      const key = grok.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = grok.getGrokProviderList().find((p) => p.name === key)
+      if (!prev) return null
+      // 模型条目的键（= [model.<key>] 与 models.default 的取值）
+      const owned = grok.getGrokModelList().filter((m) => m.modelProvider === key).map((m) => m.id)
+      const def = grok.getGrokDefaultModel()
+      const active = !!def.modelId && owned.includes(def.modelId)
+      return { key, owned, active, model: active ? def.modelId : '' }
+    },
+    clear() {
+      const key = grok.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = grok.readGrokConfig()
+      const tables = doc.model_providers && typeof doc.model_providers === 'object' ? doc.model_providers : {}
+      const models = doc.model && typeof doc.model === 'object' ? doc.model : {}
+      let touched = false
+      if (tables[key]) {
+        delete tables[key]
+        if (!Object.keys(tables).length) delete doc.model_providers
+        touched = true
+      }
+      for (const [modelKey, entry] of Object.entries(models)) {
+        if (entry && typeof entry === 'object' && entry.model_provider === key) {
+          delete models[modelKey]
+          touched = true
+          if (doc.models && doc.models.default === modelKey) delete doc.models.default
+        }
+      }
+      if (touched) grok.writeGrokConfig(doc)
+    },
+    after(prior, applied) {
+      if (!prior.active || !applied.length) return
+      const chosen = pickAppliedModel(prior, applied)
+      if (grok.getGrokModelList().some((m) => m.id === chosen)) grok.setGrokDefaultModel(chosen)
+    },
+  },
+
+  // Cline：providers.json（lastUsedProvider = 当前使用）+ models.json（模型目录）+ 供应商级 enabled
+  cline: {
+    apis: ['openai-completions'],
+    before() {
+      const key = cline.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = cline.readProvidersDoc()
+      const raw = doc.providers && doc.providers[key]
+      if (!raw) return null
+      const active = cline.effectiveLastUsedProvider(doc) === key
+      const model = raw.settings && typeof raw.settings.model === 'string' ? raw.settings.model : ''
+      return { key, active, model: active ? model : '', enabled: raw.enabled !== false }
+    },
+    clear() {
+      const key = cline.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = cline.readProvidersDoc()
+      let touched = false
+      if (doc.providers && doc.providers[key]) {
+        delete doc.providers[key]
+        touched = true
+      }
+      // lastUsedProvider 先清掉：条目已不存在，留着就是悬空引用（after 会写回）
+      if (doc.lastUsedProvider === key) {
+        delete doc.lastUsedProvider
+        touched = true
+      }
+      const voice = doc.modes && doc.modes.voiceInput
+      if (voice && voice.providerId === key) {
+        delete doc.modes.voiceInput
+        touched = true
+      }
+      if (touched) cline.writeProvidersDoc(doc)
+      const modelsDoc = cline.readModelsDoc()
+      if (modelsDoc.providers && modelsDoc.providers[key]) {
+        delete modelsDoc.providers[key]
+        cline.writeModelsDoc(modelsDoc)
+      }
+    },
+    after(prior, applied) {
+      if (!applied.length) return
+      const key = prior.key
+      // 停用开关原样保留（Cline 自己的启用/停用就是条目顶层的 enabled）
+      if (prior.enabled === false) {
+        const doc = cline.readProvidersDoc()
+        if (doc.providers && doc.providers[key]) {
+          doc.providers[key].enabled = false
+          cline.writeProvidersDoc(doc)
+        }
+      }
+      if (!prior.active) return
+      const chosen = pickAppliedModel(prior, applied)
+      cline.setClineDefaultModelForProvider(key, chosen)
+      cline.setClineActiveProvider(key)
+    },
+  },
+
+  // Command Code：providers.json provider.<key>（含 models 字典）+ settings.json model + 供应商级 disabled
+  commandcode: {
+    apis: commandCode.CC_APIS,
+    before() {
+      const key = commandCode.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const prev = commandCode.getCommandCodeProviderList().find((p) => p.id === key)
+      if (!prev) return null
+      const def = commandCode.getCommandCodeDefaultModel()
+      const active = def.provider === key
+      return { key, active, model: active ? String(def.modelId || '') : '', disabled: prev.disabled === true }
+    },
+    clear() {
+      // 不走 deleteCommandCodeProvider：它会顺带清掉 auth.json 里的 key，重建时 key 为空就会丢
+      const key = commandCode.providerKeyFor(AUTOROUTE_PROVIDER_NAME)
+      const doc = commandCode.readProvidersDoc()
+      if (!doc.provider || !doc.provider[key]) return
+      delete doc.provider[key]
+      commandCode.writeProvidersDoc(doc)
+    },
+    after(prior, applied) {
+      if (!applied.length) return
+      const key = prior.key
+      const doc = commandCode.readProvidersDoc()
+      const entry = doc.provider && doc.provider[key]
+      if (!entry) return
+      if (prior.disabled === true && entry.disabled !== true) {
+        entry.disabled = true
+        commandCode.writeProvidersDoc(doc)
+      }
+      if (prior.active) commandCode.setCommandCodeDefaultModel(key, pickAppliedModel(prior, applied))
+    },
+  },
+}
+
 const dispatchAutoRoute = (targets) => {
   const config = autoroute.readAutoRouteConfig();
   const enabled = autoroute.resolveAutoRouteModels(config);
@@ -1004,7 +1551,27 @@ const dispatchAutoRoute = (targets) => {
       baseUrl: isCodex || isKimi || isZcode || isGrok || isCline || isCommandCode ? `${baseUrl}/v1` : baseUrl,
       models,
     };
+    // 网关下发 = 覆盖式重建 router 供应商（仅当协议兼容时才清理，否则先删再报错会丢配置）
+    const rebuild = AUTOROUTE_REBUILD[target.app];
+    const canRebuild = !!rebuild && (!rebuild.apis || rebuild.apis.includes(provider.api));
+    let prior = null;
+    if (canRebuild) {
+      try {
+        prior = rebuild.before();
+      } catch (e) {
+        prior = null;
+      }
+      if (prior) {
+        try {
+          rebuild.clear(prior);
+        } catch (e) {
+          results.push({ app: target.app, ok: false, message: e.message || String(e) });
+          continue;
+        }
+      }
+    }
     const targetResults = [];
+    const applied = [];
     for (const model of models) {
       try {
         const message = d.run(provider, model, {
@@ -1012,7 +1579,16 @@ const dispatchAutoRoute = (targets) => {
           // 只有 Codex 认模型目录 URL：指向网关的 /v1/codex/models（与 /v1/models 同一套模型 ID）
           codexModelCatalogUrl: isCodex ? `${baseUrl}/v1/codex/models` : undefined,
         });
+        applied.push(model.id);
         targetResults.push({ app: target.app, ok: true, message });
+      } catch (e) {
+        targetResults.push({ app: target.app, ok: false, message: e.message || String(e) });
+      }
+    }
+    // 重建后恢复「原本生效 / 原本停用」的状态，并沿用原默认模型（已不在新清单则取第一个）
+    if (canRebuild && prior) {
+      try {
+        rebuild.after(prior, applied);
       } catch (e) {
         targetResults.push({ app: target.app, ok: false, message: e.message || String(e) });
       }

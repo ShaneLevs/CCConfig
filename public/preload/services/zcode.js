@@ -476,6 +476,30 @@ const setZcodeDefaultModel = (providerId, modelId) => {
   return true
 }
 
+// 网关覆盖式下发用：providerOrder 里的位置（= 选择器顺序；首个即首选供应商）。
+// 覆盖式重建会把供应商整条删掉，重建后需要把位置还回去，否则顺序被挤到末尾
+const getZcodeProviderOrderIndex = (id) => {
+  const pid = String(id || '').trim()
+  if (!pid) return -1
+  const { cfg } = loadTable()
+  return cfg ? cfg.providerOrder.indexOf(pid) : -1
+}
+
+// 把供应商挪回 providerOrder 的指定下标（越界自动夹到合法区间；不在序中则插入）
+const reinsertZcodeProviderOrder = (id, index) => {
+  const pid = String(id || '').trim()
+  if (!pid) return false
+  const doc = readOrCreate()
+  const cfg = configOf(doc)
+  if (!findProviderRule(cfg, pid)) return false
+  const rest = cfg.providerOrder.filter((x) => x !== pid)
+  const at = Math.max(0, Math.min(Number(index) >= 0 ? Number(index) : rest.length, rest.length))
+  rest.splice(at, 0, pid)
+  cfg.providerOrder = rest
+  commit(doc)
+  return true
+}
+
 // ==================== 下发用 upsert（dispatch.js 调用，语义同 qoder.upsert*） ====================
 
 // 通用库供应商名可能是中文/任意符号，而 ZCode providerId 只由小写字母/数字/中划线构成，
@@ -900,6 +924,7 @@ module.exports = {
   upsertZcodeProvider, providerIdFor,
   addZcodeModel, updateZcodeModel, deleteZcodeModel, upsertZcodeModel,
   getZcodeDefaultModel, setZcodeDefaultModel,
+  getZcodeProviderOrderIndex, reinsertZcodeProviderOrder,
   openZcodeDir, openZcodeConfigFile, isZcodeInstalled,
   readZcodeUsage, readZcodeUsageFromHistory, getZcodeUsageDbPath: ZCODE_USAGE_DB_PATH,
   ZCODE_API_TYPES, ZCODE_ACCESS_TYPES,
