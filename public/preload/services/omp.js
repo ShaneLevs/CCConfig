@@ -4,25 +4,70 @@ const os = require('node:os')
 const yaml = require('js-yaml')
 const { t } = require("./i18n")
 
-const OMP_DIR = () => path.join(os.homedir(), '.omp', 'agent')
+// ==================== 目录解析 ====================
+// 与 omp 自身（@oh-my-pi/pi-utils/dirs.ts）逐条对齐，否则插件管理的文件和 CLI 读的
+// 不是同一份：
+//   configRoot = $HOME/<PI_CONFIG_DIR 或 ".omp">                    （getConfigDirName）
+//   有 profile（OMP_PROFILE / PI_PROFILE）→ configRoot/profiles/<profile>
+//   agentDir   = configRoot/agent，无 profile 时被 PI_CODING_AGENT_DIR 覆盖
+//                （profile 优先：dirs.ts 的 `agentDirOverride = profile ? undefined : ...`）
+// 另外 PI_PROFILE、OMP_PROFILE 都可能是空串（omp 自己对空串视为无 profile）。
+const configRoot = () => {
+  const dirName = (process.env.PI_CONFIG_DIR || '').trim() || '.omp'
+  return path.join(os.homedir(), dirName)
+}
+
+const activeProfile = () => {
+  const raw = (process.env.OMP_PROFILE || process.env.PI_PROFILE || '').trim()
+  return raw || ''
+}
+
+const OMP_DIR = () => {
+  const profile = activeProfile()
+  if (profile) return path.join(configRoot(), 'profiles', profile, 'agent')
+  const override = (process.env.PI_CODING_AGENT_DIR || '').trim()
+  if (override) return path.resolve(override)
+  return path.join(configRoot(), 'agent')
+}
 const OMP_CONFIG_PATH = () => path.join(OMP_DIR(), 'config.yml')
 const OMP_MODELS_PATH = () => path.join(OMP_DIR(), 'models.yml')
 
 // ==================== config.yml 读写 ====================
 
-const readConfigFile = () => {
-  const p = OMP_CONFIG_PATH()
-  if (!fs.existsSync(p)) return {}
+// 解析失败必须抛错：调用方都是「读 → 改 → 整份写回」，静默读成 {} 会把用户
+// 手写的 symbolPreset / theme / display 等字段连同 API Key 一起抹掉。
+const readYamlFile = (p, parseErrorMessageKey) => {
+  if (!fs.existsSync(p)) return null
+  let raw
   try {
-    return yaml.load(fs.readFileSync(p, { encoding: 'utf-8' })) || {}
-  } catch { return {} }
+    raw = fs.readFileSync(p, { encoding: 'utf-8' })
+  } catch (e) {
+    throw new Error(t(parseErrorMessageKey, { message: e.message }))
+  }
+  let doc
+  try {
+    doc = yaml.load(raw)
+  } catch (e) {
+    throw new Error(t(parseErrorMessageKey, { message: e.message }))
+  }
+  if (doc === null || doc === undefined) return {}
+  if (typeof doc !== 'object' || Array.isArray(doc)) {
+    throw new Error(t(parseErrorMessageKey, { message: 'root must be a mapping' }))
+  }
+  return doc
 }
 
-const writeConfigFile = (doc) => {
-  const p = OMP_CONFIG_PATH()
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, yaml.dump(doc || {}, { lineWidth: -1 }), { encoding: 'utf-8' })
+// 写入权限 0600：models.yml 存明文 apiKey，config.yml 也含账号相关配置，
+// 与 omp 自己的文件权限保持一致（Mac/Linux；Windows 无 chmod 语义，忽略失败）。
+const writeYamlFile = (p, doc) => {
+  fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 })
+  fs.writeFileSync(p, yaml.dump(doc || {}, { lineWidth: -1 }), { encoding: 'utf-8', mode: 0o600 })
+  try { fs.chmodSync(p, 0o600) } catch { /* 非 POSIX 平台忽略 */ }
 }
+
+const readConfigFile = () => readYamlFile(OMP_CONFIG_PATH(), 'serviceAgent.omp.configParseFailed') || {}
+
+const writeConfigFile = (doc) => writeYamlFile(OMP_CONFIG_PATH(), doc)
 
 // ==================== modelRoles（config.yml → modelRoles 键） ====================
 
@@ -55,18 +100,17 @@ const getOmpModelRoleRefs = () => {
 // ==================== models.yml（js-yaml 文件读写） ====================
 
 const readOmpModels = () => {
-  const p = OMP_MODELS_PATH()
-  if (!fs.existsSync(p)) return { providers: {} }
-  try {
-    return yaml.load(fs.readFileSync(p, { encoding: 'utf-8' })) || { providers: {} }
-  } catch { return { providers: {} } }
+  const doc = readYamlFile(OMP_MODELS_PATH(), 'serviceAgent.omp.modelsParseFailed')
+  if (doc === null) return { providers: {} }
+  if (!doc.providers || typeof doc.providers !== 'object' || Array.isArray(doc.providers)) {
+    // 文件存在但结构不是 { providers: {...} }：不能当成空表写回（会清空用户的全部模型）
+    if (doc.providers === undefined) doc.providers = {}
+    else throw new Error(t('serviceAgent.omp.modelsParseFailed', { message: 'providers must be a mapping' }))
+  }
+  return doc
 }
 
-const writeOmpModels = (data) => {
-  const p = OMP_MODELS_PATH()
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, yaml.dump(data || { providers: {} }, { lineWidth: -1 }), { encoding: 'utf-8' })
-}
+const writeOmpModels = (data) => writeYamlFile(OMP_MODELS_PATH(), data || { providers: {} })
 
 // ==================== Providers / Models CRUD ====================
 
@@ -253,6 +297,7 @@ const openOmpDir = () => {
 const isOmpInstalled = () => fs.existsSync(OMP_DIR())
 
 module.exports = {
+  getOmpDir: OMP_DIR, getOmpConfigPath: OMP_CONFIG_PATH, getOmpModelsPath: OMP_MODELS_PATH,
   readOmpModelRoles, writeOmpModelRoles, parseOmpModelRef, getOmpModelRoleRefs,
   readOmpModels, writeOmpModels,
   getOmpProviderList, addOmpProvider, updateOmpProvider, deleteOmpProvider,

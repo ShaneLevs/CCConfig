@@ -169,10 +169,18 @@ Pi Agent:
   特殊 schema：cost 必须含 {input, output, cacheRead, cacheWrite} 四项；contextWindow 为 0 则省略
 
 omp:
-  ~/.omp/agent/config.yml modelRoles  →  js-yaml 直接读写（load → 改 modelRoles → dump 写回）
-  ~/.omp/agent/models.yml providers    →  js-yaml 直接读写
+  <agentDir>/config.yml modelRoles  →  js-yaml 直接读写（load → 改 modelRoles → dump 写回）
+  <agentDir>/models.yml providers    →  js-yaml 直接读写
+  agentDir 解析与 omp 自身（@oh-my-pi/pi-utils/dirs.ts）逐条对齐，否则插件和 CLI 读写的不是同一份：
+    configRoot = $HOME/<PI_CONFIG_DIR 或 ".omp">
+    有 profile（OMP_PROFILE / PI_PROFILE）→ configRoot/profiles/<profile>（profile 优先于下面两项）
+    否则 agentDir = PI_CODING_AGENT_DIR（若设置）或 configRoot/agent
+    Linux 的 XDG_*_HOME 重定向未纳入（需要用户先 `omp config migrate`，属边缘场景）
   模型引用格式：provider/model[:thinkingLevel]，无前缀引用编辑时自动补全带前缀
   删除供应商/模型前检查 modelRoles 引用，被引用时拒绝删除
+  写文件一律 0600（models.yml 存明文 apiKey、config.yml 含账号配置）：先写再 chmod，Windows 忽略失败
+  YAML 解析失败必须抛错中止（serviceAgent.omp.configParseFailed / modelsParseFailed）：
+    读侧静默读成 {} 再整份写回会把用户手写的 symbolPreset / theme / display 等字段连同 API Key 一起抹掉
   纯文件读写，不依赖 omp 二进制 / bun 运行时
 
 Reasonix:

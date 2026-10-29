@@ -125,7 +125,9 @@
     "omp": {
       "invalidModelRoles": "modelRoles 数据格式不正确",
       "providerReferenced": "供应商 {name} 有模型被模型角色引用（{roles}），请先修改模型角色",
-      "modelReferenced": "模型 {model} 被模型角色引用（{roles}），请先修改模型角色"
+      "modelReferenced": "模型 {model} 被模型角色引用（{roles}），请先修改模型角色",
+      "configParseFailed": "config.yml 解析失败，已阻止修改（请先修复 YAML 语法）: {message}",
+      "modelsParseFailed": "models.yml 解析失败，已阻止修改（请先修复 YAML 语法）: {message}"
     },
     "pi": {
       "invalidResponse": "响应格式错误",

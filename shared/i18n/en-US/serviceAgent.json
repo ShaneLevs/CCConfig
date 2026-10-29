@@ -125,7 +125,9 @@
     "omp": {
       "invalidModelRoles": "modelRoles data has an invalid format",
       "providerReferenced": "Provider {name} has models referenced by model roles ({roles}); update the model roles first",
-      "modelReferenced": "Model {model} is referenced by model roles ({roles}); update the model roles first"
+      "modelReferenced": "Model {model} is referenced by model roles ({roles}); update the model roles first",
+      "configParseFailed": "Failed to parse config.yml; changes are blocked until the YAML is fixed: {message}",
+      "modelsParseFailed": "Failed to parse models.yml; changes are blocked until the YAML is fixed: {message}"
     },
     "pi": {
       "invalidResponse": "Invalid response format",
