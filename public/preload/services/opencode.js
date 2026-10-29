@@ -3,6 +3,7 @@ const path = require('node:path')
 const JSON5 = require('json5')
 
 const { t } = require('./i18n')
+const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 
 const OPENCODE_DIR = path.join(window.utools.getPath('home'), '.config', 'opencode')
 
@@ -238,7 +239,7 @@ const getOpencodeSkills = () => {
     const entries = fs.readdirSync(OPENCODE_SKILLS_PATH, { withFileTypes: true })
     const skills = []
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      if (!isDirEntry(OPENCODE_SKILLS_PATH, entry)) continue
       const skillName = entry.name
       const skillPath = path.join(OPENCODE_SKILLS_PATH, skillName)
       const skillMdPath = path.join(skillPath, 'SKILL.md')
@@ -249,7 +250,7 @@ const getOpencodeSkills = () => {
           .replace(/^\uFEFF/, '')
         const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
         const frontmatter = frontmatterMatch ? frontmatterMatch[1] : ''
-        const fileCount = fs.readdirSync(skillPath).length
+        const fileCount = countEntries(skillPath)
         skills.push({ name: skillName, frontmatter, path: skillPath, skillMdPath, fileCount })
       } catch (e) {
         console.error('读取 OpenCode skill 失败:', skillMdPath, e)
@@ -266,7 +267,8 @@ const deleteOpencodeSkill = (skillName) => {
   try {
     const skillPath = path.join(OPENCODE_SKILLS_PATH, skillName)
     if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
-    fs.rmSync(skillPath, { recursive: true, force: true })
+    // 软链接只删链接本身
+    rmEntry(skillPath)
     return { success: true }
   } catch (error) {
     return { success: false, error: error.message }

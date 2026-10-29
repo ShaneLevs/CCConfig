@@ -10,6 +10,7 @@ const grok = require("./grok");
 const cline = require("./cline");
 const commandCode = require("./command-code");
 const { t } = require("./i18n");
+const { isDirEntry, rmEntry } = require("./fs-utils");
 
 // ==================== SkillHub API 辅助 ====================
 const SKILLHUB_API_BASE = "https://api.skillhub.cn";
@@ -114,7 +115,7 @@ function _findSkillMd(dir, depth = 0) {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory())
+      if (isDirEntry(dir, entry))
         results.push(..._findSkillMd(path.join(dir, entry.name), depth + 1));
     }
   } catch (e) {
@@ -236,7 +237,9 @@ function completeInstall(targetBase, skillName, extractDir) {
   const targetDir = path.join(targetBase, skillName);
   if (!fs.existsSync(targetBase))
     fs.mkdirSync(targetBase, { recursive: true });
-  if (fs.existsSync(targetDir)) fs.rmSync(targetDir, { recursive: true });
+  // 已存在的目标若是软链接（场景：用软链接挂载的 Skill 被重装），
+  // 只删链接本身，绝不递归进去把源目录删掉。
+  if (fs.existsSync(targetDir)) rmEntry(targetDir);
   fs.renameSync(extractDir, targetDir);
   _cleanupTempDir();
   return true;

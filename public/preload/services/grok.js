@@ -3,6 +3,7 @@ const path = require('node:path')
 const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
 const { t } = require("./i18n")
+const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 
 // ==================== Grok Build（xAI 官方编码 CLI，命令 `grok`） ====================
 // 主配置：~/.grok/config.toml（GROK_HOME 可重定向主目录，插件需跟随，同 Codex/Hermes 先例）。
@@ -744,7 +745,7 @@ const readSkillEntry = (skillPath, disabled) => {
     frontmatter: frontmatterMatch ? frontmatterMatch[1] : '',
     path: skillPath,
     skillMdPath,
-    fileCount: fs.readdirSync(skillPath).length,
+    fileCount: countEntries(skillPath),
     disabled,
   }
 }
@@ -762,7 +763,7 @@ const getGrokSkills = () => {
       return
     }
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === SKILL_DISABLED_DIR) continue
+      if (!isDirEntry(base, entry) || entry.name === SKILL_DISABLED_DIR) continue
       try {
         const skill = readSkillEntry(path.join(base, entry.name), disabled)
         if (skill) skills.push(skill)
@@ -800,7 +801,8 @@ const deleteGrokSkill = (skillName, isDisabled) => {
     : path.join(dir, skillName)
   if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
-    fs.rmSync(skillPath, { recursive: true, force: true })
+    // 软链接只删链接本身
+    rmEntry(skillPath)
     return { success: true }
   } catch (e) {
     return { success: false, error: e.message }

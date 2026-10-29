@@ -6,6 +6,7 @@ const path = require("node:path");
 const { CLAUDE_SKILLS_PATH, CLAUDE_JSON_PATH } = require("./config");
 const { t } = require("./i18n");
 const { _buildProjectPathMap } = require("./claude-usage");
+const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
 
 // 缓存：签名 = 技能目录 mtime:disabled 目录 mtime；projectPathMap 只构建一次
 let _skillsCache = null;
@@ -50,7 +51,8 @@ function getSkills() {
       withFileTypes: true,
     });
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === ".disabled") continue;
+      if (!isDirEntry(CLAUDE_SKILLS_PATH, entry) || entry.name === ".disabled")
+        continue;
       const skillName = entry.name;
       const skillPath = path.join(CLAUDE_SKILLS_PATH, skillName);
       const skillMdPath = path.join(skillPath, "SKILL.md");
@@ -63,14 +65,14 @@ function getSkills() {
         const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
         const frontmatter = frontmatterMatch ? frontmatterMatch[1] : "";
         const usage = skillUsage[skillName] || {};
-        const skillFiles = fs.readdirSync(skillPath);
+        const fileCount = countEntries(skillPath);
         skills.push({
           name: skillName,
           frontmatter,
           disabled: false,
           scope: "global",
           skillMdPath,
-          fileCount: skillFiles.length,
+          fileCount,
           usageCount: usage.usageCount || 0,
           lastUsedAt: usage.lastUsedAt || null,
         });
@@ -85,7 +87,7 @@ function getSkills() {
         withFileTypes: true,
       });
       for (const entry of disabledEntries) {
-        if (!entry.isDirectory()) continue;
+        if (!isDirEntry(disabledDir, entry)) continue;
         const skillName = entry.name;
         const skillPath = path.join(disabledDir, skillName);
         const skillMdPath = path.join(skillPath, "SKILL.md");
@@ -98,14 +100,14 @@ function getSkills() {
           const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
           const frontmatter = frontmatterMatch ? frontmatterMatch[1] : "";
           const usage = skillUsage[skillName] || {};
-          const skillFiles = fs.readdirSync(skillPath);
+          const fileCount = countEntries(skillPath);
           skills.push({
             name: skillName,
             frontmatter,
             disabled: true,
             scope: "global",
             skillMdPath,
-            fileCount: skillFiles.length,
+            fileCount,
             usageCount: usage.usageCount || 0,
             lastUsedAt: usage.lastUsedAt || null,
           });
@@ -142,7 +144,8 @@ function getSkills() {
             withFileTypes: true,
           });
           for (const entry of projectSkills) {
-            if (!entry.isDirectory() || entry.name === ".disabled") continue;
+            if (!isDirEntry(projectSkillsDir, entry) || entry.name === ".disabled")
+              continue;
             const skillName = entry.name;
             const skillMdPath = path.join(
               projectSkillsDir,
@@ -161,7 +164,7 @@ function getSkills() {
               const frontmatter = frontmatterMatch ? frontmatterMatch[1] : "";
               const usage = skillUsage[skillName] || {};
               const skillDir = path.join(projectSkillsDir, skillName);
-              const skillFiles = fs.readdirSync(skillDir);
+              const fileCount = countEntries(skillDir);
               skills.push({
                 name: skillName,
                 frontmatter,
@@ -170,7 +173,7 @@ function getSkills() {
                 projectName: path.basename(projectPath),
                 projectPath,
                 skillMdPath,
-                fileCount: skillFiles.length,
+                fileCount,
                 usageCount: usage.usageCount || 0,
                 lastUsedAt: usage.lastUsedAt || null,
               });
@@ -186,7 +189,7 @@ function getSkills() {
               withFileTypes: true,
             });
             for (const entry of disabledEntries) {
-              if (!entry.isDirectory()) continue;
+              if (!isDirEntry(projectDisabledDir, entry)) continue;
               const skillName = entry.name;
               const skillMdPath = path.join(
                 projectDisabledDir,
@@ -209,7 +212,7 @@ function getSkills() {
                   : "";
                 const usage = skillUsage[skillName] || {};
                 const skillDir = path.join(projectDisabledDir, skillName);
-                const skillFiles = fs.readdirSync(skillDir);
+                const fileCount = countEntries(skillDir);
                 skills.push({
                   name: skillName,
                   frontmatter,
@@ -218,7 +221,7 @@ function getSkills() {
                   projectName: path.basename(projectPath),
                   projectPath,
                   skillMdPath,
-                  fileCount: skillFiles.length,
+                  fileCount,
                   usageCount: usage.usageCount || 0,
                   lastUsedAt: usage.lastUsedAt || null,
                 });
@@ -295,7 +298,8 @@ function deleteSkill(skillName, isDisabled) {
       : path.join(CLAUDE_SKILLS_PATH, skillName);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
-    fs.rmSync(skillPath, { recursive: true, force: true });
+    // 软链接只删链接本身
+    rmEntry(skillPath);
     _skillsCache = null;
     return { success: true };
   } catch (error) {
@@ -352,7 +356,8 @@ function deleteProjectSkill(skillName, projectPath, isDisabled) {
       : path.join(projectPath, ".claude", "skills", skillName);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
-    fs.rmSync(skillPath, { recursive: true, force: true });
+    // 软链接只删链接本身
+    rmEntry(skillPath);
     _skillsCache = null;
     return { success: true };
   } catch (error) {

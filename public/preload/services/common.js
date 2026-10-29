@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("./crypto");
 const { t } = require("./i18n");
+const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
 
 // ==================== 通用配置 ====================
 // 设计约定：
@@ -673,7 +674,7 @@ const readSkillDirNames = () => {
     const out = new Set();
     if (!fs.existsSync(dir)) return out;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if (!isDirEntry(dir, entry) || entry.name.startsWith(".")) continue;
       if (!fs.existsSync(path.join(dir, entry.name, "SKILL.md"))) continue;
       out.add(entry.name);
     }
@@ -857,7 +858,8 @@ const deleteCommonSkill = (skillName) => {
   const dir = candidates.find((p) => fs.existsSync(p));
   if (!dir) return { success: false, error: t("service.skill.dirMissing") };
   try {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // 软链接只删链接本身，不动源目录
+    rmEntry(dir);
     removeSkillFromScenes(skillName);
     return { success: true };
   } catch (e) {
@@ -932,14 +934,7 @@ const readCommonSkills = () => {
           .replace(/^\uFEFF/, "");
         const fm = parseSkillFrontmatter(content);
         const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-        let fileCount = 0;
-        try {
-          fileCount = fs
-            .readdirSync(skillDir)
-            .filter((f) => !f.startsWith(".")).length;
-        } catch {
-          /* ignore */
-        }
+        const fileCount = countEntries(skillDir);
         skills.push({
           name: fm.name || dirName,
           dirName,
@@ -957,7 +952,7 @@ const readCommonSkills = () => {
     // 启用的 skills（跳过 .disabled 及隐藏目录）
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if (!isDirEntry(dir, entry) || entry.name.startsWith(".")) continue;
       readOne(path.join(dir, entry.name), entry.name, true);
     }
 
@@ -968,7 +963,7 @@ const readCommonSkills = () => {
         withFileTypes: true,
       });
       for (const entry of disabledEntries) {
-        if (!entry.isDirectory()) continue;
+        if (!isDirEntry(disabledDir, entry)) continue;
         readOne(path.join(disabledDir, entry.name), entry.name, false);
       }
     }

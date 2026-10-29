@@ -3,6 +3,7 @@ const path = require('node:path')
 const os = require('node:os')
 const crypto = require('node:crypto')
 const { t } = require('./i18n')
+const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 
 // ==================== Cline（AI 编程 agent，命令 `cline`）====================
 // 存储位置（与 CLI / Desktop / SDK 共用；IDE 扩展的供应商配置在编辑器 globalState 里，
@@ -909,7 +910,7 @@ const readSkillEntry = (skillPath, disabled) => {
     frontmatter: frontmatterMatch ? frontmatterMatch[1] : '',
     path: skillPath,
     skillMdPath,
-    fileCount: fs.readdirSync(skillPath).length,
+    fileCount: countEntries(skillPath),
     disabled,
   }
 }
@@ -927,7 +928,7 @@ const getClineSkills = () => {
       return
     }
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === SKILL_DISABLED_DIR) continue
+      if (!isDirEntry(base, entry) || entry.name === SKILL_DISABLED_DIR) continue
       try {
         const skill = readSkillEntry(path.join(base, entry.name), disabled)
         if (skill) skills.push(skill)
@@ -973,7 +974,8 @@ const deleteClineSkill = (skillName, isDisabled) => {
     : path.join(dir, name)
   if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
-    fs.rmSync(skillPath, { recursive: true, force: true })
+    // 软链接只删链接本身
+    rmEntry(skillPath)
     return { success: true }
   } catch (e) {
     return { success: false, error: e.message }

@@ -3,6 +3,7 @@ const path = require('node:path')
 const { execSync } = require('node:child_process')
 
 const { t } = require('./i18n')
+const { isDirEntry, isFileEntry } = require('./fs-utils')
 
 const HOME = () => require('os').homedir()
 const PLUGINS_DIR = () => path.join(HOME(), '.claude', 'plugins')
@@ -22,7 +23,7 @@ const listSubdirNames = (dir) => {
   try {
     if (!fs.existsSync(dir)) return []
     return fs.readdirSync(dir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
+      .filter(d => isDirEntry(dir, d))
       .map(d => d.name)
   } catch { return [] }
 }
@@ -32,9 +33,9 @@ const visitMdStems = (dir, prefix, depth, visitor) => {
     if (!fs.existsSync(dir) || depth > 5) return
     const entries = fs.readdirSync(dir, { withFileTypes: true })
     for (const entry of entries) {
-      if (entry.isDirectory()) {
+      if (isDirEntry(dir, entry)) {
         visitMdStems(path.join(dir, entry.name), prefix + entry.name + '/', depth + 1, visitor)
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      } else if (isFileEntry(dir, entry) && entry.name.endsWith('.md')) {
         visitor(prefix + entry.name.replace(/\.md$/, ''), depth)
       }
     }
@@ -57,7 +58,7 @@ const discoverPluginComponents = (pluginDir, lspServersJson) => {
   if (fs.existsSync(hooksDir)) {
     try {
       hooks = fs.readdirSync(hooksDir, { withFileTypes: true })
-        .filter(d => d.isFile() && !d.name.endsWith('.json') && !d.name.endsWith('.cmd'))
+        .filter(d => isFileEntry(hooksDir, d) && !d.name.endsWith('.json') && !d.name.endsWith('.cmd'))
         .map(d => d.name)
     } catch { /* ignore */ }
   }

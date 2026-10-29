@@ -5,6 +5,7 @@ const path = require("node:path");
 const { t } = require("./i18n");
 
 const { PI_NPM_DIR, readJson, readPiSettings, writePiSettings } = require("./pi-common");
+const { isDirEntry, isFileEntry } = require("./fs-utils");
 
 // 已安装扩展清单：读 settings.packages，结合包目录磁盘内容（package.json /
 // .claude-plugin/plugin.json / skills 目录）推断各类型资源列表
@@ -90,7 +91,7 @@ const getPiExtensions = () => {
         try {
           resources.skills = fs
             .readdirSync(skillsDir, { withFileTypes: true })
-            .filter((d) => d.isDirectory())
+            .filter((d) => isDirEntry(skillsDir, d))
             .map((d) => d.name);
         } catch {
           /* ignore */
@@ -245,7 +246,7 @@ const collectPiPackageResources = (pkgDir, type) => {
         }
         if (type === "skills") {
           for (const d of fs.readdirSync(abs, { withFileTypes: true })) {
-            if (d.isDirectory()) out.add(`${rel}/${d.name}`);
+            if (isDirEntry(abs, d)) out.add(`${rel}/${d.name}`);
           }
         } else {
           const extRe = PI_RES_FILE_EXT[type] || PI_RES_FILE_EXT.extensions;
@@ -265,7 +266,7 @@ const collectPiPackageResources = (pkgDir, type) => {
     if (type === "skills") {
       return fs
         .readdirSync(dir, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
+        .filter((d) => isDirEntry(dir, d))
         .map((d) => `skills/${d.name}`);
     }
     const extRe = PI_RES_FILE_EXT[type] || PI_RES_FILE_EXT.extensions;
@@ -275,8 +276,8 @@ const collectPiPackageResources = (pkgDir, type) => {
       for (const ent of fs.readdirSync(abs, { withFileTypes: true })) {
         if (ent.name === "node_modules" || ent.name.startsWith(".")) continue;
         const rel = `${prefix}/${ent.name}`;
-        if (ent.isDirectory()) res.push(...walk(path.join(abs, ent.name), rel, depth + 1));
-        else if (extRe.test(ent.name)) res.push(rel);
+        if (isDirEntry(abs, ent)) res.push(...walk(path.join(abs, ent.name), rel, depth + 1));
+        else if (extRe.test(ent.name) && isFileEntry(abs, ent)) res.push(rel);
       }
       return res;
     };

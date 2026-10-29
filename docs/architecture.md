@@ -471,6 +471,28 @@ Command Code（cmd，~/.commandcode/，COMMANDCODE_HOME 可覆盖）：
   网关下发：api 仍按通用库协议（默认 openai-completions），baseUrl 带 /v1（cmd 自己只追加端点路径）
 ```
 
+### Skill 目录扫描必须跟随符号链接（`fs-utils.js`）
+
+`fs.readdirSync(dir, { withFileTypes: true })` 返回的 `Dirent.isDirectory()` **只看目录项自身的类型，对符号链接恒为 false**。
+而「用软链挂载 Skill」是很常见的用法（`~/.agents/skills/ego-browser -> ~/.local/share/ego/ego-skills`、
+dotfiles / chezmoi 管理、外部目录共享），直接 `isDirectory()` 会让这些条目**整条从 UI 消失**——不报错、不进场景、
+不参与启停与统计。v1.5.0 之前所有 skill 扫描点都有这个问题。
+
+统一规则（改动 skill 相关代码时照此执行）：
+
+- 判定目录/文件一律走 `public/preload/services/fs-utils.js`（`isDirEntry(dir, entry)` / `isFileEntry(dir, entry)`），
+  不要直接写 `entry.isDirectory()`。语义：先按 Dirent 判，链接再 `statSync` 跟随目标，断链/无权限返回 false。
+- 目录条目计数用 `countEntries(dir)`：穿透软链、跳过隐藏项（`.DS_Store`）。
+- **删除一律用 `rmEntry(p)`**：`lstat` 判定是链接就只 `unlink` 链接本身，绝不递归进目标目录。
+  覆盖了 `deleteCommonSkill` / `deleteSkill` / `deleteProjectSkill` / `deleteClineSkill` / `deleteGrokSkill` /
+  `deleteCommandCodeSkill` / `deleteOpencodeSkill` 与 `skills-install.js` 的 `completeInstall`（重装同名软链 Skill 时）。
+- 启停（`renameSync` 到 `.disabled/`）移动的是链接本身，不复制、不动源目录——安全，已在测试里锁住。
+- 断链（指向已不存在的目标）不显示、也不让整轮扫描失败。
+
+当前已改造的扫描点：`common.js`（通用 Skill + 场景绑定）、`skills.js`（Claude 全局/项目级）、`opencode.js`、
+`grok.js`、`cline.js`、`command-code.js`、`plugins.js`（插件组件发现）、`pi-package-detail.js`（pi 包资源）、
+`skills-install.js`（安装时递归找 SKILL.md）。冒烟测试：`tests/smoke-symlink-skill.cjs`。
+
 ### 订阅用量（通用 → 订阅）
 
 用户手动添加自己订阅的第三方服务，插件用**本机浏览器的登录态**代他查用量，结果同时显示在订阅页与桌面版托盘面板。
