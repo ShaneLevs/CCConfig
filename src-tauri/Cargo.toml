@@ -1,6 +1,6 @@
 [package]
 name = "ccconfig"
-version = "1.5.0"
+version = "1.6.0"
 edition = "2021"
 description = "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex and more"
 
