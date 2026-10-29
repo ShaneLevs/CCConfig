@@ -92,6 +92,11 @@
       "deleted": "Model alias {alias} deleted",
       "deleteFailed": "Delete failed: {message}",
       "defaultSet": "Default model set to {alias}"
+    },
+    "usage": {
+      "tip": "Kimi Code usage statistics (parsed from usage.record events in session wire.jsonl)",
+      "emptyDescription": "No usage data yet. It will appear here after you use Kimi Code",
+      "emptyHint": "Sessions directory: {path}"
     }
   }
 }

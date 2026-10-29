@@ -92,6 +92,11 @@
       "deleted": "模型别名 {alias} 已删除",
       "deleteFailed": "删除失败: {message}",
       "defaultSet": "默认模型已设为 {alias}"
+    },
+    "usage": {
+      "tip": "Kimi Code 使用统计（从会话 wire.jsonl 的 usage.record 解析）",
+      "emptyDescription": "暂无使用数据，使用 Kimi Code 后会在此处显示",
+      "emptyHint": "会话目录：{path}"
     }
   }
 }

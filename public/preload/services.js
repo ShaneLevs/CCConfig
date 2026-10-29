@@ -12,6 +12,7 @@ const pi = require("./services/pi");
 const omp = require("./services/omp");
 const reasonix = require("./services/reasonix");
 const kimi = require("./services/kimi");
+const kimiUsage = require("./services/kimi-usage");
 const minimax = require("./services/minimax");
 const qoder = require("./services/qoder");
 const zcode = require("./services/zcode");
@@ -227,6 +228,10 @@ window.services = {
       collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
     try {
+      const s = kimiUsage.readKimiUsage()
+      collected.kimi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Kimi 采集失败:', e); collected.kimi = false }
+    try {
       const s = minimax.readMinimaxUsage()
       collected.minimax = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] MiniMax 采集失败:', e); collected.minimax = false }
@@ -269,6 +274,7 @@ window.services = {
       tryCollect('claude', () => usageAsync.readClaudeUsageAsync(true)),
       tryCollect('opencode', () => usageAsync.readOpencodeUsageAsync()),
       tryCollect('pi', () => usageAsync.readPiUsageAsync()),
+      tryCollect('kimi', () => usageAsync.readKimiUsageAsync()),
       tryCollect('minimax', () => usageAsync.readMinimaxUsageAsync()),
       tryCollect('dsh', () => usageAsync.readDshUsageAsync()),
       tryCollect('zcode', () => usageAsync.readZcodeUsageAsync()),
@@ -397,7 +403,7 @@ window.services = {
   generateReasonixApiKeyEnv: reasonix.generateReasonixApiKeyEnv,
   openReasonixDir: reasonix.openReasonixDir,
   isReasonixInstalled: reasonix.isReasonixInstalled,
-  // ==================== Kimi Code（~/.kimi-code/config.toml，仅模型配置） ====================
+  // ==================== Kimi Code（~/.kimi-code/config.toml，模型配置 + 使用统计） ====================
   getKimiConfigPath: kimi.getKimiConfigPath,
   readKimiConfig: kimi.readKimiConfig,
   writeKimiConfig: kimi.writeKimiConfig,
@@ -411,6 +417,11 @@ window.services = {
   deleteKimiModel: kimi.deleteKimiModel,
   getKimiDefaultModel: kimi.getKimiDefaultModel,
   setKimiDefaultModel: kimi.setKimiDefaultModel,
+  openKimiDir: kimi.openKimiDir,
+  isKimiInstalled: kimi.isKimiInstalled,
+  readKimiUsageAsync: usageAsync.readKimiUsageAsync,
+  getKimiSessionsDir: kimiUsage.getKimiSessionsDir,
+  openKimiSessionsDir: kimiUsage.openKimiSessionsDir,
 
   // ==================== MiniMax Code（~/.minimax/config.yaml，仅模型配置） ====================
   getMinimaxConfigPath: minimax.getMinimaxConfigPath,
@@ -428,8 +439,6 @@ window.services = {
   isMinimaxInstalled: minimax.isMinimaxInstalled,
   readMinimaxUsageAsync: usageAsync.readMinimaxUsageAsync,
   getMinimaxSessionsDir: minimax.getMinimaxSessionsDir,
-  openKimiDir: kimi.openKimiDir,
-  isKimiInstalled: kimi.isKimiInstalled,
 
   // ==================== Qoder（~/.qoder 与 ~/.qoder-cn 的 settings.json，仅模型配置） ====================
   getQoderProviderList: qoder.getQoderProviderList,

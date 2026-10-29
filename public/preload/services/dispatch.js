@@ -398,8 +398,22 @@ const KIMI_PROVIDER_TYPE = {
 const dispatchToKimi = (provider, model, opts) => {
   const name = opts.providerName || provider.name
   const type = KIMI_PROVIDER_TYPE[provider.api || 'openai-completions'] || 'openai'
-  kimi.upsertKimiProvider(name, { type, baseUrl: provider.baseUrl || '', apiKey: provider.apiKey || '' })
-  const alias = kimi.upsertKimiModel(name, model.id, { contextWindow: model.contextWindow })
+  // headers → [providers.<name>.custom_headers]（Kimi 官方的自定义 HTTP 头）
+  kimi.upsertKimiProvider(name, {
+    type,
+    baseUrl: provider.baseUrl || '',
+    apiKey: provider.apiKey || '',
+    headers: provider.headers,
+  })
+  // 通用库模型元数据随之下发：显示名 / 上下文 / 最大输出 / 输入模态 / 推理能力 / 推理档位
+  const alias = kimi.upsertKimiModel(name, model.id, {
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+    displayName: model.name || model.id,
+    reasoning: model.reasoning,
+    input: Array.isArray(model.input) ? model.input : undefined,
+    reasoningEfforts: Array.isArray(model.reasoningEfforts) ? model.reasoningEfforts : undefined,
+  })
   let suffix = ''
   if (opts.setDefault) {
     kimi.setKimiDefaultModel(alias)

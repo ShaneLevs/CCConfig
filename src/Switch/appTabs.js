@@ -44,7 +44,10 @@ export const APP_TABS = {
   omp: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon }],
   reasonix: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.configManage", icon: DashboardIcon }],
   codex: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
-  kimi: [{ key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon }],
+  kimi: [
+    { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
+    { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },
+  ],
   minimax: [
     { key: "config", labelKey: "nav.tab.config", titleKey: "nav.title.modelConfig", icon: DashboardIcon },
     { key: "usage", labelKey: "nav.tab.usage", titleKey: "nav.title.usage", icon: ChartIcon },

@@ -153,6 +153,29 @@ Kimi Code:
   overrides / base_url / protocol 等 CLI 自动写入字段走 _extra 原样往返，UI 不暴露编辑入口
   含 oauth 字段的 /login 托管供应商只读禁改禁删；下发别名 = 供应商/模型ID
   通用库四种协议全支持（openai / openai_responses / anthropic / google-genai 映射）
+  通用库下发把模型参数一并带过去（只增不减 / 有值才覆盖，重下发不抹手工字段）：
+    provider.headers → [providers.<name>.custom_headers]（与既有头合并）/
+    model.name → display_name / contextWindow → max_context_size（取较大值）/
+    maxTokens → max_output_size（文档限定仅 anthropic 读取，其余协议不写）/
+    input 模态 → capabilities（image/video/audio → image_in/video_in/audio_in）/
+    reasoning → capabilities.thinking（capabilities 按官方「只能追加」语义做并集）/
+    reasoningEfforts → support_efforts（非法档位过滤）
+  使用统计：~/.kimi-code/sessions/<workspace>/<session>/agents/<agentId>/wire.jsonl
+    每行一个事件，只取 usage.record（wire.jsonl 里的 tool 结果 / systemPrompt 单行可达数百 KB，
+      先按子串过滤再 JSON.parse）：
+      { model（Kimi 模型别名，如 router/pro）, usage: { inputOther, output, inputCacheRead,
+        inputCacheCreation }, usageScope（turn|session，均计入）, time（epoch ms） }
+    模型名只记模型本身、不带供应商：优先取同一次请求前一条 llm.request 的 model（真正发往 API
+      的模型 ID）；老日志没有 llm.request 时退回别名，且只剥配置里确实存在的供应商名前缀
+      （避免误删 moonshotai/kimi-k2 这类模型 ID 自带的命名空间）
+    口径：输入 = inputOther + inputCacheRead + inputCacheCreation（含缓存），输出 = output，
+      总量 = 输入 + 输出；日期取 time 的本地日期（同 Grok / Cline）
+      day.inputTokens 含缓存（= tokens - output），day.models[].inputTokens 为未缓存输入
+      state.json 提供稳定会话 ID 与真实 cwd（目录名 wd_<slug>_<hash> 是有损编码）；
+      子 agent（agents/<id>/wire.jsonl）用量一并汇总，按会话 level 合计
+    落库：ccconfig_agent_usage_kimi_<nativeId>（与「通用」统计页同源）；无 wire.jsonl 或
+      解析不到 usage.record 时回放落库历史，不归零
+    重统计走后台线程（usage-worker.js 的 kimi runner）；冒烟测试：node tests/smoke-kimi-usage-test.cjs
 
 MiniMax Code:
   ~/.minimax/config.yaml（MINIMAX_DATA_DIR 优先，MAVIS_DATA_DIR 兼容回退）→ js-yaml 读写（解析失败抛错阻断写回）

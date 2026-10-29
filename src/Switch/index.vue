@@ -22,6 +22,7 @@ import OmpConfigView from "./omp/ConfigView.vue";
 import ReasonixConfigView from "./reasonix/ConfigView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
+import KimiUsageView from "./kimi/UsageView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
 import MinimaxUsageView from "./minimax/UsageView.vue";
 import QoderConfigView from "./qoder/ConfigView.vue";
@@ -383,9 +384,13 @@ onUnmounted(() => {
         <CodexConfigView v-if="activeApp === 'codex' && activeTab === 'config'" />
       </template>
 
-      <!-- Kimi views（仅模型配置） -->
+      <!-- Kimi views（模型配置 + 使用统计） -->
       <template v-if="isAppReady('kimi')">
         <KimiConfigView v-if="activeApp === 'kimi' && activeTab === 'config'" />
+        <KimiUsageView
+          v-if="isTabVisited('kimi', 'usage')"
+          v-show="activeApp === 'kimi' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- MiniMax Code views（模型配置 + 使用统计） -->

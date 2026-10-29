@@ -175,6 +175,10 @@ const readOpencodeUsageAsync = () =>
 const readPiUsageAsync = () =>
   withFallback("pi", false, () => require("./pi").readPiUsage());
 
+// Kimi Code：wire.jsonl 解析（只扫 usage.record 行）走后台线程
+const readKimiUsageAsync = () =>
+  withFallback("kimi", false, () => require("./kimi-usage").readKimiUsage());
+
 // MiniMax Code：会话 JSONL 解析走后台线程（同 Pi），不阻塞渲染层
 const readMinimaxUsageAsync = () =>
   withFallback("minimax", false, () => require("./minimax").readMinimaxUsage());
@@ -203,6 +207,7 @@ module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
   readPiUsageAsync,
+  readKimiUsageAsync,
   readMinimaxUsageAsync,
   readZcodeUsageAsync,
   readDshUsageAsync,

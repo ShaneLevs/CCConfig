@@ -259,10 +259,19 @@ const modelOptions = computed(() =>
   fetchedModels.value.map((m) => ({ label: m.name || m.id, value: m.id }))
 );
 
-// 别名跟随输入：用户未手改过别名时，按官方惯例 <供应商>/<模型ID> 自动填
+// 别名跟随输入：用户未手改过别名时，按官方惯例 <供应商>/<模型ID> 自动填。
+// 从拉取结果带出模型参数：上下文 / 显示名 / anthropic 的最大输出（其余协议不读 max_output_size）
+const applyFetchedModel = (id) => {
+  const m = fetchedModels.value.find((x) => x.id === id);
+  if (!m) return;
+  if (m.contextWindow > 0) addModelForm.value.maxContextSize = m.contextWindow;
+  if (m.maxTokens > 0 && addProviderType.value === "anthropic") addModelForm.value.maxOutputSize = m.maxTokens;
+  if (m.name && m.name !== id && !addModelForm.value.displayName) addModelForm.value.displayName = m.name;
+};
 const aliasTouched = ref(false);
 const onModelIdInput = (v) => {
   addModelForm.value.model = v;
+  applyFetchedModel(v);
   if (!aliasTouched.value) {
     addModelForm.value.alias = v ? `${addModelProvider.value}/${v}` : "";
   }

@@ -193,6 +193,8 @@ const deleteKimiProvider = (name) => {
 
 // 下发用：存在则合并更新（保留既有扩展字段与已存 key，空值不覆盖），不存在则创建。
 // 托管供应商（oauth）不动其凭证与端点，仅允许刷新 type 之外的常规更新会被跳过。
+// cfg.headers（通用库供应商 headers）→ [providers.<name>.custom_headers]（官方：每次请求附加的自定义头），
+// 与既有头合并；headers 本身不是 config.toml 字段，不能直接写进表里。
 const upsertKimiProvider = (name, cfg) => {
   const doc = readKimiConfig()
   const tables = getProviderTables(doc)
@@ -200,8 +202,16 @@ const upsertKimiProvider = (name, cfg) => {
     ? normalizeProvider(name, tables[name])
     : { name, type: '', baseUrl: '', apiKey: '', managed: false, _extra: {} }
   if (prev.managed) return true
+  const headers = { ...((prev._extra && prev._extra.custom_headers) || {}) }
+  if (cfg.headers && typeof cfg.headers === 'object') {
+    for (const [k, v] of Object.entries(cfg.headers)) {
+      if (v !== undefined && v !== null && v !== '') headers[k] = String(v)
+    }
+  }
   const merged = { ...prev }
+  if (Object.keys(headers).length) merged._extra = { ...(prev._extra || {}), custom_headers: headers }
   for (const [k, v] of Object.entries(cfg)) {
+    if (k === 'headers') continue
     if (v !== undefined && v !== '') merged[k] = v
   }
   if (!merged.type) merged.type = 'openai'
@@ -384,14 +394,33 @@ const deleteKimiModel = (alias) => {
   return true
 }
 
+// 通用库 model.input 的输入模态 → Kimi capabilities（text 隐含，无对应标签）
+const INPUT_CAPABILITY = { image: 'image_in', video: 'video_in', audio: 'audio_in' }
+
+// 由通用库模型字段推导 capabilities：reasoning → thinking，input 里的多媒体 → image_in/video_in/audio_in。
+// capabilities 在 Kimi 侧是「显式追加」语义（只能追加不能移除），所以下发只做并集、不删既有标签。
+const dispatchCapabilities = (opts) => {
+  const caps = []
+  if (opts.reasoning) caps.push('thinking')
+  for (const m of Array.isArray(opts.input) ? opts.input : []) {
+    if (INPUT_CAPABILITY[m]) caps.push(INPUT_CAPABILITY[m])
+  }
+  return caps
+}
+
 // 下发用：别名约定 <provider>/<model>（与官方 managed:kimi-code 的 kimi-code/k3 风格一致）。
-// 已存在则更新 provider/model，上下文只增不减（避免下发把用户手工调大的值改小）
+// 通用库字段全部按「有值才覆盖」写入，且上下文只增不减（避免下发把用户手工调大的值改小）：
+//   name → display_name / contextWindow → max_context_size（上限）/
+//   maxTokens → max_output_size（官方仅 anthropic 读取）/ input + reasoning → capabilities /
+//   reasoningEfforts → support_efforts（只保留合法档位）
 const upsertKimiModel = (providerName, modelId, opts) => {
+  const o = opts || {}
   const alias = `${providerName}/${modelId}`
   const doc = readKimiConfig()
   const models = getModelTables(doc)
   const prev = models[alias] ? normalizeModel(alias, models[alias]) : null
-  const ctx = Number(opts && opts.contextWindow) > 0 ? Number(opts.contextWindow) : 0
+  const providerType = (getProviderTables(doc)[providerName] || {}).type || ''
+  const ctx = Number(o.contextWindow) > 0 ? Number(o.contextWindow) : 0
   const merged = {
     ...(prev || { alias, provider: providerName, model: modelId, maxContextSize: 0, _extra: {} }),
     provider: providerName,
@@ -399,7 +428,30 @@ const upsertKimiModel = (providerName, modelId, opts) => {
     maxContextSize: Math.max(prev ? prev.maxContextSize : 0, ctx),
   }
   // 仅当新值非空才覆盖，避免重下发清掉用户手工设置的显示名
-  if (opts && opts.displayName) merged.displayName = String(opts.displayName)
+  if (o.displayName || o.name) merged.displayName = String(o.displayName || o.name)
+  // max_output_size 文档明确「目前仅 anthropic 供应商读取」，其余协议写了也是死配置
+  const maxOutput = Number(o.maxTokens) > 0 ? Number(o.maxTokens) : 0
+  if (maxOutput && providerType === 'anthropic') merged.maxOutputSize = maxOutput
+  const maxInput = Number(o.maxInputSize) > 0 ? Number(o.maxInputSize) : 0
+  if (maxInput) merged.maxInputSize = maxInput
+  const caps = [
+    ...(Array.isArray(o.capabilities) ? o.capabilities : []),
+    ...dispatchCapabilities(o),
+  ].filter((c) => KIMI_CAPABILITIES.includes(c))
+  if (caps.length) {
+    merged.capabilities = [...new Set([...(prev ? prev.capabilities : []), ...caps])]
+  }
+  const efforts = Array.isArray(o.reasoningEfforts)
+    ? o.reasoningEfforts
+    : Array.isArray(o.supportEfforts) ? o.supportEfforts : null
+  if (efforts) {
+    const valid = efforts.filter((e) => KIMI_EFFORTS.includes(e))
+    if (valid.length) merged.supportEfforts = valid
+  }
+  if (o.defaultEffort) merged.defaultEffort = String(o.defaultEffort)
+  if (o.offEffort) merged.offEffort = String(o.offEffort)
+  if (o.reasoningKey) merged.reasoningKey = String(o.reasoningKey)
+  if (typeof o.adaptiveThinking === 'boolean') merged.adaptiveThinking = o.adaptiveThinking
   models[alias] = buildModelToml(merged)
   writeKimiConfig(doc)
   return alias
