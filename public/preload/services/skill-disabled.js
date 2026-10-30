@@ -109,6 +109,16 @@ const migrateDisabledSkills = (skillsRoot) => {
       console.error("[skill-disabled] 迁移旧停用目录失败:", from, e);
     }
   });
+  // Finder 浏览过目录后会留下 .DS_Store，它会让 rmdir 一直失败、旧目录看起来「还在」。
+  // 只清这个已知的元数据文件；迁移失败的真实 Skill 目录仍保留，留给下次重试。
+  const legacyJunk = path.join(legacy, ".DS_Store");
+  if (pathExists(legacyJunk)) {
+    try {
+      fs.unlinkSync(legacyJunk);
+    } catch {
+      /* ignore */
+    }
+  }
   try {
     fs.rmdirSync(legacy);
   } catch {

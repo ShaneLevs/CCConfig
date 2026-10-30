@@ -96,6 +96,12 @@ ok(enabled('alpha'), '绑定项 alpha 启用')
 ok(disabled('beta') && disabled('gamma'), '未绑定项 beta/gamma 移入 .disabled')
 ok(switched.applied.enabled.length === 1, '返回启用列表')
 ok(switched.applied.disabled.length === 2, '返回禁用列表')
+const betaSkill = common.readCommonSkills().find((s) => s.dirName === 'beta')
+ok(
+  betaSkill && betaSkill.dir === path.join(disabledDir, 'beta'),
+  '禁用项返回实际路径（界面卡片绑定 skill.dir）',
+  betaSkill && betaSkill.dir,
+)
 
 console.log('\n4. 清空当前场景（删除场景 / 旧数据兜底）不动目录')
 common.switchSkillScene('')

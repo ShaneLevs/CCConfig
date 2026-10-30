@@ -19,8 +19,22 @@ const { t } = useI18n();
 
 // 通用 Skill：读取 ~/.agents/skills 目录下的 Skill（SKILL.md 元数据），
 // 支持从 SkillHub / 魔搭社区 通过链接安装（功能同 Claude Code，仅安装目录不同）。
-// 启停：物理移动目录到 .disabled/（同 Claude Code）；
+// 启停：物理移动到 ~/.agents/.disabled/（与 skills 目录同级，见 skill-disabled.js）；
 // 场景：按用途绑定一组 Skill，切换后只启用绑定的那些（见 preload/services/common.js）。
+
+// 卡片上展示实际目录（停用项在 ~/.agents/.disabled 下），home 缩写为 ~
+const displayPath = (absPath) => {
+  if (!absPath) return "";
+  try {
+    const home = window.utools.getPath("home");
+    if (home && absPath.startsWith(home)) {
+      return `~${absPath.slice(home.length).replace(/\\/g, "/")}`;
+    }
+  } catch (e) {
+    /* 非 uTools 环境直接显示绝对路径 */
+  }
+  return absPath;
+};
 
 const parseFrontmatter = (yamlStr) => {
   if (!yamlStr) return {};
@@ -563,7 +577,7 @@ onBeforeUnmount(() => {
         <template #description>{{ parseFrontmatter(skill.frontmatter).description || t('skill.noDescription') }}</template>
         <template #meta>
           <Tag size="small" variant="light" theme="primary">{{ t('commonApp.skill.fileCount', { count: skill.fileCount }) }}</Tag>
-          <span class="skill-dir-name">~/.agents/skills/{{ skill.dirName }}</span>
+          <span class="skill-dir-name">{{ displayPath(skill.dir) }}</span>
         </template>
       </SkillCard>
 
@@ -597,7 +611,7 @@ onBeforeUnmount(() => {
           <template #description>{{ parseFrontmatter(skill.frontmatter).description || t('skill.noDescription') }}</template>
           <template #meta>
             <Tag size="small" variant="light" theme="primary">{{ t('commonApp.skill.fileCount', { count: skill.fileCount }) }}</Tag>
-            <span class="skill-dir-name">~/.agents/skills/.disabled/{{ skill.dirName }}</span>
+            <span class="skill-dir-name">{{ displayPath(skill.dir) }}</span>
           </template>
         </SkillCard>
       </template>
