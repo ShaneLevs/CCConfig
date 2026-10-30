@@ -15,6 +15,7 @@ import BatchAddModelsDialog from "./components/BatchAddModelsDialog.vue";
 import DispatchDialog from "./components/DispatchDialog.vue";
 import { formatNumber } from "../../utils/format";
 import { MODEL_API_TYPE_OPTIONS } from "../../constants";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -52,6 +53,7 @@ const COMPAT_KEY_OPTIONS = [
 const loading = ref(false);
 const providers = ref([]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 const editDialog = ref(false);
 const editingProvider = ref(null);
 const editForm = ref({ apiKey: '', baseUrl: '', api: 'openai-completions', headers: [], authHeader: true });

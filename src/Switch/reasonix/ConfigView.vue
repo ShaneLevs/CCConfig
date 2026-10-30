@@ -11,6 +11,7 @@ import {
   CopyIcon, LockOnIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -20,6 +21,7 @@ const warningMsg = ref("");
 const providers = ref([]);
 const defaultModel = ref("");
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 
 // ==================== 弹窗状态 ====================
 

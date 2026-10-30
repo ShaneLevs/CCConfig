@@ -13,6 +13,7 @@ import {
   RefreshIcon, EditIcon, AddIcon, DeleteIcon, StarIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -58,6 +59,7 @@ const providers = ref([]);
 const defaultModel = ref("");
 const defaultBase = computed(() => defaultModel.value.split("#")[0]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList);
 
 // 当前 provider+model 的 defaultModel 引用形态
 const modelRef = (p, modelId) =>

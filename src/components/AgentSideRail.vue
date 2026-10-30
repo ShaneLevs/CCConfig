@@ -68,7 +68,7 @@ const ASSET_BASE = import.meta.env.BASE_URL;
 /* 选中项：theme.css 把整条 brand 色阶换成了灰阶，纯填色在暗色下几乎等于容器底色
    （brand-color-light = #343434 叠在 #303133 上），单靠颜色分不出选中。
    这里补一圈 1px 内描边（暗色近白 / 浅色近黑，均由灰阶 brand-color 提供），
-   与「通用 → 外观 → 特效」卡片的选中态同款；用 inset 阴影而不是 border，避免布局跳动。 */
+   与「通用 → 深色背景特效」卡片的选中态同款；用 inset 阴影而不是 border，避免布局跳动。 */
 .agent-rail-item--active,
 .agent-rail-item--active:hover {
   background: var(--td-brand-color-light);

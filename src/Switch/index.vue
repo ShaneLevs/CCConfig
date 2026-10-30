@@ -54,7 +54,6 @@ import CommonSubscriptionsView from "./common/SubscriptionsView.vue";
 import CommonUsageView from "./common/UsageView.vue";
 import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
-import AppearanceSettings from "../components/AppearanceSettings.vue";
 import GeneralSettings from "../components/GeneralSettings.vue";
 import AboutSettings from "../components/AboutSettings.vue";
 import AgentSideRail from "../components/AgentSideRail.vue";
@@ -77,12 +76,10 @@ const { AGENT_META, appDropdownOptions, toggleAgentVisibility, visibleAgents } =
 // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
 const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
-// 设置弹窗页签：general = 通用（语言），agents = Agent 显示，appearance = 外观（主题 + 特效）
+// 设置弹窗页签：general = 通用（语言 + 主题 + 深色背景特效），agents = Agent 显示，about = 关于
 const settingsTab = ref("general");
-// Agent 显示页单列展示 + 行内安装状态，需要更宽；其它页签保持原宽度
-const settingsDialogWidth = computed(() =>
-  settingsTab.value === "agents" ? "min(720px, 92vw)" : "540px",
-);
+// 弹窗尺寸固定（宽度写在模板里，高度见 .settings-body）：切换页签不再改弹窗大小，
+// 各页签内容在固定高度内自适应（超出则内容区滚动）。
 const showSettings = ref(false);
 
 // 左侧 agent 快速切换栏：窗口 ≥ 1000px（= 800 + 2×100）时显示；此时侧栏+内容总占位
@@ -500,21 +497,21 @@ onUnmounted(() => {
         v-model:visible="showSettings"
         :header="t('settings.title')"
         :footer="false"
-        :width="settingsDialogWidth"
+        width="min(720px, 92vw)"
         placement="center"
       >
         <div class="settings-body">
           <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
             <RadioButton value="general">{{ t('settings.tab.general') }}</RadioButton>
             <RadioButton value="agents">{{ t('settings.tab.agents') }}</RadioButton>
-            <RadioButton value="appearance">{{ t('settings.tab.appearance') }}</RadioButton>
             <RadioButton value="about">{{ t('settings.tab.about') }}</RadioButton>
           </RadioGroup>
 
-          <GeneralSettings v-if="settingsTab === 'general'" />
-          <AgentVisibilitySettings v-else-if="settingsTab === 'agents'" />
-          <AppearanceSettings v-else-if="settingsTab === 'appearance'" />
-          <AboutSettings v-else-if="settingsTab === 'about'" />
+          <div class="settings-content">
+            <GeneralSettings v-if="settingsTab === 'general'" />
+            <AgentVisibilitySettings v-else-if="settingsTab === 'agents'" />
+            <AboutSettings v-else-if="settingsTab === 'about'" />
+          </div>
         </div>
       </Dialog>
     </div>
@@ -617,13 +614,23 @@ onUnmounted(() => {
 .settings-btn:hover {
   color: var(--td-brand-color);
 }
+/* 固定高度：页签栏常驻，内容区自己滚（切换页签时弹窗尺寸不变，内容自适应） */
 .settings-body {
-  max-height: 70vh;
-  overflow-y: auto;
-  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  /* 上限 560px，短窗口下按视口收缩；两者都是「与页签无关」的固定值 */
+  height: min(560px, 68vh);
 }
 .settings-tabs {
+  flex-shrink: 0;
   margin-bottom: 12px;
+}
+.settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 浮层滚动策略与页面一致时不做特殊处理，这里留出滑块空间避免内容左右抖 */
+  padding-right: 4px;
 }
 
 /* 侧栏进出场：margin-left 从 -(侧栏+间距) 过渡到 0，flex 每帧重排带动内容平滑让位/复位，

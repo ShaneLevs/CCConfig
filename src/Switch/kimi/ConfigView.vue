@@ -10,6 +10,7 @@ import {
   RefreshIcon, EditIcon, AddIcon, DeleteIcon, StarIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -29,6 +30,7 @@ const providers = ref([]);
 const models = ref([]);
 const defaultModel = ref("");
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 
 // 官方扩展字段的枚举选项（docs configuration/config-files.html models 节）
 const capabilityOptions = CAPABILITY_VALUES.map(v => ({ label: v, value: v }));

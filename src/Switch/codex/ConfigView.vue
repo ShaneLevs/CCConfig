@@ -11,6 +11,7 @@ import {
   CopyIcon, LockOnIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -29,6 +30,7 @@ const providers = ref([]);
 const modelsMap = ref({});
 const current = ref({ provider: "", model: "", reasoningEffort: "", apiAuth: false, catalogPath: "" });
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList);
 
 // ==================== 当前生效配置（摘要 + 全局开关） ====================
 

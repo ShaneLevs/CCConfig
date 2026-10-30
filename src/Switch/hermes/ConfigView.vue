@@ -15,6 +15,7 @@ import {
   RefreshIcon, EditIcon, AddIcon, DeleteIcon, StarIcon, LockOnIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -34,6 +35,7 @@ const loading = ref(false);
 const warningMsg = ref("");
 const providers = ref([]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 
 const defaultKey = ref(null); // { provider, modelId }
 const isDefaultModel = (p, m) =>

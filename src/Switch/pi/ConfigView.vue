@@ -12,6 +12,7 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -52,6 +53,7 @@ const inputTypeOptions = computed(() => INPUT_TYPE_OPTIONS.map((o) => ({ ...o, l
 const loading = ref(false);
 const providers = ref([]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 const warningMsg = ref("");
 const editDialog = ref(false);
 const editingProvider = ref(null);

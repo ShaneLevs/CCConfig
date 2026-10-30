@@ -20,6 +20,7 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -48,6 +49,7 @@ const loading = ref(false);
 const warningMsg = ref("");
 const providers = ref([]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList);
 
 const defaultKey = ref(null); // { provider, modelId }
 const isDefaultModel = (p, m) =>

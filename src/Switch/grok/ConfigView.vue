@@ -22,6 +22,7 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -46,6 +47,7 @@ const providers = ref([]);
 const ungrouped = ref([]);
 const defaultKey = ref({ modelId: "", webSearch: "" });
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 
 const formatNumber = (n) => {
   if (!n) return "";

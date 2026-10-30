@@ -11,6 +11,7 @@ import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import OmpRolesCard from "./components/OmpRolesCard.vue";
 import OmpModelFormDialog from "./components/OmpModelFormDialog.vue";
 import { formatNumber } from "../../utils/format";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -33,6 +34,7 @@ const loading = ref(false);
 const warningMsg = ref("");
 const providers = ref([]);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.name);
 const rolesCardRef = ref(null);
 
 // 供应商弹窗

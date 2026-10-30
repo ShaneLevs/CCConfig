@@ -25,6 +25,7 @@ import {
 } from "tdesign-icons-vue-next";
 import OcModelFormDialog from "./components/OcModelFormDialog.vue";
 import OcProviderDialog from "./components/OcProviderDialog.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -90,6 +91,8 @@ const providerList = computed(() => {
     return { id, ...config, models };
   });
 });
+
+useFirstProviderExpand(providerList, expandedProviders);
 
 // ==================== Helpers ====================
 

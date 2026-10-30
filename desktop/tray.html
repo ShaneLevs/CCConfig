@@ -1361,9 +1361,11 @@
 
   // 用量柱状图
   const CHART_DAYS = 14
-  const MAX_CATEGORIES = 5
-  // 与主窗口统计页同一套配色（细柱 + 低饱和色，暗色下也够区分）
-  const PALETTE = ['#6366f1', '#14b8a6', '#f59e0b', '#ec4899', '#0ea5e9']
+  const MAX_CATEGORIES = 8
+  // 与主窗口统计页同一套配色（细柱 + 低饱和色，暗色下也够区分）。
+  // 前 6 个与主窗口 PALETTE 一致，后 2 个补主窗口没用到、彼此不相邻的色相，
+  // 保证 8 个分类两两可区分（超出 MAX_CATEGORIES 的才合并成灰色「其他」）。
+  const PALETTE = ['#6366f1', '#14b8a6', '#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#84cc16', '#ef4444']
   const OTHER_COLOR = '#94a3b8'
   const OTHER_KEY = '__other'
   const AGENT_LABELS = {

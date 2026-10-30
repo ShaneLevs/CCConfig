@@ -31,7 +31,12 @@ const openGithub = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0 8px;
+  /* 内容区固定高度：整块在弹窗里垂直 + 水平居中；内容比可视区高时（矮窗口）
+     min-height 让容器跟内容一起长高，滚动区域不会把顶部裁掉 */
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 16px 0;
   text-align: center;
 }
 .about-logo {

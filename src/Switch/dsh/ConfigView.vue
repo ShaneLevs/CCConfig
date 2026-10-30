@@ -19,6 +19,7 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
+import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -62,6 +63,7 @@ const providers = ref([]);
 const official = ref(null);
 const defaultKey = ref(null);
 const expandedList = ref([]);
+useFirstProviderExpand(providers, expandedList, (p) => p.route);
 
 const providerOf = (route) => providers.value.find((p) => p.route === route) || null;
 
