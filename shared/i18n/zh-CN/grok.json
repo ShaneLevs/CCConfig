@@ -90,7 +90,7 @@
       "startupTimeout": "启动超时 {sec}s"
     },
     "skill": {
-      "tip": "（Grok 用户级 Skill 目录，启停写入 .disabled/）",
+      "tip": "（Grok 用户级 Skill 目录，启停移入同级的 .disabled/）",
       "install": "安装 Skill",
       "empty": "未安装 Skill；可从上方的「安装 Skill」从 SkillHub / 魔搭社区安装，或手动放入目录",
       "enabledSuccess": "已启用 {name}",

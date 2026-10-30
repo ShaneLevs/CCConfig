@@ -267,7 +267,7 @@ throws(() => grok.setGrokMcpServer('nocmd', { type: 'stdio' }), 'stdio 缺 comma
 grok.deleteGrokMcpServer('sentry')
 eq(grok.getGrokMcpServers().map((m) => m.name), ['filesystem'], '删除 MCP')
 
-// ==================== 8. Skill（.disabled 目录机制） ====================
+// ==================== 8. Skill（skills 同级的 .disabled 目录机制） ====================
 console.log('8. Skill')
 const skillsDir = grok.getGrokSkillsDir()
 fs.mkdirSync(path.join(skillsDir, 'git-helper'), { recursive: true })
@@ -278,7 +278,8 @@ eq(skills[0].disabled, false, '默认启用')
 ok(skills[0].frontmatter.includes('name: git-helper'), 'frontmatter 解析')
 let res = grok.setGrokSkillEnabled('git-helper', false)
 ok(res.success === true, '关闭 skill 成功')
-ok(fs.existsSync(path.join(skillsDir, '.disabled', 'git-helper')), '关闭 = 移动到 .disabled')
+ok(fs.existsSync(path.join(tmp, '.disabled', 'git-helper')), '关闭 = 移动到 skills 同级的 .disabled')
+ok(!fs.existsSync(path.join(skillsDir, '.disabled', 'git-helper')), 'skills 根目录内不再留有停用项')
 skills = grok.getGrokSkills()
 eq([skills[0].name, skills[0].disabled], ['git-helper', true], '关闭后仍列出且 disabled=true')
 res = grok.setGrokSkillEnabled('git-helper', true)

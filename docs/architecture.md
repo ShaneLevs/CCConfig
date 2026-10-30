@@ -57,7 +57,7 @@ uTools 版把文档交给宿主 DB；桌面版在 sidecar 里用文件实现同�
 Claude:
   ~/.claude/settings.json  ←→  本地数据库（AES-256-CBC 加密）
   ~/.claude.json 顶层 mcpServers（MCP，官方位置，单一来源，全局生效）←→ 本地数据库（禁用状态）
-  ~/.claude/skills/（全局）+ 项目级 .claude/skills/ + .disabled 目录
+  ~/.claude/skills/（全局）+ 项目级 .claude/skills/ + 停用目录（skills 同级的 .disabled/）
   ~/.claude/projects/**/*.jsonl  →  使用统计：
       signature = file_count:max_mtime 校验 → DB 缓存命中秒开
       热力图历史持久化（ccconfig_heatmap_*），全量解析后与历史按日期合并
@@ -66,8 +66,8 @@ Claude:
 通用配置（跨 agent 主数据）:
   供应商/模型主数据 → 本地数据库（ccconfig_common_providers，API Key 加密）
   通用 MCP → 云端为唯一主档存全量服务器（ccconfig_common_mcp）；本机启停名单存 ccconfig_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccconfig_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
-  通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动目录到 .disabled/（同 Claude Code 机制）
-    Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 .disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名> / Scene: <名>，不再有「场景：关闭」），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
+  通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动到 ~/.agents/.disabled/（skills 根目录同级）
+    Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 ~/.agents/.disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名> / Scene: <名>，不再有「场景：关闭」），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
   模型主数据字段（ccconfig_common_providers.providers[].models[]，均为可选、旧档缺字段按默认值消费）：
     id / name / contextWindow / maxTokens
@@ -154,6 +154,8 @@ Claude:
       Hermes 顶层 model.provider/default、DSH agent-default-model、Grok models.default、Cline lastUsedProvider、Command Code settings.model
     清空时绕过 delete* 的「在用」守卫（生效中的供应商本来就删不掉）；Claude 只清空六个模型槽位、保留 _id/名称/额外字段；
     重建后按各 agent 自己的写入路径（dispatchToXxx）重新生成模型条目，元数据映射规则不变
+    Claude 的 1M 上下文：通用库模型 contextWindow ≥ 100 万时槽位值带 [1m] 后缀（等价于配置页「1m」勾选框）；
+      已有同模型缺后缀时原地补齐，已有后缀则只补不删（保留配置页手动勾选）
 
 OpenCode:
   ~/.config/opencode.json / opencode.jsonc (json5/jsonc，优先 .json)  ←→  本地数据库
@@ -411,7 +413,8 @@ Grok Build（xAI 官方编码 CLI，命令 `grok`）:
     开关同时维护顶层 disabled_mcp_servers 名单（不写条目的 enabled，与官方 CLI 行为一致）；
     oauth / setup / tool_timeouts / bearer_token_* 等未知键经 _extra 原样往返
   Skill：~/.grok/skills/<name>/SKILL.md（官方用户级目录；grok 也递归子目录，这里只读一层，同 OpenCode 视图）；
-    启停 = 物理移动目录到 .disabled/（同 Claude / OpenCode / 通用 Skill）；安装复用 SkillHub / 魔搭流水线
+    启停 = 物理移动到 ~/.grok/.disabled/（skills 根目录同级；官方递归扫描 skills，放根目录内会被加载）；
+    安装复用 SkillHub / 魔搭流水线
   使用统计：~/.grok/sessions/<URL 编码工作目录>/<session-id>/usage.json（`grok usage` 的落盘版本）：
     结构 { sessionId, updatedAt, session: UsageSummary, turns: [{ turnNumber, endedAt, ...UsageSummary }] }（serde camelCase），
     UsageSummary 含 inputTokens / outputTokens / cachedReadTokens / cacheCreationTokens / reasoningTokens /
@@ -463,7 +466,7 @@ Cline（AI 编程 agent，命令 `cline`；CLI / Desktop / SDK 共用一套文�
     { mcpServers: { <name>: { command/args/env | type: "streamableHttp"|"sse" + url/headers,
       disabled, autoApprove, ... } } }
     关闭态写条目自身 disabled: true（开启时删掉该键）；autoApprove 等未识别键原样往返
-  ~/.cline/skills/<name>/SKILL.md  Skill 目录；启停 = 物理移动目录到 .disabled/（同 Claude / OpenCode / Grok）；
+  ~/.cline/skills/<name>/SKILL.md  Skill 目录；启停 = 物理移动到 ~/.cline/.disabled/（skills 根目录同级）；
     安装复用 SkillHub / 魔搭流水线（~/.agents/skills 由「通用配置 → Skill」管理，此处不重复接管）
   使用统计：<data>/sessions/<session_id>/<session_id>.json
     { session_id, started_at, updated_at?, provider, model,
@@ -501,7 +504,7 @@ Command Code（cmd，~/.commandcode/，COMMANDCODE_HOME 可覆盖）：
                    仅 user scope；local scope（projects/<slug>/mcp.json）与 project scope（<项目>/.mcp.json）不碰
                    oauth 等未知键经 _extra 原样往返；开关写条目 enabled（不删条目）
   config.json     localOnly 等少量开关（本插件不写）
-  Skill：~/.commandcode/skills/<name>/SKILL.md；启停 = 物理移动目录到 .disabled/（同其它 agent）。
+  Skill：~/.commandcode/skills/<name>/SKILL.md；启停 = 物理移动到 ~/.commandcode/.disabled/（skills 根目录同级）。
     官方另有 settings.json.disabledSkills 数组也能停用，本插件不写它，避免两套状态打架
   Taste（本项目独有，其它 agent 没有）：<项目>/.commandcode/taste/ + ~/.commandcode/taste/（global）
                    taste.md 用 `# 分类` 分节，条目形如 `- 内容. Confidence: 0.90`；
@@ -545,7 +548,11 @@ dotfiles / chezmoi 管理、外部目录共享），直接 `isDirectory()` 会�
 - **删除一律用 `rmEntry(p)`**：`lstat` 判定是链接就只 `unlink` 链接本身，绝不递归进目标目录。
   覆盖了 `deleteCommonSkill` / `deleteSkill` / `deleteProjectSkill` / `deleteClineSkill` / `deleteGrokSkill` /
   `deleteCommandCodeSkill` / `deleteOpencodeSkill` 与 `skills-install.js` 的 `completeInstall`（重装同名软链 Skill 时）。
-- 启停（`renameSync` 到 `.disabled/`）移动的是链接本身，不复制、不动源目录——安全，已在测试里锁住。
+- **停用目录一律放在 skills 根目录的同级**（`public/preload/services/skill-disabled.js`）：
+  `<skills 根>/.disabled` 会被 Grok Build 等递归扫描当成可用 Skill（Grok 官方明确会 walks every directory，
+  且不读 `.gitignore`）。现在统一存 `<skills 根>/../.disabled/<name>`，入口只有 `setSkillEnabled` /
+  `disabledSkillPath` / `listDisabledSkillNames`；旧位置在扫描/启停时自动迁移（幂等，同名冲突进 `.duplicates/`）。
+- 启停移动的是条目本身（软链只动链接），不复制、不动源目录；跨卷 `EXDEV` 时退化为复制后删源——已在测试里锁住。
 - 断链（指向已不存在的目标）不显示、也不让整轮扫描失败。
 
 当前已改造的扫描点：`common.js`（通用 Skill + 场景绑定）、`skills.js`（Claude 全局/项目级）、`opencode.js`、

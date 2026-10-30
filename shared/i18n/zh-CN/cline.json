@@ -85,7 +85,7 @@
       "enableBeforeTools": "请先启用该服务器再查看工具"
     },
     "skill": {
-      "tip": "（~/.cline/skills，启停写入 .disabled/）",
+      "tip": "（~/.cline/skills，启停移入同级的 .disabled/）",
       "install": "安装 Skill",
       "empty": "未安装 Skill；可用「安装 Skill」从 SkillHub / 魔搭社区安装，或手动放入目录",
       "enabledSuccess": "已启用 {name}",

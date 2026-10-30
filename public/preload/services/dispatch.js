@@ -123,6 +123,8 @@ const upsertDispatchModel = (list, model, extra = {}) => {
 // 与 Claude 配置页的配置列表互通（切换时由 useConfigSwitch 写入 settings.json）。
 // 一个 provider 一份配置；模型自动填入空闲槽位（默认 → Haiku → Sonnet → Opus → Fable → Subagent），
 // 已有同模型跳过，6 个槽位全满时报错提示（不覆盖已有模型）。
+// 1M 上下文：与 Claude 配置页的「1m」勾选框互认——通用库模型 contextWindow ≥ 100 万时槽位值带 [1m]
+// 后缀；已有同模型缺后缀时原地补齐（不占新槽位），已有后缀则永不删除（尊重配置页手动勾选）。
 // 仅接受 anthropic-messages 协议的供应商（激活后写入 ANTHROPIC_* env，其余协议不可用）。
 const DB_PREFIX = 'ccconfig_config_'
 const DISPATCH_DB_PREFIX = DB_PREFIX + 'dispatch_'
@@ -140,6 +142,15 @@ const CLAUDE_MODEL_SLOTS = CLAUDE_SLOT_ENVS.map(([slot]) => slot)
 const CLAUDE_SLOT_LABELS = { model: 'service.dispatch.slotDefault', defaultHaikuModel: 'Haiku', defaultSonnetModel: 'Sonnet', defaultOpusModel: 'Opus', defaultFableModel: 'Fable', subagentModel: 'Subagent' }
 const claudeSlotLabel = (slot) =>
   slot === 'model' ? t(CLAUDE_SLOT_LABELS[slot]) : CLAUDE_SLOT_LABELS[slot]
+
+// 1M 上下文标记：Claude Code 认模型值尾部的 [1m]（等价于配置页「1m」勾选框）
+const CLAUDE_1M_SUFFIX = '[1m]'
+const CLAUDE_1M_CONTEXT = 1000000
+const stripClaude1m = (value) => String(value || '').replace(/\[1m\]$/i, '')
+const hasClaude1m = (value) => /\[1m\]$/i.test(String(value || ''))
+// 模型 id 自身带 [1m] 或通用库 contextWindow ≥ 100 万 → 需要 1M 标记
+const wantsClaude1m = (model) =>
+  hasClaude1m(model && model.id) || Number(model && model.contextWindow) >= CLAUDE_1M_CONTEXT
 
 const dispatchToClaude = (provider, model) => {
   if ((provider.api || 'openai-completions') !== 'anthropic-messages') {
@@ -176,20 +187,35 @@ const dispatchToClaude = (provider, model) => {
   if (provider.baseUrl) next.baseUrl = provider.baseUrl
   next.authVar = 'ANTHROPIC_AUTH_TOKEN'
   next.updatedAt = now
-  // 模型槽位：已有同模型跳过；否则填第一个空槽位；全满报错
-  if (CLAUDE_MODEL_SLOTS.some(s => next[s] === model.id)) {
+  // 模型槽位：已有同模型（忽略 [1m] 后缀）原地补齐 1M 标记，否则填第一个空槽位；全满报错
+  const modelId = stripClaude1m(model.id)
+  const existingSlot = CLAUDE_MODEL_SLOTS.find(
+    (s) => next[s] && stripClaude1m(next[s]) === modelId,
+  )
+  let slot = existingSlot
+  let action = 'exists'
+  if (existingSlot) {
+    // 只补不删：配置页手动勾选的 1m 不因通用库缺 contextWindow 而被取消
+    if (wantsClaude1m(model) && !hasClaude1m(next[existingSlot])) {
+      next[existingSlot] += CLAUDE_1M_SUFFIX
+      action = 'updated'
+    }
+  } else {
+    slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
+    if (!slot) {
+      throw new Error(
+        t('service.dispatch.claudeSlotsFull', { name: provider.name }),
+      )
+    }
+    next[slot] = wantsClaude1m(model) ? modelId + CLAUDE_1M_SUFFIX : modelId
+    action = 'added'
+  }
+  if (action === 'exists') {
     return t('service.dispatch.claudeModelExists', {
       name: provider.name,
-      model: model.id,
+      model: modelId,
     })
   }
-  const slot = CLAUDE_MODEL_SLOTS.find(s => !next[s])
-  if (!slot) {
-    throw new Error(
-      t('service.dispatch.claudeSlotsFull', { name: provider.name }),
-    )
-  }
-  next[slot] = model.id
   let res
   try {
     res = window.utools.db.put(next)
@@ -207,11 +233,17 @@ const dispatchToClaude = (provider, model) => {
         : t('service.dispatch.claudeSaveFailed'),
     )
   }
-  return t('service.dispatch.claudeDispatched', {
-    name: provider.name,
-    model: model.id,
-    slot: claudeSlotLabel(slot),
-  })
+  const message = t(
+    action === 'updated'
+      ? 'service.dispatch.claudeModelUpdated'
+      : 'service.dispatch.claudeDispatched',
+    {
+      name: provider.name,
+      model: modelId,
+      slot: claudeSlotLabel(slot),
+    },
+  )
+  return hasClaude1m(next[slot]) ? message + t('service.dispatch.claude1mNote') : message
 }
 
 // OpenCode：provider[id]（options.baseURL/apiKey）+ models[id]；通用库协议 → opencode npm 包
@@ -1061,10 +1093,14 @@ const AUTOROUTE_REBUILD = {
       try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return }
       if (!doc) return
       // 沿用原默认模型：它还在新槽位里就换回默认槽（两个槽位内容对调，不丢模型）
-      if (prior.model && doc.model !== prior.model) {
-        const other = CLAUDE_MODEL_SLOTS.find((slot) => slot !== 'model' && doc[slot] === prior.model)
+      // 比较忽略 [1m] 后缀：旧配置里的值没有后缀，重建后可能已补上
+      const priorModel = stripClaude1m(prior.model)
+      if (priorModel && stripClaude1m(doc.model) !== priorModel) {
+        const other = CLAUDE_MODEL_SLOTS.find(
+          (slot) => slot !== 'model' && stripClaude1m(doc[slot]) === priorModel,
+        )
         if (other) {
-          const next = { ...doc, model: prior.model, [other]: doc.model, updatedAt: Date.now() }
+          const next = { ...doc, model: doc[other], [other]: doc.model, updatedAt: Date.now() }
           const res = window.utools.db.put(next)
           if (res && res.ok) doc = next
         }

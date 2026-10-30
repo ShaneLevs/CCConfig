@@ -110,7 +110,7 @@
       "transportHint": "stdio runs a local subprocess; http connects to a remote URL"
     },
     "skill": {
-      "tip": "User-scope skills in ~/.commandcode/skills; disabling moves them into .disabled/",
+      "tip": "User-scope skills in ~/.commandcode/skills; disabling moves them into a sibling .disabled/",
       "install": "Install skill",
       "empty": "No skills installed; install one from SkillHub / ModelScope above, or drop it into the directory manually",
       "enabledSuccess": "Enabled {name}",

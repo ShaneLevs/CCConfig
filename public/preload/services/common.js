@@ -3,6 +3,13 @@ const path = require("node:path");
 const crypto = require("./crypto");
 const { t } = require("./i18n");
 const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
+const {
+  disabledSkillsDir,
+  disabledSkillPath,
+  moveEntry,
+  migrateDisabledSkills,
+  setSkillEnabled,
+} = require("./skill-disabled");
 
 // ==================== 通用配置 ====================
 // 设计约定：
@@ -591,19 +598,17 @@ const getLocalMcpServers = () => {
 // 本地/云端双端 API 已移除：启停与镜像同步统一由主档 API
 // （upsertCommonMcpServer / deleteCommonMcpServer / setCommonMcpEnabled / syncLocalMcpTargets）驱动。
 
-// ==================== Skill 启停（.disabled 文件夹方式，同 Claude Code） ====================
+// ==================== Skill 启停（.disabled 文件夹方式） ====================
 // 通用 Skill 存放在 ~/.agents/skills（跨 Agent 共享）。
-// 禁用 = 将 skill 目录移动到 ~/.agents/skills/.disabled/<name>，启用 = 移回，
-// 与 Claude Code 的 skill 启停方式一致（agent 扫描时 .disabled 目录会被忽略）。
+// 禁用 = 将 skill 目录移动到 ~/.agents/.disabled/<name>，启用 = 移回。
+// 停用目录放在 skills 根目录的同级：Grok Build 等会递归遍历 skills 根目录，
+// 根目录内的 .disabled 子目录照样会被当成可用 Skill（见 skill-disabled.js）。
 
-const DISABLED_DIR_NAME = ".disabled";
-
-const getDisabledSkillsDir = () =>
-  path.join(COMMON_SKILLS_DIR(), DISABLED_DIR_NAME);
+const getDisabledSkillsDir = () => disabledSkillsDir(COMMON_SKILLS_DIR());
 
 // ==================== Skill 场景（按用途绑定一组 Skill） ====================
 // 场景是「当前只启用这些 Skill」的白名单：切换场景时把绑定内的目录移回
-// ~/.agents/skills，把其余 Skill 移进 .disabled/（复用上面的物理启停机制）。
+// ~/.agents/skills，把其余 Skill 移进 ~/.agents/.disabled/（复用上面的物理启停机制）。
 // 场景与当前场景按机器隔离（ccconfig_skill_scenes_<nativeId>）：
 // 同一账号不同机器安装的 Skill 不同，绑定关系不应互相覆盖。
 // activeId 为空 = 手动模式（不限制），此时启停完全由用户逐项控制。
@@ -669,6 +674,7 @@ const normalizeSkillSceneName = (name, scenes, selfId) => {
 
 const readSkillDirNames = () => {
   const root = COMMON_SKILLS_DIR();
+  migrateDisabledSkills(root);
   const disabledDir = getDisabledSkillsDir();
   const collect = (dir) => {
     const out = new Set();
@@ -698,17 +704,13 @@ const applySkillSceneDirs = (scene) => {
   const missing = [];
   const failed = [];
 
-  const move = (from, to) => fs.renameSync(from, to);
-
   for (const name of enabledNames) {
     if (desired.has(name)) {
       enabled.push(name);
       continue;
     }
     try {
-      if (!fs.existsSync(disabledDir))
-        fs.mkdirSync(disabledDir, { recursive: true });
-      move(path.join(root, name), path.join(disabledDir, name));
+      moveEntry(path.join(root, name), path.join(disabledDir, name));
       disabled.push(name);
     } catch (e) {
       failed.push({ name, action: "disable", error: e.message });
@@ -725,7 +727,7 @@ const applySkillSceneDirs = (scene) => {
       continue;
     }
     try {
-      move(path.join(disabledDir, name), path.join(root, name));
+      moveEntry(path.join(disabledDir, name), path.join(root, name));
       enabled.push(name);
     } catch (e) {
       failed.push({ name, action: "enable", error: e.message });
@@ -826,34 +828,20 @@ const switchSkillScene = (id) => {
   return { success: true, activeId: id, applied };
 };
 
-// 设置通用 Skill 启用/禁用（物理移动目录到 .disabled / 移回）
+// 设置通用 Skill 启用/禁用（物理移动目录到 ~/.agents/.disabled / 移回）
 const setCommonSkillEnabled = (skillName, enabled) => {
   if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
-  const disabledDir = getDisabledSkillsDir();
-  const sourceDir = enabled
-    ? path.join(disabledDir, skillName)
-    : path.join(COMMON_SKILLS_DIR(), skillName);
-  const targetDir = enabled
-    ? path.join(COMMON_SKILLS_DIR(), skillName)
-    : path.join(disabledDir, skillName);
-  if (!fs.existsSync(sourceDir))
-    return { success: false, error: t("service.skill.notFound") };
-  try {
-    if (!enabled) fs.mkdirSync(disabledDir, { recursive: true });
-    fs.renameSync(sourceDir, targetDir);
-    updateActiveSceneBinding(skillName, enabled);
-    return { success: true };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+  const result = setSkillEnabled(COMMON_SKILLS_DIR(), skillName, enabled);
+  if (result.success) updateActiveSceneBinding(skillName, enabled);
+  return result;
 };
 
-// 删除通用 Skill（已禁用时从 .disabled 删除）
+// 删除通用 Skill（已禁用时从停用目录删除）
 const deleteCommonSkill = (skillName) => {
   if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
   const candidates = [
     path.join(COMMON_SKILLS_DIR(), skillName),
-    path.join(getDisabledSkillsDir(), skillName),
+    disabledSkillPath(COMMON_SKILLS_DIR(), skillName),
   ];
   const dir = candidates.find((p) => fs.existsSync(p));
   if (!dir) return { success: false, error: t("service.skill.dirMissing") };
@@ -912,9 +900,10 @@ const parseSkillFrontmatter = (content) => {
 };
 
 // 读取 ~/.agents/skills 下每个子目录的 SKILL.md（目录不存在时自动创建）
-// 启用的 skill 直接扫描；禁用的 skill 扫描 .disabled 子目录（与 Claude Code 机制一致）
+// 启用的 skill 直接扫描；禁用的 skill 扫描同级 ~/.agents/.disabled（见 skill-disabled.js）
 const readCommonSkills = () => {
   const dir = COMMON_SKILLS_DIR();
+  migrateDisabledSkills(dir);
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -949,14 +938,14 @@ const readCommonSkills = () => {
       }
     };
 
-    // 启用的 skills（跳过 .disabled 及隐藏目录）
+    // 启用的 skills（跳过隐藏目录，含旧版遗留的 .disabled）
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (!isDirEntry(dir, entry) || entry.name.startsWith(".")) continue;
       readOne(path.join(dir, entry.name), entry.name, true);
     }
 
-    // 禁用的 skills（.disabled 目录内）
+    // 禁用的 skills（skills 根目录同级的 .disabled 内）
     const disabledDir = getDisabledSkillsDir();
     if (fs.existsSync(disabledDir)) {
       const disabledEntries = fs.readdirSync(disabledDir, {

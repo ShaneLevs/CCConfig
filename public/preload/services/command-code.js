@@ -3,6 +3,12 @@ const path = require('node:path')
 const os = require('node:os')
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const {
+  disabledSkillsDir,
+  disabledSkillPath,
+  migrateDisabledSkills,
+  setSkillEnabled,
+} = require('./skill-disabled')
 
 // Command Code（cmd）：BYOK 供应商 + 模型配置在 ~/.commandcode/providers.json（JSON）。
 // 目录解析：COMMANDCODE_HOME 环境变量优先，否则 ~/.commandcode（官方唯一位置，无平台分叉）。
@@ -21,7 +27,7 @@ const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 //   mcp.json — { mcpServers: { "<name>": { transport: "stdio"|"http", enabled, command, args, env,
 //     url, headers } } }，仅 user scope（local scope 在 projects/<slug>/mcp.json，
 //     project scope 在 <project>/.mcp.json，本服务都不碰）。
-// Skill 目录 ~/.commandcode/skills，启停沿用 .disabled 目录机制（与其它 agent 同一套心智）。
+// Skill 目录 ~/.commandcode/skills，启停 = 移动到 ~/.commandcode/.disabled（skills 根目录同级）。
 // 使用统计解析 ~/.commandcode/projects/<slug>/<session-id>.jsonl 的逐轮 usage。
 //
 // 官方还支持 settings.json 的 disabledSkills 数组停用 Skill；本插件统一用 .disabled 目录，
@@ -800,6 +806,7 @@ const readSkillEntry = (skillPath, disabled) => {
 
 const getCommandCodeSkills = () => {
   const dir = CC_SKILLS_PATH()
+  migrateDisabledSkills(dir)
   const skills = []
   const scan = (base, disabled) => {
     if (!fs.existsSync(base)) return
@@ -821,31 +828,18 @@ const getCommandCodeSkills = () => {
     }
   }
   scan(dir, false)
-  scan(path.join(dir, SKILL_DISABLED_DIR), true)
+  scan(disabledSkillsDir(dir), true)
   return skills.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// 启停 = 目录物理移动（与其它 agent 同一套心智）
-const setCommandCodeSkillEnabled = (skillName, enabled) => {
-  const dir = CC_SKILLS_PATH()
-  const disabledDir = path.join(dir, SKILL_DISABLED_DIR)
-  const from = enabled ? path.join(disabledDir, skillName) : path.join(dir, skillName)
-  const to = enabled ? path.join(dir, skillName) : path.join(disabledDir, skillName)
-  if (!fs.existsSync(from)) return { success: false, error: t('service.skill.notFound') }
-  if (fs.existsSync(to)) return { success: false, error: t('service.skill.alreadyExists') }
-  if (!fs.existsSync(disabledDir)) fs.mkdirSync(disabledDir, { recursive: true })
-  try {
-    fs.renameSync(from, to)
-    return { success: true }
-  } catch (e) {
-    return { success: false, error: e.message }
-  }
-}
+// 启停 = 在 skills 根目录与同级 .disabled 之间移动
+const setCommandCodeSkillEnabled = (skillName, enabled) =>
+  setSkillEnabled(CC_SKILLS_PATH(), skillName, enabled)
 
 const deleteCommandCodeSkill = (skillName, isDisabled) => {
   const dir = CC_SKILLS_PATH()
   const skillPath = isDisabled
-    ? path.join(dir, SKILL_DISABLED_DIR, skillName)
+    ? disabledSkillPath(dir, skillName)
     : path.join(dir, skillName)
   if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {

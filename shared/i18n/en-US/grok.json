@@ -90,7 +90,7 @@
       "startupTimeout": "startup timeout {sec}s"
     },
     "skill": {
-      "tip": "(Grok user-level skill directory; toggles move folders into .disabled/)",
+      "tip": "(Grok user-level skill directory; toggles move folders into a sibling .disabled/)",
       "install": "Install Skill",
       "empty": "No skills installed. Use Install Skill to pull one from SkillHub / ModelScope, or drop a folder here manually.",
       "enabledSuccess": "Enabled {name}",

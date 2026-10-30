@@ -110,7 +110,7 @@
       "transportHint": "stdio 通过本地子进程通信；http 连接远程 URL"
     },
     "skill": {
-      "tip": "（~/.commandcode/skills 用户级 Skill 目录，启停写入 .disabled/）",
+      "tip": "（~/.commandcode/skills 用户级 Skill 目录，启停移入同级的 .disabled/）",
       "install": "安装 Skill",
       "empty": "未安装 Skill；可从上方「安装 Skill」从 SkillHub / 魔搭社区安装，或手动放入目录",
       "enabledSuccess": "已启用 {name}",

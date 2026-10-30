@@ -213,7 +213,7 @@ eq(cline.getClineSkills().map((s) => s.name), ['alpha', 'beta'], '扫描 skills 
 ok(cline.getClineSkills()[0].frontmatter.includes('description: demo skill'), 'frontmatter 解析')
 
 cline.setClineSkillEnabled('alpha', false)
-ok(fs.existsSync(path.join(skillsDir, '.disabled', 'alpha')), '停用 = 移入 .disabled')
+ok(fs.existsSync(path.join(tmp, '.disabled', 'alpha')), '停用 = 移入 skills 同级的 .disabled')
 eq(cline.getClineSkills().find((s) => s.name === 'alpha').disabled, true, '停用状态读回')
 cline.setClineSkillEnabled('alpha', true)
 ok(fs.existsSync(path.join(skillsDir, 'alpha')), '启用 = 移回原目录')

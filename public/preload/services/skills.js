@@ -1,5 +1,5 @@
 // Claude 技能管理：~/.claude/skills 全局与项目级技能扫描（frontmatter 解析 +
-// mtime 签名缓存）、.disabled 目录启停机制与路径辅助。
+// mtime 签名缓存）、停用目录（skills 同级的 .disabled）启停机制与路径辅助。
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -7,6 +7,12 @@ const { CLAUDE_SKILLS_PATH, CLAUDE_JSON_PATH } = require("./config");
 const { t } = require("./i18n");
 const { _buildProjectPathMap } = require("./claude-usage");
 const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
+const {
+  disabledSkillsDir,
+  disabledSkillPath,
+  migrateDisabledSkills,
+  setSkillEnabled,
+} = require("./skill-disabled");
 
 // 缓存：签名 = 技能目录 mtime:disabled 目录 mtime；projectPathMap 只构建一次
 let _skillsCache = null;
@@ -14,7 +20,8 @@ let _cachedProjectPathMap = null;
 
 function getSkills() {
   try {
-    const _disabledDirPath = path.join(CLAUDE_SKILLS_PATH, ".disabled");
+    migrateDisabledSkills(CLAUDE_SKILLS_PATH);
+    const _disabledDirPath = disabledSkillsDir(CLAUDE_SKILLS_PATH);
     const dirMtime = fs.existsSync(CLAUDE_SKILLS_PATH)
       ? fs.statSync(CLAUDE_SKILLS_PATH).mtimeMs
       : 0;
@@ -43,7 +50,7 @@ function getSkills() {
       console.error("读取 skillUsage 失败:", e);
     }
 
-    const disabledDir = path.join(CLAUDE_SKILLS_PATH, ".disabled");
+    const disabledDir = disabledSkillsDir(CLAUDE_SKILLS_PATH);
     const skills = [];
 
     // 读取启用的 skills
@@ -139,6 +146,7 @@ function getSkills() {
             "skills",
           );
           if (!fs.existsSync(projectSkillsDir)) continue;
+          migrateDisabledSkills(projectSkillsDir);
 
           const projectSkills = fs.readdirSync(projectSkillsDir, {
             withFileTypes: true,
@@ -182,8 +190,8 @@ function getSkills() {
             }
           }
 
-          // 读取项目级禁用的 skills
-          const projectDisabledDir = path.join(projectSkillsDir, ".disabled");
+          // 读取项目级禁用的 skills（项目 .claude/.disabled，与 skills 目录同级）
+          const projectDisabledDir = disabledSkillsDir(projectSkillsDir);
           if (fs.existsSync(projectDisabledDir)) {
             const disabledEntries = fs.readdirSync(projectDisabledDir, {
               withFileTypes: true,
@@ -260,41 +268,21 @@ function getSkills() {
 }
 
 function disableSkill(skillName) {
-  try {
-    const skillPath = path.join(CLAUDE_SKILLS_PATH, skillName);
-    const disabledDir = path.join(CLAUDE_SKILLS_PATH, ".disabled");
-    const targetPath = path.join(disabledDir, skillName);
-    if (!fs.existsSync(skillPath))
-      return { success: false, error: t("service.skill.notFound") };
-    if (!fs.existsSync(disabledDir))
-      fs.mkdirSync(disabledDir, { recursive: true });
-    fs.renameSync(skillPath, targetPath);
-    _skillsCache = null;
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+  const result = setSkillEnabled(CLAUDE_SKILLS_PATH, skillName, false);
+  if (result.success) _skillsCache = null;
+  return result;
 }
 
 function enableSkill(skillName) {
-  try {
-    const disabledDir = path.join(CLAUDE_SKILLS_PATH, ".disabled");
-    const skillPath = path.join(disabledDir, skillName);
-    const targetPath = path.join(CLAUDE_SKILLS_PATH, skillName);
-    if (!fs.existsSync(skillPath))
-      return { success: false, error: t("service.skill.notFound") };
-    fs.renameSync(skillPath, targetPath);
-    _skillsCache = null;
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+  const result = setSkillEnabled(CLAUDE_SKILLS_PATH, skillName, true);
+  if (result.success) _skillsCache = null;
+  return result;
 }
 
 function deleteSkill(skillName, isDisabled) {
   try {
     const skillPath = isDisabled
-      ? path.join(CLAUDE_SKILLS_PATH, ".disabled", skillName)
+      ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
       : path.join(CLAUDE_SKILLS_PATH, skillName);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
@@ -308,51 +296,32 @@ function deleteSkill(skillName, isDisabled) {
 }
 
 function disableProjectSkill(skillName, projectPath) {
-  try {
-    const skillPath = path.join(projectPath, ".claude", "skills", skillName);
-    const disabledDir = path.join(
-      projectPath,
-      ".claude",
-      "skills",
-      ".disabled",
-    );
-    const targetPath = path.join(disabledDir, skillName);
-    if (!fs.existsSync(skillPath))
-      return { success: false, error: t("service.skill.notFound") };
-    if (!fs.existsSync(disabledDir))
-      fs.mkdirSync(disabledDir, { recursive: true });
-    fs.renameSync(skillPath, targetPath);
-    _skillsCache = null;
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+  const result = setSkillEnabled(
+    path.join(projectPath, ".claude", "skills"),
+    skillName,
+    false,
+  );
+  if (result.success) _skillsCache = null;
+  return result;
 }
 
 function enableProjectSkill(skillName, projectPath) {
-  try {
-    const disabledDir = path.join(
-      projectPath,
-      ".claude",
-      "skills",
-      ".disabled",
-    );
-    const skillPath = path.join(disabledDir, skillName);
-    const targetPath = path.join(projectPath, ".claude", "skills", skillName);
-    if (!fs.existsSync(skillPath))
-      return { success: false, error: t("service.skill.notFound") };
-    fs.renameSync(skillPath, targetPath);
-    _skillsCache = null;
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+  const result = setSkillEnabled(
+    path.join(projectPath, ".claude", "skills"),
+    skillName,
+    true,
+  );
+  if (result.success) _skillsCache = null;
+  return result;
 }
 
 function deleteProjectSkill(skillName, projectPath, isDisabled) {
   try {
     const skillPath = isDisabled
-      ? path.join(projectPath, ".claude", "skills", ".disabled", skillName)
+      ? disabledSkillPath(
+          path.join(projectPath, ".claude", "skills"),
+          skillName,
+        )
       : path.join(projectPath, ".claude", "skills", skillName);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
@@ -387,11 +356,14 @@ function getSkillMdPath(skillName, scope, projectPath, isDisabled) {
     let skillDir;
     if (scope === "project") {
       skillDir = isDisabled
-        ? path.join(projectPath, ".claude", "skills", ".disabled", skillName)
+        ? disabledSkillPath(
+            path.join(projectPath, ".claude", "skills"),
+            skillName,
+          )
         : path.join(projectPath, ".claude", "skills", skillName);
     } else {
       skillDir = isDisabled
-        ? path.join(CLAUDE_SKILLS_PATH, ".disabled", skillName)
+        ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
         : path.join(CLAUDE_SKILLS_PATH, skillName);
     }
     const mdPath = path.join(skillDir, "SKILL.md");
@@ -408,11 +380,14 @@ function getSkillDirPath(skillName, scope, projectPath, isDisabled) {
     let skillDir;
     if (scope === "project") {
       skillDir = isDisabled
-        ? path.join(projectPath, ".claude", "skills", ".disabled", skillName)
+        ? disabledSkillPath(
+            path.join(projectPath, ".claude", "skills"),
+            skillName,
+          )
         : path.join(projectPath, ".claude", "skills", skillName);
     } else {
       skillDir = isDisabled
-        ? path.join(CLAUDE_SKILLS_PATH, ".disabled", skillName)
+        ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
         : path.join(CLAUDE_SKILLS_PATH, skillName);
     }
     if (!fs.existsSync(skillDir))

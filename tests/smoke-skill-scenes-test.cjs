@@ -13,7 +13,7 @@ const path = require('node:path')
 // ==================== 最小 uTools 环境（临时 home + 内存 DB + 功能注册表） ====================
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ccconfig-skill-scene-'))
 const skillsDir = path.join(home, '.agents', 'skills')
-const disabledDir = path.join(skillsDir, '.disabled')
+const disabledDir = path.join(home, '.agents', '.disabled')
 
 for (const name of ['alpha', 'beta', 'gamma']) {
   const dir = path.join(skillsDir, name)

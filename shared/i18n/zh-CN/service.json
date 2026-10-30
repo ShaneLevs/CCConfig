@@ -88,6 +88,8 @@
       "claudeSaveFailed": "保存 Claude 配置失败",
       "claudeSaveFailedReason": "保存 Claude 配置失败：{message}",
       "claudeDispatched": "已写入 Claude 配置「{name}」：{model} → {slot}",
+      "claudeModelUpdated": "已更新 Claude 配置「{name}」：{model} → {slot}",
+      "claude1mNote": "（已勾选 1m 上下文）",
       "slotDefault": "默认模型",
       "opencodeWriteFailed": "写入 opencode 配置失败",
       "opencodeDispatched": "provider[{id}]（{npm}）已更新，模型 {model} 已写入",

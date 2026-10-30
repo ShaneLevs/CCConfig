@@ -4,6 +4,12 @@ const os = require('node:os')
 const crypto = require('node:crypto')
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const {
+  disabledSkillsDir,
+  disabledSkillPath,
+  migrateDisabledSkills,
+  setSkillEnabled,
+} = require('./skill-disabled')
 
 // ==================== Cline（AI 编程 agent，命令 `cline`）====================
 // 存储位置（与 CLI / Desktop / SDK 共用；IDE 扩展的供应商配置在编辑器 globalState 里，
@@ -11,7 +17,7 @@ const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 //   <CLINE_DATA>/settings/providers.json        供应商连接信息 + 当前使用
 //   <CLINE_DATA>/settings/models.json           模型目录（上下文 / 输出上限 / 能力）
 //   <CLINE_DATA>/settings/cline_mcp_settings.json MCP 服务器（IDE 扩展与本文件共享）
-//   <CLINE_DIR>/skills/<name>/SKILL.md          Skill（.disabled/ 目录做启停）
+//   <CLINE_DIR>/skills/<name>/SKILL.md          Skill（启停移到同级的 .disabled/）
 //   <CLINE_DATA>/sessions/<id>/<id>.json        会话档（metadata.usage 为用量来源）
 // 目录解析（与 @cline/shared 的 resolveClineDir / resolveClineDataDir 一致）：
 //   CLINE_DIR 覆盖 ~/.cline；CLINE_DATA_DIR 覆盖 ~/.cline/data
@@ -896,7 +902,7 @@ const deleteClineMcpServer = (name) => {
 // ==================== Skill（~/.cline/skills）====================
 // 官方路径 <CLINE_DIR>/skills/<name>/SKILL.md；另外也兼容 ~/.agents/skills（Cline 全局共享目录），
 // 但本视图只管理 ~/.cline/skills（受管目录），避免与「通用配置 → Skill」重复管理同一批目录。
-// 启停沿用 .disabled 目录机制（物理移动，与 Claude / OpenCode / 通用 Skill 同一套心智）。
+// 启停 = 物理移动到 <CLINE_DIR>/.disabled（skills 根目录同级，见 skill-disabled.js）。
 
 const SKILL_DISABLED_DIR = '.disabled'
 
@@ -917,6 +923,7 @@ const readSkillEntry = (skillPath, disabled) => {
 
 const getClineSkills = () => {
   const dir = skillsPath()
+  migrateDisabledSkills(dir)
   const skills = []
   const scan = (base, disabled) => {
     if (!fs.existsSync(base)) return
@@ -938,30 +945,13 @@ const getClineSkills = () => {
     }
   }
   scan(dir, false)
-  scan(path.join(dir, SKILL_DISABLED_DIR), true)
+  scan(disabledSkillsDir(dir), true)
   return skills.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// 启停 = 目录物理移动：enabled 时从 .disabled 移回，反之移入
-const setClineSkillEnabled = (skillName, enabled) => {
-  const name = String(skillName || '').trim()
-  if (!name || name === SKILL_DISABLED_DIR || name.includes(path.sep) || name.includes('/')) {
-    return { success: false, error: t('service.skill.notFound') }
-  }
-  const dir = skillsPath()
-  const disabledDir = path.join(dir, SKILL_DISABLED_DIR)
-  const from = enabled ? path.join(disabledDir, name) : path.join(dir, name)
-  const to = enabled ? path.join(dir, name) : path.join(disabledDir, name)
-  if (!fs.existsSync(from)) return { success: false, error: t('service.skill.notFound') }
-  if (fs.existsSync(to)) return { success: false, error: t('service.skill.alreadyExists') }
-  if (!fs.existsSync(disabledDir)) fs.mkdirSync(disabledDir, { recursive: true })
-  try {
-    fs.renameSync(from, to)
-    return { success: true }
-  } catch (e) {
-    return { success: false, error: e.message }
-  }
-}
+// 启停 = 在 skills 根目录与同级 .disabled 之间移动
+const setClineSkillEnabled = (skillName, enabled) =>
+  setSkillEnabled(skillsPath(), skillName, enabled)
 
 const deleteClineSkill = (skillName, isDisabled) => {
   const name = String(skillName || '').trim()
@@ -970,7 +960,7 @@ const deleteClineSkill = (skillName, isDisabled) => {
   }
   const dir = skillsPath()
   const skillPath = isDisabled
-    ? path.join(dir, SKILL_DISABLED_DIR, name)
+    ? disabledSkillPath(dir, name)
     : path.join(dir, name)
   if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {

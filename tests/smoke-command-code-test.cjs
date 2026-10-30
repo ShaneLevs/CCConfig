@@ -223,7 +223,7 @@ check('skill 启停 .disabled 往返', () => {
   assert.ok(list[0].frontmatter.includes('name: code-review'))
 
   assert.deepStrictEqual(cc.setCommandCodeSkillEnabled('code-review', false), { success: true })
-  assert.ok(fs.existsSync(path.join(dir, '.disabled', 'code-review')), '应移入 .disabled')
+  assert.ok(fs.existsSync(path.join(tmp, '.disabled', 'code-review')), '应移入 skills 同级的 .disabled')
   list = cc.getCommandCodeSkills()
   assert.strictEqual(list[0].disabled, true)
 

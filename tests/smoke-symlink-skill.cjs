@@ -5,7 +5,7 @@
 // 恒为 false，所以「用软链挂载 Skill」的目录原本会被整条跳过。本测试锁住以下行为：
 //   1. 通用 / Claude / OpenCode / Grok / Cline / Command Code 六个视图都能列到软链 Skill
 //   2. 软链 Skill 的 fileCount 正常（走 countEntries，不吃 .DS_Store）
-//   3. 启停（renameSync 到 .disabled）移动的是链接本身，源目录不受影响
+//   3. 启停（移动到 skills 同级的 .disabled）移动的是链接本身，源目录不受影响
 //   4. 通用 Skill 场景可以正常启用 / 禁用软链 Skill
 //   5. 删除软链 Skill 只删链接，绝不递归删掉源目录
 //   6. 断链（指向已不存在的目标）不会让扫描整个崩掉，只是不显示
@@ -172,8 +172,9 @@ console.log('\n4. 通用 Skill 启停只移动链接')
 {
   const res = common.setCommonSkillEnabled('ego-browser', false)
   ok(res.success, '禁用软链 Skill 成功', res.error)
-  const disabledLink = path.join(commonRoot, '.disabled', 'ego-browser')
-  ok(fs.existsSync(disabledLink), '链接已移入 .disabled')
+  const disabledLink = path.join(home, '.agents', '.disabled', 'ego-browser')
+  ok(fs.existsSync(disabledLink), '链接已移入 skills 同级的 .disabled')
+  ok(!fs.existsSync(path.join(commonRoot, '.disabled')), 'skills 根目录内不再有 .disabled 子目录')
   ok(
     fs.lstatSync(disabledLink).isSymbolicLink(),
     '.disabled 里仍然是符号链接（没被复制成实体目录）',
@@ -226,7 +227,7 @@ plainSkill(claudeSkills, 'plain-claude')
 
   ok(skills.disableSkill('mounted-claude').success, '禁用软链 Claude Skill')
   ok(
-    fs.lstatSync(path.join(claudeSkills, '.disabled', 'mounted-claude')).isSymbolicLink(),
+    fs.lstatSync(path.join(home, '.claude', '.disabled', 'mounted-claude')).isSymbolicLink(),
     '.disabled 里仍是链接',
   )
   ok(fs.existsSync(path.join(claudeMounted.src, 'SKILL.md')), '源目录不受影响')
@@ -262,7 +263,7 @@ console.log('\n9. Grok Skill')
   ok(m && m.fileCount === 2, '软链 Grok Skill fileCount 正确', m && String(m.fileCount))
   ok(grok.setGrokSkillEnabled('mounted-grok', false).success, '禁用软链 Grok Skill')
   ok(
-    fs.lstatSync(path.join(root, '.disabled', 'mounted-grok')).isSymbolicLink(),
+    fs.lstatSync(path.join(grokHome, '.disabled', 'mounted-grok')).isSymbolicLink(),
     '.disabled 里仍是链接',
   )
   ok(fs.existsSync(path.join(mounted.src, 'SKILL.md')), '源目录不受影响')

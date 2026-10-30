@@ -88,6 +88,8 @@
       "claudeSaveFailed": "Failed to save Claude config",
       "claudeSaveFailedReason": "Failed to save Claude config: {message}",
       "claudeDispatched": "Written to Claude config \"{name}\": {model} → {slot}",
+      "claudeModelUpdated": "Updated Claude config \"{name}\": {model} → {slot}",
+      "claude1mNote": " (1m context enabled)",
       "slotDefault": "Default model",
       "opencodeWriteFailed": "Failed to write OpenCode config",
       "opencodeDispatched": "provider[{id}] ({npm}) updated; model {model} written",

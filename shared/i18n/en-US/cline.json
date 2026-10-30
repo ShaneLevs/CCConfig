@@ -85,7 +85,7 @@
       "enableBeforeTools": "Enable this server before inspecting its tools"
     },
     "skill": {
-      "tip": "(~/.cline/skills; disabling moves the folder into .disabled/)",
+      "tip": "(~/.cline/skills; disabling moves the folder into a sibling .disabled/)",
       "install": "Install skill",
       "empty": "No skills installed; use “Install skill” to add one from SkillHub / ModelScope, or drop it into the folder manually",
       "enabledSuccess": "Enabled {name}",

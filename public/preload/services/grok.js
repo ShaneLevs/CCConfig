@@ -4,6 +4,12 @@ const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
 const { t } = require("./i18n")
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const {
+  disabledSkillsDir,
+  disabledSkillPath,
+  migrateDisabledSkills,
+  setSkillEnabled,
+} = require('./skill-disabled')
 
 // ==================== Grok Build（xAI 官方编码 CLI，命令 `grok`） ====================
 // 主配置：~/.grok/config.toml（GROK_HOME 可重定向主目录，插件需跟随，同 Codex/Hermes 先例）。
@@ -732,7 +738,8 @@ const deleteGrokMcpServer = (name) => {
 
 // 官方扫描 ~/.grok/skills/<name>/SKILL.md（也递归子目录，取首个同名），
 // 这里只读一层目录 + 根 SKILL.md，与 OpenCode 视图一致；
-// 启停沿用 .disabled 目录机制（与 Claude / OpenCode / 通用 Skill 同一套心智）
+// 启停 = 移动到 ~/.grok/.disabled（skills 根目录同级，见 skill-disabled.js）。
+// 官方会递归扫描 skills 根目录，放在根目录内的 .disabled 照样会被加载。
 const SKILL_DISABLED_DIR = '.disabled'
 
 const readSkillEntry = (skillPath, disabled) => {
@@ -752,6 +759,7 @@ const readSkillEntry = (skillPath, disabled) => {
 
 const getGrokSkills = () => {
   const dir = GROK_SKILLS_PATH()
+  migrateDisabledSkills(dir)
   const skills = []
   const scan = (base, disabled) => {
     if (!fs.existsSync(base)) return
@@ -773,31 +781,18 @@ const getGrokSkills = () => {
     }
   }
   scan(dir, false)
-  scan(path.join(dir, SKILL_DISABLED_DIR), true)
+  scan(disabledSkillsDir(dir), true)
   return skills.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// 启停 = 目录物理移动（同 Claude / OpenCode / 通用 Skill）：enabled 时从 .disabled 移回，反之移入
-const setGrokSkillEnabled = (skillName, enabled) => {
-  const dir = GROK_SKILLS_PATH()
-  const disabledDir = path.join(dir, SKILL_DISABLED_DIR)
-  const from = enabled ? path.join(disabledDir, skillName) : path.join(dir, skillName)
-  const to = enabled ? path.join(dir, skillName) : path.join(disabledDir, skillName)
-  if (!fs.existsSync(from)) return { success: false, error: t('service.skill.notFound') }
-  if (fs.existsSync(to)) return { success: false, error: t('service.skill.alreadyExists') }
-  if (!fs.existsSync(disabledDir)) fs.mkdirSync(disabledDir, { recursive: true })
-  try {
-    fs.renameSync(from, to)
-    return { success: true }
-  } catch (e) {
-    return { success: false, error: e.message }
-  }
-}
+// 启停 = 在 skills 根目录与同级 .disabled 之间移动
+const setGrokSkillEnabled = (skillName, enabled) =>
+  setSkillEnabled(GROK_SKILLS_PATH(), skillName, enabled)
 
 const deleteGrokSkill = (skillName, isDisabled) => {
   const dir = GROK_SKILLS_PATH()
   const skillPath = isDisabled
-    ? path.join(dir, SKILL_DISABLED_DIR, skillName)
+    ? disabledSkillPath(dir, skillName)
     : path.join(dir, skillName)
   if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
