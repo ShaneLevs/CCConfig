@@ -86,6 +86,8 @@
       "modelNotFoundForDefault": "模型 {model} 不存在，无法设为默认"
     },
     "codex": {
+      "wireApiUnsupported": "Codex 0.166 起已移除 {wireApi} provider，请改用 responses",
+      "catalogEmpty": "Codex 模型目录为空，客户端会拒绝加载；请先为当前供应商添加至少一个模型",
       "providerIdRequired": "供应商 ID 不能为空",
       "providerIdInvalidChars": "供应商 ID 只能包含字母、数字、下划线、中划线",
       "providerInUse": "供应商 {id} 是当前使用的供应商，请先切换到其他模型",

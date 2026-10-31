@@ -1,15 +1,17 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Select, Switch } from 'tdesign-vue-next'
+import { Select, Switch, RadioGroup, RadioButton } from 'tdesign-vue-next'
 import { useLocale } from '../composables/useLocale'
 import { useAppearance } from '../composables/useAppearance'
+import { useUnitFormat } from '../composables/useUnitFormat'
 
-// 设置弹窗「通用」页签：语言 + 主题模式 + 深色背景特效（都用下拉 / 开关，避免一排按钮占宽）
+// 设置弹窗「通用」页签：语言 + 主题模式 + 统计单位 + 深色背景特效（都用下拉 / 开关 / 单选，避免一排按钮占宽）
 const { t } = useI18n()
 const { preference, setPreference } = useLocale()
 const { themeMode, setThemeMode, darkBackgroundEnabled, setDarkBackground, darkEffect, setDarkEffect } =
   useAppearance()
+const { unitMode, setUnitMode } = useUnitFormat()
 
 const languageOptions = computed(() => [
   { label: t('settings.language.system'), value: 'system' },
@@ -21,6 +23,11 @@ const themeOptions = computed(() => [
   { label: t('appearance.theme.system'), value: 'system' },
   { label: t('appearance.theme.light'), value: 'light' },
   { label: t('appearance.theme.dark'), value: 'dark' },
+])
+
+const unitOptions = computed(() => [
+  { label: t('settings.statsUnit.compact'), value: 'compact' },
+  { label: t('settings.statsUnit.cn'), value: 'cn' },
 ])
 </script>
 
@@ -52,6 +59,26 @@ const themeOptions = computed(() => [
         :options="themeOptions"
         @change="setThemeMode"
       />
+    </div>
+
+    <div class="settings-divider" />
+
+    <div class="settings-row">
+      <div class="settings-label">
+        <div class="settings-title">{{ t('settings.statsUnit.title') }}</div>
+        <div class="settings-desc">{{ t('settings.statsUnit.desc') }}</div>
+      </div>
+      <RadioGroup
+        class="settings-unit-radio"
+        :value="unitMode"
+        variant="default-filled"
+        size="small"
+        @change="setUnitMode"
+      >
+        <RadioButton v-for="opt in unitOptions" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </RadioButton>
+      </RadioGroup>
     </div>
 
     <div class="settings-divider" />
@@ -125,6 +152,9 @@ const themeOptions = computed(() => [
 }
 .settings-select {
   width: 176px;
+  flex-shrink: 0;
+}
+.settings-unit-radio {
   flex-shrink: 0;
 }
 .settings-divider {

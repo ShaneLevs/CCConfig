@@ -247,7 +247,7 @@
       "targetAgentLabel": "Target agents",
       "cascaderPlaceholder": "Select providers and models (multi-select; selecting a provider selects all its models)",
       "claudeTooltip": "Only providers using the Anthropic Messages protocol can dispatch to Claude Code",
-      "codexTooltip": "Only providers using the OpenAI Chat / Responses protocol can dispatch to Codex",
+      "codexTooltip": "Codex is written as a Responses provider; Chat providers must pass through the gateway to work",
       "minimaxTooltip": "Only providers using the OpenAI Chat / Responses / Anthropic Messages protocol can dispatch to MiniMax Code; Chinese provider names are sanitized to ASCII provider keys",
       "qoderTooltip": "Only providers using the OpenAI Chat / Responses / Anthropic Messages protocol can dispatch to Qoder; Chinese provider names are sanitized to ASCII provider keys",
       "zcodeTooltip": "Only providers using the OpenAI Chat / Responses / Anthropic Messages protocol can dispatch to ZCode; provider names are sanitized to lowercase IDs by ZCode rules",

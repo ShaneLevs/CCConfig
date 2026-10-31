@@ -75,6 +75,7 @@
 .codex-model-item:hover { background: var(--td-bg-color-container-hover); }
 .codex-model-info { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; flex: 1; }
 .codex-model-name { font-size: 13px; color: var(--td-text-color-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codex-model-meta { font-size: 11px; color: var(--td-text-color-placeholder); white-space: nowrap; }
 .codex-model-actions { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
 
 /* ===== 表单弹窗 ===== */

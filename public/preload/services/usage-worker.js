@@ -61,6 +61,7 @@ const RUNNERS = {
   claude: (force) => require("./claude-usage").readClaudeUsage(force),
   opencode: () => require("./opencode").readOpencodeUsage(),
   pi: () => require("./pi").readPiUsage(),
+  codex: () => require("./codex").readCodexUsage(),
   omp: () => require("./omp-usage").readOmpUsage(),
   kimi: () => require("./kimi-usage").readKimiUsage(),
   minimax: () => require("./minimax").readMinimaxUsage(),

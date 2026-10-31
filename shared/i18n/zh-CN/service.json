@@ -76,7 +76,7 @@
     },
     "dispatch": {
       "claudeProtocolUnsupported": "供应商「{name}」协议为 {api}，仅 Anthropic Messages 协议供应商可下发 Claude Code",
-      "codexProtocolUnsupported": "供应商「{name}」协议为 {api}，Codex 仅支持 OpenAI Chat / Responses 协议供应商",
+      "codexProtocolUnsupported": "供应商「{name}」协议为 {api}，Codex 仅支持 Responses 协议供应商",
       "minimaxProtocolUnsupported": "供应商「{name}」协议为 {api}，MiniMax Code 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
       "qoderProtocolUnsupported": "供应商「{name}」协议为 {api}，Qoder 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",
       "zcodeProtocolUnsupported": "供应商「{name}」协议为 {api}，ZCode 仅支持 OpenAI Chat / Responses / Anthropic Messages 协议",

@@ -8,6 +8,7 @@
       "installed": "已安装",
       "notInstalled": "未安装",
       "checking": "检测中…",
+      "recheck": "重新检测安装状态",
       "formCli": "CLI",
       "formDesktop": "客户端"
     }

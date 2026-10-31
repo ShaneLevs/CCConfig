@@ -3,14 +3,10 @@
     "config": {
       "toolbarSubtitle": "config.toml + models.json（Desktop / CLI 共用）",
       "addProvider": "添加供应商",
-      "catalogToggleTooltip": "模型目录（models.json）：Codex 桌面端模型列表的数据来源。开启即生成并启用，此后模型/供应商增删改自动同步；关闭后桌面端恢复内置模型列表（文件保留）",
-      "catalog": "模型目录",
       "currentTitle": "当前生效配置",
       "reset": "恢复默认配置",
-      "currentSubtitle": "仅管理模型相关字段，其余原样保留",
+      "currentSubtitle": "总开关统一管理模型、API Key 认证和模型目录，其余配置原样保留",
       "effort": "思考强度",
-      "skipLogin": "跳过 ChatGPT 登录",
-      "skipLoginTooltip": "限定认证方式为 API key（写 preferred_auth_method + forced_login_method），配合自定义供应商可免 ChatGPT 登录。注意：它不提供凭证——若客户端曾登录失败留下无效的 ~/.codex/auth.json，删除后重启客户端即可",
       "currentEmpty": "未设置，在下方供应商的模型上点星标即可切换",
       "emptyProviders": "未检测到 Codex 自定义供应商，添加一个即可按 DeepSeek 官方接入方式使用第三方模型",
       "currentTag": "当前",
@@ -47,14 +43,27 @@
       "builtinProvider": "{name}（内置）",
       "resetSummaryCurrent": "当前模型 {provider} / {model}（model / model_provider）",
       "resetSummaryEffort": "思考强度 {effort}（model_reasoning_effort）",
-      "resetSummaryAuth": "跳过 ChatGPT 登录（preferred_auth_method / forced_login_method）",
-      "resetSummaryCatalog": "模型目录引用 model_catalog_json（models.json 文件保留在 ~/.codex/）",
       "resetSummaryProviders": "全部自定义供应商（{count} 个，含已保存的 API Key）",
       "resetSummaryLogin": "登录信息 ~/.codex/auth.json（下次打开 Codex 需重新登录 ChatGPT 账号）",
       "wireApi": {
-        "responses": "responses（Codex 原生）",
-        "chat": "chat（OpenAI 兼容）"
-      }
+        "responses": "responses（Codex 原生）"
+      },
+      "activeToggle": "使用当前配置",
+      "activeToggleTooltip": "启用模型、API Key 认证和模型目录。关闭后取消默认模型及认证/目录配置；供应商、API Key 和 models.json 文件保留。",
+      "activeEnabled": "当前配置已启用",
+      "activeDisabled": "当前配置已停用：默认模型、API Key 认证和模型目录已取消；供应商配置与 models.json 文件保留",
+      "activeEnableFailed": "启用当前配置失败: {message}",
+      "activeDisableFailed": "停用当前配置失败: {message}",
+      "resetSummaryActive": "当前配置启停状态（model / forced_login_method / model_catalog_json）",
+      "activeNeedModel": "先在供应商下点模型星标设为默认模型，然后即可启用当前配置",
+      "editModel": "编辑模型配置",
+      "inputText": "文本",
+      "inputImage": "图片",
+      "modelDisplayName": "模型显示名称（可选）",
+      "modelDisplayNamePlaceholder": "留空则使用模型 ID",
+      "inputType": "支持的输入类型",
+      "modelLimitsHint": "上下文窗口与图片输入会写入 Codex 模型目录。",
+      "contextShort": "上下文 {value}"
     },
     "provider": {
       "idRequired": "请输入供应商 ID",
@@ -74,20 +83,18 @@
       "deleted": "模型 {id} 已删除",
       "deleteFailed": "删除失败: {message}",
       "switched": "已切换到 {provider} / {model}",
-      "switchFailed": "切换失败: {message}"
-    },
-    "catalog": {
-      "enabled": "模型目录已启用（新增 {added}，升级 {updated}，共 {total} 条），此后模型增删改自动同步",
-      "disabled": "已停用模型目录，桌面端恢复内置模型列表（models.json 文件保留）",
-      "enableFailed": "启用失败: {message}",
-      "disableFailed": "停用失败: {message}"
+      "switchFailed": "切换失败: {message}",
+      "updated": "模型配置已更新",
+      "saveFailed": "保存失败: {message}"
     },
     "effort": {
       "set": "思考强度已设为 {effort}",
       "reset": "思考强度已恢复默认",
-      "authEnabled": "已启用 API Key 认证（跳过 ChatGPT 登录）",
-      "authDisabled": "已关闭 API Key 认证",
       "saveFailed": "保存失败: {message}"
+    },
+    "usage": {
+      "tip": "统计 Codex 会话中的 Token 用量（本地会话文件，按本地日期归档）",
+      "emptyDescription": "暂无 Codex 使用数据"
     },
     "reset": {
       "done": "已恢复默认配置，重启 Codex 客户端后生效",

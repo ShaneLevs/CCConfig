@@ -4,7 +4,23 @@
     "tab": {
       "general": "General",
       "agents": "Agents",
+      "client": "Client",
       "about": "About"
+    },
+    "client": {
+      "autostart": {
+        "title": "Launch at login",
+        "desc": "Start CCConfig in the background after you sign in. The window stays hidden in the menu bar / system tray.",
+        "failed": "Could not read or change the launch-at-login setting. Please try again."
+      },
+      "codex": {
+        "title": "Codex CLI",
+        "checking": "Checking Codex CLI…",
+        "installed": "Codex CLI detected",
+        "notInstalled": "Codex CLI not detected. Install it and recheck; Codex Desktop can still be used separately.",
+        "recheck": "Recheck",
+        "failed": "Codex CLI detection failed; make sure the command is executable"
+      }
     },
     "about": {
       "desc": "Configuration manager and switcher for multi-app AI coding assistants"
@@ -15,6 +31,12 @@
       "system": "Follow system",
       "zhCN": "简体中文",
       "enUS": "English"
+    },
+    "statsUnit": {
+      "title": "Statistics units",
+      "desc": "How token counts are abbreviated in usage statistics.",
+      "compact": "K / M / B",
+      "cn": "Wan / Yi"
     }
   }
 }

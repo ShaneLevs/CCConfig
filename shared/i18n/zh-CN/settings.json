@@ -4,7 +4,23 @@
     "tab": {
       "general": "通用",
       "agents": "Agent 显示",
+      "client": "客户端设置",
       "about": "关于"
+    },
+    "client": {
+      "autostart": {
+        "title": "开机自启",
+        "desc": "登录系统后在后台启动 CCConfig，窗口隐藏到菜单栏 / 系统托盘。",
+        "failed": "无法读取或修改开机自启状态，请稍后重试。"
+      },
+      "codex": {
+        "title": "Codex CLI",
+        "checking": "正在检测 Codex CLI…",
+        "installed": "已检测到 Codex CLI",
+        "notInstalled": "未检测到 Codex CLI。安装后重新检测；Codex Desktop 也可单独使用",
+        "recheck": "重新检测",
+        "failed": "检测 Codex CLI 失败，请确认命令可执行"
+      }
     },
     "about": {
       "desc": "多应用 AI 编程助手配置管理与切换工具"
@@ -15,6 +31,12 @@
       "system": "跟随系统",
       "zhCN": "简体中文",
       "enUS": "English"
+    },
+    "statsUnit": {
+      "title": "统计单位",
+      "desc": "使用统计中数字的缩写方式。",
+      "compact": "K / M / B",
+      "cn": "万 / 亿"
     }
   }
 }

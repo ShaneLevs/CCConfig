@@ -9,8 +9,10 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Empty } from "tdesign-vue-next";
 import { agentLabel, AGENT_META } from "../../composables/agentMeta";
+import { useUnitFormat } from "../../composables/useUnitFormat";
 
 const { t, locale } = useI18n();
+const { formatStat } = useUnitFormat();
 
 const props = defineProps({
   // [{ date: 'YYYY-MM-DD', models: { name: tokens }, agents: { id: tokens } }]，按日期升序
@@ -33,19 +35,8 @@ const OTHER_KEY = "__other";
 const pad2 = (n) => String(n).padStart(2, "0");
 const parseDate = (dateStr) => new Date(`${dateStr}T00:00:00`);
 
-// 轴刻度用紧凑写法（1B / 750M），图例 / tooltip 用完整数字
-const formatCompact = (num) => {
-  if (!num) return "0";
-  const units = ["", "K", "M", "B", "T"];
-  let tier = 0;
-  let value = num;
-  while (value >= 1000 && tier < units.length - 1) {
-    value /= 1000;
-    tier++;
-  }
-  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return `${Number(value.toFixed(digits))}${units[tier]}`;
-};
+// 轴刻度用紧凑写法（1B / 750M / 1.2万），图例 / tooltip 用完整数字
+const formatCompact = (num) => formatStat(num, { decimals: "auto", trimZero: true });
 
 const formatExact = (num) =>
   (num || 0).toLocaleString(locale.value, { maximumFractionDigits: 0 });

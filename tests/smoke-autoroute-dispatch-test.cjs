@@ -208,7 +208,7 @@ fs.writeFileSync(codexConfigFile, [
   '[model_providers.router]',
   'name = "router"',
   'base_url = "http://127.0.0.1:17877/v1"',
-  'wire_api = "chat"',
+  'wire_api = "responses"',
   'experimental_bearer_token = "old"',
   '',
 ].join('\n'))

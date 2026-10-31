@@ -675,7 +675,19 @@ const handleRequest = async (req, res) => {
     // model_catalog_url 上，Codex ≥ 0.161 直接拉取——用 API key 的 Codex 不会自己去 GET /v1/models，
     // 没有目录它选不到网关里的模型。与 /v1/models 共用 ID 解析，两边名字一致。
     if (method === "GET" && (path === "/v1/codex/models" || path === "/codex/models")) {
-      const entries = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider }, i) => codexCatalog.buildCatalogEntry(provider.name, id, i + 1));
+      const entries = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider, model }, i) =>
+        codexCatalog.buildCatalogEntry(provider.name, id, i + 1, {
+          name: model?.name,
+          contextWindow: model?.contextWindow,
+          input: model?.input,
+        }),
+      );
+      if (!entries.length) {
+        // Codex 会拒绝空目录；与本地目录开关同口径，宁可返回错误也不写入“成功但不可用”的引用。
+        sendJson(res, 409, { error: { message: t("serviceAgent.codex.catalogEmpty"), type: "invalid_request_error" } });
+        finish({ protocol: "models", model: "", status: 409 });
+        return;
+      }
       const models = [];
       let bytes = 2; // {"models":[]}
       let leftOut = 0;

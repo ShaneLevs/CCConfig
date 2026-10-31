@@ -29,6 +29,8 @@ const AGENT_DISPATCH_OPTIONS = visibleAgentOptions;
 // 各 agent 支持的通用库协议（不在表内的目标不做协议限制）
 const AGENT_PROTOCOLS = {
   claude: ["anthropic-messages"],
+  // Codex 0.166 只认 Responses provider。通用库直连仍可下发 Chat 源，但服务层会写成
+  // responses；真正连 Chat 上游时必须经过网关协议转换，否则请求会失败。
   codex: ["openai-completions", "openai-responses"],
   minimax: ["openai-completions", "openai-responses", "anthropic-messages"],
   qoder: ["openai-completions", "openai-responses", "anthropic-messages"],

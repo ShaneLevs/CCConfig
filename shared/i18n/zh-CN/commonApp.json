@@ -247,7 +247,7 @@
       "targetAgentLabel": "目标 Agent",
       "cascaderPlaceholder": "选择供应商与模型（可多选，勾选供应商 = 全选其模型）",
       "claudeTooltip": "仅 Anthropic Messages 协议的供应商可下发 Claude Code",
-      "codexTooltip": "仅 OpenAI Chat / Responses 协议的供应商可下发 Codex",
+      "codexTooltip": "Codex 只写 Responses provider；Chat 供应商需经网关转换后才能正常调用",
       "minimaxTooltip": "仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 MiniMax Code；中文供应商名会自动清洗为 ASCII 供应商键",
       "qoderTooltip": "仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 Qoder；中文供应商名会自动清洗为 ASCII 供应商键",
       "zcodeTooltip": "仅 OpenAI Chat / Responses / Anthropic Messages 协议的供应商可下发 ZCode；供应商名会按 ZCode 规则清洗为小写 ID",

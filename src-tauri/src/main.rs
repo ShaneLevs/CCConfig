@@ -43,6 +43,8 @@ const POPUP_GAP: f64 = 8.0;
 /// 托盘点击与「失焦收起」的最小间隔：macOS 点托盘时弹窗会先失焦，
 /// 紧接着的 Click 若被当成「打开」就会关不掉，用这个窗口期把同一次点击识别为「收起」。
 const POPUP_TOGGLE_GRACE_MS: u64 = 350;
+/// 开机自启时注入的启动参数：与 tauri-plugin-autostart 注册的 args 保持一致。
+const AUTOSTART_ARG: &str = "--autostart";
 
 // ==================== 改名（ccswitch → ccconfig）遗留常量 ====================
 // 这些字面量已经在用户磁盘上存在，**不能跟着改名**，否则老数据读不到/不迁移。
@@ -244,7 +246,14 @@ fn port_script(port: u16, token: &str) -> String {
     )
 }
 
-fn build_main_window(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Result<()> {
+/// `show` = false 用于开机自启：窗口照常建好（托盘「打开主窗口」随后可直接 show），
+/// 但不抢焦点、不弹到用户面前。
+fn build_main_window(
+    app: &tauri::AppHandle,
+    port: u16,
+    token: &str,
+    show: bool,
+) -> tauri::Result<()> {
     let script = port_script(port, token);
     // 首帧外观跟随系统：显式设 theme，否则 WKWebView 停在 Aqua 外观（prefers-color-scheme 永远 light）。
     let dark = system_is_dark();
@@ -275,8 +284,10 @@ fn build_main_window(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::R
 
     let win = builder.build()?;
     apply_main_background(&win, dark);
-    let _ = win.show();
-    let _ = win.set_focus();
+    if show {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
     Ok(())
 }
 
@@ -421,10 +432,12 @@ fn build_tray_popup(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Re
         i18n::Locale::Zh => "zh-CN",
         i18n::Locale::En => "en-US",
     };
+    let stats_unit = current_stats_unit(app);
     let script = format!(
-        "{} window.__CC_LOCALE__ = {}; window.__CC_TRAY_I18N__ = {};",
+        "{} window.__CC_LOCALE__ = {}; window.__CC_STATS_UNIT__ = {}; window.__CC_TRAY_I18N__ = {};",
         port_script(port, token),
         serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        serde_json::to_string(stats_unit).unwrap_or_else(|_| "\"compact\"".into()),
         i18n::native_value(locale, &["tray"])
     );
 
@@ -551,9 +564,11 @@ fn show_tray_popup(app: &tauri::AppHandle, anchor: TrayAnchor) {
         i18n::Locale::Zh => "zh-CN",
         i18n::Locale::En => "en-US",
     };
+    let stats_unit = current_stats_unit(app);
     let script = format!(
-        "window.__CC_LOCALE__ = {}; window.__CC_TRAY_I18N__ = {}; window.__ccTrayReload && window.__ccTrayReload();",
+        "window.__CC_LOCALE__ = {}; window.__CC_STATS_UNIT__ = {}; window.__CC_TRAY_I18N__ = {}; window.__ccTrayReload && window.__ccTrayReload();",
         serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        serde_json::to_string(stats_unit).unwrap_or_else(|_| "\"compact\"".into()),
         i18n::native_value(locale, &["tray"])
     );
     let _ = win.eval(&script);
@@ -645,6 +660,26 @@ fn tray_popup_hide(app: tauri::AppHandle) {
     hide_popup_window(&app);
 }
 
+/// 设置 → 客户端 → 开机自启：当前是否已注册（以系统里的实际状态为准，不另存 DB）。
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// 写入 / 移除开机自启项。失败原因原样回传前端展示（权限、路径异常等）。
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable()
+    } else {
+        manager.disable()
+    }
+    .map_err(|e| e.to_string())
+}
+
 /// 引导页展示的失败原因：`kind` 决定标题（node = 没找到 Node，sidecar = 起不来），
 /// `reason` / `tried` 让用户不必翻日志就能看到实际原因。
 fn build_guide_window(
@@ -731,6 +766,23 @@ fn read_locale_doc(app: &tauri::AppHandle, doc_id: &str) -> Option<i18n::Locale>
     let doc = sidecar_rpc_args(app, "__utools.db.get", serde_json::json!([doc_id]));
     let preference = json_at(&doc, &["locale"]).and_then(|v| v.as_str());
     i18n::from_preference(preference)
+}
+
+/// 托盘统计单位：优先读本机文档 ccconfig_stats_unit_<nativeId>；缺省 K/M/B。
+/// 与主窗口 useUnitFormat 写的是同一份文档，切换后下次展开托盘即生效。
+fn current_stats_unit(app: &tauri::AppHandle) -> &'static str {
+    let native_id = sidecar_rpc(app, "__utools.getNativeId")
+        .and_then(|v| v.get("value").and_then(|x| x.as_str()).map(str::to_string))
+        .filter(|id| !id.is_empty());
+    let doc_id = match &native_id {
+        Some(id) => format!("ccconfig_stats_unit_{id}"),
+        None => "ccconfig_stats_unit".to_string(),
+    };
+    let doc = sidecar_rpc_args(app, "__utools.db.get", serde_json::json!([doc_id]));
+    match json_at(&doc, &["unit"]).and_then(|v| v.as_str()) {
+        Some("cn") => "cn",
+        _ => "compact",
+    }
 }
 
 // ==================== sidecar 同步 RPC（语言档 / 重启网关） ====================
@@ -880,7 +932,7 @@ fn restart_sidecar(app: &tauri::AppHandle) {
                 let _ = win.eval(&port_script(port, &token));
             } else {
                 // 上次启动只剩引导页：重建主窗口并关掉引导页，不用让用户重开应用
-                if build_main_window(app, port, &token).is_ok() {
+                if build_main_window(app, port, &token, true).is_ok() {
                     if let Some(guide) = app.get_webview_window(GUIDE_WINDOW) {
                         let _ = guide.close();
                     }
@@ -965,13 +1017,24 @@ fn spawn_watchdog(app: tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            // 开机自启时静默进托盘：启动参数与设置的「客户端 → 开机自启」一致，
+            // setup 里据此跳过主窗口的 show/focus。macOS 默认走 LaunchAgent。
+            tauri_plugin_autostart::Builder::new()
+                .arg(AUTOSTART_ARG)
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             tray_popup_action,
             tray_popup_resize,
-            tray_popup_hide
+            tray_popup_hide,
+            get_autostart,
+            set_autostart
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            // 由登录项拉起时不弹主窗口，只留托盘（网关继续工作）
+            let launched_at_login = std::env::args().any(|arg| arg == AUTOSTART_ARG);
             migrate_legacy_data();
 
             let sidecar_dir = resolve_sidecar_dir(&handle);
@@ -1028,7 +1091,7 @@ fn main() {
                     if let Ok(mut guard) = app.state::<AppState>().sidecar.lock() {
                         *guard = Some(started);
                     }
-                    build_main_window(&handle, port, &token)?;
+                    build_main_window(&handle, port, &token, !launched_at_login)?;
                     // 弹窗常驻隐藏：页面在后台加载、量高度，首次点托盘零等待。
                     // 失败不致命：左键回落到直接打开主窗口。
                     if let Err(e) = build_tray_popup(&handle, port, &token) {

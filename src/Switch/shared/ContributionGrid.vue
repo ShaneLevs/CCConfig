@@ -3,8 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { Tooltip } from "tdesign-vue-next";
 import { agentLabel } from "../../composables/agentMeta";
+import { useUnitFormat } from "../../composables/useUnitFormat";
 
 const { t, locale } = useI18n();
+const { formatStat } = useUnitFormat();
 
 // 月份 / 星期标签跟随当前语言（zh-CN: 1月/一，en-US: Jan/M）
 const monthText = (month) =>
@@ -92,11 +94,7 @@ const maxWeeks = computed(() => {
   return Math.max(Math.floor(available / WEEK_WIDTH), 10);
 });
 
-const fmt = (num) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-  if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-  return num.toString();
-};
+const fmt = (num) => formatStat(num, { decimals: 1 });
 
 // tooltip 里的模型行：按当天该模型用量降序（input/output 展示为格式化文本）
 const modelLinesOf = (models) =>

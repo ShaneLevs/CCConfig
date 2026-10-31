@@ -1,5 +1,5 @@
 <script setup>
-// 通用配置统计页：合并各已适配 agent 的使用数据（Claude / OpenCode / Pi / Kimi / MiniMax /
+// 通用配置统计页：合并各已适配 agent 的使用数据（Claude / OpenCode / Pi / Codex / Kimi / MiniMax /
 // DSH / ZCode / Grok / Cline / Command Code）。
 // 打开/刷新时先调 collectCommonUsageAsync 从各 agent 采集最新数据落库（后台线程，未安装/无数据的
 // agent 自动跳过），再纯读 DB 聚合展示（文档 ccconfig_agent_usage_<agent>_<nativeId>）。

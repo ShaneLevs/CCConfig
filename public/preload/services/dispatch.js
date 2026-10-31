@@ -466,10 +466,11 @@ const dispatchToReasonix = (provider, model, opts) => {
 }
 
 // Codex Desktop/CLI：config.toml [model_providers.<id>] + 顶层 model_provider/model。
-// 仅支持 OpenAI 系协议（wire_api responses/chat），Anthropic / Google 协议供应商不适用；
-// 模型同时进 DB 模型列表（Codex 页快捷切换 / models.json 目录生成的数据源）
+// Codex 0.166 已移除 Chat Completions provider，只接受 wire_api = "responses"。
+// 通用库的 Chat 源仍可写入 Codex，但 Codex 会按 Responses 请求该地址；只有经本地网关
+// 转换为 Responses 后才可用。至少保证写出的配置能被 Codex 加载。
 const CODEX_WIRE_API = {
-  'openai-completions': 'chat',
+  'openai-completions': 'responses',
   'openai-responses': 'responses',
 }
 
@@ -495,7 +496,11 @@ const dispatchToCodex = (provider, model, opts) => {
     // 本地 models.json 仍由「模型目录」开关管，两者不冲突
     ...(opts.codexModelCatalogUrl ? { modelCatalogUrl: opts.codexModelCatalogUrl } : {}),
   })
-  codex.upsertCodexModel(id, model.id)
+  codex.upsertCodexModel(id, model.id, false, {
+    name: model.name,
+    contextWindow: model.contextWindow,
+    input: model.input,
+  })
   let suffix = ''
   if (opts.setDefault) {
     codex.setCodexDefaultModel(id, model.id)

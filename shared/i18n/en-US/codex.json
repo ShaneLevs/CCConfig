@@ -3,14 +3,10 @@
     "config": {
       "toolbarSubtitle": "config.toml + models.json (shared by Desktop / CLI)",
       "addProvider": "Add provider",
-      "catalogToggleTooltip": "Model catalog (models.json): the data source for the Codex desktop model list. Enabling it generates and activates the catalog, after which model/provider changes sync automatically; disabling it restores the built-in model list on desktop (the file is kept).",
-      "catalog": "Model catalog",
       "currentTitle": "Active config",
       "reset": "Restore defaults",
-      "currentSubtitle": "Only model-related fields are managed; everything else is left untouched",
+      "currentSubtitle": "One switch manages the model, API Key auth, and model catalog; everything else is left untouched",
       "effort": "Reasoning effort",
-      "skipLogin": "Skip ChatGPT login",
-      "skipLoginTooltip": "Restricts the auth method to API key (writes preferred_auth_method + forced_login_method); with a custom provider this avoids ChatGPT login. Note: it does not provide credentials — if a failed login left an invalid ~/.codex/auth.json, delete it and restart the client.",
       "currentEmpty": "Not set. Click the star on a model below to switch.",
       "emptyProviders": "No Codex custom providers detected. Add one to use third-party models via DeepSeek's official integration.",
       "currentTag": "Current",
@@ -47,14 +43,27 @@
       "builtinProvider": "{name} (built-in)",
       "resetSummaryCurrent": "Current model {provider} / {model} (model / model_provider)",
       "resetSummaryEffort": "Reasoning effort {effort} (model_reasoning_effort)",
-      "resetSummaryAuth": "Skip ChatGPT login (preferred_auth_method / forced_login_method)",
-      "resetSummaryCatalog": "Model catalog reference model_catalog_json (models.json is kept in ~/.codex/)",
       "resetSummaryProviders": "All custom providers ({count} total, including saved API Keys)",
       "resetSummaryLogin": "Login info ~/.codex/auth.json (Codex will need to sign in to ChatGPT again next time)",
       "wireApi": {
-        "responses": "responses (Codex native)",
-        "chat": "chat (OpenAI compatible)"
-      }
+        "responses": "responses (Codex native)"
+      },
+      "activeToggle": "Use current config",
+      "activeToggleTooltip": "Enables the model, API Key auth, and model catalog. Turning it off clears the default model plus auth/catalog fields; providers, API keys, and models.json are kept.",
+      "activeEnabled": "Current config enabled",
+      "activeDisabled": "Current config disabled: the default model, API Key auth, and model catalog were cleared; provider settings and models.json are kept",
+      "activeEnableFailed": "Failed to enable current config: {message}",
+      "activeDisableFailed": "Failed to disable current config: {message}",
+      "resetSummaryActive": "Current config enabled state (model / forced_login_method / model_catalog_json)",
+      "activeNeedModel": "Click a model star under a provider to set the default model, then you can enable the current config",
+      "editModel": "Edit model config",
+      "inputText": "Text",
+      "inputImage": "Image",
+      "modelDisplayName": "Model display name (optional)",
+      "modelDisplayNamePlaceholder": "Leave empty to use the model ID",
+      "inputType": "Supported input types",
+      "modelLimitsHint": "Context window and image input are written to the Codex catalog.",
+      "contextShort": "context {value}"
     },
     "provider": {
       "idRequired": "Enter a provider ID",
@@ -74,20 +83,18 @@
       "deleted": "Model {id} deleted",
       "deleteFailed": "Delete failed: {message}",
       "switched": "Switched to {provider} / {model}",
-      "switchFailed": "Switch failed: {message}"
-    },
-    "catalog": {
-      "enabled": "Model catalog enabled ({added} added, {updated} upgraded, {total} total). Model changes will now sync automatically.",
-      "disabled": "Model catalog disabled; the desktop app is back to its built-in model list (models.json is kept).",
-      "enableFailed": "Enable failed: {message}",
-      "disableFailed": "Disable failed: {message}"
+      "switchFailed": "Switch failed: {message}",
+      "updated": "Model config updated",
+      "saveFailed": "Save failed: {message}"
     },
     "effort": {
       "set": "Reasoning effort set to {effort}",
       "reset": "Reasoning effort reset to default",
-      "authEnabled": "API Key auth enabled (ChatGPT login skipped)",
-      "authDisabled": "API Key auth disabled",
       "saveFailed": "Save failed: {message}"
+    },
+    "usage": {
+      "tip": "Token usage from local Codex sessions, grouped by local date",
+      "emptyDescription": "No Codex usage data yet"
     },
     "reset": {
       "done": "Default config restored. Restart the Codex client to apply.",

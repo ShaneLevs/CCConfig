@@ -175,6 +175,9 @@ const readOpencodeUsageAsync = () =>
 const readPiUsageAsync = () =>
   withFallback("pi", false, () => require("./pi").readPiUsage());
 
+const readCodexUsageAsync = () =>
+  withFallback("codex", false, () => require("./codex").readCodexUsage());
+
 // omp：会话 JSONL（含 gc 归档的 .jsonl.gz）解析走后台线程
 const readOmpUsageAsync = () =>
   withFallback("omp", false, () => require("./omp-usage").readOmpUsage());
@@ -221,6 +224,7 @@ module.exports = {
   readClaudeUsageAsync,
   readOpencodeUsageAsync,
   readPiUsageAsync,
+  readCodexUsageAsync,
   readOmpUsageAsync,
   readKimiUsageAsync,
   readMinimaxUsageAsync,

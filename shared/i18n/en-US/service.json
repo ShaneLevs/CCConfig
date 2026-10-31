@@ -76,7 +76,7 @@
     },
     "dispatch": {
       "claudeProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; only Anthropic Messages providers can be dispatched to Claude Code",
-      "codexProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Codex only supports OpenAI Chat / Responses providers",
+      "codexProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Codex only supports Responses providers",
       "minimaxProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; MiniMax Code only supports OpenAI Chat / Responses / Anthropic Messages",
       "qoderProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; Qoder only supports OpenAI Chat / Responses / Anthropic Messages",
       "zcodeProtocolUnsupported": "Provider \"{name}\" uses the {api} protocol; ZCode only supports OpenAI Chat / Responses / Anthropic Messages",

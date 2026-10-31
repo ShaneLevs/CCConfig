@@ -13,9 +13,11 @@ import {
 import ContributionGrid from "./ContributionGrid.vue";
 import UsageTokenChart from "./UsageTokenChart.vue";
 import { usePageRefresh } from "../../composables/usePageRefresh";
+import { useUnitFormat } from "../../composables/useUnitFormat";
 import "./styles/UsagePage.css";
 
 const { t } = useI18n();
+const { formatStat } = useUnitFormat();
 
 const props = defineProps({
   // 所属 agent（由各 UsageView 传入）：切回本页时据此自动刷新
@@ -69,17 +71,6 @@ const datePresets = computed(() => ({
   [t('usage.last7Days')]: () => [new Date(Date.now() - 6 * 864e5), new Date()],
   [t('usage.last30Days')]: () => [new Date(Date.now() - 29 * 864e5), new Date()],
 }));
-
-const formatNumber = (num) => {
-  if (!num || num === 0) return "0";
-  const units = ["", "K", "M", "B", "T", "Q"];
-  let tier = 0;
-  while (num >= 1000 && tier < units.length - 1) {
-    num /= 1000;
-    tier++;
-  }
-  return tier === 0 ? num.toString() : num.toFixed(2) + units[tier];
-};
 
 const hasDateFilter = computed(() => dateRange.value.length === 2);
 
@@ -254,7 +245,7 @@ defineExpose({ loadData });
     <!-- 统计卡片 -->
     <div class="stat-cards-row">
       <div v-for="s in stats" :key="s.key" class="stat-card" :class="s.colorClass">
-        <Statistic :value="getStatValue(s.key)" :format="formatNumber">
+        <Statistic :value="getStatValue(s.key)" :format="formatStat">
           <template #title>
             <span class="stat-title-row">
               <span class="stat-icon-wrap" :style="{ background: s.iconColor + '20', color: s.iconColor }">
@@ -323,11 +314,11 @@ defineExpose({ loadData });
           <div class="usage-model-row-content">
             <span class="usage-model-row-name">{{ model.name }}</span>
             <Space size="small" class="usage-model-row-stats">
-              <span class="usage-model-stat">{{ formatNumber(model.tokens) }} tokens</span>
+              <span class="usage-model-stat">{{ formatStat(model.tokens) }} tokens</span>
               <span class="usage-model-stat-divider">|</span>
-              <span class="usage-model-stat">in {{ formatNumber(model.inputTokens) }}</span>
+              <span class="usage-model-stat">in {{ formatStat(model.inputTokens) }}</span>
               <span class="usage-model-stat-divider">|</span>
-              <span class="usage-model-stat">out {{ formatNumber(model.outputTokens) }}</span>
+              <span class="usage-model-stat">out {{ formatStat(model.outputTokens) }}</span>
               <template v-if="model.sessions">
                 <span class="usage-model-stat-divider">|</span>
                 <span class="usage-model-stat">{{ t('usage.sessions', { count: model.sessions }) }}</span>

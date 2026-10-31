@@ -6,9 +6,9 @@
 // 否则 uTools 以 file:// 加载时绝对路径会指向文件系统根目录导致图标丢失）
 const ASSET_BASE = import.meta.env.BASE_URL;
 
-// 默认顺序：已有使用统计的应用（Claude Code / Pi Agent / OpenCode / DSH / Grok Build / Command Code）排在前面，其余按原有顺序跟随。
+// 默认顺序：已有使用统计的应用（Claude Code / Pi Agent / OpenCode / Codex / DSH / Grok Build / Command Code）排在前面，其余按原有顺序跟随。
 // 用户拖拽排序后以 DB 记录里的 order 为准，仅在「仍是某个历史默认顺序」时升级。
-export const AGENT_ORDER = ["claude", "pi", "opencode", "dsh", "grok", "cline", "commandcode", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"];
+export const AGENT_ORDER = ["claude", "pi", "opencode", "codex", "dsh", "grok", "cline", "commandcode", "omp", "reasonix", "kimi", "minimax", "qoder", "zcode", "hermes"];
 // 历史默认顺序（自上而下逐版演进）：仅用于识别「用户仍停在某个历史默认顺序」的存量记录，
 // 命中任一即升级为当前 AGENT_ORDER。用户自定义过的顺序不在其中，原样保留（新 agent 追加到末尾）。
 export const LEGACY_AGENT_ORDERS = [
@@ -18,6 +18,8 @@ export const LEGACY_AGENT_ORDERS = [
   ["claude", "pi", "opencode", "dsh", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"],
   // 第三版：Grok Build 追加到使用统计组末尾（Cline / Command Code 加入前的最后一版）
   ["claude", "pi", "opencode", "dsh", "grok", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"],
+  // 第四版：Codex 接入统计，移动到统计组
+  ["claude", "pi", "opencode", "dsh", "grok", "cline", "commandcode", "omp", "reasonix", "codex", "kimi", "minimax", "qoder", "zcode", "hermes"],
 ];
 // 「通用配置」不是 agent，但会出现在切换器下拉里，展示元数据与 agent 放一起便于复用
 // 名称是唯一需要翻译的展示字段：这里只放 key，解析交给调用方（保持本文件纯数据、无副作用）

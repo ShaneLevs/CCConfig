@@ -23,6 +23,7 @@ import OmpUsageView from "./omp/UsageView.vue";
 import ReasonixConfigView from "./reasonix/ConfigView.vue";
 import ReasonixUsageView from "./reasonix/UsageView.vue";
 import CodexConfigView from "./codex/ConfigView.vue";
+import CodexUsageView from "./codex/UsageView.vue";
 import KimiConfigView from "./kimi/ConfigView.vue";
 import KimiUsageView from "./kimi/UsageView.vue";
 import MinimaxConfigView from "./minimax/ConfigView.vue";
@@ -55,6 +56,7 @@ import CommonUsageView from "./common/UsageView.vue";
 import AppTabBar from "../components/AppTabBar.vue";
 import AgentVisibilitySettings from "../components/AgentVisibilitySettings.vue";
 import GeneralSettings from "../components/GeneralSettings.vue";
+import ClientSettings from "../components/ClientSettings.vue";
 import AboutSettings from "../components/AboutSettings.vue";
 import AgentSideRail from "../components/AgentSideRail.vue";
 import OverlayScrollbar from "../components/OverlayScrollbar.vue";
@@ -76,8 +78,11 @@ const { AGENT_META, appDropdownOptions, toggleAgentVisibility, visibleAgents } =
 // 自动网关开启状态（每次进入插件从 DB 重读，之后由 AutoRouteView 开关同步）
 const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 
-// 设置弹窗页签：general = 通用（语言 + 主题 + 深色背景特效），agents = Agent 显示，about = 关于
+// 设置弹窗页签：general = 通用（语言 + 主题 + 深色背景特效），agents = Agent 显示，
+// client = 客户端专属（仅桌面版），about = 关于
 const settingsTab = ref("general");
+// 桌面版 bridge 在 Vue 挂载前就给 <html> 打了 is-desktop，uTools 版没有这个类
+const isDesktop = document.documentElement.classList.contains("is-desktop");
 // 弹窗尺寸固定（宽度写在模板里，高度见 .settings-body）：切换页签不再改弹窗大小，
 // 各页签内容在固定高度内自适应（超出则内容区滚动）。
 const showSettings = ref(false);
@@ -386,9 +391,13 @@ onUnmounted(() => {
         />
       </template>
 
-      <!-- Codex views（仅模型配置） -->
+      <!-- Codex views（模型配置 + 使用统计） -->
       <template v-if="isAppReady('codex')">
         <CodexConfigView v-if="activeApp === 'codex' && activeTab === 'config'" />
+        <CodexUsageView
+          v-if="isTabVisited('codex', 'usage')"
+          v-show="activeApp === 'codex' && activeTab === 'usage'"
+        />
       </template>
 
       <!-- Kimi views（模型配置 + 使用统计） -->
@@ -504,12 +513,14 @@ onUnmounted(() => {
           <RadioGroup v-model="settingsTab" variant="default-filled" size="small" class="settings-tabs">
             <RadioButton value="general">{{ t('settings.tab.general') }}</RadioButton>
             <RadioButton value="agents">{{ t('settings.tab.agents') }}</RadioButton>
+            <RadioButton v-if="isDesktop" value="client">{{ t('settings.tab.client') }}</RadioButton>
             <RadioButton value="about">{{ t('settings.tab.about') }}</RadioButton>
           </RadioGroup>
 
           <div class="settings-content">
             <GeneralSettings v-if="settingsTab === 'general'" />
             <AgentVisibilitySettings v-else-if="settingsTab === 'agents'" />
+            <ClientSettings v-else-if="settingsTab === 'client'" />
             <AboutSettings v-else-if="settingsTab === 'about'" />
           </div>
         </div>

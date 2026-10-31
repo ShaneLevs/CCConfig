@@ -8,6 +8,7 @@
       "installed": "Installed",
       "notInstalled": "Not installed",
       "checking": "Checking…",
+      "recheck": "Recheck installations",
       "formCli": "CLI",
       "formDesktop": "App"
     }

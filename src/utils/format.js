@@ -17,3 +17,39 @@ export const formatCompactNumber = (n, options = {}) => {
 // 兼容既有调用：0/空 → 「默认」，≥1M → x.xM，≥1K → x.xK
 export const formatNumber = (n) =>
   formatCompactNumber(n, { zeroLabel: t('common.default'), decimals: 1 })
+
+// 使用统计数据缩写。mode: 'compact' → K/M/B/T/Q，'cn' → 万/亿/万亿。
+// decimals 传 'auto' 时按换算后的数值量级选 0/1/2 位（图表轴用）。
+export const STAT_UNIT_COMPACT = 'compact'
+export const STAT_UNIT_CN = 'cn'
+
+const formatScaled = (value, decimals, trimZero) => {
+  const digits = decimals === 'auto' ? (value >= 100 ? 0 : value >= 10 ? 1 : 2) : decimals
+  const text = value.toFixed(digits)
+  if (!trimZero) return text
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
+}
+
+export const formatStatNumber = (num, options = {}) => {
+  // 万/亿 默认去掉小数尾零（7000万 比 7000.00万 更自然）；K/M/B 保持原有两位小数
+  const { mode = STAT_UNIT_COMPACT, decimals = 2, trimZero = mode === STAT_UNIT_CN, zeroLabel = '0' } = options
+  if (!num || num <= 0) return zeroLabel
+
+  if (mode === STAT_UNIT_CN) {
+    if (num >= 1e12) return formatScaled(num / 1e12, decimals, trimZero) + '万亿'
+    if (num >= 1e8) return formatScaled(num / 1e8, decimals, trimZero) + '亿'
+    if (num >= 1e4) return formatScaled(num / 1e4, decimals, trimZero) + '万'
+    return String(Math.round(num))
+  }
+
+  const units = ['', 'K', 'M', 'B', 'T', 'Q']
+  let value = num
+  let tier = 0
+  while (value >= 1000 && tier < units.length - 1) {
+    value /= 1000
+    tier++
+  }
+  return tier === 0
+    ? String(Math.round(num))
+    : formatScaled(value, decimals, trimZero) + units[tier]
+}

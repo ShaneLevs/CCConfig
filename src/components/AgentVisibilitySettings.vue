@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { Checkbox } from "tdesign-vue-next";
+import { Button, Checkbox } from "tdesign-vue-next";
 import { GripVertical } from "@lucide/vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
@@ -13,21 +13,25 @@ const { activeApp } = useAppContext();
 const { agentOrder, AGENT_META, visibleAgents } = useAgentVisibility();
 
 // 每行右侧的安装状态 / 版本：服务层异步探测 CLI（桌面版走 sidecar 异步通道），
-// 组件挂载时拉一次，检测期间显示「检测中…」。
+// 组件挂载与打开设置时拉一次，并提供手动重新检测（避免刚装完仍显示缓存结果）。
 const installInfo = ref({});
 const checking = ref(false);
 
-onMounted(async () => {
+const checkInstalled = async (force = false) => {
   if (!window.services?.getAgentInstallInfo) return;
   checking.value = true;
   try {
-    installInfo.value = (await window.services.getAgentInstallInfo()) || {};
+    installInfo.value = (await window.services.getAgentInstallInfo({ force })) || {};
   } catch (e) {
     console.error("检测 Agent 安装状态失败:", e);
   } finally {
     checking.value = false;
   }
-});
+};
+
+const refreshInstallInfo = () => checkInstalled(true);
+
+onMounted(() => checkInstalled(false));
 
 // 拖拽排序用 Pointer Events：HTML5 DnD 在桌面版（Tauri 窗口接管原生拖放）里收不到 drag 事件。
 // 拖动期间渲染一份草稿顺序，指针落到哪一项就把它插到那一项的位置（实时重排），松手才写回 agentOrder。
@@ -113,6 +117,9 @@ onBeforeUnmount(stopDrag);
   <div class="settings-section">
     <div class="settings-title">{{ t('agents.visibility.title') }}</div>
     <div class="settings-desc">{{ t('agents.visibility.desc') }}</div>
+    <Button class="agent-visibility-recheck" size="small" variant="outline" :loading="checking" @click="refreshInstallInfo">
+      {{ t('agents.visibility.recheck') }}
+    </Button>
     <div class="agent-visibility-list">
       <div
         v-for="app in listOrder"
@@ -169,6 +176,9 @@ onBeforeUnmount(stopDrag);
   color: var(--td-text-color-secondary);
   margin-top: 2px;
   line-height: 1.5;
+}
+.agent-visibility-recheck {
+  align-self: flex-start;
 }
 .agent-visibility-list {
   display: flex;

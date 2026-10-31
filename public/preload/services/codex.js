@@ -4,11 +4,11 @@ const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
 const { t } = require("./i18n")
 const legacy = require("./legacy")
+const { isDirEntry } = require("./fs-utils")
 
-// Codex Desktop（ChatGPT 桌面端）/ Codex CLI / VS Code 插件共用 ~/.codex 下的同一套配置。
-// 模型配置参照 DeepSeek 官方接入方式（api-docs.deepseek.com agent_integrations/codex）：
-//   config.toml 顶层 model / model_provider / model_reasoning_effort / preferred_auth_method /
-//   forced_login_method / model_catalog_json + [model_providers.<id>] 子表
+// Codex Desktop / CLI / VS Code 插件共用 ~/.codex 下的同一套配置。
+// 只写当前 Codex 仍识别的模型字段：model / model_provider / model_reasoning_effort /
+// forced_login_method / model_catalog_json + [model_providers.<id>] 子表
 //   （name / base_url / wire_api / experimental_bearer_token）
 // 仅管理模型相关字段，config.toml 的其余配置（mcp_servers / profiles 等）读改写原样保留。
 
@@ -40,7 +40,9 @@ const readCodexConfig = () => {
 const writeCodexConfig = (doc) => {
   const p = CODEX_CONFIG_PATH()
   fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, stringifyToml(doc || {}), { encoding: 'utf-8' })
+  // config.toml 含明文 API Key：新建时用 0600，已有文件也收紧权限。
+  fs.writeFileSync(p, stringifyToml(doc || {}), { encoding: 'utf-8', mode: 0o600 })
+  try { fs.chmodSync(p, 0o600) } catch (e) { /* Windows 等平台忽略 */ }
   return true
 }
 
@@ -66,6 +68,16 @@ const normalizeCodexBaseUrl = (baseUrl) => {
   return url
 }
 
+// Codex 0.166 已移除 Chat Completions provider；chat 会让整份 config.toml 拒绝加载。
+// 读取旧值时归一为 responses，写入时也只接受 responses。
+const normalizeCodexWireApi = (wireApi) => {
+  if (wireApi === undefined || wireApi === null || wireApi === '') return 'responses'
+  if (wireApi !== 'responses') {
+    throw new Error(t('serviceAgent.codex.wireApiUnsupported', { wireApi: String(wireApi) }))
+  }
+  return 'responses'
+}
+
 // 归一化一个 provider 条目供 UI 消费；env_key（老版本 Codex 用环境变量名取 key）只读展示，
 // 本体保留在 _extra 里原样写回
 const normalizeProvider = (id, p) => {
@@ -77,7 +89,7 @@ const normalizeProvider = (id, p) => {
     id,
     name: p.name || id,
     baseUrl: p.base_url || '',
-    wireApi: p.wire_api || 'responses',
+    wireApi: normalizeCodexWireApi(p.wire_api || 'responses'),
     apiKey: p.experimental_bearer_token || '',
     envKey: p.env_key || '',
     _extra: extra,
@@ -88,8 +100,8 @@ const normalizeProvider = (id, p) => {
 const buildProviderToml = (cfg) => {
   const p = {}
   if (cfg.name) p.name = cfg.name
-  if (cfg.baseUrl) p.base_url = cfg.baseUrl
-  if (cfg.wireApi) p.wire_api = cfg.wireApi
+  if (cfg.baseUrl) p.base_url = normalizeCodexBaseUrl(cfg.baseUrl)
+  if (cfg.wireApi) p.wire_api = normalizeCodexWireApi(cfg.wireApi)
   if (cfg.apiKey) p.experimental_bearer_token = cfg.apiKey
   for (const [k, v] of Object.entries(cfg._extra || {})) {
     if (v !== undefined) p[k] = v
@@ -136,12 +148,16 @@ const updateCodexProvider = (id, updates) => {
   tables[newId] = next
   if (newId !== id) {
     if (doc.model_provider === id) doc.model_provider = newId
-    const modelsMap = readProviderModelsDoc()
-    if (modelsMap[id]) {
-      modelsMap[newId] = modelsMap[id]
-      delete modelsMap[id]
-      writeProviderModelsDoc(modelsMap)
+    const store = readProviderModelsStore()
+    if (store.models[id]) {
+      store.models[newId] = store.models[id]
+      delete store.models[id]
     }
+    if (store.modelConfigs[id]) {
+      store.modelConfigs[newId] = store.modelConfigs[id]
+      delete store.modelConfigs[id]
+    }
+    writeProviderModelsStore(store)
   }
   writeCodexConfig(doc)
   return true
@@ -166,6 +182,7 @@ const upsertCodexProvider = (id, cfg) => {
     if (v !== undefined && v !== '') merged[k] = v
   }
   if (merged.baseUrl) merged.baseUrl = normalizeCodexBaseUrl(merged.baseUrl)
+  if (cfg.wireApi !== undefined) merged.wireApi = normalizeCodexWireApi(cfg.wireApi)
   tables[id] = buildProviderToml(merged)
   writeCodexConfig(doc)
   return true
@@ -179,11 +196,10 @@ const deleteCodexProvider = (id) => {
     throw new Error(t('serviceAgent.codex.providerInUse', { id }))
   }
   delete tables[id]
-  const modelsMap = readProviderModelsDoc()
-  if (modelsMap[id]) {
-    delete modelsMap[id]
-    writeProviderModelsDoc(modelsMap)
-  }
+  const store = readProviderModelsStore()
+  if (store.models[id]) delete store.models[id]
+  if (store.modelConfigs[id]) delete store.modelConfigs[id]
+  writeProviderModelsStore(store)
   writeCodexConfig(doc)
   return true
 }
@@ -203,28 +219,37 @@ const getCodexCurrent = () => {
     provider: doc.model_provider || '',
     model: doc.model || '',
     reasoningEffort: doc.model_reasoning_effort || '',
-    apiAuth: doc.preferred_auth_method === 'apikey' && doc.forced_login_method === 'api',
+    // preferred_auth_method 已从 Codex 删除；forced_login_method=api 单独表示限定 API Key。
+    apiAuth: doc.forced_login_method === 'api',
     catalogPath: doc.model_catalog_json || '',
+    active: !!(doc.model && doc.forced_login_method === 'api' && doc.model_catalog_json),
   }
 }
 
-// 按 DeepSeek 接入方式补齐「跳过 ChatGPT 登录」的两个开关；只补缺失，不覆盖用户已有值
+// 只写当前 Codex 识别的 forced_login_method；旧版配套的 preferred_auth_method
+// 已删除，顺手清理，避免新版 Codex 持续报未识别配置。
 const ensureApiAuthFields = (doc) => {
-  if (doc.preferred_auth_method === undefined) doc.preferred_auth_method = 'apikey'
   if (doc.forced_login_method === undefined) doc.forced_login_method = 'api'
+  delete doc.preferred_auth_method
 }
 
-// 切换默认模型：写 model_provider + model（Codex 的模型与供应商是顶层配对字段），并补 API 认证开关
+// 切换默认模型：写 model_provider + model（Codex 的模型与供应商是顶层配对字段），
+// 同时启用 API Key 认证并同步模型目录。设置默认模型即代表启用当前自定义配置。
 const setCodexDefaultModel = (providerId, modelId) => {
   if (!providerId) throw new Error(t('serviceAgent.common.selectProviderFirst'))
   if (!modelId) throw new Error(t('serviceAgent.common.modelIdRequired'))
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
   if (!tables[providerId]) throw new Error(t('serviceAgent.common.providerNotFound', { name: providerId }))
-  doc.model_provider = providerId
-  doc.model = modelId
-  ensureApiAuthFields(doc)
-  writeCodexConfig(doc)
+  upsertCodexModel(providerId, modelId, false)
+  // 先完成目录同步，避免目录为空或 models.json 损坏时留下“已设默认模型但未启用”的半状态。
+  const catalog = syncCodexModelCatalog()
+  if (catalog.disabled || !catalog.total) throw new Error(t('serviceAgent.codex.catalogEmpty'))
+  const next = readCodexConfig()
+  next.model_provider = providerId
+  next.model = modelId
+  ensureApiAuthFields(next)
+  writeCodexConfig(next)
   return true
 }
 
@@ -237,14 +262,13 @@ const setCodexReasoningEffort = (effort) => {
   return true
 }
 
-// 跳过 ChatGPT 登录：preferred_auth_method / forced_login_method 成对写删
+// 跳过 ChatGPT 登录：forced_login_method = api
 const setCodexApiAuth = (enabled) => {
   const doc = readCodexConfig()
+  delete doc.preferred_auth_method
   if (enabled) {
-    doc.preferred_auth_method = 'apikey'
     doc.forced_login_method = 'api'
   } else {
-    delete doc.preferred_auth_method
     delete doc.forced_login_method
   }
   writeCodexConfig(doc)
@@ -257,19 +281,57 @@ const setCodexApiAuth = (enabled) => {
 
 const PROVIDER_MODELS_DB = 'ccconfig_codex_provider_models'
 
-const readProviderModelsDoc = () => {
+const MODEL_INPUT_TYPES = ['text', 'image']
+
+// 模型参数与 ID 分表保存：models 保持原来的 provider → string[] 结构，兼容历史 DB 与外部调用；
+// modelConfigs 是按模型保存的可选元数据，只有新增/编辑过参数时才产生。
+// 网关重复下发只合并非空字段：缺少 contextWindow 等不能把用户已保存的参数清空。
+const compactModelConfig = (cfg) => Object.fromEntries(
+  Object.entries(cfg && typeof cfg === 'object' ? cfg : {}).filter(([, value]) =>
+    value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)
+  )
+)
+
+const normalizeModelConfig = (cfg) => {
+  const input = Array.isArray(cfg?.input)
+    ? cfg.input.filter((v, i, arr) => MODEL_INPUT_TYPES.includes(v) && arr.indexOf(v) === i)
+    : []
+  const out = {}
+  const name = typeof cfg?.name === 'string' ? cfg.name.trim() : ''
+  const contextWindow = Math.max(0, Math.floor(Number(cfg?.contextWindow) || 0))
+  if (name) out.name = name
+  if (contextWindow) out.contextWindow = contextWindow
+  if (input.length) out.input = input.length ? input : ['text']
+  return out
+}
+
+const readProviderModelsStore = () => {
   try {
     const d = window.utools.db.get(PROVIDER_MODELS_DB)
-    return (d && d.models) || {}
+    const models = {}
+    for (const [providerId, list] of Object.entries((d && d.models) || {})) {
+      if (Array.isArray(list)) models[providerId] = list.filter((id) => typeof id === 'string' && id)
+    }
+    const modelConfigs = {}
+    for (const [providerId, configs] of Object.entries((d && d.modelConfigs) || {})) {
+      if (!configs || typeof configs !== 'object' || Array.isArray(configs)) continue
+      const next = {}
+      for (const [modelId, cfg] of Object.entries(configs)) {
+        const normalized = normalizeModelConfig(cfg)
+        if (Object.keys(normalized).length) next[modelId] = normalized
+      }
+      if (Object.keys(next).length) modelConfigs[providerId] = next
+    }
+    return { models, modelConfigs }
   } catch (e) {
-    return {}
+    return { models: {}, modelConfigs: {} }
   }
 }
 
-const writeProviderModelsDoc = (map) => {
+const writeProviderModelsStore = (store) => {
   let existing = null
   try { existing = window.utools.db.get(PROVIDER_MODELS_DB) } catch (e) { /* ignore */ }
-  const doc = { _id: PROVIDER_MODELS_DB, models: map }
+  const doc = { _id: PROVIDER_MODELS_DB, models: store.models, modelConfigs: store.modelConfigs }
   if (existing) doc._rev = existing._rev
   const res = window.utools.db.put(doc)
   if (!res || !res.ok) {
@@ -279,6 +341,13 @@ const writeProviderModelsDoc = (map) => {
   }
   autoSyncCatalog()
   return true
+}
+
+// 兼容旧调用：只替换模型 ID 列表，模型参数保持不动。
+const writeProviderModelsDoc = (map) => {
+  const store = readProviderModelsStore()
+  store.models = map
+  return writeProviderModelsStore(store)
 }
 
 // 模型列表变化后自动维护 models.json 目录（增删模型 / 删除供应商 / 重命名供应商都经过
@@ -294,35 +363,71 @@ const autoSyncCatalog = () => {
   }
 }
 
-const getCodexProviderModels = (providerId) => readProviderModelsDoc()[providerId] || []
+const getCodexProviderModels = (providerId) => readProviderModelsStore().models[providerId] || []
 
 // 全部模型列表（catalog 生成 / UI 展示用）
-const getCodexProviderModelsMap = () => readProviderModelsDoc()
+const getCodexProviderModelsMap = () => readProviderModelsStore().models
 
-const addCodexModel = (providerId, modelId) => upsertCodexModel(providerId, modelId, false)
+const getCodexProviderModelConfigsMap = () => readProviderModelsStore().modelConfigs
+
+const getCodexModelConfig = (providerId, modelId) =>
+  readProviderModelsStore().modelConfigs[providerId]?.[modelId] || {}
+
+const addCodexModel = (providerId, modelId, config = {}) =>
+  upsertCodexModel(providerId, modelId, false, config)
 
 const deleteCodexModel = (providerId, modelId) => {
-  const map = readProviderModelsDoc()
-  const list = map[providerId] || []
-  if (!list.includes(modelId)) return true
-  map[providerId] = list.filter(m => m !== modelId)
-  writeProviderModelsDoc(map)
+  const store = readProviderModelsStore()
+  const list = store.models[providerId] || []
+  const hasConfig = !!store.modelConfigs[providerId]?.[modelId]
+  if (!list.includes(modelId) && !hasConfig) return true
+  if (list.includes(modelId)) {
+    store.models[providerId] = list.filter((m) => m !== modelId)
+  }
+  if (hasConfig) {
+    delete store.modelConfigs[providerId][modelId]
+    if (!Object.keys(store.modelConfigs[providerId]).length) delete store.modelConfigs[providerId]
+  }
+  writeProviderModelsStore(store)
   return true
 }
 
-// 已存在时不报错（下发路径用）；exists 为 true 时重复添加报错（UI 路径用）
-const upsertCodexModel = (providerId, modelId, exists = true) => {
+// 参数编辑：模型必须已在当前供应商列表；空值用于清除可选字段。
+const updateCodexModel = (providerId, modelId, config = {}) => {
+  const store = readProviderModelsStore()
+  const list = store.models[providerId] || []
+  if (!list.includes(modelId)) {
+    throw new Error(t('serviceAgent.common.modelNotFound', { model: modelId }))
+  }
+  const normalized = normalizeModelConfig(config)
+  if (!store.modelConfigs[providerId]) store.modelConfigs[providerId] = {}
+  if (Object.keys(normalized).length) store.modelConfigs[providerId][modelId] = normalized
+  else delete store.modelConfigs[providerId][modelId]
+  if (!Object.keys(store.modelConfigs[providerId]).length) delete store.modelConfigs[providerId]
+  writeProviderModelsStore(store)
+  return true
+}
+
+// 已存在时不报错（下发路径用）；exists 为 true 时重复添加报错（UI 路径用）。
+// config 会与已有参数合并，空值用于保持原值，避免网关重复下发覆盖手工配置。
+const upsertCodexModel = (providerId, modelId, exists = true, config = {}) => {
   if (!providerId) throw new Error(t('serviceAgent.common.providerRequired'))
   const id = String(modelId || '').trim()
   if (!id) throw new Error(t('serviceAgent.common.modelIdRequired'))
-  const map = readProviderModelsDoc()
-  const list = map[providerId] || []
-  if (list.includes(id)) {
-    if (exists) throw new Error(t('serviceAgent.common.modelExists', { id }))
-    return true
-  }
-  map[providerId] = [...list, id]
-  writeProviderModelsDoc(map)
+  const store = readProviderModelsStore()
+  const list = store.models[providerId] || []
+  const existsInList = list.includes(id)
+  if (existsInList && exists) throw new Error(t('serviceAgent.common.modelExists', { id }))
+  if (!existsInList) store.models[providerId] = [...list, id]
+  const normalized = normalizeModelConfig({
+    ...(store.modelConfigs[providerId]?.[id] || {}),
+    ...compactModelConfig(config),
+  })
+  if (!store.modelConfigs[providerId]) store.modelConfigs[providerId] = {}
+  if (Object.keys(normalized).length) store.modelConfigs[providerId][id] = normalized
+  else delete store.modelConfigs[providerId][id]
+  if (!Object.keys(store.modelConfigs[providerId]).length) delete store.modelConfigs[providerId]
+  writeProviderModelsStore(store)
   return true
 }
 
@@ -344,7 +449,8 @@ const readCodexModelCatalog = () => {
 const writeCodexModelCatalog = (catalog) => {
   const p = CODEX_MODELS_JSON_PATH()
   fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, JSON.stringify(catalog, null, 2), { encoding: 'utf-8' })
+  fs.writeFileSync(p, JSON.stringify(catalog, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  try { fs.chmodSync(p, 0o600) } catch (e) { /* Windows 等平台忽略 */ }
 }
 
 // Codex 指令模板与人格变量，照抄 DeepSeek 官方接入脚本（codex-deepseek-setup.sh）内嵌目录：
@@ -364,9 +470,9 @@ const CODEX_INSTRUCTIONS_VARIABLES = {"personality_default": "", "personality_fr
 // - supports_search_tool / service_tiers / base_instructions：新版读取，写了少走内置默认值。
 // model_messages.instructions_template 与 base_instructions 同时写：前者是新版模板机制，
 // 后者是旧版直取字段，第三方模型不写就拿不到 Codex 系统提示词（客户端以空指令运行）。
-const buildCatalogEntry = (providerId, modelId, priority = 1) => ({
+const buildCatalogEntry = (providerId, modelId, priority = 1, config = {}) => ({
   slug: modelId,
-  display_name: modelId,
+  display_name: config.name || modelId,
   // 这些是写入 ~/.codex/models.json 的数据/标记，不随界面语言变化
   description: `${providerId} models (Generated by CCConfig)`,
   base_instructions: CODEX_INSTRUCTIONS_TEMPLATE,
@@ -385,7 +491,8 @@ const buildCatalogEntry = (providerId, modelId, priority = 1) => ({
   apply_patch_tool_type: 'freeform',
   truncation_policy: { mode: 'tokens', limit: 10000 },
   experimental_supported_tools: [],
-  input_modalities: ['text'],
+  input_modalities: Array.isArray(config.input) && config.input.includes('image') ? ['text', 'image'] : ['text'],
+  ...(Number(config.contextWindow) > 0 ? { context_window: Math.floor(Number(config.contextWindow)) } : {}),
   supports_reasoning_summaries: true,
   supports_parallel_tool_calls: true,
   supports_search_tool: true,
@@ -417,7 +524,9 @@ const isGeneratedEntry = (m) =>
 const syncCodexModelCatalog = () => {
   const doc = readCodexConfig()
   const tables = getProviderTables(doc)
-  const modelsMap = readProviderModelsDoc()
+  const store = readProviderModelsStore()
+  const modelsMap = store.models
+  const configsMap = store.modelConfigs
   const catalog = readCodexModelCatalog()
   const seen = new Set(catalog.models.map(m => m && m.slug).filter(Boolean))
   let added = 0
@@ -429,7 +538,7 @@ const syncCodexModelCatalog = () => {
       const idx = catalog.models.findIndex((m) => m && m.slug === modelId)
       if (idx !== -1) {
         if (isGeneratedEntry(catalog.models[idx])) {
-          catalog.models[idx] = buildCatalogEntry(id, modelId, catalog.models[idx].priority || idx + 1)
+          catalog.models[idx] = buildCatalogEntry(id, modelId, catalog.models[idx].priority || idx + 1, configsMap[id]?.[modelId])
           updated++
         }
         seen.add(modelId) // 已有条目：后续供应商不再重复处理（同旧 seen 语义，先到先得）
@@ -437,7 +546,7 @@ const syncCodexModelCatalog = () => {
       }
       if (seen.has(modelId)) continue
       seen.add(modelId)
-      catalog.models.push(buildCatalogEntry(id, modelId, catalog.models.length + 1))
+      catalog.models.push(buildCatalogEntry(id, modelId, catalog.models.length + 1, configsMap[id]?.[modelId]))
       added++
     }
   }
@@ -450,12 +559,19 @@ const syncCodexModelCatalog = () => {
   catalog.models = catalog.models.filter(
     (m) => !isGeneratedEntry(m) || (m && validSlugs.has(m.slug))
   )
+  // 空目录会使 Codex 拒绝加载整份配置；保留文件供手工条目恢复，但解除引用。
+  if (!catalog.models.length) {
+    writeCodexModelCatalog(catalog)
+    delete doc.model_catalog_json
+    writeCodexConfig(doc)
+    return { total: 0, added, updated, disabled: true }
+  }
   writeCodexModelCatalog(catalog)
   // 必须写绝对路径且用正斜杠：Windows 客户端不展开 ~（目录会静默加载失败变 fallback
   // metadata），且反斜杠在 TOML 字符串里是转义字符——同 DeepSeek 官方 Windows 脚本的处理
   doc.model_catalog_json = CODEX_MODELS_JSON_PATH().replace(/\\/g, '/')
   writeCodexConfig(doc)
-  return { total: catalog.models.length, added, updated }
+  return { total: catalog.models.length, added, updated, disabled: false }
 }
 
 // 停用模型目录：仅解除 model_catalog_json 引用（桌面端恢复内置模型列表），
@@ -466,6 +582,40 @@ const disableCodexCatalog = () => {
   writeCodexConfig(doc)
   return true
 }
+
+// 「使用当前配置」总开关：开启时要求已有默认模型，一并启用 API Key 认证和模型目录；
+// 关闭时只移除当前生效字段，保留供应商、API Key、DB 模型列表和 models.json 文件。
+const enableCodexActiveConfig = () => {
+  const doc = readCodexConfig()
+  if (!doc.model_provider || !doc.model) {
+    throw new Error(t('serviceAgent.common.selectProviderFirst'))
+  }
+  const tables = getProviderTables(doc)
+  if (!tables[doc.model_provider]) {
+    throw new Error(t('serviceAgent.common.providerNotFound', { name: doc.model_provider }))
+  }
+  upsertCodexModel(doc.model_provider, doc.model, false)
+  const catalog = syncCodexModelCatalog()
+  if (catalog.disabled || !catalog.total) throw new Error(t('serviceAgent.codex.catalogEmpty'))
+  const next = readCodexConfig()
+  ensureApiAuthFields(next)
+  writeCodexConfig(next)
+  return { enabled: true, ...catalog }
+}
+
+const disableCodexActiveConfig = () => {
+  const doc = readCodexConfig()
+  delete doc.model
+  delete doc.model_provider
+  delete doc.preferred_auth_method
+  delete doc.forced_login_method
+  delete doc.model_catalog_json
+  writeCodexConfig(doc)
+  return { enabled: false }
+}
+
+const setCodexActiveConfig = (enabled) =>
+  enabled ? enableCodexActiveConfig() : disableCodexActiveConfig()
 
 // 自家条目是否陈旧：缺任一必填键（Codex 升级新增的字段）、缺系统提示词、或档位里没 effort。
 // 只有带固定 description 标记的条目会被判定（用户/其他工具维护的条目不动）
@@ -487,7 +637,13 @@ const ensureCodexCatalogFresh = () => {
   if (!fs.existsSync(CODEX_MODELS_JSON_PATH())) return syncCodexModelCatalog()
   let stale = false
   try {
-    stale = readCodexModelCatalog().models.some(entryNeedsUpgrade)
+    const catalog = readCodexModelCatalog()
+    if (!catalog.models.length) {
+      delete doc.model_catalog_json
+      writeCodexConfig(doc)
+      return { total: 0, added: 0, updated: 0, disabled: true }
+    }
+    stale = catalog.models.some(entryNeedsUpgrade)
   } catch (e) {
     return null // models.json 解析失败：不覆盖，留给用户修复后手动同步
   }
@@ -525,18 +681,252 @@ const openCodexDir = () => {
   try { window.utools.shellOpenPath(dir) } catch { /* ignore */ }
 }
 
-const isCodexInstalled = () => fs.existsSync(CODEX_DIR())
+// 配置目录在卸载后仍会残留，不能作为安装判据；实际探测 codex 命令。
+// 走异步 Promise，避开桌面版侧车事件循环里的同步子进程。
+const isCodexInstalled = () => new Promise((resolve) => {
+  const candidates = ['codex']
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+    candidates.push(
+      path.join(appData, 'npm', 'codex.cmd'),
+      path.join(localAppData, 'pnpm', 'codex.cmd'),
+      path.join(localAppData, 'Volta', 'bin', 'codex.exe'),
+    )
+  } else {
+    candidates.push(
+      path.join(os.homedir(), '.npm-global', 'bin', 'codex'),
+      path.join(os.homedir(), '.local', 'bin', 'codex'),
+      path.join(os.homedir(), '.bun', 'bin', 'codex'),
+      path.join(os.homedir(), '.volta', 'bin', 'codex'),
+      '/opt/homebrew/bin/codex',
+      '/usr/local/bin/codex',
+    )
+  }
+  const tryAt = (index) => {
+    if (index >= candidates.length) return resolve(false)
+    const cmd = candidates[index]
+    require('node:child_process').execFile(
+      cmd,
+      ['--version'],
+      {
+        encoding: 'utf-8',
+        timeout: 3000,
+        windowsHide: true,
+        shell: process.platform === 'win32' && cmd === 'codex',
+      },
+      (err, stdout, stderr) => {
+        if (!err && /codex/i.test(`${stdout || ''}${stderr || ''}`)) return resolve(true)
+        tryAt(index + 1)
+      },
+    )
+  }
+  tryAt(0)
+})
+
+// ==================== Usage ====================
+
+// Codex 会话位于 <CODEX_HOME>/sessions/YYYY/MM/DD/*.jsonl。
+// 0.166 在每个模型响应后写 token_usage_record（本次响应增量）；旧版本可能只有
+// event_msg.token_count.last_token_usage。统一取 last/increment，绝不累加 total_token_usage。
+const CODEX_SESSIONS_DIR = () => path.join(CODEX_DIR(), 'sessions')
+const MAX_SESSION_DEPTH = 6
+
+const collectCodexSessionFiles = (dir, depth = 0, out = []) => {
+  if (depth > MAX_SESSION_DEPTH) return out
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (isDirEntry(dir, entry)) collectCodexSessionFiles(full, depth + 1, out)
+    else if (entry.name.endsWith('.jsonl')) out.push(full)
+  }
+  return out
+}
+
+const emptyCodexUsage = () => ({
+  summary: {
+    totalTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    messageCount: 0,
+    sessionCount: 0,
+  },
+  modelStats: [],
+  contributions: require('./usage').emptyContributions(),
+  avgTokensPerSession: 0,
+  recentSessions: [],
+})
+
+// Codex / OpenAI usage 的 input_tokens 已包含 cached_input_tokens，与 UsagePage
+// 的「输入含缓存」口径一致；这里原样保留 input，另外记录 cache 明细。
+const normalizeCodexUsageTokens = (u) => {
+  const input = Number(u?.input_tokens) || 0
+  const cached = Number(u?.cached_input_tokens) || 0
+  const cacheWrite = Number(u?.cache_write_input_tokens) || 0
+  const output = Number(u?.output_tokens) || 0
+  const reasoning = Number(u?.reasoning_output_tokens) || 0
+  return {
+    inputTokens: input,
+    cacheReadTokens: cached,
+    cacheWriteTokens: cacheWrite,
+    outputTokens: output,
+    totalTokens: Number(u?.total_tokens) || input + output,
+  }
+}
+
+const codexUsageRecord = ({ sessionId, model, cwd, timestamp, usage }) => {
+  const tokens = normalizeCodexUsageTokens(usage)
+  return {
+    sessionId,
+    model: model || 'unknown',
+    project: cwd ? path.basename(cwd) : '',
+    projectPath: cwd || '',
+    timestamp,
+    date: require('./usage').localDayKey(timestamp),
+    ...tokens,
+    cost: 0,
+  }
+}
+
+const readCodexUsage = () => {
+  const sessionsDir = CODEX_SESSIONS_DIR()
+  if (!fs.existsSync(sessionsDir)) return emptyCodexUsage()
+
+  const records = []
+  const sessions = new Map()
+  for (const file of collectCodexSessionFiles(sessionsDir)) {
+    let content
+    try {
+      content = fs.readFileSync(file, { encoding: 'utf-8' })
+    } catch {
+      continue
+    }
+
+    let sessionId = path.basename(file, '.jsonl')
+    let cwd = ''
+    let model = ''
+    let sessionTs = ''
+    const incrementRecords = []
+    const fallbackRecords = []
+    const seen = new Set()
+
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue
+      let event
+      try { event = JSON.parse(line) } catch { continue }
+      const payload = event.payload || {}
+      const timestamp = event.timestamp || sessionTs
+
+      if (event.type === 'session_meta') {
+        sessionId = payload.session_id || payload.id || sessionId
+        cwd = payload.cwd || cwd
+        model = payload.provenance?.model || model
+        sessionTs = payload.timestamp || timestamp
+        sessions.set(sessionId, {
+          sessionId,
+          timestamp: sessionTs,
+          cwd,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          totalTokens: 0,
+        })
+        continue
+      }
+
+      if (event.type === 'turn_context') {
+        model = payload.model || model
+        continue
+      }
+
+      if (event.type === 'token_usage_record' && payload.usage) {
+        const key = payload.response_id || `${payload.turn_id || ''}\u0000${event.ordinal ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        incrementRecords.push(codexUsageRecord({
+          sessionId,
+          model: payload.model || payload.model_slug || model,
+          cwd,
+          timestamp,
+          usage: payload.usage,
+        }))
+        continue
+      }
+
+      // 旧版兼容：last_token_usage 是增量；total_token_usage 是整个会话累计值。
+      if (event.type === 'event_msg' && payload.type === 'token_count' && payload.info?.last_token_usage) {
+        const key = `${event.ordinal ?? ''}\u0000${timestamp}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        fallbackRecords.push(codexUsageRecord({
+          sessionId,
+          model,
+          cwd,
+          timestamp,
+          usage: payload.info.last_token_usage,
+        }))
+      }
+    }
+
+    // 同一会话已有精确的 token_usage_record 时，不再使用旧 token_count 回退。
+    if (incrementRecords.length) records.push(...incrementRecords)
+    else if (fallbackRecords.length) records.push(...fallbackRecords)
+  }
+
+  const usage = require('./usage')
+  const finalRecords = records.filter((record) => {
+    if (!record.totalTokens && !record.inputTokens && !record.outputTokens) return false
+    if (!sessions.has(record.sessionId)) {
+      sessions.set(record.sessionId, {
+        sessionId: record.sessionId,
+        timestamp: record.timestamp,
+        cwd: record.projectPath,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalTokens: 0,
+      })
+    }
+    const session = sessions.get(record.sessionId)
+    session.inputTokens += record.inputTokens
+    session.outputTokens += record.outputTokens
+    session.cacheReadTokens += record.cacheReadTokens
+    session.cacheWriteTokens += record.cacheWriteTokens
+    session.totalTokens += record.totalTokens
+    if (record.timestamp > (session.timestamp || '')) session.timestamp = record.timestamp
+    return true
+  })
+
+  // 只保留确实产生过 usage 的会话，避免 session_meta 的空会话把 sessionCount 抬高。
+  const usedSessionIds = new Set(finalRecords.map((r) => r.sessionId))
+  for (const id of sessions.keys()) {
+    if (!usedSessionIds.has(id)) sessions.delete(id)
+  }
+  const stats = usage.calculateStats(finalRecords, sessions, { includeCost: false })
+  usage.saveAgentUsage('codex', stats.contributions)
+  return stats
+}
 
 module.exports = {
   getCodexDir, getCodexConfigPath, getCodexModelsJsonPath,
   normalizeCodexBaseUrl,
   readCodexConfig, writeCodexConfig,
   getCodexProviderList, addCodexProvider, updateCodexProvider, upsertCodexProvider, deleteCodexProvider,
-  getCodexCurrent, setCodexDefaultModel, setCodexReasoningEffort, setCodexApiAuth,
-  getCodexProviderModels, getCodexProviderModelsMap, addCodexModel, deleteCodexModel, upsertCodexModel,
+  getCodexCurrent, setCodexDefaultModel, setCodexReasoningEffort, setCodexApiAuth, setCodexActiveConfig,
+  getCodexProviderModels, getCodexProviderModelsMap, getCodexProviderModelConfigsMap, getCodexModelConfig,
+  addCodexModel, updateCodexModel, deleteCodexModel, upsertCodexModel,
   syncCodexModelCatalog, disableCodexCatalog, readCodexModelCatalog, ensureCodexCatalogFresh,
   resetCodexConfig,
-  openCodexDir, isCodexInstalled,
+  openCodexDir, isCodexInstalled, readCodexUsage,
   // 内部结构函数导出，供测试/复用
-  normalizeProvider, buildProviderToml, buildCatalogEntry,
+  normalizeCodexWireApi, normalizeProvider, buildProviderToml, buildCatalogEntry,
 }

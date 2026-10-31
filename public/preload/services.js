@@ -230,6 +230,10 @@ window.services = {
       collected.pi = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] Pi 采集失败:', e); collected.pi = false }
     try {
+      const s = codex.readCodexUsage()
+      collected.codex = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
+    } catch (e) { console.warn('[common usage] Codex 采集失败:', e); collected.codex = false }
+    try {
       const s = ompUsage.readOmpUsage()
       collected.omp = (s?.contributions || []).some(d => (d.tokens || 0) > 0)
     } catch (e) { console.warn('[common usage] omp 采集失败:', e); collected.omp = false }
@@ -284,6 +288,7 @@ window.services = {
       tryCollect('claude', () => usageAsync.readClaudeUsageAsync(true)),
       tryCollect('opencode', () => usageAsync.readOpencodeUsageAsync()),
       tryCollect('pi', () => usageAsync.readPiUsageAsync()),
+      tryCollect('codex', () => usageAsync.readCodexUsageAsync()),
       tryCollect('omp', () => usageAsync.readOmpUsageAsync()),
       tryCollect('kimi', () => usageAsync.readKimiUsageAsync()),
       tryCollect('minimax', () => usageAsync.readMinimaxUsageAsync()),
@@ -344,12 +349,19 @@ window.services = {
   setCodexDefaultModel: codex.setCodexDefaultModel,
   setCodexReasoningEffort: codex.setCodexReasoningEffort,
   setCodexApiAuth: codex.setCodexApiAuth,
+  setCodexActiveConfig: codex.setCodexActiveConfig,
   getCodexProviderModelsMap: codex.getCodexProviderModelsMap,
+  getCodexProviderModelConfigsMap: codex.getCodexProviderModelConfigsMap,
   addCodexModel: codex.addCodexModel,
+  updateCodexModel: codex.updateCodexModel,
   deleteCodexModel: codex.deleteCodexModel,
   syncCodexModelCatalog: codex.syncCodexModelCatalog,
+  disableCodexCatalog: codex.disableCodexCatalog,
   openCodexDir: codex.openCodexDir,
+  // Promise：实际执行 codex --version，不再把残留的 ~/.codex 目录当作已安装
   isCodexInstalled: codex.isCodexInstalled,
+  readCodexUsage: codex.readCodexUsage,
+  readCodexUsageAsync: usageAsync.readCodexUsageAsync,
 
   // ==================== 通用配置（主数据库） ====================
 

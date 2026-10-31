@@ -9,6 +9,7 @@
   Rust 通过 initialization_script 注入：
     window.__CCCONFIG_PORT__ / __CCCONFIG_TOKEN__  sidecar 地址（重启 sidecar 后会被 eval 刷新）
     window.__CC_LOCALE__                           zh-CN / en-US
+    window.__CC_STATS_UNIT__                       compact / cn（统计单位：K/M/B 或 万/亿）
     window.__CC_TRAY_I18N__                        native.json 的 tray 子树
   数据由页面自己走 sidecar HTTP /rpc 拉（含异步任务的 /rpc-poll 通道），
   因此刷新、错误处理都在这一层完成，Rust 只负责窗口与背景。
@@ -754,24 +755,25 @@
   .chart-plot {
     position: relative;
     height: 138px;
-    padding-left: 34px;
+    padding-left: 44px;
   }
   .chart-gridline {
     position: absolute;
-    left: 34px;
+    left: 44px;
     right: 0;
     border-top: 1px dashed var(--divider);
   }
   .chart-gridlabel {
     position: absolute;
-    left: -34px;
+    left: -44px;
     top: -7px;
-    width: 29px;
+    width: 40px;
     text-align: right;
     font-size: 9.5px;
     line-height: 14px;
     color: var(--faint);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .chart-cols {
     display: flex;
@@ -1317,11 +1319,26 @@
 
   // ---------- 格式化 ----------
   const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
+  // 与主窗口「通用设置 → 统计单位」保持一致：compact = K/M/B，cn = 万/亿
+  const statsUnit = () => (window.__CC_STATS_UNIT__ === 'cn' ? 'cn' : 'compact')
+  const fmtScaled = (value) => Number(value.toFixed(1)).toString()
   function fmtTokens(n) {
     n = Number(n || 0)
-    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
-    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'
-    return String(n)
+    if (!n) return '0'
+    if (statsUnit() === 'cn') {
+      if (n >= 1e12) return fmtScaled(n / 1e12) + '万亿'
+      if (n >= 1e8) return fmtScaled(n / 1e8) + '亿'
+      if (n >= 1e4) return fmtScaled(n / 1e4) + '万'
+      return String(Math.round(n))
+    }
+    const units = ['', 'K', 'M', 'B', 'T', 'Q']
+    let value = n
+    let tier = 0
+    while (value >= 1000 && tier < units.length - 1) {
+      value /= 1000
+      tier++
+    }
+    return tier === 0 ? String(Math.round(n)) : fmtScaled(value) + units[tier]
   }
   function fmtPct(part, total) {
     if (!total) return '—'

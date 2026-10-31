@@ -1,6 +1,6 @@
 [package]
 name = "ccconfig"
-version = "1.7.2"
+version = "1.8.0"
 edition = "2021"
 description = "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex and more"
 
@@ -14,6 +14,8 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 window-vibrancy = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 开机自启（设置 → 客户端）：macOS 写 LaunchAgent、Windows 写 HKCU Run。
+tauri-plugin-autostart = "2"
 
 # Windows 系统 UI 语言（i18n::system_locale 用；macOS 走 defaults 命令）
 [target.'cfg(target_os = "windows")'.dependencies]

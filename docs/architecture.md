@@ -238,16 +238,30 @@ Reasonix:
 
 Codex:
   ~/.codex/config.toml → smol-toml 读写（解析失败抛错阻断写回，仅管模型相关字段其余原样保留）
-  base_url 必须停在版本段：Codex 自己追加 /responses 或 /chat/completions，下发时经 normalizeCodexBaseUrl 归一
-  （补 /v1、去 …/chat/completions 等端点后缀，幂等）
+  当前 Codex 只接受 wire_api = "responses"；旧 chat 会让整份 config.toml 拒绝加载。
+  base_url 必须停在版本段：Codex 自己追加 /responses，下发时经 normalizeCodexBaseUrl 归一
+  （补 /v1、去 …/chat/completions 等端点后缀，幂等）。Chat 源要先经网关转换后，Codex 才能调用。
+  免 ChatGPT 登录只写 forced_login_method = "api"；preferred_auth_method 已删除，读取时兼容、写回时清理。
+  config.toml / models.json 含凭据或模型元数据，写入后权限统一 0600。
+  「使用当前配置」是 UI 的统一开关：设默认模型时自动写 model / model_provider、forced_login_method，
+    并同步模型目录；关闭时删除这四组生效字段，但保留供应商、API Key、DB 模型列表和 models.json
   「模型目录」= 合并各供应商模型写 ~/.codex/models.json + model_catalog_json 绝对路径（正斜杠）
+    目录为空时不设置 model_catalog_json（Codex 会拒绝空目录）；models.json 保留供后续恢复
   条目必须符合 Codex ModelInfo schema（档位键名必须是 effort）；Codex 逐版新增「缺了整份目录加载失败」的
     必填字段：supports_reasoning_summaries(<0.145)、supports_parallel_tool_calls(≥0.147)、shell_type/
     truncation_policy 等；系统提示词双写 base_instructions（旧版）+ model_messages.instructions_template（新版）
+  CCConfig 模型参数存入同一 DB 文档的 modelConfigs（models 仍保持 provider → string[] 兼容旧档）：
+    name → display_name；input 含 image → input_modalities ["text","image"]；contextWindow → context_window
+    Codex 0.166 模型目录与 config.toml 均无最大输出字段：界面不提供，模型参数也不保存 maxTokens
+    网关 /v1/codex/models 也从通用模型带 name / contextWindow / input，保证本地目录和远程目录同口径
   带「由 CCConfig 生成」标记的旧条目同步时原地重建；打开 Codex 页（getCodexCurrent）时自愈：
     条目缺必填字段 → 重建；models.json 丢了但 config.toml 仍引用 → 按 DB 模型列表补回；文件损坏不动
   网关下发额外写 [model_providers.router].model_catalog_url = <网关>/v1/codex/models：
     Codex ≥0.161 直接拉目录（用 API key 的 Codex 不会自己 GET /v1/models），不再依赖本地文件
+    网关目录为空时返回 409，绝不声称下发了一个 Codex 无法加载的空目录
+  使用统计：CODEX_HOME/sessions/**/*.jsonl
+    0.166 token_usage_record.usage 是单次响应增量；旧版 token_count.last_token_usage 为增量回退
+    禁止累加 token_count.total_token_usage；input_tokens 按「输入含缓存」口径，模型归属取 turn_context
 
 Kimi Code:
   ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）

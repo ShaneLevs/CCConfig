@@ -6,9 +6,11 @@ import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon, DragMoveIcon 
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../../composables/useAgentVisibility";
 import { usePageRefresh } from "../../composables/usePageRefresh";
+import { useUnitFormat } from "../../composables/useUnitFormat";
 import "./styles/AutoRouteView.css";
 
 const { t } = useI18n();
+const { formatStat } = useUnitFormat();
 
 // 自动网关：本地模型网关 — 勾选主数据模型，经本地 HTTP 服务暴露给本机任意 agent（跨协议自动转换）
 // 开启状态同步到共享 ref，驱动 index.vue「网关」tab 按钮的绿点标识
@@ -401,11 +403,7 @@ const logMs = (log) => (isPending(log) ? now.value - log.time : log.ms) + "ms";
 
 // 日志行每条 usage 展示：↑输入 ↓输出 + 缓存读标记（c 前缀），悬停 title 看精确值。
 // anthropic 的 input 不含缓存，展示用总 prompt 需加回 cache_read/write（与统计口径一致）
-const fmtTokensK = (n) => {
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(n);
-};
+const fmtTokensK = (n) => formatStat(n, { decimals: 1, trimZero: true });
 const logUsage = (log) => {
   const u = log.usage;
   if (!u) return null;
@@ -469,11 +467,7 @@ const statsSummary = computed(() => {
     const v = Math.round(r * 1000) / 10;
     return (v % 1 ? v.toFixed(1) : String(v)) + "%";
   };
-  const tokens = (n) => {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-    if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-    return String(n);
-  };
+  const tokens = (n) => formatStat(n, { decimals: 1 });
   return {
     requests,
     successRate: requests ? pct((s.successes || 0) / requests) : "—",
