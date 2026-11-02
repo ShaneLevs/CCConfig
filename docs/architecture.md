@@ -50,6 +50,7 @@ uTools 版把文档交给宿主 DB；桌面版在 sidecar 里用文件实现同�
 - 语义与 uTools 对齐：`_rev` 冲突 / `missing_rev`、单文档 1MB、`remove` 接受 id 或 doc、`allDocs()` 无参 / 前缀 / ID 数组。
 - 写入：`put` / `remove` 只标脏该文档，200ms 防抖后只重写这一条（临时文件 + rename 原子替换）；`onPluginEnter` / `onPluginOut` / 退出 / `allDocs` 前强制 `flushNow()`。内存 Map 既是读缓存，也是进程内的事实来源。
 - 冒烟测试：`node tests/smoke-db-shim-test.cjs`（跨进程持久化、特殊 ID、`allDocs`、写入放大、权限）。
+- 桌面版客户端偏好（目前是 macOS「隐藏 Dock 图标」）存 `~/.ccconfig/client.json`，由 Rust 直接读写；启动时在建主窗口前读取并应用，避免 Dock 图标闪现一下。
 
 ## 数据流
 
@@ -67,7 +68,24 @@ Claude:
   供应商/模型主数据 → 本地数据库（ccconfig_common_providers，API Key 加密）
   通用 MCP → 云端为唯一主档存全量服务器（ccconfig_common_mcp）；本机启停名单存 ccconfig_mcp_local_state_<nativeId>（disabled 列表，不在名单 = 开启）。开启 = 把主档中已启用服务器镜像写入全部选中本地 JSON 文件（只替换 mcpServers 字段，保留其他顶层字段）；关闭/删除 = 从全部文件移除。存放位置按机器隔离存 ccconfig_mcp_local_targets_<nativeId>（未配置默认 ~/.mcp.json），可多选预置路径（~/.mcp.json、~/.config/mcp/mcp.json、~/.agents/mcp.json、~/.agents/mcp/mcp.json）或自定义（仅限 .json）。刷新/变更时先把本地文件中主档没有的服务器回收进主档（首次进入按「在文件中 → 开启，仅云端 → 关闭」初始化启停），同名冲突以云端主档为准，再统一写回全部位置
   通用 Skill → 只读扫描 ~/.agents/skills（SKILL.md 元数据），启停 = 物理移动到 ~/.agents/.disabled/（skills 根目录同级）
-    Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 ~/.agents/.disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名> / Scene: <名>，不再有「场景：关闭」），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
+    Skill 安装弹窗的 skills.sh 入口 →「通用配置 → Skill → 安装 Skill」输入框同时接受 skills.sh 技能详情页链接
+      与 npx skills add 命令（带引号、-y、skills@版本、owner/repo 简写都支持）。uTools 的 installCommonSkill
+      指令同步注册三条 regex（SkillHub/魔搭链接、skills.sh 详情页链接、npx skills add 命令），命中后 payload
+      直接交给同一个安装弹窗。站点是 Next.js RSC，
+      安装命令藏在 self.__next_f.push([1,"..."]) 载荷里，按载荷解析（不依赖 DOM）。
+      详情页路径分两种：GitHub 来源 <host>/<owner>/<repo>/<skillId>，站点来源 <host>/site/<source>/<skillId>。
+      详情按需抓取并缓存 30 分钟：ld+json 取名称/简介，载荷取安装命令；抓不到命令时 GitHub 来源按
+      owner/repo + skillId 兜底，站点来源直接报不支持。排行榜与详情正文不再由本应用渲染。
+      一键安装只调用官方 CLI：npx -y skills@1.7.4 add <目标> [--skill <名>]
+        -g -a zed --copy -y。zed 的全局目录就是 ~/.agents/skills，--copy 保证只写这一处，
+        不会在其它 Agent 目录留下软链接；DISABLE_TELEMETRY / DO_NOT_TRACK 关闭 CLI 遥测。
+      启动前用 PATH 上的 node --version 校验 >= 22.20.0（CLI 的 engines），不满足直接报错停止；
+        npx / node 缺失、命令超时或退出码非 0 都会带 CLI 输出尾部提示。
+      目标目录已存在时先返回 exists，弹窗确认后再以 overwrite 重跑（CLI 的 --copy 会清目录重建）。
+        安装后校验 ~/.agents/skills/<名>/SKILL.md；命令没带 --skill 时用安装前后新增的目录兜底，
+        随后执行当前场景白名单（未绑定则移入 .disabled）。
+      CLI 自身会在 ~/.agents/.skill-lock.json 记录安装来源，这是官方行为，应用不读写它。
+    Skill 场景 → 本机档 ccconfig_skill_scenes_<nativeId> = { scenes: [{ id, name, skillDirs }], activeId }；切换场景把绑定目录移回 ~/.agents/skills、其余移入 ~/.agents/.disabled/；activeId 为空 = 未启用场景（删除当前场景 / 旧数据的兜底，界面不再提供手动入口）。装载 / 每次进入时重放一次生效场景（外部安装或手动移动目录不会绕过白名单）。逐个勾选 Skill 会同步当前场景绑定，删除 Skill 从所有场景清理；绑定但未安装的目录记入返回值的 missing，安装完成后按场景补启用。场景名不允许冒号与「关闭」「手动」。uTools 指令 switchSkillScene 的 cmds 由场景名动态生成（场景：<名>，不再有「场景：关闭」；uTools 指令统一中文，不做英文适配），桌面托盘弹窗用标签按钮展示场景并高亮当前生效项
   协议类型：OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI
   模型主数据字段（ccconfig_common_providers.providers[].models[]，均为可选、旧档缺字段按默认值消费）：
     id / name / contextWindow / maxTokens
@@ -98,6 +116,8 @@ Claude:
       否则东八区 00:00–08:00 的用量被记到「昨天」、热力图「今日」恒为 0。
       365 天空骨架同样必须用 usage.emptyContributions()（也为本地日期），两者口径不一致会互相覆盖。
     通用统计页纯读这些 DB 文档跨 agent 合并（日期求和 + 模型并集），不触碰源文件；口径与各 agent 页合并历史后一致
+    桌面版托盘的「用量」页签只画这份落库数据；展开后停在用量页、或切到 / 再点一次用量页签时，先调 collectCommonUsageAsync
+    （与通用统计页同一采集入口）再 readCommonUsageForTray 重画，网关页签不触发采集
     每日贡献另带 agentModels = { <agent>: { tokens, models } }：热力图 tooltip 据此按 agent 分组（模型并集仍供模型分布卡片用）
     通用统计页的 Token 柱状图是同一份数据的纯前端派生（src/Switch/shared/UsageTokenChart.vue）：按天/按周分桶叠放（跨度 ≤ 30 天按天，> 30 天按周），可切「模型 / Agent」维度；分类取区间总量前 6 名、其余并入「其他」；悬浮某一天的某个分类时其余分类与其余天同步置灰，tooltip 只显示该分类当天用量；价格 / 速度 / 请求数等未落库口径不展示
     DSH / ZCode / Grok / Cline / Command Code / Kimi / Reasonix 反向把该文档当历史档：源数据（会话日志 / 用量库 / 结算文件）被清理后回放历史

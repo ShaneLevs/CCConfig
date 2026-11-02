@@ -3,7 +3,7 @@
 //   1. 场景 CRUD（新建 / 重名与非法名拒绝 / 删除）
 //   2. 切换场景 = 绑定的启用、未绑定的移入 .disabled；切回手动模式不动目录
 //   3. 手动启停同步当前场景绑定；删除 Skill 从场景绑定里清理
-//   4. 场景指令动态注册（cmds 同时含中英文），最后一个场景删除后移除功能
+//   4. 场景指令动态注册（cmds 仅中文），最后一个场景删除后移除功能
 //   5. 绑定但未安装的 Skill 记入 missing
 // 放在 tests/ 而非 public/：public 下文件会被 Vite 原样复制进 dist 随插件打包。
 const fs = require('node:fs')
@@ -86,7 +86,7 @@ ok(common.getSkillScenes().scenes.length === 1, '场景列表有 1 条')
 const feature = sceneFeature()
 ok(!!feature, '注册了场景指令')
 ok(feature && feature.cmds.includes('场景：写作'), '指令含中文场景名')
-ok(feature && feature.cmds.includes('Scene: 写作'), '指令含英文场景名')
+ok(feature && !feature.cmds.some((cmd) => /^Scene:/i.test(cmd)), '不再注册英文场景名')
 ok(feature && !feature.cmds.includes('场景：关闭'), '不再注册手动 / 关闭入口')
 
 console.log('\n3. 切换场景只启用绑定的 Skill')

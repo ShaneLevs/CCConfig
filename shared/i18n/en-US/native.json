@@ -44,6 +44,7 @@
       "chartByModel": "Model",
       "chartByAgent": "Agent",
       "usageEmpty": "No token usage yet",
+      "usageRefreshing": "Updating…",
       "usageShare": "{percent} of the day",
       "saveFailed": "Save failed, try again",
       "chartOther": "Other"

@@ -13,13 +13,10 @@
         "desc": "Start CCConfig in the background after you sign in. The window stays hidden in the menu bar / system tray.",
         "failed": "Could not read or change the launch-at-login setting. Please try again."
       },
-      "codex": {
-        "title": "Codex CLI",
-        "checking": "Checking Codex CLI…",
-        "installed": "Codex CLI detected",
-        "notInstalled": "Codex CLI not detected. Install it and recheck; Codex Desktop can still be used separately.",
-        "recheck": "Recheck",
-        "failed": "Codex CLI detection failed; make sure the command is executable"
+      "hideDock": {
+        "title": "Hide Dock icon",
+        "desc": "Keep only the menu bar icon; the main window can still be opened from the menu bar.",
+        "failed": "Could not change the Dock icon visibility. Please try again."
       }
     },
     "about": {

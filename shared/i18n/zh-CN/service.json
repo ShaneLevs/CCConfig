@@ -29,7 +29,21 @@
       "downloadEmpty": "下载文件不存在或为空",
       "downloadMissing": "下载文件不存在",
       "downloadTooSmall": "下载文件过小，可能下载失败",
-      "fetchFailed": "获取失败"
+      "fetchFailed": "获取失败",
+      "skillsSh": {
+        "invalidInput": "请输入 skills.sh 技能详情页链接，或 npx skills add 命令",
+        "timeout": "请求超时",
+        "sourceUnsupported": "暂不支持从 {source} 一键安装",
+        "nodeMissing": "未找到可用的 Node.js，请先安装 Node.js {required} 或更高版本（安装需要 npx）",
+        "nodeTooOld": "通过 npx 安装需要 Node.js {required} 或更高版本，当前为 {version}。升级 Node.js 后重试",
+        "npxMissing": "未找到 npx，请安装 Node.js {required} 或更高版本（包含 npm/npx）",
+        "npxFailed": "npx 安装失败：{message}",
+        "npxUnknownError": "未知错误",
+        "installTimeout": "npx 安装超时，请检查网络后重试",
+        "installDirMissing": "npx 执行成功，但 ~/.agents/skills 下没有找到 Skill 目录（{name}）",
+        "invalidInstallTarget": "安装来源地址无效",
+        "invalidSkillName": "Skill 名称包含不支持的字符，无法通过 npx 安装"
+      }
     },
     "skillScene": {
       "notFound": "场景不存在",
@@ -110,35 +124,6 @@
       "unknownTargetAgent": "未知目标 agent",
       "routeMappingRequired": "请先在通用配置 · 网关中添加模型映射",
       "routeModelsRequired": "请先在通用配置 · 自动网关中勾选要接入网关的模型"
-    },
-    "commands": {
-      "explain": {
-        "claudeConfig": "Claude Code 配置管理工具",
-        "installClaudeSkill": "从 SkillHub/魔搭社区 安装 Claude Code Skill",
-        "opencodeConfig": "OpenCode 配置管理工具",
-        "installOpencodeSkill": "从 SkillHub/魔搭社区 安装 OpenCode Skill",
-        "piConfig": "Pi Agent 配置管理工具",
-        "installPiExtension": "安装 Pi Agent 扩展",
-        "ompConfig": "omp CLI 配置管理工具",
-        "reasonixConfig": "Reasonix 配置管理工具",
-        "codexConfig": "Codex 模型配置管理工具（Desktop / CLI）",
-        "kimiConfig": "Kimi Code 模型配置管理工具",
-        "minimaxConfig": "MiniMax Code 模型配置管理工具（CLI / Desktop）",
-        "qoderConfig": "Qoder 模型配置管理工具",
-        "zcodeConfig": "ZCode 模型配置管理工具",
-        "hermesConfig": "Hermes 模型配置管理工具",
-        "dshConfig": "DSH（DeepSeek Harness）模型配置管理工具",
-        "grokConfig": "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具",
-        "clineConfig": "Cline（CLI / 桌面版）供应商 / 模型 / MCP / Skill 配置管理工具",
-        "commandcodeConfig": "Command Code 模型 / MCP / Skill / Taste 配置管理工具",
-        "switchSkillScene": "切换通用 Skill 场景（只启用该场景绑定的 Skill）"
-      },
-      "label": {
-        "installClaudeSkill": "安装 Claude Code Skill",
-        "installOpencodeSkill": "安装 OpenCode Skill",
-        "installPiExtension": "安装 Pi Agent 扩展",
-        "installCommandCodeSkill": "安装 Command Code Skill"
-      }
     },
     "subscription": {
       "trayTitle": "订阅用量",

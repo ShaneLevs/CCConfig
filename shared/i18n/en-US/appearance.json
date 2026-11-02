@@ -9,7 +9,11 @@
     },
     "effects": {
       "title": "Dark mode background effects",
-      "desc": "Animated backgrounds in dark mode. They cover the translucent background and may cause lag on slower machines.",
+      "desc": "Animated backgrounds in dark mode. The selected effect covers the translucent background and may cause lag on slower machines.",
+      "none": {
+        "name": "Off",
+        "desc": "Keeps the translucent background."
+      },
       "prismatic": {
         "name": "Prismatic Burst",
         "desc": "Prismatic spectrum burst"

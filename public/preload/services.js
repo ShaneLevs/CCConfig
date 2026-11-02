@@ -6,6 +6,7 @@ const plugins = require("./services/plugins");
 const usage = require("./services/usage");
 const skills = require("./services/skills");
 const skillsInstall = require("./services/skills-install");
+const skillsSh = require("./services/skills-sh");
 const claudeUsage = require("./services/claude-usage");
 const usageAsync = require("./services/usage-async");
 const pi = require("./services/pi");
@@ -95,12 +96,7 @@ window.services = {
   // 一次性数据迁移（旧命名 ccswitch → ccconfig）：装载期已自动跑过，暴露出来供调试/测试手动触发
   migrateLegacyData: dbMigrate.migrateLegacyData,
   getLocale: i18n.getLocale,
-  setLocale: (locale) => {
-    const next = i18n.setLocale(locale);
-    // 语言变化后重新注册 uTools 指令（explain / label / cmds 跟随当前语言）
-    try { commands.initFromDb(); } catch (e) { console.error("[i18n] 重新同步指令失败", e); }
-    return next;
-  },
+  setLocale: (locale) => i18n.setLocale(locale),
   getDisabledMcpServers,
   disableMcpServer,
   enableMcpServer,
@@ -136,6 +132,9 @@ window.services = {
 
   // ==================== Skills Install（SkillHub / ModelScope → Claude / OpenCode / 通用） ====================
   ...skillsInstall,
+
+  // ==================== Skills.sh（详情页链接 / npx 命令 → 通用 ~/.agents/skills） ====================
+  ...skillsSh,
 
   // ==================== Claude Usage（JSONL 统计 / 热力图 / MCP 调用） ====================
   ...claudeUsage,

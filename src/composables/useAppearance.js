@@ -2,7 +2,7 @@ import { computed, ref, watch } from 'vue'
 
 // 外观设置（主题模式 + 深色背景特效），模块级单例：
 // - App.vue 读取解析后的 isDark 决定是否渲染特效；
-// - 设置弹窗的「外观」页签读写配置；
+// - 设置弹窗的「通用」页签读写配置（背景特效为下拉，none 表示关闭）；
 // - main.js 在 mount 前调用 installAppearance()，避免首帧主题闪变。
 //
 // 按设备区分同步（_<nativeId> 后缀）：各机器性能/外观偏好不同。
@@ -22,6 +22,8 @@ const DOC_ID = id ? `${LEGACY_DOC_ID}_${id}` : LEGACY_DOC_ID
 const darkBackgroundEnabled = ref(false)
 // 'prismatic' | 'pixel' | 'aurora' | 'galaxy'
 const darkEffect = ref('prismatic')
+// 设置面板的下拉值：'none' 表示关闭，其余沿用 darkEffect
+const backgroundEffect = computed(() => (darkBackgroundEnabled.value ? darkEffect.value : 'none'))
 // 'system' | 'light' | 'dark'
 const themeMode = ref('system')
 
@@ -124,13 +126,14 @@ export function useAppearance() {
     saveDoc()
   }
 
-  const setDarkBackground = (enabled) => {
-    darkBackgroundEnabled.value = enabled
-    saveDoc()
-  }
-
-  const setDarkEffect = (effect) => {
-    darkEffect.value = effect
+  // 下拉选「关闭」写 enabled=false；选特效写 enabled=true + effect，旧档 schema 不变
+  const setBackgroundEffect = (effect) => {
+    if (effect === 'none') {
+      darkBackgroundEnabled.value = false
+    } else {
+      darkEffect.value = effect
+      darkBackgroundEnabled.value = true
+    }
     saveDoc()
   }
 
@@ -140,8 +143,8 @@ export function useAppearance() {
     isDark,
     isThemeMismatch,
     darkBackgroundEnabled,
-    setDarkBackground,
     darkEffect,
-    setDarkEffect,
+    backgroundEffect,
+    setBackgroundEffect,
   }
 }

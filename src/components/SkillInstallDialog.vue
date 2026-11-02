@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Dialog, Input, Button, Tag, Loading } from "tdesign-vue-next";
 import { useSkillInstall } from "../composables/useSkillInstall";
@@ -26,10 +27,26 @@ const { t } = useI18n();
 
 const {
   showInstallDialog, installUrl, isFetchingInfo, isInstalling,
-  installInfo, installProgress, pendingInstall, showOverwriteDialog,
+  installInfo, installProgress, pendingInstall, showOverwriteDialog, supportsSkillsSh,
   openInstallDialog, openInstallWithUrl, openExternal, openSkillsDir,
   confirmInstall, overwriteInstall, cancelInstall,
 } = useSkillInstall(() => emit("installed"), props.serviceConfig);
+
+const sourceLabel = computed(() => {
+  const source = installInfo.value?.source;
+  if (source === "skillhub") return t("skill.install.sourceSkillHub");
+  if (source === "modelscope") return t("skill.install.sourceModelScope");
+  if (source === "skills-sh") return t("skill.install.sourceSkillsSh");
+  return "";
+});
+
+const sourceTagTheme = computed(() =>
+  installInfo.value?.source === "modelscope" ? "warning" : "primary",
+);
+
+const fromRegistry = computed(() =>
+  ["skillhub", "modelscope"].includes(installInfo.value?.source),
+);
 
 const open = (url) => {
   if (url) openInstallWithUrl(url);
@@ -50,26 +67,35 @@ defineExpose({ open, openInstallWithUrl, openDir });
     @confirm="confirmInstall"
   >
     <div class="install-form">
-      <div class="skill-install-form-item"><label>{{ t('skill.install.link') }}</label><Input v-model="installUrl" :placeholder="t('skill.install.linkPlaceholder')" :disabled="isFetchingInfo || isInstalling" /></div>
+      <div class="skill-install-form-item"><label>{{ t('skill.install.link') }}</label><Input v-model="installUrl" :placeholder="supportsSkillsSh ? t('skill.install.linkPlaceholderSkillsSh') : t('skill.install.linkPlaceholder')" :disabled="isFetchingInfo || isInstalling" /></div>
       <div class="install-hint">{{ t('skill.install.hintSourcesPrefix') }} <span class="hint-link" @click="openExternal('https://skillhub.cn/skills')">SkillHub</span> {{ t('skill.install.hintSourcesMiddle') }} <span class="hint-link" @click="openExternal('https://www.modelscope.cn/skills')">{{ t('skill.install.sourceModelScope') }}</span> {{ t('skill.install.hintSourcesSuffix') }}</div>
+      <div v-if="supportsSkillsSh" class="install-hint">{{ t('skill.install.hintSkillsSh') }}</div>
       <div class="install-hint">{{ t('skill.install.hintManualPrefix') }} <span class="hint-link" @click="openDir">{{ manualDirLabel }}</span> {{ t('skill.install.hintManualSuffix') }}</div>
+      <div v-if="isFetchingInfo" class="install-loading"><Loading size="small" /></div>
       <div v-if="installInfo" class="install-info-card">
         <div class="install-info-header">
           <span class="install-info-name">{{ installInfo.displayName }}</span>
         </div>
         <div class="install-info-meta">
-          <span>{{ t('skill.install.author', { author: installInfo.author }) }}</span><span>{{ t('skill.install.downloads', { count: installInfo.downloads }) }}</span>
-          <Tag size="small" :theme="installInfo.source === 'skillhub' ? 'primary' : 'warning'" variant="light" class="install-info-source">{{ installInfo.source === 'skillhub' ? t('skill.install.sourceSkillHub') : t('skill.install.sourceModelScope') }}</Tag>
-          <span class="install-info-version">v{{ installInfo.version }}</span>
+          <template v-if="fromRegistry">
+            <span>{{ t('skill.install.author', { author: installInfo.author }) }}</span><span>{{ t('skill.install.downloads', { count: installInfo.downloads }) }}</span>
+          </template>
+          <Tag size="small" :theme="sourceTagTheme" variant="light" class="install-info-source">{{ sourceLabel }}</Tag>
+          <span v-if="fromRegistry" class="install-info-version">v{{ installInfo.version }}</span>
         </div>
+        <div v-if="installInfo.sourceLabel" class="install-info-source-label">{{ t('skill.install.installSource') }}: {{ installInfo.sourceLabel }}</div>
         <div v-if="installInfo.tags?.length || installInfo.requiresApiKey" class="install-info-tags">
           <Tag v-for="tag in installInfo.tags" :key="tag" size="small" variant="light" theme="default" class="install-info-tag">{{ tag }}</Tag>
           <Tag v-if="installInfo.requiresApiKey" size="small" variant="light" theme="warning" class="install-info-tag">{{ t('skill.requiresApiKey') }}</Tag>
         </div>
-        <div class="install-info-summary">{{ installInfo.summary }}</div>
+        <div v-if="installInfo.summary" class="install-info-summary">{{ installInfo.summary }}</div>
         <div v-if="installInfo.evaluation" class="install-eval">
           <span class="install-eval-label">{{ t('skill.install.trace') }}</span>
           <span class="install-eval-score">{{ installInfo.evaluation.total }}/5</span>
+        </div>
+        <div v-if="installInfo.installCommand" class="install-command">
+          <span class="install-command-label">{{ t('skill.install.installCommand') }}</span>
+          <code>{{ installInfo.installCommand }}</code>
         </div>
         <div v-if="installProgress > 0 && installProgress < 100" class="install-progress"><Loading size="small" /><span>{{ t('skill.install.downloading', { progress: installProgress }) }}</span></div>
       </div>
@@ -175,6 +201,42 @@ defineExpose({ open, openInstallWithUrl, openDir });
   font-size: 13px;
   color: var(--td-text-color-secondary);
   line-height: 1.5;
+}
+
+.install-info-source-label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+  word-break: break-all;
+}
+
+.install-command {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.install-command-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--td-text-color-secondary);
+}
+
+.install-command code {
+  padding: 6px 8px;
+  background: var(--td-bg-color-container);
+  border-radius: var(--td-radius-default);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--td-text-color-primary);
+  word-break: break-all;
+}
+
+.install-loading {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
 }
 
 .install-eval {

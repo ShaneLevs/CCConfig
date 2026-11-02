@@ -183,12 +183,12 @@ const handleSceneChange = (value) => {
   switchScene(value);
 };
 
-// uTools 指令「场景：<名称>」/「Scene: <名称>」进入时由 index.vue 的深链调用
+// uTools 指令「场景：<名称>」进入时由 index.vue 的深链调用
 const applySceneFromCommand = (payload) => {
   loadScenes();
   const name = String(payload || '')
     .trim()
-    .replace(/^(?:场景[:：]\s*|Scene:\s*)/i, '')
+    .replace(/^场景[:：]\s*/, '')
     .trim();
   if (!name) return;
   const scene = scenes.value.find((s) => s.name === name);
@@ -440,6 +440,9 @@ const SKILL_INSTALL_CONFIG = {
   installSkillFromModelScope: 'installCommonSkillFromModelScope',
   completeSkillInstall: 'completeCommonSkillInstall',
   cancelSkillInstall: 'cancelCommonSkillInstall',
+  // skills.sh：详情页链接 / npx 命令 → ~/.agents/skills
+  fetchSkillsShInfo: 'fetchSkillsShInfo',
+  installSkillsShSkill: 'installCommonSkillFromSkillsSh',
 };
 const openInstallWithUrl = (url) => {
   installDialogRef.value?.open(url);
@@ -529,13 +532,10 @@ onBeforeUnmount(() => {
         <Button size="small" theme="primary" @click="installDialogRef?.open()">
           <template #icon><DownloadIcon /></template> {{ t('skill.install.title') }}
         </Button>
-
         <Tooltip :content="t('common.refresh')" placement="top">
-
           <Button size="small" variant="outline" :loading="loading || autoRefreshing" @click="loadSkills">
-          <template #icon><RefreshIcon /></template>
-        </Button>
-
+            <template #icon><RefreshIcon /></template>
+          </Button>
         </Tooltip>
       </Space>
     </div>

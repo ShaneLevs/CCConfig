@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Switch } from 'tdesign-vue-next'
+import { Switch } from 'tdesign-vue-next'
 
 // 设置弹窗「客户端」页签：只在桌面版显示。
 // 开机自启状态以系统里的实际注册项为准（macOS LaunchAgent / Windows HKCU Run），
@@ -13,10 +13,12 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 
-// Codex 安装检测：实际问题可能是「CLI 未安装」，也可能只是 GUI 启动时 PATH 不完整。
-// 服务层会实际执行 codex --version，并返回安装形态与版本；用户可主动重新检测。
-const codexInstall = ref(null)
-const checkingCodex = ref(false)
+// 隐藏 Dock 图标是 macOS 专属配置；Windows 版不渲染这一行。
+const isMac = /Mac/i.test(navigator.userAgent)
+const hideDock = ref(false)
+const dockLoading = ref(isMac)
+const dockSaving = ref(false)
+const dockError = ref('')
 
 const invoke = (cmd, args) => {
   const internals = window.__TAURI_INTERNALS__
@@ -26,18 +28,15 @@ const invoke = (cmd, args) => {
   return internals.invoke(cmd, args || {})
 }
 
-const checkCodex = async () => {
-  checkingCodex.value = true
+const loadDock = async () => {
+  if (!isMac) return
   try {
-    if (window.services?.getAgentInstallInfo) {
-      const list = await window.services.getAgentInstallInfo({ force: true })
-      codexInstall.value = list?.codex || { installed: false, version: '', forms: {} }
-    }
+    hideDock.value = Boolean(await invoke('get_hide_dock_icon'))
   } catch (e) {
-    console.error('Codex install check failed:', e)
-    codexInstall.value = { installed: false, version: '', forms: {}, error: true }
+    console.error('get_hide_dock_icon failed:', e)
+    dockError.value = t('settings.client.hideDock.failed')
   } finally {
-    checkingCodex.value = false
+    dockLoading.value = false
   }
 }
 
@@ -52,7 +51,7 @@ const load = async () => {
   } finally {
     loading.value = false
   }
-  checkCodex()
+  loadDock()
 }
 
 const toggle = async (value) => {
@@ -66,6 +65,20 @@ const toggle = async (value) => {
     error.value = t('settings.client.autostart.failed')
   } finally {
     saving.value = false
+  }
+}
+
+const toggleDock = async (value) => {
+  dockSaving.value = true
+  dockError.value = ''
+  try {
+    await invoke('set_hide_dock_icon', { enabled: value })
+    hideDock.value = value
+  } catch (e) {
+    console.error('set_hide_dock_icon failed:', e)
+    dockError.value = t('settings.client.hideDock.failed')
+  } finally {
+    dockSaving.value = false
   }
 }
 
@@ -87,23 +100,22 @@ onMounted(load)
       />
     </div>
     <div v-if="error" class="settings-error">{{ error }}</div>
-    <div class="settings-divider"></div>
-    <div class="settings-row">
-      <div class="settings-label">
-        <div class="settings-title">{{ t('settings.client.codex.title') }}</div>
-        <div class="settings-desc">
-          <template v-if="checkingCodex">{{ t('settings.client.codex.checking') }}</template>
-          <template v-else-if="codexInstall?.installed">
-            {{ t('settings.client.codex.installed') }}<template v-if="codexInstall.version"> · v{{ codexInstall.version }}</template>
-          </template>
-          <template v-else>{{ t('settings.client.codex.notInstalled') }}</template>
+    <template v-if="isMac">
+      <div class="settings-divider"></div>
+      <div class="settings-row">
+        <div class="settings-label">
+          <div class="settings-title">{{ t('settings.client.hideDock.title') }}</div>
+          <div class="settings-desc">{{ t('settings.client.hideDock.desc') }}</div>
         </div>
+        <Switch
+          :model-value="hideDock"
+          :loading="dockSaving"
+          :disabled="dockLoading"
+          @change="toggleDock"
+        />
       </div>
-      <Button size="small" variant="outline" :loading="checkingCodex" @click="checkCodex">
-        {{ t('settings.client.codex.recheck') }}
-      </Button>
-    </div>
-    <div v-if="codexInstall?.error" class="settings-error">{{ t('settings.client.codex.failed') }}</div>
+      <div v-if="dockError" class="settings-error">{{ dockError }}</div>
+    </template>
   </div>
 </template>
 

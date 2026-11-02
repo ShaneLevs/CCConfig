@@ -13,13 +13,10 @@
         "desc": "登录系统后在后台启动 CCConfig，窗口隐藏到菜单栏 / 系统托盘。",
         "failed": "无法读取或修改开机自启状态，请稍后重试。"
       },
-      "codex": {
-        "title": "Codex CLI",
-        "checking": "正在检测 Codex CLI…",
-        "installed": "已检测到 Codex CLI",
-        "notInstalled": "未检测到 Codex CLI。安装后重新检测；Codex Desktop 也可单独使用",
-        "recheck": "重新检测",
-        "failed": "检测 Codex CLI 失败，请确认命令可执行"
+      "hideDock": {
+        "title": "隐藏 Dock 图标",
+        "desc": "开启后只在菜单栏保留入口，主窗口仍可从菜单栏打开。",
+        "failed": "无法修改 Dock 图标显示状态，请稍后重试。"
       }
     },
     "about": {

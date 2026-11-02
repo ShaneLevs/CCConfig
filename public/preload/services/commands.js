@@ -17,48 +17,72 @@
 //   - 设置界面勾选变化时由渲染进程调用 syncAgentCommands 即时同步。
 // 「通用配置」（commonConfig / installCommonSkill）为静态声明，永不参与启停。
 //
-// 多语言：explain / regex label 跟随 preload 当前语言；cmds 同时保留中英两套关键词，
-// 让两种语言的搜索都能命中。语言变化时 services.setLocale 会重新调用 initFromDb()。
-const { t } = require("./i18n");
-
+// 指令文案固定中文：uTools 插件只服务国内用户，不跟随界面语言，也不提供英文别名。
 const SKILL_URL_REGEX =
   "/^https:\\/\\/(www\\.)?(skillhub\\.(tencent\\.com|cn)\\/skills\\/[\\w-]+(\\/[\\w-]+)?|modelscope\\.cn\\/skills\\/@[\\w-]+\\/[\\w-]+)$/";
 
-// 中英双语搜索别名：两种语言环境都能搜到同一条指令
 const CMDS = {
-  claudeConfig: ["Claude Code配置", "Claude Code config"],
-  opencodeConfig: ["OpenCode配置", "OpenCode config"],
-  piConfig: ["Pi Agents配置", "Pi Agent config"],
-  ompConfig: ["omp配置", "omp config"],
-  reasonixConfig: ["Reasonix配置", "Reasonix config"],
-  codexConfig: ["Codex配置", "Codex config"],
-  kimiConfig: ["Kimi Code配置", "Kimi Code config"],
-  minimaxConfig: ["MiniMax Code配置", "MiniMax Code config"],
-  qoderConfig: ["Qoder配置", "Qoder config"],
-  zcodeConfig: ["ZCode配置", "ZCode config"],
-  hermesConfig: ["Hermes配置", "Hermes config"],
-  dshConfig: ["dsh配置", "dsh config"],
-  grokConfig: ["Grok Build配置", "Grok Build config"],
-  clineConfig: ["Cline配置", "Cline config"],
-  commandcodeConfig: ["Command Code配置", "Command Code config"],
+  claudeConfig: ["Claude Code配置"],
+  opencodeConfig: ["OpenCode配置"],
+  piConfig: ["Pi Agents配置"],
+  ompConfig: ["omp配置"],
+  reasonixConfig: ["Reasonix配置"],
+  codexConfig: ["Codex配置"],
+  kimiConfig: ["Kimi Code配置"],
+  minimaxConfig: ["MiniMax Code配置"],
+  qoderConfig: ["Qoder配置"],
+  zcodeConfig: ["ZCode配置"],
+  hermesConfig: ["Hermes配置"],
+  dshConfig: ["dsh配置"],
+  grokConfig: ["Grok Build配置"],
+  clineConfig: ["Cline配置"],
+  commandcodeConfig: ["Command Code配置"],
+};
+
+const EXPLAINS = {
+  claudeConfig: "Claude Code 配置管理工具",
+  installClaudeSkill: "从 SkillHub/魔搭社区 安装 Claude Code Skill",
+  opencodeConfig: "OpenCode 配置管理工具",
+  installOpencodeSkill: "从 SkillHub/魔搭社区 安装 OpenCode Skill",
+  piConfig: "Pi Agent 配置管理工具",
+  installPiExtension: "安装 Pi Agent 扩展",
+  ompConfig: "omp CLI 配置管理工具",
+  reasonixConfig: "Reasonix 配置管理工具",
+  codexConfig: "Codex 模型配置管理工具（Desktop / CLI）",
+  kimiConfig: "Kimi Code 模型配置管理工具",
+  minimaxConfig: "MiniMax Code 模型配置管理工具（CLI / Desktop）",
+  qoderConfig: "Qoder 模型配置管理工具",
+  zcodeConfig: "ZCode 模型配置管理工具",
+  hermesConfig: "Hermes 模型配置管理工具",
+  dshConfig: "DSH（DeepSeek Harness）模型配置管理工具",
+  grokConfig: "Grok Build（xAI 官方 CLI）模型 / MCP / Skill 配置管理工具",
+  clineConfig: "Cline（CLI / 桌面版）供应商 / 模型 / MCP / Skill 配置管理工具",
+  commandcodeConfig: "Command Code 模型 / MCP / Skill / Taste 配置管理工具",
+  switchSkillScene: "切换通用 Skill 场景（只启用该场景绑定的 Skill）",
+};
+
+const LABELS = {
+  installClaudeSkill: "安装 Claude Code Skill",
+  installOpencodeSkill: "安装 OpenCode Skill",
+  installPiExtension: "安装 Pi Agent 扩展",
 };
 
 function getFeatureDefinitions() {
   return {
     claudeConfig: {
       code: "claudeConfig",
-      explain: t("service.commands.explain.claudeConfig"),
+      explain: EXPLAINS.claudeConfig,
       icon: "icon-claude.png",
       cmds: CMDS.claudeConfig,
     },
     installClaudeSkill: {
       code: "installClaudeSkill",
-      explain: t("service.commands.explain.installClaudeSkill"),
+      explain: EXPLAINS.installClaudeSkill,
       icon: "icon-claude.png",
       cmds: [
         {
           type: "regex",
-          label: t("service.commands.label.installClaudeSkill"),
+          label: LABELS.installClaudeSkill,
           match: SKILL_URL_REGEX,
           minLength: 30,
           maxLength: 200,
@@ -67,18 +91,18 @@ function getFeatureDefinitions() {
     },
     opencodeConfig: {
       code: "opencodeConfig",
-      explain: t("service.commands.explain.opencodeConfig"),
+      explain: EXPLAINS.opencodeConfig,
       icon: "icon-opencode.png",
       cmds: CMDS.opencodeConfig,
     },
     installOpencodeSkill: {
       code: "installOpencodeSkill",
-      explain: t("service.commands.explain.installOpencodeSkill"),
+      explain: EXPLAINS.installOpencodeSkill,
       icon: "icon-opencode.png",
       cmds: [
         {
           type: "regex",
-          label: t("service.commands.label.installOpencodeSkill"),
+          label: LABELS.installOpencodeSkill,
           match: SKILL_URL_REGEX,
           minLength: 30,
           maxLength: 200,
@@ -87,18 +111,18 @@ function getFeatureDefinitions() {
     },
     piConfig: {
       code: "piConfig",
-      explain: t("service.commands.explain.piConfig"),
+      explain: EXPLAINS.piConfig,
       icon: "icon-pi.png",
       cmds: CMDS.piConfig,
     },
     installPiExtension: {
       code: "installPiExtension",
-      explain: t("service.commands.explain.installPiExtension"),
+      explain: EXPLAINS.installPiExtension,
       icon: "icon-pi.png",
       cmds: [
         {
           type: "regex",
-          label: t("service.commands.label.installPiExtension"),
+          label: LABELS.installPiExtension,
           match: "/^pi\\s+install\\s+.+/",
           minLength: 12,
           maxLength: 200,
@@ -107,73 +131,73 @@ function getFeatureDefinitions() {
     },
     ompConfig: {
       code: "ompConfig",
-      explain: t("service.commands.explain.ompConfig"),
+      explain: EXPLAINS.ompConfig,
       icon: "icon-omp.svg",
       cmds: CMDS.ompConfig,
     },
     reasonixConfig: {
       code: "reasonixConfig",
-      explain: t("service.commands.explain.reasonixConfig"),
+      explain: EXPLAINS.reasonixConfig,
       icon: "icon-reasonix.png",
       cmds: CMDS.reasonixConfig,
     },
     codexConfig: {
       code: "codexConfig",
-      explain: t("service.commands.explain.codexConfig"),
+      explain: EXPLAINS.codexConfig,
       icon: "icon-codex.png",
       cmds: CMDS.codexConfig,
     },
     kimiConfig: {
       code: "kimiConfig",
-      explain: t("service.commands.explain.kimiConfig"),
+      explain: EXPLAINS.kimiConfig,
       icon: "icon-kimi.svg",
       cmds: CMDS.kimiConfig,
     },
     minimaxConfig: {
       code: "minimaxConfig",
-      explain: t("service.commands.explain.minimaxConfig"),
+      explain: EXPLAINS.minimaxConfig,
       icon: "icon-minimax.svg",
       cmds: CMDS.minimaxConfig,
     },
     qoderConfig: {
       code: "qoderConfig",
-      explain: t("service.commands.explain.qoderConfig"),
+      explain: EXPLAINS.qoderConfig,
       icon: "icon-qoder.png",
       cmds: CMDS.qoderConfig,
     },
     zcodeConfig: {
       code: "zcodeConfig",
-      explain: t("service.commands.explain.zcodeConfig"),
+      explain: EXPLAINS.zcodeConfig,
       icon: "icon-zcode.png",
       cmds: CMDS.zcodeConfig,
     },
     hermesConfig: {
       code: "hermesConfig",
-      explain: t("service.commands.explain.hermesConfig"),
+      explain: EXPLAINS.hermesConfig,
       icon: "icon-hermes.png",
       cmds: CMDS.hermesConfig,
     },
     dshConfig: {
       code: "dshConfig",
-      explain: t("service.commands.explain.dshConfig"),
+      explain: EXPLAINS.dshConfig,
       icon: "icon-dsh.png",
       cmds: CMDS.dshConfig,
     },
     grokConfig: {
       code: "grokConfig",
-      explain: t("service.commands.explain.grokConfig"),
+      explain: EXPLAINS.grokConfig,
       icon: "icon-grok.svg",
       cmds: CMDS.grokConfig,
     },
     clineConfig: {
       code: "clineConfig",
-      explain: t("service.commands.explain.clineConfig"),
+      explain: EXPLAINS.clineConfig,
       icon: "icon-cline.svg",
       cmds: CMDS.clineConfig,
     },
     commandcodeConfig: {
       code: "commandcodeConfig",
-      explain: t("service.commands.explain.commandcodeConfig"),
+      explain: EXPLAINS.commandcodeConfig,
       icon: "icon-commandcode.svg",
       cmds: CMDS.commandcodeConfig,
     },
@@ -262,7 +286,7 @@ function syncAgentCommands(visible) {
 }
 
 // 通用 Skill 场景：一条动态功能指令承载全部场景名（text 指令命中时 payload 就是那条文案），
-// 用户搜索「场景：写作」/「Scene: Writing」即可切换；场景增删改后由 common.js 重新注册。
+// 用户搜索「场景：写作」即可切换；场景增删改后由 common.js 重新注册。
 // 不再提供「场景：关闭」（手动模式已从界面与指令里移除）。
 const SKILL_SCENE_FEATURE_CODE = "switchSkillScene";
 
@@ -276,11 +300,11 @@ function getSkillSceneFeature() {
   if (!scenes.length) return null;
   const cmds = [];
   for (const scene of scenes) {
-    cmds.push(`场景：${scene.name}`, `Scene: ${scene.name}`);
+    cmds.push(`场景：${scene.name}`);
   }
   return {
     code: SKILL_SCENE_FEATURE_CODE,
-    explain: t("service.commands.explain.switchSkillScene"),
+    explain: EXPLAINS.switchSkillScene,
     icon: "gen.svg",
     cmds,
   };

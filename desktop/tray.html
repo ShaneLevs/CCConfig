@@ -2210,6 +2210,8 @@
   // ---------- 数据 ----------
   let renderSeq = 0
   let refreshing = false
+  // 通用统计采集（调用各 agent 的统计入口）较重，同一时间只跑一轮，避免连点页签排队
+  let usageRefreshing = false
 
   async function reload(options) {
     const shouldRefresh = !options || options.refresh !== false
@@ -2291,8 +2293,34 @@
     setTab(activeTab)
     reportHeight()
 
-    if (shouldRefresh && activeTab === 'usage') refreshSubscriptions(seq)
+    if (shouldRefresh && activeTab === 'usage') {
+      refreshSubscriptions(seq)
+      refreshUsageStats()
+    }
     return status
+  }
+
+  // 「用量」页画的是「通用统计」已落库的合并数据，托盘本身不解析各 agent 的源文件。
+  // 展开后停在用量页、或点进用量页时先触发一次后台采集（与主窗口通用统计页同一入口），
+  // 完成后再读库重画；否则这份数据只会停在主窗口上次打开通用统计时的快照。
+  async function refreshUsageStats() {
+    if (offline) return
+    if (activeTab === 'usage') usageRange.textContent = t('usageRefreshing')
+    if (usageRefreshing) return
+    usageRefreshing = true
+    try {
+      await rpc('collectCommonUsageAsync')
+      const usage = await rpc('readCommonUsageForTray', [60])
+      if (!Array.isArray(usage)) return
+      usageDays = usage
+      renderUsage()
+      if (activeTab === 'usage') reportHeight()
+    } catch (error) {
+      diag('tray-refresh-usage', error)
+      renderUsage()
+    } finally {
+      usageRefreshing = false
+    }
   }
 
   // 先展示缓存快照，再后台请求一次（service 层有 5 分钟节流）。
@@ -2395,9 +2423,12 @@
     const button = event.target.closest ? event.target.closest('[data-tab]') : null
     if (!button) return
     const next = button.dataset.tab
-    if (next === activeTab) return
-    setTab(next)
-    if (activeTab === 'usage') refreshSubscriptions(renderSeq)
+    // 再点一次当前「用量」页签也当作手动刷新：托盘没有单独的刷新按钮
+    if (next !== activeTab) setTab(next)
+    if (activeTab === 'usage') {
+      refreshSubscriptions(renderSeq)
+      refreshUsageStats()
+    }
   })
 
   modeSegment.addEventListener('click', (event) => {

@@ -44,6 +44,7 @@
       "chartByModel": "模型",
       "chartByAgent": "Agent",
       "usageEmpty": "暂无 Token 统计",
+      "usageRefreshing": "统计中…",
       "usageShare": "占当天 {percent}",
       "saveFailed": "保存失败，请重试",
       "chartOther": "其他"

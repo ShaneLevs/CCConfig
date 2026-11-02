@@ -20,7 +20,7 @@
 - **供应商/模型主数据** — 共享的供应商与模型库（API Key AES-256-CBC 加密），支持 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages / Google Generative AI 四类协议，一键下发到任意受支持的 agent
 - **本地网关** — 把选中的供应商/模型暴露在 `http://127.0.0.1:<port>`，对本机任意 agent 提供 Anthropic / OpenAI Chat / OpenAI Responses 三种协议，跨协议自动转换（含流式）；「模型映射」模式下用固定映射名（如 `pro` / `plus`）对外，换上游只改映射，响应里的 model 也会改写成映射名（默认开，可关），所以各 agent 的使用统计显示的是映射名而不是上游真实模型名
 - **MCP 管理** — 逐应用 MCP Server 配置 + 实时工具发现画布；通用配置里的共享 MCP 按机器开关镜像写入本地 JSON 文件
-- **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill，并用 skills 同级的 `.disabled` 停用目录启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
+- **Skill 与插件管理** — 从 SkillHub / 魔搭社区安装 Skill，或粘贴 skills.sh 详情页链接 / `npx skills add` 命令一键安装到 `~/.agents/skills`，并用 skills 同级的 `.disabled` 停用目录启停；管理 Claude Marketplace 插件、OpenCode plugin 数组、Pi Extension
 - **使用统计** — Token 用量、模型分布、GitHub 风格贡献墙热力图；通用统计页另有按天/按周堆叠的 Token 柱状图，可按模型或 Agent 拆分看用量构成
 - **订阅用量** — 手动添加已订阅的服务（目前 open-design），用本机浏览器的登录态代查 5 小时／周额度，同时显示在桌面版托盘面板
 - **批量编辑 / 导入导出 / 外观** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出；外观支持跟随系统 / 固定浅色 / 固定深色，深色下可选动态背景特效
@@ -79,7 +79,7 @@ $env:CCCONFIG_NODE = (Get-Command node).Source
 
 ## 使用方式
 
-uTools 中输入关键词唤起对应应用：`CCConfig` / `通用配置`（指向通用配置）、`Claude Code配置`、`OpenCode配置`、`Pi Agents配置`、`omp配置`、`Reasonix配置`、`Codex配置`、`Kimi Code配置`、`MiniMax Code配置`、`dsh配置`。粘贴 SkillHub / 魔搭链接进入 Skill 安装；`pi install <包名>` 进入 Pi Extension 安装。
+uTools 中输入关键词唤起对应应用：`CCConfig` / `通用配置`（指向通用配置）、`Claude Code配置`、`OpenCode配置`、`Pi Agents配置`、`omp配置`、`Reasonix配置`、`Codex配置`、`Kimi Code配置`、`MiniMax Code配置`、`dsh配置`。粘贴 SkillHub / 魔搭链接、skills.sh 详情页链接或 `npx skills add` 命令进入 Skill 安装；`pi install <包名>` 进入 Pi Extension 安装。
 
 独立桌面应用没有搜索框：启动后进入「通用配置」，通过左侧栏切换应用。
 

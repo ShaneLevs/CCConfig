@@ -52,8 +52,18 @@ const buildEvaluation = (data) => {
   return { total: Math.round(total * 10) / 10 };
 };
 
+// skills.sh 安装入口：详情页链接或 `npx skills add` 命令
+const SKILLS_SH_URL_RE = /^https?:\/\/(?:www\.)?skills\.sh\/\S+/i;
+const SKILLS_SH_COMMAND_RE =
+  /(?:^|\s)npx\s+(?:(?:-y|--yes)\s+)?skills(?:@[^\s]+)?\s+add\s+\S+/i;
+const isSkillsShInput = (value) =>
+  SKILLS_SH_URL_RE.test(String(value || '').trim()) ||
+  SKILLS_SH_COMMAND_RE.test(String(value || '').trim());
+
 export function useSkillInstall(loadSkills, config = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  // 只有提供 skills.sh 服务的页面（通用 Skill）才展示对应入口
+  const supportsSkillsSh = !!(cfg.fetchSkillsShInfo && cfg.installSkillsShSkill);
 
   const showInstallDialog = ref(false);
   const installUrl = ref("");
@@ -147,6 +157,19 @@ export function useSkillInstall(loadSkills, config = {}) {
     }
   };
 
+  const doFetchSkillsShInfo = async (input) => {
+    isFetchingInfo.value = true;
+    installInfo.value = null;
+    try {
+      const info = await window.services[cfg.fetchSkillsShInfo](input);
+      installInfo.value = { ...info, source: 'skills-sh', input };
+    } catch (e) {
+      MessagePlugin.error(t('skill.fetchFailed', { message: e.message }));
+    } finally {
+      isFetchingInfo.value = false;
+    }
+  };
+
   watch(installUrl, (newVal) => {
     if (fetchTimer) {
       clearTimeout(fetchTimer);
@@ -154,10 +177,19 @@ export function useSkillInstall(loadSkills, config = {}) {
     }
     if (installInfo.value) installInfo.value = null;
 
-    const result = extractSlug(newVal.trim());
+    const text = newVal.trim();
+    if (!text) return;
+
+    // 通用 Skill 安装框额外接受 skills.sh 链接 / npx 命令（输入停顿后再解析）
+    if (supportsSkillsSh && isSkillsShInput(text)) {
+      fetchTimer = setTimeout(() => doFetchSkillsShInfo(text), 500);
+      return;
+    }
+
+    const result = extractSlug(text);
     if (!result) return;
 
-    const isCompleteUrl = newVal.includes('skillhub.') || newVal.includes('modelscope.cn');
+    const isCompleteUrl = text.includes('skillhub.') || text.includes('modelscope.cn');
     if (isCompleteUrl) {
       doFetchSkillInfo(result);
     } else {
@@ -210,13 +242,27 @@ export function useSkillInstall(loadSkills, config = {}) {
           installInfo.value.slug,
           (progress) => { installProgress.value = progress; }
         );
+      } else if (installInfo.value.source === 'skills-sh') {
+        result = await window.services[cfg.installSkillsShSkill](
+          installInfo.value.input,
+          false,
+        );
       }
 
-      pendingInstall.value = result;
+      pendingInstall.value = {
+        ...result,
+        source: installInfo.value.source,
+        input: installInfo.value.input,
+      };
 
       if (result.exists) {
         showInstallDialog.value = false;
         showOverwriteDialog.value = true;
+      } else if (installInfo.value.source === 'skills-sh') {
+        // skills.sh 由官方 CLI 直接写入 ~/.agents/skills，无需再移动临时目录
+        MessagePlugin.success(t('skill.installSuccess', { name: result.skillName }));
+        showInstallDialog.value = false;
+        loadSkills();
       } else {
         window.services[cfg.completeSkillInstall](result.skillName, result.extractDir);
         MessagePlugin.success(t('skill.installSuccess', { name: result.skillName }));
@@ -225,14 +271,32 @@ export function useSkillInstall(loadSkills, config = {}) {
       }
     } catch (e) {
       MessagePlugin.error(t('skill.installFailed', { message: e.message }));
-      window.services[cfg.cancelSkillInstall]();
+      if (installInfo.value.source !== 'skills-sh') window.services[cfg.cancelSkillInstall]();
     } finally {
       isInstalling.value = false;
     }
   };
 
-  const overwriteInstall = () => {
+  const overwriteInstall = async () => {
     if (!pendingInstall.value) return;
+    if (pendingInstall.value.source === 'skills-sh') {
+      isInstalling.value = true;
+      try {
+        const result = await window.services[cfg.installSkillsShSkill](
+          pendingInstall.value.input,
+          true,
+        );
+        MessagePlugin.success(t('skill.overwriteSuccess', { name: result.skillName }));
+        pendingInstall.value = null;
+        showOverwriteDialog.value = false;
+        loadSkills();
+      } catch (e) {
+        MessagePlugin.error(t('skill.installFailed', { message: e.message }));
+      } finally {
+        isInstalling.value = false;
+      }
+      return;
+    }
     window.services[cfg.completeSkillInstall](
       pendingInstall.value.skillName,
       pendingInstall.value.extractDir
@@ -244,7 +308,7 @@ export function useSkillInstall(loadSkills, config = {}) {
   };
 
   const cancelInstall = () => {
-    if (pendingInstall.value) {
+    if (pendingInstall.value && pendingInstall.value.source !== 'skills-sh') {
       window.services[cfg.cancelSkillInstall](pendingInstall.value.extractDir);
     }
     pendingInstall.value = null;
@@ -260,6 +324,7 @@ export function useSkillInstall(loadSkills, config = {}) {
     installProgress,
     pendingInstall,
     showOverwriteDialog,
+    supportsSkillsSh,
     openInstallDialog,
     openInstallWithUrl,
     openExternal,

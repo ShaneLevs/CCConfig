@@ -26,6 +26,7 @@ use tauri::{
 };
 
 use node_runtime::NodeRuntime;
+use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 
 const MAIN_WINDOW: &str = "main";
@@ -71,6 +72,45 @@ struct TrayAnchor {
     y: f64,
     width: f64,
     height: f64,
+}
+
+/// 客户端偏好（设置 → 客户端）。放在 DB 之外，因为 macOS 的 Dock 图标状态
+/// 必须在 sidecar 就绪前、创建主窗口前读出来。
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct ClientPrefs {
+    hide_dock_icon: bool,
+}
+
+fn client_prefs_path() -> PathBuf {
+    data_dir().join("client.json")
+}
+
+fn read_client_prefs() -> ClientPrefs {
+    std::fs::read_to_string(client_prefs_path())
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn write_client_prefs(prefs: &ClientPrefs) -> Result<(), String> {
+    let dir = data_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建数据目录失败: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    }
+    let body = serde_json::to_vec_pretty(prefs).map_err(|e| e.to_string())?;
+    let tmp = dir.join("client.json.tmp");
+    std::fs::write(&tmp, body).map_err(|e| format!("写入客户端设置失败: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("设置文件权限失败: {e}"))?;
+    }
+    std::fs::rename(&tmp, client_prefs_path()).map_err(|e| format!("写入客户端设置失败: {e}"))
 }
 
 #[derive(Default)]
@@ -680,6 +720,32 @@ fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// 设置 → 客户端 → 隐藏 Dock 图标（仅 macOS 显示；其他平台恒为 false）。
+#[tauri::command]
+fn get_hide_dock_icon() -> bool {
+    read_client_prefs().hide_dock_icon
+}
+
+#[tauri::command]
+fn set_hide_dock_icon(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut prefs = read_client_prefs();
+    let previous = prefs.hide_dock_icon;
+    prefs.hide_dock_icon = enabled;
+    write_client_prefs(&prefs)?;
+
+    #[cfg(target_os = "macos")]
+    if let Err(e) = app.set_dock_visibility(!enabled) {
+        // 切换失败时回滚已保存的值，避免下次启动与当前状态不一致
+        prefs.hide_dock_icon = previous;
+        let _ = write_client_prefs(&prefs);
+        return Err(format!("切换 Dock 图标失败: {e}"));
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (&app, enabled);
+
+    Ok(())
+}
+
 /// 引导页展示的失败原因：`kind` 决定标题（node = 没找到 Node，sidecar = 起不来），
 /// `reason` / `tried` 让用户不必翻日志就能看到实际原因。
 fn build_guide_window(
@@ -1029,13 +1095,26 @@ fn main() {
             tray_popup_resize,
             tray_popup_hide,
             get_autostart,
-            set_autostart
+            set_autostart,
+            get_hide_dock_icon,
+            set_hide_dock_icon
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             // 由登录项拉起时不弹主窗口，只留托盘（网关继续工作）
             let launched_at_login = std::env::args().any(|arg| arg == AUTOSTART_ARG);
             migrate_legacy_data();
+
+            // macOS：按上次的客户端设置隐藏 Dock 图标。放在建窗口之前，
+            // 否则启动瞬间会先出现 Dock 图标再消失。
+            #[cfg(target_os = "macos")]
+            let hide_dock_icon = read_client_prefs().hide_dock_icon;
+            #[cfg(target_os = "macos")]
+            if hide_dock_icon {
+                if let Err(e) = handle.set_dock_visibility(false) {
+                    eprintln!("[ccconfig] 隐藏 Dock 图标失败: {e}");
+                }
+            }
 
             let sidecar_dir = resolve_sidecar_dir(&handle);
             let (node, tried) = node_runtime::detect();
@@ -1092,6 +1171,12 @@ fn main() {
                         *guard = Some(started);
                     }
                     build_main_window(&handle, port, &token, !launched_at_login)?;
+                    // 再应用一次：Tao 的隐藏 Dock 会把「当时已存在」的窗口设为 canHide=false，
+                    // 建窗口前调用时还没有窗口，这里补上，避免 Cmd+H 把主窗口藏起来。
+                    #[cfg(target_os = "macos")]
+                    if hide_dock_icon {
+                        let _ = handle.set_dock_visibility(false);
+                    }
                     // 弹窗常驻隐藏：页面在后台加载、量高度，首次点托盘零等待。
                     // 失败不致命：左键回落到直接打开主窗口。
                     if let Err(e) = build_tray_popup(&handle, port, &token) {

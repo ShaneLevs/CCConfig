@@ -29,7 +29,21 @@
       "downloadEmpty": "Downloaded file is missing or empty",
       "downloadMissing": "Downloaded file not found",
       "downloadTooSmall": "Downloaded file is too small; the download may have failed",
-      "fetchFailed": "Fetch failed"
+      "fetchFailed": "Fetch failed",
+      "skillsSh": {
+        "invalidInput": "Enter a skills.sh skill page URL or an npx skills add command",
+        "timeout": "Request timed out",
+        "sourceUnsupported": "{source} does not support one-click install",
+        "nodeMissing": "Node.js was not found. Install Node.js {required} or newer (npx is required).",
+        "nodeTooOld": "Installing through npx requires Node.js {required} or newer; found {version}. Upgrade Node.js and retry.",
+        "npxMissing": "npx was not found. Install Node.js {required} or newer (including npm/npx).",
+        "npxFailed": "npx install failed: {message}",
+        "npxUnknownError": "Unknown error",
+        "installTimeout": "npx install timed out. Check your network and retry.",
+        "installDirMissing": "npx finished, but no skill directory was found under ~/.agents/skills ({name}).",
+        "invalidInstallTarget": "The install source URL is invalid",
+        "invalidSkillName": "The skill name contains unsupported characters and cannot be installed through npx"
+      }
     },
     "skillScene": {
       "notFound": "Scene not found",
@@ -110,35 +124,6 @@
       "unknownTargetAgent": "Unknown target agent",
       "routeMappingRequired": "Add a model mapping in Common Config · Gateway first",
       "routeModelsRequired": "Select the models to expose through the gateway in Common Config · Auto Gateway first"
-    },
-    "commands": {
-      "explain": {
-        "claudeConfig": "Manage Claude Code configuration",
-        "installClaudeSkill": "Install a Claude Code skill from SkillHub / ModelScope",
-        "opencodeConfig": "Manage OpenCode configuration",
-        "installOpencodeSkill": "Install an OpenCode skill from SkillHub / ModelScope",
-        "piConfig": "Manage Pi Agent configuration",
-        "installPiExtension": "Install a Pi Agent extension",
-        "ompConfig": "Manage omp CLI configuration",
-        "reasonixConfig": "Manage Reasonix configuration",
-        "codexConfig": "Manage Codex model configuration (Desktop / CLI)",
-        "kimiConfig": "Manage Kimi Code model configuration",
-        "minimaxConfig": "Manage MiniMax Code model configuration (CLI / Desktop)",
-        "qoderConfig": "Manage Qoder model configuration",
-        "zcodeConfig": "Manage ZCode model configuration",
-        "hermesConfig": "Manage Hermes model configuration",
-        "dshConfig": "Manage DSH (DeepSeek Harness) model configuration",
-        "grokConfig": "Grok Build (xAI CLI) model / MCP / skill configuration manager",
-        "clineConfig": "Cline (CLI / desktop) provider / model / MCP / skill configuration manager",
-        "commandcodeConfig": "Command Code model / MCP / skill / taste configuration manager",
-        "switchSkillScene": "Switch the common Skill scene (enables only its bound skills)"
-      },
-      "label": {
-        "installClaudeSkill": "Install Claude Code Skill",
-        "installOpencodeSkill": "Install OpenCode Skill",
-        "installPiExtension": "Install Pi Agent Extension",
-        "installCommandCodeSkill": "Install Command Code Skill"
-      }
     },
     "subscription": {
       "trayTitle": "Subscription usage",

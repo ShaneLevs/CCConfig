@@ -1,6 +1,6 @@
 {
   "name": "CCConfig",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "main": "index.html",
   "preload": "preload/services.js",
   "logo": "logo.png",
@@ -10,21 +10,35 @@
   "features": [
     {
       "code": "commonConfig",
-      "explain": "通用配置（跨 agent 主数据） / Common configuration (cross-agent master data)",
+      "explain": "通用配置（跨 agent 主数据）",
       "icon": "gen.svg",
-      "cmds": ["CCConfig", "通用配置", "Common Config"]
+      "cmds": ["CCConfig", "通用配置"]
     },
     {
       "code": "installCommonSkill",
-      "explain": "从 SkillHub/魔搭社区 安装通用 Skill（~/.agents/skills） / Install a common skill from SkillHub / ModelScope",
+      "explain": "从 SkillHub/魔搭社区/skills.sh 安装通用 Skill（~/.agents/skills）",
       "icon": "gen.svg",
       "cmds": [
         {
           "type": "regex",
-          "label": "安装通用 Skill / Install common Skill",
+          "label": "安装通用 Skill",
           "match": "/^https:\\/\\/(www\\.)?(skillhub\\.(tencent\\.com|cn)\\/skills\\/[\\w-]+(\\/[\\w-]+)?|modelscope\\.cn\\/skills\\/@[\\w-]+\\/[\\w-]+)$/",
           "minLength": 30,
           "maxLength": 200
+        },
+        {
+          "type": "regex",
+          "label": "安装通用 Skill（skills.sh 链接）",
+          "match": "/^https:\\/\\/(www\\.)?skills\\.sh\\/(site\\/[\\w.-]+\\/[\\w./-]+|[\\w.-]+\\/[\\w.-]+\\/[\\w./-]+)$/",
+          "minLength": 30,
+          "maxLength": 300
+        },
+        {
+          "type": "regex",
+          "label": "安装通用 Skill（npx 命令）",
+          "match": "/^npx\\s+(?:-y\\s+|--yes\\s+)?skills(?:@[\\w.-]+)?\\s+add\\s+\\S+/",
+          "minLength": 15,
+          "maxLength": 500
         }
       ]
     }

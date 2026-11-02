@@ -20,7 +20,7 @@ It gives fifteen AI coding CLIs a single place to manage API providers, models, 
 - **Provider/model master data** — a shared provider and model database (AES-256-CBC encrypted keys) supporting OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative AI; dispatch it into any supported agent with one click
 - **Local gateway** — expose selected providers/models at `http://127.0.0.1:<port>` and speak Anthropic, OpenAI Chat or OpenAI Responses to any local agent, with automatic cross-protocol conversion including streaming
 - **MCP management** — per-app MCP server config plus a live tool-discovery canvas; shared MCP servers in Common Config mirror into local JSON files with a per-machine enable switch
-- **Skill & plugin management** — install skills from SkillHub / ModelScope, toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
+- **Skill & plugin management** — install skills from SkillHub / ModelScope, or paste a skills.sh skill page URL / `npx skills add` command to install into `~/.agents/skills`; toggle them via the `.disabled` mechanism; manage Claude Marketplace plugins, OpenCode plugin arrays and Pi extensions
 - **Usage analytics** — token usage, model distribution and GitHub-style contribution heatmaps, aggregated across agents in one view
 - **Subscription quota** — manually add services you subscribe to (open-design today), read their 5-hour / weekly quota with your local browser's sign-in and mirror it into the desktop menu bar
 - **Batch edit, import/export, appearance** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and a three-mode appearance setting (follow system / light / dark) with optional dark-mode animated backgrounds
@@ -79,7 +79,7 @@ $env:CCCONFIG_NODE = (Get-Command node).Source
 
 ## Usage
 
-In uTools, type a keyword to open the matching app — `CCConfig` / `通用配置` (Common Config), `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link opens Skill install; `pi install <package>` opens Pi extension install.
+In uTools, type a keyword to open the matching app — `CCConfig` / `通用配置`, `Claude Code配置`, `OpenCode配置`, `Pi Agents配置`, `omp配置`, `Reasonix配置`, `Codex配置`, `Kimi Code配置`, `MiniMax Code配置`, `dsh配置`. Pasting a SkillHub / ModelScope link, a skills.sh skill page URL or an `npx skills add` command opens Skill install; `pi install <package>` opens Pi extension install.
 
 The desktop app has no search box: it opens on Common Config and you switch apps from the left rail.
 
