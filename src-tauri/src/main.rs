@@ -24,6 +24,7 @@ use tauri::{
     LogicalSize, Manager, PhysicalPosition, Position, RunEvent, Size, WebviewUrl,
     WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_updater::UpdaterExt;
 
 use node_runtime::NodeRuntime;
 use serde::{Deserialize, Serialize};
@@ -111,6 +112,51 @@ fn write_client_prefs(prefs: &ClientPrefs) -> Result<(), String> {
             .map_err(|e| format!("设置文件权限失败: {e}"))?;
     }
     std::fs::rename(&tmp, client_prefs_path()).map_err(|e| format!("写入客户端设置失败: {e}"))
+}
+
+/// 设置 → 关于 → 自动更新。进度存在 Rust 侧，前端在安装命令执行期间轮询。
+#[derive(Default)]
+struct UpdateState {
+    progress: Mutex<UpdateProgress>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProgress {
+    /// idle / downloading / installing / ready / error
+    stage: String,
+    downloaded: u64,
+    total: Option<u64>,
+}
+
+impl Default for UpdateProgress {
+    fn default() -> Self {
+        Self {
+            stage: "idle".to_string(),
+            downloaded: 0,
+            total: None,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateCheck {
+    available: bool,
+    current_version: String,
+    version: Option<String>,
+    notes: Option<String>,
+    date: Option<String>,
+}
+
+fn set_update_progress(app: &tauri::AppHandle, stage: &str, downloaded: u64, total: Option<u64>) {
+    if let Some(state) = app.try_state::<UpdateState>() {
+        if let Ok(mut progress) = state.progress.lock() {
+            progress.stage = stage.to_string();
+            progress.downloaded = downloaded;
+            progress.total = total;
+        }
+    }
 }
 
 #[derive(Default)]
@@ -746,6 +792,82 @@ fn set_hide_dock_icon(app: tauri::AppHandle, enabled: bool) -> Result<(), String
     Ok(())
 }
 
+/// 设置 → 关于 → 检查更新。端点与公钥来自 tauri.conf.json 的 `plugins.updater`。
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<UpdateCheck, String> {
+    let current_version = app.package_info().version.to_string();
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(UpdateCheck {
+            available: true,
+            current_version,
+            version: Some(update.version.clone()),
+            notes: update.body.clone(),
+            date: update.date.map(|d| d.to_string()),
+        }),
+        Ok(None) => Ok(UpdateCheck {
+            available: false,
+            current_version,
+            version: None,
+            notes: None,
+            date: None,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// 下载并安装更新。下载进度写入 UpdateState，前端用 get_update_progress 轮询。
+/// macOS 安装完成后需调用 restart_app；Windows 由安装器负责重启应用。
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No update available".to_string())?;
+
+    set_update_progress(&app, "downloading", 0, None);
+    let progress_app = app.clone();
+    let install_app = app.clone();
+    let result = update
+        .download_and_install(
+            move |downloaded, total| {
+                set_update_progress(&progress_app, "downloading", downloaded as u64, total);
+            },
+            move || {
+                set_update_progress(&install_app, "installing", 0, None);
+            },
+        )
+        .await;
+
+    match result {
+        Ok(()) => {
+            set_update_progress(&app, "ready", 0, None);
+            Ok(())
+        }
+        Err(e) => {
+            set_update_progress(&app, "error", 0, None);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn get_update_progress(state: tauri::State<UpdateState>) -> UpdateProgress {
+    state
+        .progress
+        .lock()
+        .map(|progress| progress.clone())
+        .unwrap_or_default()
+}
+
+/// 重启应用，让 macOS 已替换的 .app 生效。
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    app.restart();
+}
+
 /// 引导页展示的失败原因：`kind` 决定标题（node = 没找到 Node，sidecar = 起不来），
 /// `reason` / `tried` 让用户不必翻日志就能看到实际原因。
 fn build_guide_window(
@@ -1090,6 +1212,7 @@ fn main() {
                 .arg(AUTOSTART_ARG)
                 .build(),
         )
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             tray_popup_action,
             tray_popup_resize,
@@ -1097,7 +1220,11 @@ fn main() {
             get_autostart,
             set_autostart,
             get_hide_dock_icon,
-            set_hide_dock_icon
+            set_hide_dock_icon,
+            check_update,
+            install_update,
+            get_update_progress,
+            restart_app
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -1137,6 +1264,7 @@ fn main() {
                 sidecar_dir: sidecar_dir.clone(),
             });
             app.manage(TrayPopupState::default());
+            app.manage(UpdateState::default());
 
             // 托盘先建，保证即使 sidecar 起不来用户也有入口
             if let Err(e) = setup_tray(&handle) {

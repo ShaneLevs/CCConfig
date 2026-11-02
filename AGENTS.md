@@ -20,6 +20,8 @@ npm run bump -- 1.0.2  # 同步 5 处版本号，勿手改单个文件
 
 版本号落点：`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`public/plugin.json`。`scripts/version-files.mjs` 是唯一清单。发版顺序：`bump` → `version:check` → 提交推送 → 小写 `vX.Y.Z` tag → `gh release create --generate-notes`。Release 发布后 CI 用 macOS / Windows runner 构建 dmg 与 NSIS exe 并覆盖上传同名资产；workflow 必须已在 `main`。uTools 仍手动上传 `dist/`。tag 必须等于 `v` + `package.json` 版本。CI 失败可 `gh run rerun <id> --failed`；兜底本地 `tauri:build` 后 `gh release upload --clobber`。
 
+自动更新（设置 → 关于）依赖 GitHub Release 的 `latest.json` 与签名更新包。CI 需要 Secret `TAURI_SIGNING_PRIVATE_KEY`（私钥有密码时再加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）；未配置时跳过更新包、普通安装包照常发布。公钥在 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`，私钥与公钥必须成对，丢失私钥后只能换新密钥并让用户重新安装一次。
+
 ## 核心结构
 
 - **Fat Preload**：文件、网络、子进程都在 `public/preload/services/`；`services.js` 只装配 `window.services`，公开 API 面保持稳定。Vite 的 `bundlePreloadPlugin` 用 esbuild 打成 CJS/node18 的 `dist/preload/services.js`；`usage-worker.js` 必须独立打包。

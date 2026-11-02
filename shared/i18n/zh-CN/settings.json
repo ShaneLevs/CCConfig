@@ -20,7 +20,21 @@
       }
     },
     "about": {
-      "desc": "多应用 AI 编程助手配置管理与切换工具"
+      "desc": "多应用 AI 编程助手配置管理与切换工具",
+      "update": {
+        "idle": "检查是否有新版本",
+        "checking": "正在检查更新…",
+        "latest": "已是最新版本 v{version}",
+        "downloading": "正在下载更新 {progress}%",
+        "downloadingUnknown": "正在下载更新…",
+        "installing": "正在安装更新…",
+        "ready": "更新已下载，重启后生效",
+        "check": "检查更新",
+        "retry": "重试",
+        "restart": "重启并安装",
+        "failed": "检查更新失败，请稍后重试。",
+        "installFailed": "下载更新失败，请稍后重试。"
+      }
     },
     "language": {
       "title": "语言",

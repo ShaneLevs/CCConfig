@@ -704,6 +704,14 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
   视为存活；单次 `ESRCH` 就 `process.exit(0)` 会让正常启动的应用掉到引导页。
 - 托盘「重启网关」现在也会在主窗口缺失时重建主窗口并关掉引导页（`restart_sidecar`），不必重开应用。
 
+### 自动更新（桌面版）
+
+- 入口：设置 → 关于（仅桌面版渲染）。`src/composables/useAppUpdate.js` 打开页签时自动检查，发现新版本后直接下载；下载完成显示「重启并安装」。
+- 实现：Rust 侧 `tauri-plugin-updater`（`check_update` / `install_update` / `get_update_progress` / `restart_app`），进度存 `UpdateState`，前端在安装命令执行期间轮询，不依赖 Tauri 事件 API。
+- 清单：更新源为 `https://github.com/ShaneLevs/CCConfig/releases/latest/download/latest.json`。CI 在 macOS / Windows 构建完成后由 `scripts/generate-updater-manifest.mjs` 合并各平台 `.sig` 生成并上传 `latest.json`。
+- 签名：公钥写在 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；私钥放 GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY`（无密码时不需要 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。未配置私钥时 CI 会跳过 `createUpdaterArtifacts`，普通 dmg / exe 仍可发布，但自动更新不可用。
+- 本地验证：`npm run build:app` 后执行 `npx tauri build --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true}}'`，需先设置 `TAURI_SIGNING_PRIVATE_KEY`。macOS 必须带 `app` 目标，只打 dmg 不会生成 `.app.tar.gz`。
+
 ## 认证与模型选择细节
 
 ### Claude 认证方式
