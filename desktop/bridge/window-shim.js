@@ -282,6 +282,9 @@
     isLinux: () => /Linux/i.test(navigator.userAgent),
   };
 
+  // 前端统一通过 window.ccconfigDb 访问共享本地库（uTools 版由 preload 注入同一对象）
+  window.ccconfigDb = window.utools.db;
+
   // 供调试：在控制台查看 sidecar 是否可达
   window.__ccconfigDiag = () => {
     try {

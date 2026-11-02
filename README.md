@@ -96,6 +96,26 @@ npm run tauri:build  # 桌面版打包 → release/*.dmg（macOS）或 *-setup.e
 
 两个发行版共用 `src/` 与 `public/preload/`，只有外壳不同。架构说明与维持这一点的约束见 [AGENTS.md](AGENTS.md) 与 [docs/architecture.md](docs/architecture.md)。
 
+## 发版（维护者）
+
+```bash
+npm run bump -- X.Y.Z   # 同步 5 处版本号，勿手改单个文件
+npm run version:check
+npm run i18n:check
+npm run routes:check
+npm test
+npm run build
+# 提交本次发布改动并推送 main，然后：
+git tag vX.Y.Z && git push origin vX.Y.Z
+gh release create vX.Y.Z --generate-notes
+```
+
+- tag 必须等于 `v` + `package.json` 版本；发布正式 Release（非 draft / prerelease），才会触发桌面版构建并进入 `releases/latest`。
+- 桌面版自动更新依赖 Actions Secret `TAURI_SIGNING_PRIVATE_KEY`，私钥必须与 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey` 成对；私钥有密码时再加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。Secret 缺失时只发布普通安装包，不会生成更新包。
+- CI 的 `updater-manifest` job 会合并各平台 `.sig` 并上传 `latest.json`。发布后确认 Release 包含 dmg / exe / `.app.tar.gz` / `.sig` / `latest.json`。
+- 更新源：`https://github.com/ShaneLevs/CCConfig/releases/latest/download/latest.json`。版本号只增不减，不要复用或覆盖同一版本的 tag / 资产；发坏了升补丁版本重发。
+- macOS 更新包需要 `app` 构建目标（workflow 已用 `--bundles app,dmg`）；uTools 插件仍需手动上传 `dist/`。
+
 ## 技术栈
 
 渲染层 Vue 3 + Vite + TDesign Vue Next；文案用 vue-i18n 与共享的 `shared/i18n` JSON（Vue / preload / Rust 三端共用）。文件读写与网络请求全部在打包后的 preload 里，经 uTools API 或 Tauri v2 Node sidecar 暴露。配置解析用 json5 / js-yaml / smol-toml；MCP 工具发现用 `@modelcontextprotocol/sdk`；背景特效用 ogl。

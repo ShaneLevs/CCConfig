@@ -18,6 +18,7 @@
 // 「通用配置」（commonConfig / installCommonSkill）为静态声明，永不参与启停。
 //
 // 指令文案固定中文：uTools 插件只服务国内用户，不跟随界面语言，也不提供英文别名。
+const db = require('./db')
 const SKILL_URL_REGEX =
   "/^https:\\/\\/(www\\.)?(skillhub\\.(tencent\\.com|cn)\\/skills\\/[\\w-]+(\\/[\\w-]+)?|modelscope\\.cn\\/skills\\/@[\\w-]+\\/[\\w-]+)$/";
 
@@ -231,7 +232,7 @@ const VISIBLE_AGENTS_DB_BASE = "ccconfig_visible_agents";
 
 function getNativeId() {
   try {
-    return window.utools.getNativeId() || "";
+    return db.getNativeId() || "";
   } catch (e) {
     return "";
   }
@@ -330,10 +331,10 @@ function initFromDb() {
     try {
       const docId = visibleAgentsDocId();
       let doc = null;
-      try { doc = window.utools.db.get(docId); } catch (e) { /* ignore */ }
+      try { doc = db.get(docId); } catch (e) { /* ignore */ }
       // 本机尚无记录：回退读旧版共享文档（旧文档可能仍含其他机器的状态，仅作种子）
       if (!doc && docId !== VISIBLE_AGENTS_DB_BASE) {
-        try { doc = window.utools.db.get(VISIBLE_AGENTS_DB_BASE); } catch (e) { /* ignore */ }
+        try { doc = db.get(VISIBLE_AGENTS_DB_BASE); } catch (e) { /* ignore */ }
       }
       visible = doc && doc.visible ? doc.visible : null;
     } catch (e) {

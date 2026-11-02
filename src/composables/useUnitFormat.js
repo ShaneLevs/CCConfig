@@ -5,7 +5,7 @@ import { formatStatNumber, STAT_UNIT_CN, STAT_UNIT_COMPACT } from '../utils/form
 // 按机器隔离（_<nativeId> 后缀），与语言 / 外观偏好一致。
 const getNativeId = () => {
   try {
-    return window.utools?.getNativeId?.() || ''
+    return window.services?.getNativeId?.() || ''
   } catch (e) {
     return ''
   }
@@ -20,7 +20,7 @@ const unitMode = ref(STAT_UNIT_COMPACT)
 
 const readDoc = () => {
   try {
-    return window.utools?.db?.get(DOC_ID) || null
+    return window.ccconfigDb?.get(DOC_ID) || null
   } catch (e) {
     return null
   }
@@ -28,10 +28,10 @@ const readDoc = () => {
 
 const saveDoc = (tries = 0) => {
   try {
-    const existing = window.utools?.db?.get(DOC_ID) || null
+    const existing = window.ccconfigDb?.get(DOC_ID) || null
     const doc = { _id: DOC_ID, unit: unitMode.value }
     if (existing?._rev) doc._rev = existing._rev
-    const res = window.utools?.db?.put(doc)
+    const res = window.ccconfigDb?.put(doc)
     if (res && res.error && res.name === 'conflict' && tries < 1) {
       return saveDoc(tries + 1)
     }

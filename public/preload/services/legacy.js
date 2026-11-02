@@ -24,10 +24,21 @@ const EXPORT_APP_FIELD = 'ccswitch'
 // 网关响应头：掉落/被拒的候选数量提示。新名为主，同时补发旧名，避免外部脚本失效。
 const GATEWAY_LEFT_OUT_HEADER = 'x-ccswitch-left-out'
 
+// 桌面版数据目录环境变量（旧名）。local-db.js 读取，新名 CCCONFIG_DATA_DIR 优先。
+const DATA_DIR_ENV = 'CCSWITCH_DATA_DIR'
+
+// 设备 ID 文档名与哈希种子。**绝不能改**：改了会重算出新的 nativeId，
+// 所有 `_<nativeId>` 文档（统计、外观、显隐、语言、单位）都会孤儿化。
+const RUNTIME_ID_DOC = 'ccswitch_runtime_id'
+const NATIVE_ID_SEED_SUFFIX = 'ccswitch-desktop'
+
 module.exports = {
   DOC_ID_PREFIX,
   ENCRYPTION_SALT,
   CODEX_MODEL_DESCRIPTION,
   EXPORT_APP_FIELD,
   GATEWAY_LEFT_OUT_HEADER,
+  DATA_DIR_ENV,
+  RUNTIME_ID_DOC,
+  NATIVE_ID_SEED_SUFFIX,
 }

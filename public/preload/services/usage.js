@@ -1,6 +1,7 @@
 // 共享 JSONL 处理管线 — Claude / Pi 复用
 // 导出处理函数和工具，调用方传入 schema 映射函数适配各自格式
 
+const db = require('./db')
 const { getNativeId } = require('./config')
 
 // 日期键必须是「本地日期」：热力图按本地日期铺格子，而各 agent 的日期口径有两套——
@@ -138,9 +139,9 @@ const saveAgentUsage = (agent, contributions) => {
     }
     if (Object.keys(days).length === 0) return false
     const doc = { _id: docId, nativeId: getNativeId(), agent, days, updatedAt: Date.now() }
-    const existing = window.utools.db.get(docId)
+    const existing = db.get(docId)
     if (existing) doc._rev = existing._rev
-    window.utools.db.put(doc)
+    db.put(doc)
     return true
   } catch (error) {
     console.error('[agent usage] 落库失败:', agent, error)
@@ -151,7 +152,7 @@ const saveAgentUsage = (agent, contributions) => {
 // 读单个 agent 的落库聚合（DSH 统计页把它当历史档，合并进当天统计）
 const readAgentUsage = (agent) => {
   try {
-    const doc = window.utools.db.get(agentUsageDocId(agent))
+    const doc = db.get(agentUsageDocId(agent))
     return doc?.days || {}
   } catch (error) {
     console.error('[agent usage] 读库失败:', agent, error)
@@ -170,7 +171,7 @@ const readAllAgentUsage = () => {
   const dayMap = new Map()
   for (const agent of AGENT_USAGE_IDS) {
     try {
-      const doc = window.utools.db.get(agentUsageDocId(agent))
+      const doc = db.get(agentUsageDocId(agent))
       if (!doc?.days) continue
       const dayCount = Object.keys(doc.days).length
       if (dayCount === 0) continue
@@ -258,7 +259,7 @@ const readAllAgentUsage = () => {
 // 无历史返回 null。返回形状与 UsagePage fetcher 契约一致。
 const readAgentUsageFromHistory = (agent) => {
   try {
-    const doc = window.utools.db.get(agentUsageDocId(agent))
+    const doc = db.get(agentUsageDocId(agent))
     const days = doc?.days || {}
     const dates = Object.keys(days)
     if (dates.length === 0) return null

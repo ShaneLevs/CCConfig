@@ -1,3 +1,4 @@
+const db = require('./db')
 const fs = require('node:fs')
 const path = require('node:path')
 const { decompress } = require('fzstd')
@@ -378,11 +379,11 @@ const buildStats = () => {
 // ==================== 缓存 ====================
 // 会话文件可能累计到很大，按「文件数 + 总字节 + 最新 mtime」做签名，命中即跳过解压；
 // 文档按机器隔离（同 usage_cache / heatmap 先例）。无 uTools 环境（单测）时自动跳过。
-const cacheDocId = () => `ccconfig_dsh_usage_cache_${window.utools.getNativeId()}`
+const cacheDocId = () => `ccconfig_dsh_usage_cache_${db.getNativeId()}`
 
 const getCache = () => {
   try {
-    const doc = window.utools.db.get(cacheDocId())
+    const doc = db.get(cacheDocId())
     return doc && doc.stats ? doc : null
   } catch {
     return null
@@ -393,9 +394,9 @@ const saveCache = (signature, stats) => {
   try {
     const docId = cacheDocId()
     const doc = { _id: docId, signature, stats, updatedAt: Date.now() }
-    const existing = window.utools.db.get(docId)
+    const existing = db.get(docId)
     if (existing) doc._rev = existing._rev
-    window.utools.db.put(doc)
+    db.put(doc)
   } catch (error) {
     console.error('[DSH Usage] 写缓存失败:', error)
   }

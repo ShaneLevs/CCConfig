@@ -66,9 +66,9 @@ export function useConfigSwitch(currentConfig, loadCurrentConfig) {
       // 保存当前启用的配置 ID，供全局弹窗读取
       if (config.id) {
         const activeDoc = { _id: 'ccconfig_active_config_id', configId: config.id };
-        const existing = window.utools.db.get('ccconfig_active_config_id');
+        const existing = window.ccconfigDb.get('ccconfig_active_config_id');
         if (existing) activeDoc._rev = existing._rev;
-        window.utools.db.put(activeDoc);
+        window.ccconfigDb.put(activeDoc);
       }
       MessagePlugin.success(t("claude.config.switched"));
       loadCurrentConfig();

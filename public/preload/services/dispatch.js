@@ -20,6 +20,7 @@
 //             密钥写入 ~/.commandcode/auth.json 的 <key>.apiKey（providers.json 的 apiKey 只接受引用语法）
 // 全部为纯文件/DB 写入，不依赖 agent 二进制；每个目标独立 try/catch，单个失败不影响其他目标。
 // Claude 特殊：下发写入 uTools DB 保存配置（一个 provider 一份，Claude 配置页可见），不直接改 settings.json
+const db = require('./db')
 const crypto = require('./crypto')
 const claudeConfig = require('./config')
 const opencode = require('./opencode')
@@ -163,7 +164,7 @@ const dispatchToClaude = (provider, model) => {
   }
   const docId = DISPATCH_DB_PREFIX + provider.name
   let doc = null
-  try { doc = window.utools.db.get(docId) } catch (e) { /* ignore */ }
+  try { doc = db.get(docId) } catch (e) { /* ignore */ }
   const now = Date.now()
   const next = doc
     ? { ...doc }
@@ -218,7 +219,7 @@ const dispatchToClaude = (provider, model) => {
   }
   let res
   try {
-    res = window.utools.db.put(next)
+    res = db.put(next)
   } catch (e) {
     throw new Error(
       t('service.dispatch.claudeSaveFailedReason', {
@@ -960,12 +961,12 @@ const cleanupLegacyAutoRoute = (app) => {
   try {
     if (app === "claude") {
       const docId = DISPATCH_DB_PREFIX + LEGACY_AUTOROUTE_NAME;
-      const doc = window.utools.db.get(docId);
+      const doc = db.get(docId);
       if (!doc) return;
       let active = null;
-      try { active = window.utools.db.get("ccconfig_active_config_id"); } catch (e) { /* ignore */ }
+      try { active = db.get("ccconfig_active_config_id"); } catch (e) { /* ignore */ }
       if (active && active.configId === docId) return; // 是当前启用的 Claude 配置，不清理
-      window.utools.db.remove(docId);
+      db.remove(docId);
     } else if (app === "opencode") {
       const current = opencode.readOpencodeConfig();
       if (!current.provider || !current.provider[LEGACY_AUTOROUTE_NAME]) return;
@@ -1069,22 +1070,22 @@ const AUTOROUTE_REBUILD = {
     apis: ['anthropic-messages'],
     before() {
       let doc = null
-      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return null }
+      try { doc = db.get(claudeRouterDocId()) } catch (e) { return null }
       if (!doc) return null
       let activeId = ''
       try {
-        const active = window.utools.db.get(AUTOROUTE_ACTIVE_CLAUDE_DOC)
+        const active = db.get(AUTOROUTE_ACTIVE_CLAUDE_DOC)
         activeId = (active && active.configId) || ''
       } catch (e) { /* ignore */ }
       return { active: activeId === doc._id, model: String(doc.model || '') }
     },
     clear() {
       let doc = null
-      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return }
+      try { doc = db.get(claudeRouterDocId()) } catch (e) { return }
       if (!doc) return
       const next = { ...doc, key: '', baseUrl: '', updatedAt: Date.now() }
       for (const slot of CLAUDE_MODEL_SLOTS) next[slot] = ''
-      const res = window.utools.db.put(next)
+      const res = db.put(next)
       if (!res || !res.ok)
         throw new Error(
           res && res.message
@@ -1095,7 +1096,7 @@ const AUTOROUTE_REBUILD = {
     after(prior, applied) {
       if (!applied.length) return
       let doc = null
-      try { doc = window.utools.db.get(claudeRouterDocId()) } catch (e) { return }
+      try { doc = db.get(claudeRouterDocId()) } catch (e) { return }
       if (!doc) return
       // 沿用原默认模型：它还在新槽位里就换回默认槽（两个槽位内容对调，不丢模型）
       // 比较忽略 [1m] 后缀：旧配置里的值没有后缀，重建后可能已补上
@@ -1106,7 +1107,7 @@ const AUTOROUTE_REBUILD = {
         )
         if (other) {
           const next = { ...doc, model: doc[other], [other]: doc.model, updatedAt: Date.now() }
-          const res = window.utools.db.put(next)
+          const res = db.put(next)
           if (res && res.ok) doc = next
         }
       }

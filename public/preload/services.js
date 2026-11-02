@@ -1,3 +1,20 @@
+// uTools 与桌面版共用 ~/.ccconfig 本地文档库：先于其它 service 模块执行，
+// 让 config / i18n / 统计等全部走同一份数据。
+// 单测与 usage-worker 不走本入口，仍使用注入的 window.utools.db（见 services/db.js）。
+try {
+  const localDb = require("./services/local-db");
+  localDb.getNativeId(); // 触发目录创建并验证可写
+  globalThis.__CCCONFIG_USE_LOCAL_DB__ = true;
+  if (typeof window !== "undefined") window.ccconfigDb = localDb.db;
+  // uTools 旧宿主 DB → 共享库（桌面 sidecar 会按 __CCCONFIG_DESKTOP__ 跳过）
+  var utoolsImportResult = require("./services/db-import").importUtoolsData();
+} catch (error) {
+  console.error("[local-db] 初始化失败，回退到 uTools DB:", error);
+  globalThis.__CCCONFIG_USE_LOCAL_DB__ = false;
+  if (typeof window !== "undefined" && window.utools) window.ccconfigDb = window.utools.db;
+}
+
+const db = require("./services/db");
 const crypto = require("./services/crypto");
 const config = require("./services/config");
 const mcp = require("./services/mcp");
@@ -33,6 +50,7 @@ const i18n = require("./services/i18n");
 const autoroute = require("./services/autoroute");
 const subscriptions = require("./services/subscriptions");
 const dbMigrate = require("./services/db-migrate");
+const utoolsSync = require("./services/utools-sync");
 const agentInfo = require("./services/agent-info");
 
 const {
@@ -713,7 +731,7 @@ window.services = {
         );
       }
       if (!hasData.claude) {
-        hasData.claude = window.utools.db
+        hasData.claude = db
           .allDocs()
           .some((d) => d._id.startsWith("ccconfig_config_"));
       }
@@ -856,6 +874,16 @@ const syncLifecycle = () => {
   try { common.enforceActiveSkillScene(); } catch (e) { console.error("[skill-scene] 应用生效场景失败", e); }
   try { commands.initFromDb(); } catch (e) { console.error("[commands] 启停指令同步失败", e); }
   try { autoroute.startAutoRouteIfEnabled(); } catch (e) { console.error("[autoroute] 网关自启失败", e); }
+  // uTools 版：可移植文档双写 utools.db，并在云端拉取完成后与本地库对账。
+  // 桌面 sidecar 没有 uTools DB，start 内部会直接返回 false。
+  try {
+    utoolsSync.start({
+      cloudPending: !!(utoolsImportResult && utoolsImportResult.cloudPending),
+      reimport: () => require("./services/db-import").importUtoolsData(true),
+    });
+  } catch (e) {
+    console.error("[utools-sync] 启动失败", e);
+  }
 };
 syncLifecycle();
 window.utools.onPluginEnter(() => {

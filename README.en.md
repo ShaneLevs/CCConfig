@@ -96,6 +96,26 @@ npm run tauri:build  # desktop app → release/*.dmg (macOS) or *-setup.exe (Win
 
 Both builds share `src/` and `public/preload/`; only the shell differs. Architecture notes and the constraints that keep this true are in [AGENTS.md](AGENTS.md) and [docs/architecture.md](docs/architecture.md).
 
+## Releasing (maintainers)
+
+```bash
+npm run bump -- X.Y.Z   # updates all 5 version files; do not edit them by hand
+npm run version:check
+npm run i18n:check
+npm run routes:check
+npm test
+npm run build
+# commit the release changes, push main, then:
+git tag vX.Y.Z && git push origin vX.Y.Z
+gh release create vX.Y.Z --generate-notes
+```
+
+- The tag must equal `v` + the `package.json` version. Publish a normal Release (not draft / prerelease) so the desktop build runs and the version is picked up by `releases/latest`.
+- Desktop auto-update requires the Actions secret `TAURI_SIGNING_PRIVATE_KEY`. The private key must match `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`; add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has a password. Without the secret, only regular installers are published and no update artifacts are generated.
+- The `updater-manifest` CI job merges platform `.sig` files and uploads `latest.json`. After publishing, confirm the Release contains the dmg / exe / `.app.tar.gz` / `.sig` / `latest.json`.
+- Update endpoint: `https://github.com/ShaneLevs/CCConfig/releases/latest/download/latest.json`. Versions only move forward; never reuse or overwrite the tag / assets of a published version. Ship a new patch release instead.
+- macOS updater bundles require the `app` build target (the workflow uses `--bundles app,dmg`); the uTools plugin still needs `dist/` uploaded manually.
+
 ## Tech Stack
 
 Vue 3 + Vite + TDesign Vue Next on the renderer; UI copy via vue-i18n with a shared `shared/i18n` JSON catalog used by Vue, preload, and Rust. A bundled esbuild preload handles all filesystem/network work, served through the uTools API or a Tauri v2 Node sidecar. Config parsing via json5, js-yaml and smol-toml; MCP tool discovery via `@modelcontextprotocol/sdk`; background effects via ogl.

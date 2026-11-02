@@ -68,8 +68,8 @@ const PROJECT_DB_KEY = "ccconfig_commandcode_taste_project";
 
 const readSavedRoot = () => {
   try {
-    const nativeId = window.utools?.getNativeId?.() || "local";
-    const doc = window.utools.db.get(`${PROJECT_DB_KEY}_${nativeId}`);
+    const nativeId = window.services?.getNativeId?.() || "local";
+    const doc = window.ccconfigDb.get(`${PROJECT_DB_KEY}_${nativeId}`);
     return doc?.root || "";
   } catch {
     return "";
@@ -78,12 +78,12 @@ const readSavedRoot = () => {
 
 const saveProjectRoot = (root) => {
   try {
-    const nativeId = window.utools?.getNativeId?.() || "local";
+    const nativeId = window.services?.getNativeId?.() || "local";
     const id = `${PROJECT_DB_KEY}_${nativeId}`;
-    const prev = window.utools.db.get(id);
+    const prev = window.ccconfigDb.get(id);
     const doc = { _id: id, root };
     if (prev?._rev) doc._rev = prev._rev;
-    window.utools.db.put(doc);
+    window.ccconfigDb.put(doc);
     projectRoot.value = root;
     return true;
   } catch (e) {

@@ -18,7 +18,7 @@ const NEW_PREFIX = 'ccconfig_' // 新文档 ID 前缀
 const CONFIG_DOC_PREFIX = 'ccconfig_config_' // 配置类文档（claude 配置 / dispatch 下发档），.key 为 AES 密文
 const PROVIDERS_DOC_ID = 'ccconfig_common_providers' // 供应商主数据档，providers[].apiKey 为 AES 密文
 
-const db = () => window.utools.db
+const db = () => require('./db')
 
 // uTools / sidecar 的 db 写入体积上限（sidecar 1MB；uTools 同量级）。
 // 迁移不改变文档结构，只有可能出现「本来就超限」的统计档，put 失败时保留旧档即可。

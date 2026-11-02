@@ -12,6 +12,7 @@
 //   fetch     node:https 直连；返回值必须是纯 JSON 可往返结构（桌面版走 HTTP JSON）
 //
 // 密钥只在 sidecar/preload 里解密，getSubscriptions() 返回给渲染层的数据不含 Cookie 原文。
+const db = require('./db')
 const https = require('node:https')
 const crypto = require('./crypto')
 const { findCookies, inspectDir } = require('./browser-cookies')
@@ -200,11 +201,11 @@ const getProviders = () =>
 
 // ==================== 存储 ====================
 
-const docId = () => `${DOC_PREFIX}${window.utools.getNativeId()}`
+const docId = () => `${DOC_PREFIX}${db.getNativeId()}`
 
 const readDoc = () => {
   try {
-    const doc = window.utools.db.get(docId())
+    const doc = db.get(docId())
     return Array.isArray(doc?.items) ? doc.items : []
   } catch (e) {
     console.error('[subscriptions] 读取订阅失败:', e)
@@ -214,10 +215,10 @@ const readDoc = () => {
 
 const writeDoc = (items) => {
   const id = docId()
-  const doc = { _id: id, nativeId: window.utools.getNativeId(), items, updatedAt: Date.now() }
-  const existing = window.utools.db.get(id)
+  const doc = { _id: id, nativeId: db.getNativeId(), items, updatedAt: Date.now() }
+  const existing = db.get(id)
   if (existing) doc._rev = existing._rev
-  const res = window.utools.db.put(doc)
+  const res = db.put(doc)
   if (res?.error) throw new Error(res.message || res.error)
   return items
 }

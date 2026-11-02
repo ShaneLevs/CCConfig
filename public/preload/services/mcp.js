@@ -1,3 +1,4 @@
+const db = require('./db')
 const { getNativeId, getMcpServers, upsertMcpServer, deleteMcpServer } = require('./config')
 const { t } = require('./i18n')
 
@@ -34,7 +35,7 @@ const _getShellEnv = () => {
 const getDisabledMcpServers = () => {
   try {
     const prefix = `ccconfig_mcp_disabled_${getNativeId()}_`
-    return window.utools.db.allDocs()
+    return db.allDocs()
       .filter(d => d._id.startsWith(prefix))
       .map(d => ({ name: d.name, config: d.config, updatedAt: d.updatedAt }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -51,11 +52,11 @@ const disableMcpServer = (name) => {
 
     const nativeId = getNativeId()
     const docId = `ccconfig_mcp_disabled_${nativeId}_${name}`
-    const existingDoc = window.utools.db.get(docId)
+    const existingDoc = db.get(docId)
     const doc = { _id: docId, name, config: config[name], nativeId, updatedAt: Date.now() }
     if (existingDoc) doc._rev = existingDoc._rev
 
-    const result = window.utools.db.put(doc)
+    const result = db.put(doc)
     if (!result.ok) return { success: false, error: t('service.mcp.saveDbFailed') }
 
     deleteMcpServer(name)
@@ -69,13 +70,13 @@ const disableMcpServer = (name) => {
 const enableMcpServer = (name) => {
   try {
     const docId = `ccconfig_mcp_disabled_${getNativeId()}_${name}`
-    const doc = window.utools.db.get(docId)
+    const doc = db.get(docId)
     if (!doc) return { success: false, error: t('service.mcp.dbNotFound') }
 
     const success = upsertMcpServer(name, doc.config)
     if (!success) return { success: false, error: t('service.mcp.writeConfigFailed') }
 
-    window.utools.db.remove(docId)
+    db.remove(docId)
     return { success: true }
   } catch (error) {
     console.error('开启 MCP 失败:', error)
@@ -86,9 +87,9 @@ const enableMcpServer = (name) => {
 const deleteDisabledMcpServer = (name) => {
   try {
     const docId = `ccconfig_mcp_disabled_${getNativeId()}_${name}`
-    const doc = window.utools.db.get(docId)
+    const doc = db.get(docId)
     if (!doc) return { success: false, error: t('service.mcp.configNotFound') }
-    const result = window.utools.db.remove(docId)
+    const result = db.remove(docId)
     return { success: result.ok, error: result.ok ? null : t('service.mcp.deleteFailed') }
   } catch (error) {
     console.error('删除关闭的 MCP 配置失败:', error)

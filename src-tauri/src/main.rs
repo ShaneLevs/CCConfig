@@ -917,7 +917,7 @@ fn log_startup_failure(line: &str) {
 }
 
 /// 当前界面语言：优先读本机文档 ccconfig_locale_<nativeId>，再回退旧共享档 / 系统语言。
-/// 走 /rpc 而不是直接读 db/ 下的文档文件：sidecar 的落盘有 200ms 防抖，窗口长期开着时文件可能滞后。
+/// 走 /rpc 而不是直接读 db/ 下的文档文件：由 sidecar 统一解析文档语义（含旧档回退）。
 fn current_locale(app: &tauri::AppHandle) -> i18n::Locale {
     let native_id = sidecar_rpc(app, "__utools.getNativeId")
         .and_then(|v| v.get("value").and_then(|x| x.as_str()).map(str::to_string))

@@ -11,7 +11,7 @@ import {
 // 按机器隔离（_<nativeId> 后缀，同外观/Agent 启停），旧共享档 ccconfig_locale 仅作迁移种子。
 const getNativeId = () => {
   try {
-    return window.utools?.getNativeId?.() || ''
+    return window.services?.getNativeId?.() || ''
   } catch (e) {
     return ''
   }
@@ -26,10 +26,10 @@ const resolvedLocale = computed(() => resolveLocalePreference(preference.value))
 
 const readDoc = () => {
   try {
-    const doc = window.utools?.db?.get(DOC_ID)
+    const doc = window.ccconfigDb?.get(DOC_ID)
     if (!doc && DOC_ID !== LEGACY_DOC_ID) {
       // 本机尚无记录：回退读旧版共享档（只作种子，writeDoc 总写本机档）
-      return window.utools?.db?.get(LEGACY_DOC_ID) || null
+      return window.ccconfigDb?.get(LEGACY_DOC_ID) || null
     }
     return doc || null
   } catch (e) {
@@ -40,10 +40,10 @@ const readDoc = () => {
 const writeDoc = (tries = 0) => {
   try {
     // 只取本机档的 _rev（旧共享档只读）
-    const existing = window.utools?.db?.get(DOC_ID) || null
+    const existing = window.ccconfigDb?.get(DOC_ID) || null
     const doc = { _id: DOC_ID, locale: preference.value }
     if (existing?._rev) doc._rev = existing._rev
-    const res = window.utools?.db?.put(doc)
+    const res = window.ccconfigDb?.put(doc)
     if (res && res.error && res.name === 'conflict' && tries < 1) {
       return writeDoc(tries + 1)
     }

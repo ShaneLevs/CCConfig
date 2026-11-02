@@ -14,6 +14,7 @@
 // 随机 key 校验 Authorization Bearer / x-api-key，防止本机其他进程滥用主数据里的真实供应商密钥。
 // 生命周期：uTools 运行期间存活（preload 装载 + onPluginEnter 幂等自启动），uTools 退出即停止。
 
+const db = require('./db')
 const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
@@ -33,7 +34,7 @@ const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorM
 // 旧版共用文档 ccconfig_autoroute_config 作为升级回退：机器首次读取尚无本机文档时继承旧配置作为起点，
 // 之后各自独立演进；旧文档保留不删（其他机器可能还没迁移过）。
 const LEGACY_DOC_ID = "ccconfig_autoroute_config";
-const getDocId = () => `ccconfig_autoroute_config_${window.utools.getNativeId()}`;
+const getDocId = () => `ccconfig_autoroute_config_${db.getNativeId()}`;
 
 const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], mappingSeeded: false, rewriteModel: true };
 const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
@@ -69,12 +70,12 @@ const sanitizeConfig = (config) => {
 
 const persistConfig = (config) => {
   const docId = getDocId();
-  const doc = window.utools.db.get(docId);
+  const doc = db.get(docId);
   const payload = { _id: docId, data: config };
   if (doc && doc._rev) payload._rev = doc._rev;
   let res;
   try {
-    res = window.utools.db.put(payload);
+    res = db.put(payload);
   } catch (e) {
     throw new Error(t("serviceAgent.autoroute.saveConfigFailedWithMessage", { message: e.message || e }));
   }
@@ -89,7 +90,7 @@ const persistConfig = (config) => {
 const readAutoRouteConfig = () => {
   let data = {};
   try {
-    const doc = window.utools.db.get(getDocId()) || window.utools.db.get(LEGACY_DOC_ID);
+    const doc = db.get(getDocId()) || db.get(LEGACY_DOC_ID);
     if (doc && doc.data) data = doc.data;
   } catch (e) {
     /* ignore */
@@ -137,7 +138,7 @@ const HISTORY_DOC_PREFIX = "ccconfig_autoroute_usage_";
 let historyState = null; // { days, rev }
 let historyDirty = false;
 
-const getHistoryDocId = () => `${HISTORY_DOC_PREFIX}${window.utools.getNativeId()}`;
+const getHistoryDocId = () => `${HISTORY_DOC_PREFIX}${db.getNativeId()}`;
 
 // 本地日期：页面上的「今日」按用户时区理解，不与 agent 统计的 UTC 日期混用
 const localDateKey = (time) => {
@@ -162,7 +163,7 @@ const loadHistory = () => {
   const days = {};
   let rev;
   try {
-    const doc = window.utools.db.get(getHistoryDocId());
+    const doc = db.get(getHistoryDocId());
     if (doc && doc.days && typeof doc.days === "object") {
       for (const [date, raw] of Object.entries(doc.days)) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(date)) days[date] = normalizeDay(raw);
@@ -180,11 +181,11 @@ const flushHistory = () => {
   if (!historyDirty) return;
   historyDirty = false;
   const state = loadHistory();
-  const nativeId = window.utools.getNativeId();
+  const nativeId = db.getNativeId();
   const payload = { _id: getHistoryDocId(), nativeId, days: state.days, updatedAt: Date.now() };
   if (state.rev) payload._rev = state.rev;
   try {
-    const res = window.utools.db.put(payload);
+    const res = db.put(payload);
     if (res && res.ok) {
       state.rev = res.rev || state.rev;
       return;
@@ -193,7 +194,7 @@ const flushHistory = () => {
     // 文档被别处改过时刷新 _rev，下一次请求完成时即可继续写；其他错误同样留给下一次
     if (res && res.name === "conflict") {
       try {
-        const cur = window.utools.db.get(getHistoryDocId());
+        const cur = db.get(getHistoryDocId());
         if (cur && cur._rev) state.rev = cur._rev;
       } catch (e) {
         /* ignore */

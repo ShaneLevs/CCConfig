@@ -9,7 +9,7 @@ import { computed, ref, watch } from 'vue'
 // 文档 ID 沿用旧的 ccconfig_dark_background（schema 不迁移），新增 theme 字段。
 const getNativeId = () => {
   try {
-    return window.utools?.getNativeId?.() || ''
+    return window.services?.getNativeId?.() || ''
   } catch (e) {
     return ''
   }
@@ -43,10 +43,10 @@ const isThemeMismatch = computed(
 
 const readDoc = () => {
   try {
-    const doc = window.utools?.db?.get(DOC_ID)
+    const doc = window.ccconfigDb?.get(DOC_ID)
     if (!doc && DOC_ID !== LEGACY_DOC_ID) {
       // 本机尚无记录：回退读旧版共享档（只作种子，saveDoc 总写本机档）
-      return window.utools?.db?.get(LEGACY_DOC_ID) || null
+      return window.ccconfigDb?.get(LEGACY_DOC_ID) || null
     }
     return doc || null
   } catch (e) {
@@ -57,7 +57,7 @@ const readDoc = () => {
 const saveDoc = (tries = 0) => {
   try {
     // 只取本机档的 _rev（旧共享档内容只读，不可覆盖回写）
-    const existing = window.utools?.db?.get(DOC_ID) || null
+    const existing = window.ccconfigDb?.get(DOC_ID) || null
     const doc = {
       _id: DOC_ID,
       theme: themeMode.value,
@@ -65,7 +65,7 @@ const saveDoc = (tries = 0) => {
       effect: darkEffect.value,
     }
     if (existing?._rev) doc._rev = existing._rev
-    const res = window.utools?.db?.put(doc)
+    const res = window.ccconfigDb?.put(doc)
     if (res && res.error && res.name === 'conflict' && tries < 1) {
       return saveDoc(tries + 1)
     }

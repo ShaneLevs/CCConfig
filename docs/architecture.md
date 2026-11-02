@@ -36,20 +36,29 @@ docs/         # 架构文档
 | 网关响应头 `x-ccswitch-left-out` | 同上（`autoroute.js` 使用） | 新旧头同时补发，外部脚本不断 |
 | `~/Library/Application Support/CCSwitch`、`~/Library/Logs/CCSwitch` | `src-tauri/src/main.rs` 常量区 | 启动时把 `runtime.json` 与旧日志搬到 `~/.ccconfig`（DB 已改为 `db/` 每文档一文件，旧 `db.json` 不再迁移） |
 | `CCSWITCH_NODE` | `src-tauri/src/node_runtime.rs` | 旧环境变量作回退 |
-| `CCSWITCH_DATA_DIR` | `desktop/sidecar/utools-shim.js` | 同上 |
-| nativeId 哈希种子 `ccswitch-desktop`、旧文档 `ccswitch_runtime_id` | `desktop/sidecar/utools-shim.js` | **绝不能改**：变了会重算出新的 nativeId，`_<nativeId>` 文档全部孤儿化 |
+| `CCSWITCH_DATA_DIR` | `public/preload/services/legacy.js`（`local-db.js` 读取） | 同上 |
+| nativeId 哈希种子 `ccswitch-desktop`、旧文档 `ccswitch_runtime_id` | `public/preload/services/legacy.js`（`local-db.js` 使用） | **绝不能改**：变了会重算出新的 nativeId，`_<nativeId>` 文档全部孤儿化 |
 
 迁移只做两件事：文档 ID 前缀改名 + 旧格式密文换盐重加密（`<iv>:<ct>` → `v2:<iv>:<ct>`）。密文带版本前缀而不是「先试新盐、失败再试旧盐」：AES-CBC 用错钥匙解密有约 1/256 概率填充合法，会静默返回乱码。幂等、失败保留旧档下次重试。冒烟测试：`node tests/smoke-db-migrate-test.cjs`。
 
-### 桌面版本地数据库（`desktop/sidecar/utools-shim.js`）
+### 共享本地数据库（uTools + 桌面版）
 
-uTools 版把文档交给宿主 DB；桌面版在 sidecar 里用文件实现同一套 `utools.db` API，preload services 与渲染层的调用方式不变。
+uTools 版与桌面版共用 `~/.ccconfig/db`：uTools preload 与桌面 sidecar 都通过 `public/preload/services/local-db.js` 读写同一批文件，`window.services` / 渲染层因此看到同一份数据。
 
 - 位置：`~/.ccconfig/db/<slug>-<sha1(id) 前 12 位>.json`，一文档一文件；目录 0700、文件 0600。
 - 文件名不直接用文档 ID：ID 可能含 `/`、`:`、中文（如 `ccconfig_mcp_disabled_<nativeId>_<name>`），而 macOS 默认卷大小写与 Unicode 规范化不敏感，`Foo`/`foo`、NFC/NFD 会撞文件。slug 只保证可读，哈希保证唯一，真实 `_id` 以文件内容为准。
 - 语义与 uTools 对齐：`_rev` 冲突 / `missing_rev`、单文档 1MB、`remove` 接受 id 或 doc、`allDocs()` 无参 / 前缀 / ID 数组。
-- 写入：`put` / `remove` 只标脏该文档，200ms 防抖后只重写这一条（临时文件 + rename 原子替换）；`onPluginEnter` / `onPluginOut` / 退出 / `allDocs` 前强制 `flushNow()`。内存 Map 既是读缓存，也是进程内的事实来源。
-- 冒烟测试：`node tests/smoke-db-shim-test.cjs`（跨进程持久化、特殊 ID、`allDocs`、写入放大、权限）。
+- 写入写穿：每次 `put` / `remove` 立即落盘（临时文件 + rename 原子替换），不做进程内缓存，另一个应用进程能马上读到。并发写入同一文档时以 `_rev` 冲突返回，由调用方下次读写收敛。
+- 设备 ID：`local-db.getNativeId()` 统一用 `sha256(hostname|首个非回环 MAC|ccswitch-desktop)`，缓存在 `ccconfig_runtime_id`；uTools 与桌面端算出的值一致，`_<nativeId>` 文档指向同一批数据。
+- 首次切换：uTools 装载 preload 时由 `public/preload/services/db-import.js` 把宿主 DB 全量导入本地库（`ccconfig_utools_import_v1` 标记带逻辑版本，幂等）。宿主文档 ID 里的 uTools nativeId 会替换为共享 nativeId，文档内 `nativeId` 字段同步改写；统计类文档（`ccconfig_agent_usage_*` / `ccconfig_heatmap_*`）按天合并，同一 agent 同一天取 `tokens` 较大的记录，本地较新但天数更少时补齐 uTools 的历史日期；其余文档按 `updatedAt` 取较新，无时间戳保留本地。宿主旧库不删除，便于回退旧版插件。
+- 跨设备同步：共享本地库不参与 uTools 云同步，所以可移植文档由 `public/preload/services/utools-sync.js` 额外镜像回 `utools.db`，由 uTools 的「数据同步」负责推送到其他设备。可移植白名单在 `portable-docs.js`：`ccconfig_common_providers`、`ccconfig_common_mcp`、`extra_field_keys`、`ccconfig_group_order`、`ccconfig_config_*`。统计、缓存、外观、语言、显隐、MCP 本地状态、网关配置等机器档只留本地。
+- 同步时机：本地库写入可移植文档时立即镜像到 `utools.db`；preload 装载与每次进入插件时做一次 `host ↔ local ↔ 上次快照` 三向合并。快照存 `ccconfig_utools_sync_state`（`{ ids: { <docId>: { updatedAt, hash } } }`）；没有 `updatedAt` 的文档（`ccconfig_group_order`、`extra_field_keys`）用内容哈希判断是否改过。
+- 云端拉取：`utools.db.replicateStateFromCloud()` 返回 `1` 表示云端还在拉取，此时只做 host → local 单向拉取并每 500ms 轮询（最多 120 次），不推本地、不处理删除；拉取结束后先重跑一次旧库导入（`db-import` 的 `force`），再做完整合并。返回 `null`（未开数据同步）或 `0` 时直接按普通合并处理。
+- 合并规则：两边都有时按快照判断哪边改过，都改过则 `updatedAt` 大的赢（都没有时间戳时本地赢）；只有 host 有且本地无快照或 host 在快照后改过 → 以 host 为准，否则视为本地删除并传到 host；只有 local 有且情况对称。镜像写入遇到 `_rev` 冲突会重读最新 `_rev` 再试一次。桌面 sidecar 没有 `utools.db`，`start()` 直接返回 `false`，不安装写钩子。
+- 旧库导入会跳过其他设备同步进宿主 DB 的机器档：ID 带 `_<nativeId>` 且既不是本机、也不是历史导入来源的文档不搬进本地（`db-import.js` 的 `shouldImport()`）。
+- 桌面 sidecar 的 `desktop/sidecar/utools-shim.js` 只保留路径 / 生命周期等 uTools API，DB 实现委托给 `local-db.js`；`prepare-sidecar.mjs` 会把 `local-db.js` 与 `legacy.js` 一起复制进 sidecar 资源目录。
+- 单测与 usage-worker 不装载 `services.js`，`public/preload/services/db.js` 会自动回退到注入的 `window.utools.db`（内存 mock / worker 写队列 stub）。
+- 冒烟测试：`node tests/smoke-db-shim-test.cjs`（跨进程持久化、特殊 ID、`allDocs`、写入放大、权限）、`node tests/smoke-db-import-test.cjs`（旧库导入与合并）、`node tests/smoke-shared-db-test.cjs`（preload 端到端）、`node tests/smoke-utools-sync-test.cjs`（可移植文档镜像、三向合并、云端拉取轮询）。
 - 桌面版客户端偏好（目前是 macOS「隐藏 Dock 图标」）存 `~/.ccconfig/client.json`，由 Rust 直接读写；启动时在建主窗口前读取并应用，避免 Dock 图标闪现一下。
 
 ## 数据流

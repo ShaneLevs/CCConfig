@@ -6,6 +6,7 @@
 //
 // 注意：主线程侧 window.utools 是真实环境；本模块只处理 agent usage 统计相关入口。
 
+const db = require('./db')
 const { Worker } = require("node:worker_threads");
 const path = require("node:path");
 
@@ -80,10 +81,10 @@ const replayWrites = (docs) => {
   for (const doc of docs) {
     if (!doc || !doc._id) continue;
     try {
-      const existing = window.utools.db.get(doc._id);
+      const existing = db.get(doc._id);
       const payload = { ...doc };
       if (existing && existing._rev) payload._rev = existing._rev;
-      window.utools.db.put(payload);
+      db.put(payload);
     } catch (e) {
       console.error("[usage-async] 落库重放失败:", doc._id, e);
     }
@@ -94,7 +95,7 @@ const replayWrites = (docs) => {
 const collectSeedDocs = () => {
   const seeds = {};
   try {
-    const all = window.utools.db.allDocs();
+    const all = db.allDocs();
     const docs = Array.isArray(all) ? all : all && all.docs ? all.docs : [];
     for (const doc of docs || []) {
       if (!doc || !doc._id) continue;
@@ -148,7 +149,7 @@ const runInWorker = (agent, force) =>
           try { return window.utools.getPath("home"); } catch { return "/"; }
         })(),
         nid: (() => {
-          try { return window.utools.getNativeId(); } catch { return "main"; }
+          try { return db.getNativeId(); } catch { return "main"; }
         })(),
       },
     });

@@ -1,3 +1,4 @@
+const db = require('./db')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
@@ -307,7 +308,7 @@ const normalizeModelConfig = (cfg) => {
 
 const readProviderModelsStore = () => {
   try {
-    const d = window.utools.db.get(PROVIDER_MODELS_DB)
+    const d = db.get(PROVIDER_MODELS_DB)
     const models = {}
     for (const [providerId, list] of Object.entries((d && d.models) || {})) {
       if (Array.isArray(list)) models[providerId] = list.filter((id) => typeof id === 'string' && id)
@@ -330,10 +331,10 @@ const readProviderModelsStore = () => {
 
 const writeProviderModelsStore = (store) => {
   let existing = null
-  try { existing = window.utools.db.get(PROVIDER_MODELS_DB) } catch (e) { /* ignore */ }
+  try { existing = db.get(PROVIDER_MODELS_DB) } catch (e) { /* ignore */ }
   const doc = { _id: PROVIDER_MODELS_DB, models: store.models, modelConfigs: store.modelConfigs }
   if (existing) doc._rev = existing._rev
-  const res = window.utools.db.put(doc)
+  const res = db.put(doc)
   if (!res || !res.ok) {
     throw new Error(res && res.message
       ? t('serviceAgent.codex.saveModelListFailedReason', { message: res.message })
@@ -668,7 +669,7 @@ const resetCodexConfig = () => {
   delete doc.model_catalog_json
   delete doc.model_providers
   writeCodexConfig(doc)
-  try { window.utools.db.remove(PROVIDER_MODELS_DB) } catch (e) { /* ignore */ }
+  try { db.remove(PROVIDER_MODELS_DB) } catch (e) { /* ignore */ }
   try { fs.rmSync(CODEX_AUTH_PATH(), { force: true }) } catch (e) { /* ignore */ }
   return true
 }

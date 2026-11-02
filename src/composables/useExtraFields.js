@@ -34,7 +34,7 @@ export function useExtraFields(loadCurrentConfig, savedConfigs, isCurrentConfig)
   );
 
   const loadExtraFieldKeys = () => {
-    const doc = window.utools.db.get(SAVED_FIELD_KEYS_ID);
+    const doc = window.ccconfigDb.get(SAVED_FIELD_KEYS_ID);
     savedExtraFieldKeys.value = doc?.keys || [];
   };
 
@@ -99,12 +99,12 @@ export function useExtraFields(loadCurrentConfig, savedConfigs, isCurrentConfig)
   const saveExtraFieldKeys = (keys) => {
     const userKeys = keys.filter(k => k && !fixedFieldKeyOptions.includes(k));
     if (!userKeys.length) return;
-    const existingDoc = window.utools.db.get(SAVED_FIELD_KEYS_ID);
+    const existingDoc = window.ccconfigDb.get(SAVED_FIELD_KEYS_ID);
     const existing = existingDoc?.keys || [];
     const merged = [...new Set([...existing, ...userKeys])];
     const doc = { _id: SAVED_FIELD_KEYS_ID, keys: merged };
     if (existingDoc) doc._rev = existingDoc._rev;
-    window.utools.db.put(doc);
+    window.ccconfigDb.put(doc);
   };
 
   // 将预设区的值合并回 extraFields 数组（可传入 values 覆盖默认 presetValues）
@@ -167,9 +167,9 @@ export function useExtraFields(loadCurrentConfig, savedConfigs, isCurrentConfig)
 
     // 4. 保存候选字段名
     const mergedKeysDoc = { _id: SAVED_FIELD_KEYS_ID, keys: [...new Set([...savedExtraFieldKeys.value, ...userKeys])] };
-    const existingDoc = window.utools.db.get(SAVED_FIELD_KEYS_ID);
+    const existingDoc = window.ccconfigDb.get(SAVED_FIELD_KEYS_ID);
     if (existingDoc) mergedKeysDoc._rev = existingDoc._rev;
-    window.utools.db.put(mergedKeysDoc);
+    window.ccconfigDb.put(mergedKeysDoc);
 
     if (window.services.writeClaudeSettings(settings)) {
       MessagePlugin.success(t('common.globalSettingsSaved'));

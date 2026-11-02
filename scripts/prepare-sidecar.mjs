@@ -21,6 +21,9 @@ const files = [
   [path.join(root, 'desktop/sidecar/server.js'), 'server.js'],
   [path.join(root, 'desktop/sidecar/utools-shim.js'), 'utools-shim.js'],
   [path.join(root, 'desktop/sidecar/package.json'), 'package.json'],
+  // 共享本地文档库（与 uTools preload 同一份实现）；同时覆盖开发期的转发文件
+  [path.join(root, 'public/preload/services/local-db.js'), 'local-db.js'],
+  [path.join(root, 'public/preload/services/legacy.js'), 'legacy.js'],
 ]
 
 fs.mkdirSync(dest, { recursive: true })

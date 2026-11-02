@@ -81,7 +81,7 @@ const loadCurrentConfig = () => {
 };
 
 const loadSavedConfigs = () => {
-  savedConfigs.value = window.utools.db
+  savedConfigs.value = window.ccconfigDb
     .allDocs()
     .filter((d) => d._id.startsWith(DB_PREFIX))
     .map((d) => {
@@ -103,7 +103,7 @@ const loadSavedConfigs = () => {
           extraFields: d.extraFields || [],
           updatedAt: d.updatedAt,
         };
-        window.utools.db.put(cleanDoc);
+        window.ccconfigDb.put(cleanDoc);
       }
       const createdAt = parseInt(d._id.replace(DB_PREFIX, "")) || d.updatedAt || 0;
       return {
@@ -193,9 +193,9 @@ const saveConfig = (snapshot) => {
     extraFields: cleanExtraFields,
     updatedAt: now,
   };
-  if (editingConfig.value) doc._rev = window.utools.db.get(id)._rev;
+  if (editingConfig.value) doc._rev = window.ccconfigDb.get(id)._rev;
 
-  if (window.utools.db.put(doc).ok) {
+  if (window.ccconfigDb.put(doc).ok) {
     // 保存使用过的字段名到候选列表
     saveExtraFieldKeys(cleanExtraFields.map(f => f.key));
     MessagePlugin.success(t(editingConfig.value ? "claude.config.updated" : "claude.config.saved"));
@@ -215,7 +215,7 @@ const saveConfig = (snapshot) => {
 };
 
 const deleteConfig = (config) => {
-  if (window.utools.db.remove(config.id).ok) {
+  if (window.ccconfigDb.remove(config.id).ok) {
     MessagePlugin.success(t("claude.config.deleted"));
     loadSavedConfigs();
   } else {
@@ -244,7 +244,7 @@ const saveBatchEdit = () => {
   let activeConfig = null;
 
   group.configs.forEach(config => {
-    const existing = window.utools.db.get(config.id);
+    const existing = window.ccconfigDb.get(config.id);
     if (!existing) return;
     const doc = {
       ...existing,
@@ -252,7 +252,7 @@ const saveBatchEdit = () => {
       key: window.services.encryptKey(key),
       updatedAt: now,
     };
-    if (window.utools.db.put(doc).ok) {
+    if (window.ccconfigDb.put(doc).ok) {
       if (isCurrentConfig(config)) activeConfig = config;
     }
   });
@@ -269,13 +269,13 @@ const saveBatchEdit = () => {
 
 // 首次打开检测：新设备上自动将当前配置入库
 const checkFirstOpen = () => {
-  const marker = window.utools.db.get('ccconfig_first_open_done');
+  const marker = window.ccconfigDb.get('ccconfig_first_open_done');
   if (marker) return;
 
   // 已经有过配置（老用户升级），跳过首次入库
-  const existingConfigs = window.utools.db.allDocs().filter(d => d._id.startsWith(DB_PREFIX));
+  const existingConfigs = window.ccconfigDb.allDocs().filter(d => d._id.startsWith(DB_PREFIX));
   if (existingConfigs.length > 0) {
-    window.utools.db.put({ _id: 'ccconfig_first_open_done', done: true });
+    window.ccconfigDb.put({ _id: 'ccconfig_first_open_done', done: true });
     return;
   }
 
@@ -301,10 +301,10 @@ const checkFirstOpen = () => {
       extraFields: [],
       updatedAt: now,
     };
-    window.utools.db.put(doc);
+    window.ccconfigDb.put(doc);
   }
 
-  window.utools.db.put({ _id: 'ccconfig_first_open_done', done: true });
+  window.ccconfigDb.put({ _id: 'ccconfig_first_open_done', done: true });
 };
 
 // 清除敏感配置

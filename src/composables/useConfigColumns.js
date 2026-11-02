@@ -48,7 +48,7 @@ export function useConfigColumns(savedConfigs) {
   });
 
   const loadGroupOrder = () => {
-    const doc = window.utools.db.get(GROUP_ORDER_ID);
+    const doc = window.ccconfigDb.get(GROUP_ORDER_ID);
     groupOrder.value = doc?.order || [];
     columnAssignments.value = doc?.columns || {};
   };
@@ -86,9 +86,9 @@ export function useConfigColumns(savedConfigs) {
       if (i < rightColumn.value.length) flatOrder.push(rightColumn.value[i]);
     }
     const doc = { _id: GROUP_ORDER_ID, order: flatOrder.filter(g => !g.isPlaceholder).map(g => `${g.key}|${g.baseUrl}`), columns };
-    const existing = window.utools.db.get(GROUP_ORDER_ID);
+    const existing = window.ccconfigDb.get(GROUP_ORDER_ID);
     if (existing) doc._rev = existing._rev;
-    window.utools.db.put(doc);
+    window.ccconfigDb.put(doc);
     groupOrder.value = doc.order;
     columnAssignments.value = columns;
   };

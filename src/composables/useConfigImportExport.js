@@ -70,7 +70,7 @@ export function useConfigImportExport(savedConfigs, loadSavedConfigs) {
         subagentModel: c.subagentModel?.trim() || "",
         updatedAt: Date.now(),
       };
-      window.utools.db.put(doc).ok ? ok++ : fail++;
+      window.ccconfigDb.put(doc).ok ? ok++ : fail++;
     }
     loadSavedConfigs();
     showImportStringDialog.value = false;

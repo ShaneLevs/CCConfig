@@ -1,3 +1,4 @@
+const db = require('./db')
 const fs = require('node:fs')
 const path = require('node:path')
 const zlib = require('node:zlib')
@@ -81,7 +82,7 @@ const writeClaudeJson = (data) => {
 
 const getClaudeJsonPath = () => CLAUDE_JSON_PATH
 
-const getNativeId = () => window.utools.getNativeId()
+const getNativeId = () => db.getNativeId()
 
 // ==================== Claude MCP (~/.claude.json) ====================
 // MCP 配置只存放/读写 ~/.claude.json 顶层 mcpServers（Claude Code 官方位置，全局生效）。
@@ -157,9 +158,9 @@ const saveOverriddenEnv = (envData) => {
   try {
     const docId = `ccconfig_overridden_env_${getNativeId()}`
     const doc = { _id: docId, env: envData, updatedAt: Date.now() }
-    const existing = window.utools.db.get(docId)
+    const existing = db.get(docId)
     if (existing) doc._rev = existing._rev
-    window.utools.db.put(doc)
+    db.put(doc)
     return true
   } catch (error) {
     console.error('保存覆盖 env 失败:', error)
@@ -170,7 +171,7 @@ const saveOverriddenEnv = (envData) => {
 const getOverriddenEnv = () => {
   try {
     const docId = `ccconfig_overridden_env_${getNativeId()}`
-    const doc = window.utools.db.get(docId)
+    const doc = db.get(docId)
     return doc?.env || null
   } catch (error) {
     return null
@@ -189,9 +190,9 @@ const saveHeatmapHistory = (contributions) => {
       }
     }
     const doc = { _id: docId, nativeId, days, updatedAt: Date.now() }
-    const existing = window.utools.db.get(docId)
+    const existing = db.get(docId)
     if (existing) doc._rev = existing._rev
-    window.utools.db.put(doc)
+    db.put(doc)
   } catch (error) {
     console.error('保存热力图历史失败:', error)
   }
@@ -200,7 +201,7 @@ const saveHeatmapHistory = (contributions) => {
 const getHeatmapHistory = () => {
   try {
     const docId = `ccconfig_heatmap_${getNativeId()}`
-    const doc = window.utools.db.get(docId)
+    const doc = db.get(docId)
     return doc?.days || {}
   } catch (error) {
     return {}
@@ -229,9 +230,9 @@ const saveUsageCache = (signature, stats) => {
       },
       updatedAt: Date.now(),
     }
-    const existing = window.utools.db.get(docId)
+    const existing = db.get(docId)
     if (existing) doc._rev = existing._rev
-    window.utools.db.put(doc)
+    db.put(doc)
   } catch (error) {
     console.error('保存 usage 缓存失败:', error)
   }
@@ -240,7 +241,7 @@ const saveUsageCache = (signature, stats) => {
 const getUsageCache = () => {
   try {
     const docId = `ccconfig_usage_cache_${getNativeId()}`
-    const doc = window.utools.db.get(docId)
+    const doc = db.get(docId)
     return doc ? { signature: doc.signature, stats: doc.stats, updatedAt: doc.updatedAt } : null
   } catch (error) {
     return null

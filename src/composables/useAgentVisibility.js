@@ -8,7 +8,7 @@ import { AGENT_ORDER, LEGACY_AGENT_ORDERS, AGENT_META, COMMON_APP_META, agentOpt
 
 // 启停状态按设备区分：主档 ccconfig_visible_agents_<nativeId>，旧共享档作首次迁移种子（只读）
 function getNativeId() {
-  try { return window.utools.getNativeId() || ""; } catch (e) { return ""; }
+  try { return window.services.getNativeId() || ""; } catch (e) { return ""; }
 }
 const VISIBLE_AGENTS_DB_BASE = "ccconfig_visible_agents";
 const VISIBLE_AGENTS_DB = (() => {
@@ -26,23 +26,23 @@ const agentOrder = ref([...AGENT_ORDER]);
 
 const saveVisibleAgents = () => {
   let existing = null;
-  try { existing = window.utools.db.get(VISIBLE_AGENTS_DB); } catch (e) { /* ignore */ }
+  try { existing = window.ccconfigDb.get(VISIBLE_AGENTS_DB); } catch (e) { /* ignore */ }
   const doc = { _id: VISIBLE_AGENTS_DB, visible: { ...visibleAgents.value }, order: [...agentOrder.value] };
   if (existing) doc._rev = existing._rev;
   try {
-    const res = window.utools.db.put(doc);
+    const res = window.ccconfigDb.put(doc);
     if (!res || !res.ok) console.error("保存可见 agent 失败", res);
   } catch (e) { console.error("保存可见 agent 失败", e); }
 };
 
 const initVisibleAgents = () => {
   let doc = null;
-  try { doc = window.utools.db.get(VISIBLE_AGENTS_DB); } catch (e) { /* ignore */ }
+  try { doc = window.ccconfigDb.get(VISIBLE_AGENTS_DB); } catch (e) { /* ignore */ }
   // 本机尚无记录：从旧共享档取种子，并升级写入本机档（避免下次启动又读旧档）
   let seededFromLegacy = false;
   if (!doc && VISIBLE_AGENTS_DB !== LEGACY_VISIBLE_AGENTS_DB) {
     try {
-      doc = window.utools.db.get(LEGACY_VISIBLE_AGENTS_DB);
+      doc = window.ccconfigDb.get(LEGACY_VISIBLE_AGENTS_DB);
       if (doc) {
         seededFromLegacy = true;
         doc = { ...doc, _id: VISIBLE_AGENTS_DB };

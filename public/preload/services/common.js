@@ -1,3 +1,4 @@
+const db = require('./db')
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("./crypto");
@@ -24,7 +25,7 @@ const DOC_PROVIDERS = "ccconfig_common_providers";
 
 const readDoc = (docId, fallback) => {
   try {
-    const doc = window.utools.db.get(docId);
+    const doc = db.get(docId);
     if (doc && doc.data !== undefined) return doc.data;
   } catch (e) {
     /* ignore */
@@ -53,10 +54,10 @@ const findNonJsonFields = (obj, path = "$", found = []) => {
 const writeDoc = (docId, data) => {
   try {
     const doc = { _id: docId, data, updatedAt: Date.now() };
-    const existing = window.utools.db.get(docId);
+    const existing = db.get(docId);
     if (existing) doc._rev = existing._rev;
     try {
-      window.utools.db.put(doc);
+      db.put(doc);
     } catch (e) {
       // uTools 内部结构化克隆失败（数据里混入了函数/Symbol 等非 JSON 内容，
       // 常见于历史异常数据）→ 定位异常字段并净化（丢弃）后重试，保证写入成功
@@ -68,7 +69,7 @@ const writeDoc = (docId, data) => {
         nonJson,
       );
       const clean = JSON.parse(JSON.stringify(doc));
-      window.utools.db.put(clean);
+      db.put(clean);
     }
     return true;
   } catch (e) {
@@ -311,7 +312,7 @@ const resolveMcpPath = (p) => {
 // 当前选中的本地 MCP 存放路径列表。未配置 → 默认 [~/.mcp.json]（兼容旧行为）
 const getLocalMcpTargetPaths = () => {
   const data = readDoc(
-    `${DOC_MCP_TARGETS}_${window.utools.getNativeId() || ""}`,
+    `${DOC_MCP_TARGETS}_${db.getNativeId() || ""}`,
     null,
   );
   const list =
@@ -383,7 +384,7 @@ const saveLocalMcpTargets = (paths) => {
     ...presets.filter((p) => list.includes(p)),
     ...list.filter((p) => !presets.includes(p)),
   ];
-  writeDoc(`${DOC_MCP_TARGETS}_${window.utools.getNativeId() || ""}`, {
+  writeDoc(`${DOC_MCP_TARGETS}_${db.getNativeId() || ""}`, {
     paths: ordered,
   });
   // 被取消勾选的位置：删除已启用的服务器（= 本库主档管理集），
@@ -441,7 +442,7 @@ const readCommonMcpDoc = () => {
 const getCommonMcpServers = () => readCommonMcpDoc().mcpServers;
 
 const mcpStateKey = () =>
-  `${DOC_MCP_STATE}_${window.utools.getNativeId() || ""}`;
+  `${DOC_MCP_STATE}_${db.getNativeId() || ""}`;
 
 // 本机启停状态：disabled = 未写入本地文件的服务器名单，不在名单 = 启用（默认启用）
 const readMcpLocalState = () => {
@@ -616,7 +617,7 @@ const DOC_SKILL_SCENES = "ccconfig_skill_scenes";
 const RESERVED_SCENE_NAMES = new Set(["关闭", "手动", "off", "manual"]);
 
 const skillScenesDocId = () =>
-  `${DOC_SKILL_SCENES}_${window.utools.getNativeId() || ""}`;
+  `${DOC_SKILL_SCENES}_${db.getNativeId() || ""}`;
 
 const normalizeSkillScenes = (data) => {
   const list = data && Array.isArray(data.scenes) ? data.scenes : [];
