@@ -53,7 +53,17 @@
       "importSuccess": "成功导入 {count} 个供应商",
       "importPartial": "成功导入 {ok} 个，跳过 {skip} 个已存在，失败 {fail} 个",
       "importAllSkipped": "全部 {count} 个供应商已存在，未导入",
-      "importFailed": "导入失败"
+      "importFailed": "导入失败",
+      "testConnection": "测试连接",
+      "testConnectionTitle": "测试连接 · {name}",
+      "testStatusPending": "等待测试",
+      "testStatusTesting": "测试中…",
+      "testSuccess": "首字 {ms} ms",
+      "testSummary": "已测试 {done}/{total} · 成功 {ok} · 失败 {fail}",
+      "testNoModels": "该供应商还没有配置模型",
+      "testRetry": "重新测试",
+      "testClose": "关闭",
+      "testProviderHint": "每个模型按配置的接口类型发送一次最小请求，成功时显示首字延时"
     },
     "batchAdd": {
       "title": "批量添加模型",
@@ -298,6 +308,7 @@
       "resetInHours": "{n} 小时后重置",
       "resetInDays": "{n} 天后重置",
       "remainingShort": "剩余 {percent}%",
+      "creditsUnit": "credits",
       "window": {
         "session": "5 小时",
         "week": "本周",

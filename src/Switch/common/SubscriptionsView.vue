@@ -313,10 +313,12 @@ const remainingOf = (w) => {
 
 const barTheme = (percent) => (percent <= 10 ? "danger" : percent <= 30 ? "warning" : "normal");
 
-const usd = (credits, item) => {
+// 接口给的是 credits 点数，界面直接显示点数，不再换算成美元
+const creditsText = (credits) => {
   if (credits === null || credits === undefined) return "-";
-  const rate = item?.snapshot?.creditsPerUsd || 10000;
-  return `$${(credits / rate).toFixed(2)}`;
+  const n = Number(credits);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
 const resetText = (iso) => {
@@ -486,7 +488,7 @@ onUnmounted(() => {
               />
             </div>
             <div class="subs-window-foot">
-              <span>{{ usd(w.usedCredits, item) }} / {{ usd(w.limitCredits, item) }}</span>
+              <span>{{ creditsText(w.usedCredits) }} / {{ creditsText(w.limitCredits) }} {{ t('commonApp.subscription.creditsUnit') }}</span>
               <span v-if="w.resetsAt">{{ resetText(w.resetsAt) }}</span>
             </div>
           </div>

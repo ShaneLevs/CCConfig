@@ -44,6 +44,7 @@ const grok = require("./services/grok");
 const cline = require("./services/cline");
 const commandCode = require("./services/command-code");
 const common = require("./services/common");
+const connectionTest = require("./services/connection-test");
 const dispatch = require("./services/dispatch");
 const commands = require("./services/commands");
 const i18n = require("./services/i18n");
@@ -396,6 +397,8 @@ window.services = {
   addCommonModels: common.addCommonModels,
   updateCommonModel: common.updateCommonModel,
   deleteCommonModel: common.deleteCommonModel,
+  // 供应商连接测试：按模型配置的 API 类型发一次最小流式请求，返回首字延时 / 错误
+  testCommonModelConnection: connectionTest.testCommonModelConnection,
   // 通用 MCP：云端主档 + 本机启用开关（开启写入本地镜像文件，关闭从本地移除）
   listCommonMcpServers: common.listCommonMcpServers,
   upsertCommonMcpServer: common.upsertCommonMcpServer,

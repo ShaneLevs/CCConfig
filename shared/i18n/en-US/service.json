@@ -12,6 +12,16 @@
       "mcpConfigFilterName": "MCP config (*.json)",
       "listSeparator": ", "
     },
+    "connectionTest": {
+      "baseUrlMissing": "No Base URL configured, cannot test",
+      "providerMissing": "Provider {name} does not exist",
+      "modelMissing": "Model {id} does not exist",
+      "unsupportedApi": "Unsupported API type: {api}",
+      "invalidBaseUrl": "The Base URL is not valid",
+      "tooManyRedirects": "Too many redirects",
+      "timeout": "Request timed out ({seconds}s)",
+      "emptyResponse": "The endpoint returned an empty response"
+    },
     "skill": {
       "notFound": "Skill not found",
       "sourceNotFound": "Source skill not found",

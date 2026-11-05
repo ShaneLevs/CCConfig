@@ -83,6 +83,72 @@
 .hint-link { cursor: pointer; text-decoration: underline; color: var(--td-brand-color); }
 .hint-link:hover { opacity: 0.8; }
 .mono { font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+/* 连接测试弹窗 */
+.common-test-dialog .t-dialog__body { padding-top: 8px; }
+.common-test-hint { font-size: 12px; color: var(--td-text-color-placeholder); margin-bottom: 10px; }
+.common-test-empty { padding: 16px 0; }
+.common-test-summary { font-size: 12px; color: var(--td-text-color-secondary); margin-bottom: 8px; }
+.common-test-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.common-test-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: var(--td-radius-default);
+}
+.common-test-model { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.common-test-model-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.common-test-model-name {
+  font-size: 13px;
+  color: var(--td-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.common-test-model-id {
+  color: var(--td-text-color-placeholder);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.common-test-result {
+  flex-shrink: 0;
+  max-width: 56%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.common-test-pending { color: var(--td-text-color-placeholder); }
+.common-test-testing { color: var(--td-brand-color); white-space: nowrap; }
+.common-test-success { color: var(--td-success-color); white-space: nowrap; }
+.common-test-icon-success { color: var(--td-success-color); font-size: 14px; flex-shrink: 0; }
+.common-test-icon-error { color: var(--td-error-color); font-size: 14px; flex-shrink: 0; }
+/* 长错误单行省略，完整内容 hover tooltip 查看 */
+.common-test-error {
+  color: var(--td-error-color);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+.common-test-tooltip .t-tooltip {
+  max-width: 520px;
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 下发到 Agent 弹窗 */
 .common-dispatch-agents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .common-dispatch-agent { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: var(--td-radius-default); }

@@ -12,6 +12,16 @@
       "mcpConfigFilterName": "MCP 配置 (*.json)",
       "listSeparator": "、"
     },
+    "connectionTest": {
+      "baseUrlMissing": "未配置 Base URL，无法测试",
+      "providerMissing": "供应商 {name} 不存在",
+      "modelMissing": "模型 {id} 不存在",
+      "unsupportedApi": "不支持的 API 类型：{api}",
+      "invalidBaseUrl": "Base URL 格式不正确",
+      "tooManyRedirects": "重定向次数过多",
+      "timeout": "请求超时（{seconds} 秒）",
+      "emptyResponse": "接口返回了空响应"
+    },
     "skill": {
       "notFound": "Skill 不存在",
       "sourceNotFound": "源 Skill 不存在",

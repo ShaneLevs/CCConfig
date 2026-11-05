@@ -651,7 +651,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
       /api/v1/billing/summary?timeZone=… → 套餐档位 / 订阅周期 / creditsPerUsd(10000)
       /api/v1/workspaces/<ws>/billing/coding-plan-usage → windows[]：
           durationSeconds 18000 = 5 小时窗口，604800 = 周窗口；usedCredits/limitCredits 是**字符串**
-          credits ÷ 10000 = USD
+          界面直接显示 credits 点数，不换算成美元（creditsPerUsd 只随快照返回）
   新增站点：加一个 ADAPTERS 条目即可，UI/存储/托盘都不用改
 
   自定义目录兜底：captureCookie(provider, {customDirs}) 把用户手选的目录传给 findCookies；
@@ -685,7 +685,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
 
 展示:
   语义：全站一律用「剩余」——用户关心的是还剩多少（进度条越长 = 越充裕，阈值也随之反转：≤30% 橙、≤10% 红）
-  订阅页 src/Switch/common/SubscriptionsView.vue：每个窗口一行（名称 + 「剩余 96%」+ 进度条），不显金额与重置时间
+  订阅页 src/Switch/common/SubscriptionsView.vue：每个窗口一行（名称 + 「剩余 96%」+ 进度条），底部显示「已用 / 上限 credits」与重置时间
   共享面板（shared/panel/panel.html，桌面构建为 dist-app/tray.html、uTools 构建为 dist/panel.html）：getSubscriptionsTray() 返回结构化数据，页面直接画进度条
       title = 「站点品牌 · 套餐」（如 `Open Design · go`）；email = 账号邮箱；
       state = 'ok' | 'expired' | 'nodata'；windows = [{ key, label, percent }]（label 已本地化，percent 是**剩余**百分比）；

@@ -1,12 +1,14 @@
 <script setup>
 
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import {
-  Empty, Button, Tag, Space, Tooltip, Dialog, Input, MessagePlugin, Popconfirm, Select, Switch, Collapse, CollapsePanel, Textarea,
+  Empty, Button, Tag, Space, Tooltip, Dialog, Input, MessagePlugin, Popconfirm, Select, Switch, Collapse, CollapsePanel,
+  Textarea, Loading,
 } from "tdesign-vue-next";
 import {
-  RefreshIcon, EditIcon, AddIcon, DeleteIcon, SendIcon, DownloadIcon, UploadIcon,
+  RefreshIcon, EditIcon, AddIcon, DeleteIcon, SendIcon, DownloadIcon, UploadIcon, LinkIcon,
+  CheckCircleFilledIcon, ErrorCircleFilledIcon,
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
@@ -80,6 +82,75 @@ const loadProviders = () => {
     console.error("加载通用供应商失败:", e);
     providers.value = [];
   }
+};
+
+// ==================== 供应商连接测试 ====================
+// 弹窗按模型逐条请求，结果随进度实时更新；序号用来丢弃已关闭/已重开弹窗的旧结果。
+const testVisible = ref(false);
+const testProviderName = ref('');
+const testResults = ref([]);
+const testRunning = ref(false);
+const testSession = ref(0);
+
+const testDoneCount = computed(() => testResults.value.filter((item) => item.status === 'success' || item.status === 'error').length);
+const testOkCount = computed(() => testResults.value.filter((item) => item.status === 'success').length);
+const testFailCount = computed(() => testResults.value.filter((item) => item.status === 'error').length);
+
+const modelApiType = (provider, model) => model.api || provider.api || 'openai-completions';
+
+const buildTestRows = (provider) =>
+  (provider.models || []).map((model) => ({
+    id: model.id,
+    name: model.name || '',
+    api: modelApiType(provider, model),
+    status: 'pending',
+    latencyMs: 0,
+    error: '',
+  }));
+
+const openTestDialog = (provider) => {
+  testProviderName.value = provider.name;
+  testResults.value = buildTestRows(provider);
+  testVisible.value = true;
+  startConnectionTests();
+};
+
+const startConnectionTests = async () => {
+  const session = ++testSession.value;
+  testRunning.value = true;
+  for (const item of testResults.value) {
+    if (session !== testSession.value) return;
+    item.status = 'testing';
+    item.latencyMs = 0;
+    item.error = '';
+    let result;
+    try {
+      result = await window.services.testCommonModelConnection(testProviderName.value, item.id);
+    } catch (e) {
+      result = { ok: false, error: (e && e.message) || t('common.unknownError') };
+    }
+    if (session !== testSession.value) return;
+    if (result && result.ok) {
+      item.status = 'success';
+      item.latencyMs = Number(result.latencyMs) || 0;
+    } else {
+      item.status = 'error';
+      item.error = (result && result.error) || t('common.unknownError');
+    }
+  }
+  if (session === testSession.value) testRunning.value = false;
+};
+
+const retryConnectionTests = () => {
+  const provider = providers.value.find((item) => item.name === testProviderName.value);
+  if (provider) testResults.value = buildTestRows(provider);
+  startConnectionTests();
+};
+
+const handleTestDialogClosed = () => {
+  // 关闭后不再把在途请求写回结果，也避免 header 按钮一直转圈
+  testSession.value += 1;
+  testRunning.value = false;
 };
 
 const handleEdit = (provider) => {
@@ -383,6 +454,17 @@ onMounted(refresh);
             <div class="common-provider-header-right" @click.stop>
               <span class="common-model-count">{{ t('commonApp.config.modelCount', { count: prov.models.length }) }}</span>
               <Space size="small">
+                <Tooltip :content="t('commonApp.config.testConnection')" placement="top">
+                  <Button
+                    size="small"
+                    variant="text"
+                    :aria-label="t('commonApp.config.testConnection')"
+                    :loading="testRunning && testProviderName === prov.name"
+                    @click="openTestDialog(prov)"
+                  >
+                    <template #icon><LinkIcon /></template>
+                  </Button>
+                </Tooltip>
                 <Tooltip :content="t('commonApp.config.editConfig')" placement="top">
                   <Button size="small" variant="text" @click="handleEdit(prov)">
                     <template #icon><EditIcon /></template>
@@ -469,6 +551,75 @@ onMounted(refresh);
           </CollapsePanel>
         </Collapse>
     </div>
+
+    <!-- 供应商连接测试：逐模型请求并显示首字延时 / 错误 -->
+    <Dialog
+      v-model:visible="testVisible"
+      :header="t('commonApp.config.testConnectionTitle', { name: testProviderName })"
+      width="640px"
+      class="common-test-dialog"
+      @closed="handleTestDialogClosed"
+    >
+      <div class="common-test-hint">{{ t('commonApp.config.testProviderHint') }}</div>
+      <div v-if="!testResults.length" class="common-test-empty">
+        <Empty :description="t('commonApp.config.testNoModels')" />
+      </div>
+      <template v-else>
+        <div class="common-test-summary">
+          {{ t('commonApp.config.testSummary', {
+            done: testDoneCount,
+            total: testResults.length,
+            ok: testOkCount,
+            fail: testFailCount,
+          }) }}
+        </div>
+        <div class="common-test-list">
+          <div v-for="item in testResults" :key="item.id" class="common-test-row">
+            <div class="common-test-model">
+              <div class="common-test-model-head">
+                <span class="common-test-model-name">{{ item.name || item.id }}</span>
+                <Tag size="small" variant="outline">{{ item.api }}</Tag>
+              </div>
+              <span v-if="item.name && item.name !== item.id" class="common-test-model-id mono">{{ item.id }}</span>
+            </div>
+            <div class="common-test-result">
+              <span v-if="item.status === 'pending'" class="common-test-pending">
+                {{ t('commonApp.config.testStatusPending') }}
+              </span>
+              <template v-else-if="item.status === 'testing'">
+                <Loading size="14px" />
+                <span class="common-test-testing">{{ t('commonApp.config.testStatusTesting') }}</span>
+              </template>
+              <template v-else-if="item.status === 'success'">
+                <CheckCircleFilledIcon class="common-test-icon-success" />
+                <span class="common-test-success">{{ t('commonApp.config.testSuccess', { ms: item.latencyMs }) }}</span>
+              </template>
+              <template v-else>
+                <ErrorCircleFilledIcon class="common-test-icon-error" />
+                <Tooltip
+                  :content="item.error"
+                  placement="top"
+                  overlay-class-name="common-test-tooltip"
+                >
+                  <span class="common-test-error">{{ item.error }}</span>
+                </Tooltip>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #footer>
+        <Button
+          variant="outline"
+          :loading="testRunning"
+          :disabled="!testResults.length"
+          @click="retryConnectionTests"
+        >
+          {{ t('commonApp.config.testRetry') }}
+        </Button>
+        <Button theme="primary" @click="testVisible = false">{{ t('commonApp.config.testClose') }}</Button>
+      </template>
+    </Dialog>
 
     <Dialog
       v-model:visible="editDialog"

@@ -53,7 +53,17 @@
       "importSuccess": "{count} provider imported | {count} providers imported",
       "importPartial": "Imported {ok}, skipped {skip} existing, {fail} failed",
       "importAllSkipped": "All {count} providers already exist; nothing imported",
-      "importFailed": "Import failed"
+      "importFailed": "Import failed",
+      "testConnection": "Test connection",
+      "testConnectionTitle": "Test connection · {name}",
+      "testStatusPending": "Waiting",
+      "testStatusTesting": "Testing…",
+      "testSuccess": "First token {ms} ms",
+      "testSummary": "Tested {done}/{total} · {ok} succeeded · {fail} failed",
+      "testNoModels": "This provider has no models configured",
+      "testRetry": "Test again",
+      "testClose": "Close",
+      "testProviderHint": "Sends one minimal request per model using its configured API type; successful rows show first-token latency"
     },
     "batchAdd": {
       "title": "Batch add models",
@@ -298,6 +308,7 @@
       "resetInHours": "resets in {n} h",
       "resetInDays": "resets in {n} d",
       "remainingShort": "{percent}% left",
+      "creditsUnit": "credits",
       "window": {
         "session": "5-hour",
         "week": "Weekly",
