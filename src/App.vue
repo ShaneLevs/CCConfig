@@ -24,6 +24,8 @@ onMounted(() => {
   window.utools.onPluginEnter((action) => {
     route.value = action.code
     payload.value = action.payload || ''
+    // 快捷面板不在主窗口里渲染：由 preload 隐藏主窗口并创建独立窗口。
+    try { window.services?.handleQuickPanelEnter?.(action) } catch (e) { /* ignore */ }
   })
   window.utools.onPluginOut(() => {
     route.value = ''

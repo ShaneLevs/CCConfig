@@ -3,23 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <!--
-  桌面版托盘弹窗（左键点托盘图标弹出）。
-
-  不是 Vue 页面：构建时原样复制进 dist-app，由 Rust 用 WebviewUrl::App("tray.html") 加载。
-  Rust 通过 initialization_script 注入：
-    window.__CCCONFIG_PORT__ / __CCCONFIG_TOKEN__  sidecar 地址（重启 sidecar 后会被 eval 刷新）
-    window.__CC_LOCALE__                           zh-CN / en-US
-    window.__CC_STATS_UNIT__                       compact / cn（统计单位：K/M/B 或 万/亿）
-    window.__CC_TRAY_I18N__                        native.json 的 tray 子树
-  数据由页面自己走 sidecar HTTP /rpc 拉（含异步任务的 /rpc-poll 通道），
-  因此刷新、错误处理都在这一层完成，Rust 只负责窗口与背景。
+  uTools 快捷面板与桌面版托盘弹窗共用的静态页面，构建时分别复制为 dist/panel.html
+  与 dist-app/tray.html。两端通过 window.ccPanelAdapter 提供同一组能力：
+    rpc(method, args)            白名单服务调用
+    invokeAction(action, args)   打开主窗口 / 重启网关 / 隐藏或关闭面板
+    reportHeight(height)         内容变化后调整窗口高度
+    diag(kind, error)            写诊断日志
+    i18n() / locale() / statsUnit()
 
   两个页签：
   - 网关：运行状态 + 统计口径 + 数据卡片 + 接入模式配置（模型直连 / 模型映射，改动即时落库）+ Skill 场景
   - 用量：通用统计的 Token 柱状图（按模型 / Agent）+ 订阅用量
 
-  背景不在这里画：macOS 是 NSVisualEffectView（Popover 材质），Windows 是亚克力。
-  页面只铺一层很淡的叠层保证可读性，所以 html/body 必须保持透明。
+  桌面版的玻璃背景由原生视图绘制，页面根节点保持透明；uTools 版用 CSS 画出可点击背景。
 -->
 <meta name="color-scheme" content="light dark" />
 <title>CCConfig</title>
@@ -88,6 +84,8 @@
     user-select: none;
     cursor: default;
   }
+  html.cc-panel-utools { background: #e9e9ec; }
+  html.cc-panel-utools.cc-panel-dark { background: #1c1c1e; }
 
   /* 边框用 inset 阴影/outline 画（不占布局），窗口高度才能和量出来的高度完全一致 */
   #panel {
@@ -100,6 +98,180 @@
     outline: 0.5px solid var(--edge-outer);
     outline-offset: -0.5px;
   }
+  .cc-panel-utools #panel {
+    background: #f7f7f9;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), inset 0 0 0 0.5px var(--edge);
+  }
+  .cc-panel-dark #panel { background: #242426; }
+
+  /* ---------- uTools 标题栏（拖动 + 关闭；桌面版托盘不渲染） ---------- */
+  .panel-head { display: none; }
+  html.cc-panel-utools .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px 0 13px;
+    border-bottom: 0.5px solid var(--divider);
+    background: transparent;
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .panel-head-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .panel-head-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 15px;
+    line-height: 1;
+    cursor: default;
+    outline: none;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .panel-head-close:hover { background: var(--hover); color: var(--text); }
+  .panel-head-close:active { background: var(--press); }
+
+  /* ---------- 小浮窗（mini 模式） ---------- */
+  html.cc-mini .panel-head,
+  html.cc-mini .tabs,
+  html.cc-mini #offline-note,
+  html.cc-mini #scroll,
+  html.cc-mini .footer,
+  html.cc-mini #toast { display: none !important; }
+
+  .mini { display: none; }
+  html.cc-mini .mini {
+    display: flex;
+    position: relative;
+    align-items: center;
+    height: 60px;
+    /* 右侧给 hover 操作按钮留位置；宽度由页面量出内容后让宿主自适应 */
+    padding: 0 38px 0 12px;
+    /* 小浮窗不能设成窗口拖动区域：拖动区域不派发鼠标事件，hover 和按钮都会失效。
+       拖动改由页面 mousedown + 适配层 dragWindow 完成。 */
+  }
+  .mini-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: max-content;
+  }
+  .mini-usage {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: none;
+    min-width: 0;
+  }
+  .mini-label {
+    font-size: 9.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mini-tokens {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mini-rings {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+  .mini-rings[hidden] { display: none; }
+  .mini-ring {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    transform: rotate(-90deg);
+  }
+  .mini-ring-track {
+    fill: none;
+    stroke: var(--track);
+    stroke-width: 3;
+  }
+  .mini-ring-fill {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s ease;
+  }
+  .mini-ring text {
+    font-size: 11px;
+    font-weight: 600;
+    fill: var(--text);
+    font-variant-numeric: tabular-nums;
+    transform: rotate(90deg);
+    transform-origin: 20px 20px;
+  }
+  .mini-actions {
+    position: absolute;
+    z-index: 2;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    gap: 1px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  .mini:hover .mini-actions,
+  .mini:focus-within .mini-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .mini-action {
+    display: grid;
+    place-items: center;
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: default;
+    outline: none;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mini-action:hover { background: var(--press); color: var(--text); }
+  .mini-action svg { width: 10px; height: 10px; display: block; }
 
   /* ---------- 页签（网关 / 用量） ---------- */
   .tabs {
@@ -1077,6 +1249,13 @@
 </head>
 <body>
 <div id="panel">
+  <div class="panel-head" id="panel-head">
+    <span class="panel-head-title">CCConfig</span>
+    <button class="panel-head-close" type="button" id="panel-close" data-no-drag>
+      <span aria-hidden="true">×</span>
+    </button>
+  </div>
+
   <div class="tabs" id="tabs">
     <button type="button" class="on" data-tab="gateway"></button>
     <button type="button" data-tab="usage"></button>
@@ -1172,8 +1351,32 @@
   </div>
 
   <div class="footer">
+    <button type="button" data-action="shrink" id="shrink-button"></button>
     <button type="button" data-action="show-main"></button>
+    <button type="button" data-action="show-hotkey-setting" id="hotkey-setting-button" hidden></button>
     <button type="button" data-action="quit"></button>
+  </div>
+
+  <div class="mini" id="mini">
+    <div class="mini-inner" id="mini-inner">
+      <div class="mini-usage">
+        <span class="mini-label" id="mini-usage-label"></span>
+        <span class="mini-tokens" id="mini-tokens">—</span>
+      </div>
+      <div class="mini-rings" id="mini-rings" hidden></div>
+    </div>
+    <div class="mini-actions">
+      <button type="button" class="mini-action" id="mini-expand" data-no-drag>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 1.5h3.5V5" /><path d="M5 7 10.5 1.5" />
+          <path d="M5 10.5H1.5V7" /><path d="M7 5 1.5 10.5" />
+        </svg>
+      </button>
+      <button type="button" class="mini-action" id="mini-close" data-no-drag>
+        <span aria-hidden="true">×</span>
+      </button>
+    </div>
   </div>
 
   <div class="toast" id="toast" hidden></div>
@@ -1185,6 +1388,15 @@
 
   const $ = (id) => document.getElementById(id)
   const panel = $('panel')
+  const panelHead = $('panel-head')
+  const panelClose = $('panel-close')
+  const miniEl = $('mini')
+  const miniInner = $('mini-inner')
+  const miniUsageLabel = $('mini-usage-label')
+  const miniTokens = $('mini-tokens')
+  const miniRings = $('mini-rings')
+  const miniClose = $('mini-close')
+  const miniExpand = $('mini-expand')
   const tabs = $('tabs')
   const tabButtons = Array.from(tabs.querySelectorAll('[data-tab]'))
   const offlineNote = $('offline-note')
@@ -1232,11 +1444,11 @@
   const footerButtons = Array.from(document.querySelectorAll('.footer [data-action]'))
   const scopeButtons = Array.from(scopeEl.querySelectorAll('[data-scope]'))
 
-  // 每次展开 Rust 都会重新注入，所以不能缓存成常量
-  const port = () => window.__CCCONFIG_PORT__
-  const token = () => window.__CCCONFIG_TOKEN__ || ''
-  const i18n = () => window.__CC_TRAY_I18N__ || {}
-  const locale = () => window.__CC_LOCALE__ || 'zh-CN'
+  // 两个发行版只通过 ccPanelAdapter 分叉；每次调用重新读取，桌面端重启 sidecar 后全局会刷新。
+  const adapter = () => window.ccPanelAdapter || {}
+  const i18n = () => (typeof adapter().i18n === 'function' ? adapter().i18n() : {}) || {}
+  const locale = () => (typeof adapter().locale === 'function' ? adapter().locale() : 'zh-CN')
+  const initialRefresh = () => adapter().initialRefresh === true
 
   function t(key, vars) {
     const dict = i18n()
@@ -1253,56 +1465,29 @@
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 
-  function invoke(cmd, args) {
-    const internals = window.__TAURI_INTERNALS__
-    if (!internals || typeof internals.invoke !== 'function') {
-      return Promise.reject(new Error('tauri bridge unavailable'))
+  function invokeAction(action, args) {
+    const bridge = adapter()
+    if (!bridge || typeof bridge.invokeAction !== 'function') {
+      return Promise.reject(new Error('panel adapter unavailable'))
     }
-    return internals.invoke(cmd, args || {})
+    return Promise.resolve(bridge.invokeAction(action, args || {}))
   }
 
-  // ---------- sidecar HTTP（与 desktop/bridge 同一套协议） ----------
-  async function rpc(method, args = []) {
-    const p = port()
-    if (!p) throw new Error('sidecar port missing')
-    const res = await fetch('http://127.0.0.1:' + p + '/rpc', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CCConfig-Token': token(),
-      },
-      body: JSON.stringify({ method, args }),
-    })
-    const data = await res.json()
-    if (!data || !data.ok) throw new Error((data && data.error) || method)
-    // Promise 方法立刻回 taskId，真正的结果走 /rpc-poll 长轮询
-    if (data.async) return pollTask(data.taskId)
-    return data.value
-  }
-
-  async function pollTask(taskId) {
-    for (;;) {
-      const p = port()
-      const res = await fetch('http://127.0.0.1:' + p + '/rpc-poll', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CCConfig-Token': token(),
-        },
-        body: JSON.stringify({ taskId }),
-      })
-      const data = await res.json()
-      if (data.status === 'done') return data.value
-      if (data.status === 'error') throw new Error(data.error || 'rpc failed')
-      if (data.status === 'gone') throw new Error('rpc task gone')
-      // pending（服务端 25s 长轮询到点）：继续等
+  function rpc(method, args = []) {
+    const bridge = adapter()
+    if (!bridge || typeof bridge.rpc !== 'function') {
+      return Promise.reject(new Error('panel adapter unavailable'))
     }
+    return Promise.resolve(bridge.rpc(method, args))
   }
 
-  // 桌面版没有常驻 devtools，异常写进 ~/.ccconfig/logs/sidecar.log
+  // 桌面版写 sidecar 日志；uTools 版写主窗口 preload 日志。
   function diag(kind, error) {
-    const text = error && error.stack ? error.stack : String(error)
-    rpc('__utools.diag.log', [kind, text.slice(0, 4000)]).catch(() => {})
+    const text = (error && error.stack ? error.stack : String(error)).slice(0, 4000)
+    const bridge = adapter()
+    if (bridge && typeof bridge.diag === 'function') {
+      try { bridge.diag(kind, text) } catch (e) { /* 诊断本身不能递归 */ }
+    }
   }
 
   let toastTimer = 0
@@ -1320,7 +1505,7 @@
   // ---------- 格式化 ----------
   const fmtInt = (n) => Number(n || 0).toLocaleString('en-US')
   // 与主窗口「通用设置 → 统计单位」保持一致：compact = K/M/B，cn = 万/亿
-  const statsUnit = () => (window.__CC_STATS_UNIT__ === 'cn' ? 'cn' : 'compact')
+  const statsUnit = () => (adapter().statsUnit && adapter().statsUnit() === 'cn' ? 'cn' : 'compact')
   const fmtScaled = (value) => Number(value.toFixed(1)).toString()
   function fmtTokens(n) {
     n = Number(n || 0)
@@ -1366,6 +1551,11 @@
   let scopeTouched = false
 
   let activeTab = 'gateway'
+  // 'panel' = 完整面板；'mini' = 只显示本次用量与订阅余量的小浮窗。
+  // 桌面版的小浮窗是独立窗口，Rust 创建时注入 __CC_START_MODE__。
+  let mode = window.__CC_START_MODE__ === 'mini' ? 'mini' : 'panel'
+  let miniTimer = 0
+  if (mode === 'mini') document.documentElement.classList.add('cc-mini')
 
   // 网关配置：供应商 → 模型清单（不含 apiKey），只在托盘里做选择
   let routeOptions = []
@@ -1435,6 +1625,11 @@
     addMappingButton.textContent = t('addMapping')
     chartEmpty.textContent = t('usageEmpty')
     offlineNote.textContent = t('localServiceOffline')
+    if (panelClose) {
+      panelClose.title = t('close')
+      panelClose.setAttribute('aria-label', t('close'))
+    }
+    renderMini()
   }
 
   function setStatus(text, tone) {
@@ -1443,14 +1638,19 @@
   }
 
   function renderActionLabels() {
+    const capabilities = adapter().capabilities || {}
     const labels = {
+      shrink: t('shrink'),
       'show-main': t('showWindow'),
+      'show-hotkey-setting': t('setHotkey'),
       'restart-gateway': t('restartGateway'),
-      quit: t('quit'),
+      quit: capabilities.quit ? t('quit') : t('close'),
     }
     for (const button of [...footerButtons, restartButton]) {
       button.textContent = labels[button.dataset.action] || ''
     }
+    const hotkeyButton = $('hotkey-setting-button')
+    if (hotkeyButton) hotkeyButton.hidden = !capabilities.hotkeySetting
   }
 
   function renderScopeLabels() {
@@ -2180,6 +2380,105 @@
     }).join('')
   }
 
+  // ---------- 渲染：小浮窗 ----------
+  // 一行只放两块：本次网关 Token 用量 + 第一条可用订阅的两个余量圆环。
+  const MINI_REFRESH_MS = 60 * 1000
+  const RING_RADIUS = 17
+  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+
+  function firstSubscription() {
+    const list = Array.isArray(lastSubs) ? lastSubs : []
+    return list.find((sub) => (
+      sub && sub.state === 'ok' && Array.isArray(sub.windows) && sub.windows.length > 0
+    )) || null
+  }
+
+  function miniRing(label, percent) {
+    const value = clampPct(percent)
+    const tone = value <= 10 ? 'bad' : value <= 30 ? 'warn' : 'good'
+    const offset = RING_CIRCUMFERENCE * (1 - value / 100)
+    const shown = Math.round(value)
+    return (
+      '<svg class="mini-ring" viewBox="0 0 40 40" role="img" aria-label="' +
+        esc(label + ' ' + shown + '%') + '">' +
+        '<title>' + esc(label) + '</title>' +
+        '<circle class="mini-ring-track" cx="20" cy="20" r="' + RING_RADIUS + '"></circle>' +
+        '<circle class="mini-ring-fill" cx="20" cy="20" r="' + RING_RADIUS + '"' +
+          ' stroke="var(--' + tone + ')"' +
+          ' stroke-dasharray="' + RING_CIRCUMFERENCE.toFixed(2) + '"' +
+          ' stroke-dashoffset="' + offset.toFixed(2) + '"></circle>' +
+        '<text x="20" y="20" text-anchor="middle" dominant-baseline="central">' + shown + '%</text>' +
+      '</svg>'
+    )
+  }
+
+  function renderMini() {
+    if (miniUsageLabel) miniUsageLabel.textContent = t('miniSession')
+    const stats = (lastStatus && lastStatus.stats) || {}
+    const tokens = Number(stats.promptTokens || 0) + Number(stats.outputTokens || 0)
+    if (miniTokens) miniTokens.textContent = fmtTokens(tokens)
+    const sub = firstSubscription()
+    const windows = sub ? sub.windows.slice(0, 2) : []
+    if (miniRings) {
+      miniRings.hidden = windows.length === 0
+      miniRings.title = sub ? String(sub.title || '') : ''
+      miniRings.innerHTML = windows.map((w) => (
+        miniRing(String((w && w.label) || (sub && sub.title) || ''), w && w.percent)
+      )).join('')
+    }
+    if (miniClose) {
+      miniClose.title = t('miniClose')
+      miniClose.setAttribute('aria-label', t('miniClose'))
+    }
+    if (miniExpand) {
+      miniExpand.title = t('miniExpand')
+      miniExpand.setAttribute('aria-label', t('miniExpand'))
+    }
+    // 文本长度会变（Token 单位、订阅有无），宽度需要重新量
+    if (mode === 'mini') reportHeight()
+  }
+
+  // 小浮窗只拉这两块数据，比整页 reload 轻得多
+  async function refreshMini() {
+    if (mode !== 'mini') return
+    try {
+      const [status, subs] = await Promise.all([
+        rpc('getAutoRouteStatus'),
+        rpc('getSubscriptionsTray'),
+      ])
+      lastStatus = status || {}
+      lastSubs = Array.isArray(subs) ? subs : []
+      renderMini()
+    } catch (error) {
+      diag('panel-mini', error)
+    }
+  }
+
+  function startMiniTimer() {
+    stopMiniTimer()
+    miniTimer = setInterval(refreshMini, MINI_REFRESH_MS)
+  }
+
+  function stopMiniTimer() {
+    if (miniTimer) clearInterval(miniTimer)
+    miniTimer = 0
+  }
+
+  function setPanelMode(next) {
+    const target = next === 'mini' ? 'mini' : 'panel'
+    if (target === mode) return
+    mode = target
+    document.documentElement.classList.toggle('cc-mini', mode === 'mini')
+    if (mode === 'mini') {
+      renderMini()
+      startMiniTimer()
+    } else {
+      stopMiniTimer()
+    }
+    // 高度与模式一起上报：宿主按模式换窗口宽度，也据此关闭桌面版的失焦收起
+    reportHeight()
+  }
+
   function renderOffline() {
     offline = true
     setStatus(t('localServiceOffline'), 'bad')
@@ -2199,11 +2498,24 @@
   }
 
   let heightRaf = 0
+  // 小浮窗宽度跟着内容走：量 inline-flex 内容 + 左右内边距，避免中间留一大块空白
+  function miniContentWidth() {
+    if (!miniEl || !miniInner) return 0
+    const style = getComputedStyle(miniEl)
+    const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+    return Math.ceil(miniInner.getBoundingClientRect().width + padding)
+  }
+
   function reportHeight() {
     cancelAnimationFrame(heightRaf)
     heightRaf = requestAnimationFrame(() => {
       const height = Math.ceil(panel.getBoundingClientRect().height)
-      if (height > 0) invoke('tray_popup_resize', { height }).catch(() => {})
+      if (height <= 0) return
+      const width = mode === 'mini' ? miniContentWidth() : 0
+      const bridge = adapter()
+      if (bridge && typeof bridge.reportHeight === 'function') {
+        try { bridge.reportHeight(height, mode, width) } catch (e) { /* 窗口可能已销毁 */ }
+      }
     })
   }
 
@@ -2289,6 +2601,7 @@
     renderStats(hasAny || (enabled && running))
     renderGatewayConfig()
     renderSubs(subs)
+    renderMini()
     renderUsage()
     setTab(activeTab)
     reportHeight()
@@ -2334,6 +2647,7 @@
       if (seq === renderSeq && Array.isArray(subs)) {
         lastSubs = subs
         renderSubs(subs)
+        renderMini()
         reportHeight()
       }
     } catch (error) {
@@ -2387,7 +2701,7 @@
     restartButton.disabled = true
     setStatus(t('restarting'), 'warn')
     try {
-      await invoke('tray_popup_action', { action: 'restart-gateway' })
+      await invokeAction('restart-gateway')
     } catch (error) {
       diag('tray-restart', error)
       restarting = false
@@ -2397,17 +2711,92 @@
     waitForRestart()
   }
 
-  // Rust 在每次展开时调用；首次加载（窗口隐藏）只渲染缓存，不联网
+  // 桌面版每次展开由 Rust 调用；uTools 每次打开新窗口时按首帧数据自行刷新。
   window.__ccTrayReload = () => reload({ refresh: true })
+  // 桌面版独立小浮窗每次展开时调用：刷新语言/单位与数据
+  window.__ccMiniReload = () => {
+    if (mode !== 'mini') return
+    startMiniTimer()
+    renderStaticLabels()
+    renderMini()
+    refreshMini()
+  }
 
   // ---------- 事件 ----------
   footerButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      invoke('tray_popup_action', { action: button.dataset.action }).catch((error) => diag('tray-action', error))
+      if (button.dataset.action === 'shrink') {
+        if ((adapter().capabilities || {}).separateMiniWindow) {
+          // 桌面版：小浮窗是独立窗口，交给 Rust 打开并收起当前大浮窗
+          invokeAction('shrink').catch((error) => diag('panel-action', error))
+        } else {
+          setPanelMode('mini')
+        }
+        return
+      }
+      invokeAction(button.dataset.action).catch((error) => diag('panel-action', error))
     })
   })
 
   restartButton.addEventListener('click', restartGateway)
+
+  if (panelClose) {
+    panelClose.addEventListener('click', () => {
+      invokeAction('hide').catch((error) => diag('panel-action', error))
+    })
+  }
+
+  if (miniClose) {
+    miniClose.addEventListener('click', () => {
+      // 关掉小浮窗后回到完整面板模式，下次从托盘 / 快捷键打开不会被留在 mini 尺寸
+      stopMiniTimer()
+      invokeAction('mini-close').catch((error) => diag('panel-action', error))
+    })
+  }
+
+  if (miniExpand) {
+    miniExpand.addEventListener('click', () => {
+      if ((adapter().capabilities || {}).separateMiniWindow) {
+        // 独立小浮窗：放大回到大浮窗，不直接拉主窗口
+        invokeAction('mini-expand').catch((error) => diag('panel-action', error))
+      } else {
+        setPanelMode('panel')
+      }
+    })
+  }
+
+  // 拖动：优先用 CSS 的 -webkit-app-region（系统级拖动，无延迟）。
+  // 该区域不生效时页面仍会收到 mousedown，再按指针屏幕位移请宿主移动窗口。
+  let dragging = false
+  function endDrag() {
+    if (!dragging) return
+    dragging = false
+    const bridge = adapter()
+    if (bridge && typeof bridge.dragWindow === 'function') bridge.dragWindow('end', 0, 0)
+  }
+  function bindDrag(el) {
+    if (!el) return
+    el.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return
+      if (event.target && event.target.closest && event.target.closest('[data-no-drag]')) return
+      const bridge = adapter()
+      if (!bridge || typeof bridge.dragWindow !== 'function') return
+      dragging = true
+      bridge.dragWindow('start', event.screenX, event.screenY)
+      event.preventDefault()
+    })
+  }
+  bindDrag(panelHead)
+  bindDrag(miniEl)
+  window.addEventListener('mousemove', (event) => {
+    if (!dragging) return
+    const bridge = adapter()
+    if (bridge && typeof bridge.dragWindow === 'function') {
+      bridge.dragWindow('move', event.screenX, event.screenY)
+    }
+  })
+  window.addEventListener('mouseup', endDrag)
+  window.addEventListener('blur', endDrag)
 
   scopeButtons.forEach((button) => {
     button.addEventListener('click', () => {
@@ -2578,13 +2967,34 @@
   chartPlot.addEventListener('mouseleave', hideChartTip)
 
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') invoke('tray_popup_hide').catch(() => {})
+    if (event.key !== 'Escape') return
+    if (mode === 'mini') {
+      stopMiniTimer()
+      invokeAction('mini-close').catch(() => {})
+      return
+    }
+    invokeAction('hide').catch(() => {})
   })
 
-  window.addEventListener('error', (event) => diag('tray-error', event.error || event.message))
-  window.addEventListener('unhandledrejection', (event) => diag('tray-rejection', event.reason))
+  window.addEventListener('error', (event) => diag('panel-error', event.error || event.message))
+  window.addEventListener('unhandledrejection', (event) => diag('panel-rejection', event.reason))
 
-  reload({ refresh: false })
+  // uTools 标题栏由宿主 preload 在 DOMContentLoaded 时才打上 class，页面高度会多出 32px；
+  // 首帧上报可能早于这一步，这里补一次，避免窗口把底部动作条裁掉。
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => reportHeight(), { once: true })
+  }
+
+  // 独立小浮窗窗口从 mini 模式启动：直接开始一分钟刷新
+  if (mode === 'mini') startMiniTimer()
+
+  Promise.resolve()
+    .then(() => {
+      const bridge = adapter()
+      return bridge && typeof bridge.ready === 'function' ? bridge.ready() : null
+    })
+    .then(() => reload({ refresh: initialRefresh() }))
+    .catch((error) => diag('panel-boot', error))
 })()
 </script>
 </body>

@@ -274,6 +274,18 @@
     setFeature: () => {},
     removeFeature: () => {},
     getFeatures: () => [],
+    // uTools 快捷面板只在真正的 uTools 宿主可用；桌面版保留显式降级。
+    isQuickPanelSupported: () => false,
+    createBrowserWindow: () => null,
+    sendToParent: () => {},
+    hideMainWindow: () => false,
+    showMainWindow: () => false,
+    redirect: () => false,
+    redirectHotKeySetting: () => {},
+    getCmdHotKey: () => null,
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+    getDisplayNearestPoint: () => null,
+    getPrimaryDisplay: () => null,
 
     // 桌面版是 WebView，没有 Node 的 process.platform，按 UA 判断（用于下载目录、
     // shell 命令等按平台分叉的既有代码路径；macOS 仍是默认分支）

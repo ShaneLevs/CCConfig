@@ -19,6 +19,9 @@
 //
 // 指令文案固定中文：uTools 插件只服务国内用户，不跟随界面语言，也不提供英文别名。
 const db = require('./db')
+const i18n = require('./i18n')
+const zhCNNative = require('../../../shared/i18n/zh-CN/native.json')
+const enUSNative = require('../../../shared/i18n/en-US/native.json')
 const SKILL_URL_REGEX =
   "/^https:\\/\\/(www\\.)?(skillhub\\.(tencent\\.com|cn)\\/skills\\/[\\w-]+(\\/[\\w-]+)?|modelscope\\.cn\\/skills\\/@[\\w-]+\\/[\\w-]+)$/";
 
@@ -67,6 +70,9 @@ const LABELS = {
   installOpencodeSkill: "安装 OpenCode Skill",
   installPiExtension: "安装 Pi Agent 扩展",
 };
+
+const PANEL_FEATURE_CODE = 'quickPanel'
+const PANEL_FEATURE_CMDS = ['CCConfig 面板', '快捷面板']
 
 function getFeatureDefinitions() {
   return {
@@ -256,6 +262,8 @@ function normalizeVisible(visible) {
 //   启用 → setFeature(内置规范定义)，保证命令存在且为最新定义
 //   停用 → removeFeature(code)，从搜索框移除（固定命令 + 匹配命令一并移除）
 function syncAgentCommands(visible) {
+  // 快捷面板与 agent 启停无关，但语种切换后要重放指令名与描述。
+  syncQuickPanelFeature()
   const state = normalizeVisible(visible);
   const registered = [];
   const removed = [];
@@ -284,6 +292,29 @@ function syncAgentCommands(visible) {
     });
   });
   return { ok: failed.length === 0, removed, registered, failed };
+}
+
+function syncQuickPanelFeature() {
+  try {
+    if (!require('./panel-support').isSupported()) {
+      try { window.utools.removeFeature(PANEL_FEATURE_CODE) } catch (e) { /* ignore */ }
+      return
+    }
+    const locale = i18n.getLocale()
+    const dict = locale === 'en-US' ? enUSNative : zhCNNative
+    const tray = (dict && dict.native && dict.native.tray) || {}
+    const description = tray.quickPanelExplain || '打开 CCConfig 快捷面板，支持配置全局快捷键'
+    window.utools.setFeature({
+      code: PANEL_FEATURE_CODE,
+      description,
+      explain: description,
+      icon: 'gen.svg',
+      mainHide: true,
+      cmds: locale === 'en-US' ? ['CCConfig Panel', PANEL_FEATURE_CMDS[0]] : PANEL_FEATURE_CMDS,
+    })
+  } catch (e) {
+    console.error('[commands] 同步快捷面板指令失败:', e)
+  }
 }
 
 // 通用 Skill 场景：一条动态功能指令承载全部场景名（text 指令命中时 payload 就是那条文案），
@@ -349,4 +380,4 @@ function initFromDb() {
   }
 }
 
-module.exports = { syncAgentCommands, syncSkillSceneFeature, initFromDb };
+module.exports = { syncAgentCommands, syncSkillSceneFeature, syncQuickPanelFeature, initFromDb };

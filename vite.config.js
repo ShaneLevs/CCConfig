@@ -14,9 +14,23 @@ const IS_APP = process.env.CCCONFIG_TARGET === 'app'
 const OUT_DIR = IS_APP ? 'dist-app' : 'dist'
 
 function bundlePreloadPlugin() {
+  // 桌面与 uTools 都从 dist/preload 取打好的 CJS；所有目标统一将 electron 交给宿主运行时。
+  const preloadExternal = ['electron']
   const buildPreload = async () => {
     const outDir = path.resolve(__dirname, 'dist/preload')
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true })
+    // 自定义窗口 preload 不经过 Vite 的 HTML 入口：单独打成 CJS，供 createBrowserWindow 加载。
+    await esbuildBuild({
+      entryPoints: [path.resolve(__dirname, 'public/preload/panel-bridge.js')],
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      outfile: path.join(outDir, 'panel-bridge.js'),
+      format: 'cjs',
+      external: preloadExternal,
+      allowOverwrite: true,
+      logLevel: 'info',
+    })
     await esbuildBuild({
       entryPoints: [path.resolve(__dirname, 'public/preload/services.js')],
       bundle: true,
@@ -24,6 +38,7 @@ function bundlePreloadPlugin() {
       target: 'node18',
       outfile: path.join(outDir, 'services.js'),
       format: 'cjs',
+      external: preloadExternal,
       allowOverwrite: true,
       logLevel: 'info',
     })
@@ -39,6 +54,19 @@ function bundlePreloadPlugin() {
       allowOverwrite: true,
       logLevel: 'info',
     })
+    // 共享面板静态页按发行目标分别落到 dist/panel.html 与 dist-app/tray.html。
+    // 开发服务器从 /panel.html 提供同一份页面，页面脚本仍是原生 JS，不依赖 Vite 入口。
+    const panelHtml = fs.readFileSync(path.resolve(__dirname, 'shared/panel/panel.html'), 'utf8')
+    const desktopAdapter = fs.readFileSync(path.resolve(__dirname, 'shared/panel/desktop-adapter.js'), 'utf8')
+    const outRoot = path.resolve(__dirname, OUT_DIR)
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true })
+    fs.writeFileSync(
+      path.join(outRoot, IS_APP ? 'tray.html' : 'panel.html'),
+      IS_APP
+        ? panelHtml.replace('</head>', '<script>' + desktopAdapter + '</script></head>')
+        : panelHtml,
+      'utf8',
+    )
     // Vite 会把 public/preload 整个复制到 dist（含 node_modules），但依赖已被 esbuild
     // bundle 进 services.js，运行时不需要；且 js-yaml 自带 .map 调试文件，uTools 打包会
     // 拒绝，因此构建后清理复制的 node_modules
@@ -65,15 +93,25 @@ function bundlePreloadPlugin() {
     },
     async configureServer(server) {
       await buildPreload()
+      server.middlewares.use('/panel.html', (_req, res) => {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end(fs.readFileSync(path.resolve(__dirname, 'shared/panel/panel.html'), 'utf8'))
+      })
+      server.middlewares.use('/preload/panel-bridge.js', (_req, res) => {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+        res.end(fs.readFileSync(path.join(path.resolve(__dirname, 'dist/preload'), 'panel-bridge.js'), 'utf8'))
+      })
       const watcher = server.watcher
       watcher.add(path.resolve(__dirname, 'public/preload/**'))
-      // 共享文案目录也会被 esbuild 内联进 services.js（preload i18n），改动同样要重打包
+      // 共享文案目录会被 esbuild 内联进 services.js；共享面板与适配层也要触发静态页重建。
       watcher.add(path.resolve(__dirname, 'shared/i18n/**'))
+      watcher.add(path.resolve(__dirname, 'shared/panel/**'))
       watcher.on('change', async (file) => {
         const normalized = file.replace(/\\/g, '/')
         if (
           normalized.includes('public/preload/') ||
-          normalized.includes('shared/i18n/')
+          normalized.includes('shared/i18n/') ||
+          normalized.includes('shared/panel/')
         ) {
           console.log('[preload] 文件变动，重新构建...')
           await buildPreload()
@@ -102,14 +140,11 @@ function injectAppShimPlugin() {
     },
     closeBundle() {
       if (!IS_APP) return
-      // 独立的静态页面（不经过 Vue/Vite）：引导页 + 托盘弹窗，
-      // 由 Rust 用 WebviewUrl::App 打开，构建时原样放进 dist-app
-      for (const name of ['guide.html', 'tray.html']) {
-        fs.copyFileSync(
-          path.resolve(__dirname, `desktop/${name}`),
-          path.resolve(__dirname, OUT_DIR, name)
-        )
-      }
+      // 引导页仍是桌面版独立静态页；tray.html 由 bundlePreloadPlugin 从共享面板生成。
+      fs.copyFileSync(
+        path.resolve(__dirname, 'desktop/guide.html'),
+        path.resolve(__dirname, OUT_DIR, 'guide.html')
+      )
     },
   }
 }

@@ -52,6 +52,8 @@ const subscriptions = require("./services/subscriptions");
 const dbMigrate = require("./services/db-migrate");
 const utoolsSync = require("./services/utools-sync");
 const agentInfo = require("./services/agent-info");
+const panel = require("./services/panel");
+const panelSupport = require("./services/panel-support");
 
 const {
   readClaudeSettings,
@@ -432,6 +434,7 @@ window.services = {
   // ==================== 智能体启停 ↔ uTools 指令同步 ====================
   // 按启停状态增删各 agent 的启动命令（功能指令 + 匹配指令），详见 services/commands.js
   syncAgentCommands: commands.syncAgentCommands,
+  syncQuickPanelFeature: commands.syncQuickPanelFeature,
 
   getReasonixConfigPath: reasonix.getReasonixConfigPath,
   readReasonixConfig: reasonix.readReasonixConfig,
@@ -859,6 +862,12 @@ window.services = {
   openSubscriptionLogin: subscriptions.openLogin,
   // 桌面版托盘菜单用：只读缓存快照（不联网），文案已在 sidecar 侧本地化
   getSubscriptionsTray: subscriptions.getSubscriptionsTray,
+  // uTools 快捷面板：只在具备自定义窗口能力的宿主里注册入口。
+  // 页面侧 onPluginEnter 也会覆盖 preload 的同名回调；页面收到快捷面板入口时
+  // 通过这里直接转给 preload，保证两条注册路径都能拉起面板。
+  handleQuickPanelEnter: (action) => {
+    if (panelSupport.isSupported()) panel.handleEnter(action)
+  },
 };
 
 // ==================== 智能体启停指令同步：生命周期自愈 ====================
@@ -885,7 +894,18 @@ const syncLifecycle = () => {
     console.error("[utools-sync] 启动失败", e);
   }
 };
+if (panelSupport.isSupported()) {
+  panel.init();
+} else {
+  // 桌面 sidecar 与旧 uTools 宿主没有自定义窗口能力，移除可能残留的动态指令。
+  try { window.utools.removeFeature(panel.PANEL_CODE); } catch (e) { /* ignore */ }
+}
 syncLifecycle();
-window.utools.onPluginEnter(() => {
+// uTools 的 onPluginEnter 是单回调槽位（后注册覆盖先注册），快捷面板与生命周期
+// 自愈必须共用这一个回调，否则后注册的 syncLifecycle 会把面板入口顶掉。
+window.utools.onPluginEnter((action) => {
+  if (panelSupport.isSupported()) {
+    try { panel.handleEnter(action); } catch (e) { console.error("[quick-panel] 处理入口失败", e); }
+  }
   syncLifecycle();
 });

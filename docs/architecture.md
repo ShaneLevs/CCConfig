@@ -686,7 +686,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
 展示:
   语义：全站一律用「剩余」——用户关心的是还剩多少（进度条越长 = 越充裕，阈值也随之反转：≤30% 橙、≤10% 红）
   订阅页 src/Switch/common/SubscriptionsView.vue：每个窗口一行（名称 + 「剩余 96%」+ 进度条），不显金额与重置时间
-  桌面版托盘弹窗（desktop/tray.html）：getSubscriptionsTray() 返回结构化数据，页面直接画进度条
+  共享面板（shared/panel/panel.html，桌面构建为 dist-app/tray.html、uTools 构建为 dist/panel.html）：getSubscriptionsTray() 返回结构化数据，页面直接画进度条
       title = 「站点品牌 · 套餐」（如 `Open Design · go`）；email = 账号邮箱；
       state = 'ok' | 'expired' | 'nodata'；windows = [{ key, label, percent }]（label 已本地化，percent 是**剩余**百分比）；
       message = 过期 / 无数据时的提示文案（已本地化）
@@ -699,6 +699,19 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
       页面还是旧值」。只有首次挂载才按 5 分钟节流打一次接口。
   冒烟测试：node tests/smoke-subscriptions.cjs（不联网，覆盖存储脱敏/托盘数据/窗口与倒计时换算）
 ```
+
+### uTools 快捷面板（方案 B）
+
+- 共享静态页 `shared/panel/panel.html` 同时服务桌面托盘与 uTools 快捷面板：构建时分别生成 `dist-app/tray.html` 与 `dist/panel.html`。页面只通过 `window.ccPanelAdapter` 访问 `rpc / invokeAction / reportHeight / ready / i18n / locale / statsUnit / diag`；桌面适配层 `shared/panel/desktop-adapter.js` 内联进 `tray.html`，uTools 适配层由 `dist/preload/panel-bridge.js` 在自定义窗口 preload 中注入。uTools 专属能力都走同一个适配层（例如拖动窗口的 `dragWindow`），页面用 `html.cc-panel-utools` 类控制只在 uTools 窗口出现的元素。
+- 入口是动态功能 `quickPanel`（`CCConfig 面板` / `快捷面板`），由 `commands.js` 按 uTools 能力检测重放；`mainHide: true` 用于全局快捷键等入口，指令名与描述随语言切换重放。打开方式只有 uTools 指令与在该指令上配置的全局快捷键，设置页不提供额外入口。
+- 主窗口 preload 的 `services/panel.js` 用 `utools.createBrowserWindow()` 创建约 400px 的无边框置顶窗口；`show: false` 后在加载回调里显示，按光标所在显示器工作区定位，内容通过 `reportHeight` 调 `win.setSize()`。入口触发时先 `hideMainWindow(false)`。窗口常驻置顶（`setAlwaysOnTop(true, 'floating')`）并跟随所有工作区（`setVisibleOnAllWorkspaces`，含全屏应用）；页面不做失焦收起。同一入口再次触发（快捷键 / 搜索指令）是开关语义：面板可见时关闭，不可见时重新显示并聚焦。- uTools 的 `onPluginEnter` 是**单回调槽位**，后注册会覆盖先注册。快捷面板入口因此同时挂在 preload 的统一回调（`services.js` 里与 `syncLifecycle` 共用一个注册）和页面 `App.vue` 的 `onPluginEnter` 上：页面把每次 enter 交给 `window.services.handleQuickPanelEnter()` 判定并转回 preload，避免任一注册顺序把面板入口顶掉。`quickPanel` 不属于主窗口路由，主窗口收到该入口时保持空白并立即隐藏，不再渲染「通用配置」。
+- 自定义窗口不加载 `services.js`，避免重复初始化共享 DB / 网关。`panel-bridge.js` 通过 `utools.sendToParent()` 把白名单服务调用和动作发到主窗口 preload，主窗口用 `ipcRenderer.on()` 接收、用 `win.webContents.send()` 回传 JSON 安全结果；`getPanelContext` 返回本机语言、统计单位和 `native.json` 的 tray 文案。
+- uTools 版顶部多一条 32px 标题栏（品牌名 + 关闭按钮），只在 `html.cc-panel-utools` 下渲染，桌面托盘不受影响。拖动优先用 CSS `-webkit-app-region: drag`；该区域若未生效，页面会收到 `mousedown`，再按指针屏幕位移发 `drag-window` 动作，由主窗口 preload 用 `getPosition()` / `setPosition()` 按起点换算窗口位置（屏幕坐标与窗口位置同为 DIP）。关闭按钮复用 `hide` 动作。标题栏由 preload 在 `DOMContentLoaded` 时打上 class，页面在同事件补报一次高度，避免窗口底部的动作条被裁掉。
+- 底部动作按宿主能力映射：uTools 的 show-main 走 `showMainWindow() + redirect()`，quit 显示为「关闭」并关掉自定义窗口；桌面版仍走 `tray_popup_action` 的 show-main / quit。Esc 与 hide 都只收起或关闭面板。
+- 面板有两种形态：完整面板与 `html.cc-mini` 小浮窗（`mode` 由 `reportHeight` 一并上报）。uTools 版仍是同一个自定义窗口内切换，宽度从 400 切到按内容量出的值（96–360），高度 48–120；桌面版的小浮窗是独立窗口 `mini-popup`，和托盘弹窗 `tray-popup` 互不影响。
+- 小浮窗一行只显示两块：本次网关 Token 用量（`getAutoRouteStatus().stats` 的 prompt + output）与第一条可用订阅的两个余量圆环，每 60 秒只重新拉这两项，不跑整页 `reload`。
+- 大浮窗底部「缩小」在桌面版调用 `mini_popup_open`：收起大浮窗、显示独立小浮窗。小浮窗常驻置顶、失焦不收起，整窗可拖（`mini_popup_drag` 走原生 `start_dragging`，拖动过后改尺寸不再吸附回托盘）。关闭只收起小浮窗（`mini_popup_hide`），不打开主窗口；hover 的「放大」回到大浮窗（`mini_popup_expand`），主窗口仍从大浮窗底部进入。托盘图标始终只切换大浮窗，和小浮窗是否打开过无关。
+- 自定义窗口关闭能力由 uTools Runtime 管理；官方文档说明主窗口隐藏后插件可能在用户设定的时间（默认 3 分钟）内自动退出，没有文档化的保活手段，也没有在 `onPluginOut` 中强杀窗口。返回的 `BrowserWindow` 不支持实例事件监听，所以拖动结束、关闭都靠页面事件走 IPC。真实宿主里的全局快捷键切换、常驻时长与后台回收行为仍需装机验收。
 
 ### 启动失败与引导页（桌面版）
 

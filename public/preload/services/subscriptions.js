@@ -571,7 +571,7 @@ const formatReset = (iso) => {
 }
 
 /**
- * 桌面版托盘弹窗用的数据（`desktop/tray.html` 直接渲染，不再拼成菜单文本）。
+ * 共享面板用的数据（`shared/panel/panel.html` 直接渲染，不再拼成菜单文本）。
  * 文案仍在 sidecar 侧本地化好，且**只读缓存快照、不发网络请求**：
  * 弹窗打开时先渲染这份缓存，再用异步通道 refreshSubscriptions 刷新后原地更新。
  *

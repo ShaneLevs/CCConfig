@@ -238,6 +238,18 @@ function createUtoolsShim() {
     getFeatures() {
       return [];
     },
+    createBrowserWindow() {
+      return null;
+    },
+    sendToParent() {},
+    hideMainWindow: () => false,
+    showMainWindow: () => false,
+    redirect: () => false,
+    redirectHotKeySetting() {},
+    getCmdHotKey: () => null,
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+    getDisplayNearestPoint: () => null,
+    getPrimaryDisplay: () => null,
 
     isWindows: () => process.platform === "win32",
     isMacOS: () => process.platform === "darwin",

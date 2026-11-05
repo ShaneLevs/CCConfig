@@ -36,10 +36,19 @@ const GUIDE_WINDOW: &str = "guide";
 const TRAY_ID: &str = "ccconfig-tray";
 /// 托盘弹窗（WebView 面板，不是原生 NSMenu）
 const TRAY_POPUP: &str = "tray-popup";
+/// 独立小浮窗：由大浮窗的「缩小」打开，和托盘弹窗互不影响
+const MINI_POPUP: &str = "mini-popup";
 /// 弹窗宽度（逻辑像素）
 const POPUP_WIDTH: f64 = 400.0;
 const POPUP_MIN_HEIGHT: f64 = 120.0;
 const POPUP_MAX_HEIGHT: f64 = 560.0;
+/// 小浮窗尺寸：一行放本次用量与订阅余量，宽度按页面量出的内容自适应
+const MINI_WIDTH: f64 = 320.0;
+const MINI_MIN_WIDTH: f64 = 96.0;
+const MINI_MAX_WIDTH: f64 = 360.0;
+const MINI_HEIGHT: f64 = 60.0;
+const MINI_MIN_HEIGHT: f64 = 48.0;
+const MINI_MAX_HEIGHT: f64 = 120.0;
 /// 弹窗与托盘图标之间的间距
 const POPUP_GAP: f64 = 8.0;
 /// 托盘点击与「失焦收起」的最小间隔：macOS 点托盘时弹窗会先失焦，
@@ -157,6 +166,15 @@ fn set_update_progress(app: &tauri::AppHandle, stage: &str, downloaded: u64, tot
             progress.total = total;
         }
     }
+}
+
+#[derive(Default)]
+struct MiniPopupState {
+    /// 页面量出来的小浮窗宽高（逻辑像素）
+    width: Mutex<f64>,
+    height: Mutex<f64>,
+    /// 用户拖动过：之后的尺寸变化不再自动吸附回托盘
+    moved: Mutex<bool>,
 }
 
 #[derive(Default)]
@@ -566,6 +584,45 @@ fn build_tray_popup(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Re
     Ok(win)
 }
 
+/// 独立小浮窗：和托盘弹窗共用 tray.html，但启动即进入 mini 模式。
+/// 常驻隐藏，由大浮窗的「缩小」打开；失焦不收起，整窗可拖动。
+fn build_mini_popup(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Result<WebviewWindow> {
+    let dark = system_is_dark();
+    let locale = current_locale(app);
+    let locale_code = match locale {
+        i18n::Locale::Zh => "zh-CN",
+        i18n::Locale::En => "en-US",
+    };
+    let stats_unit = current_stats_unit(app);
+    let script = format!(
+        "{} window.__CC_WINDOW__ = \"mini\"; window.__CC_START_MODE__ = \"mini\"; \
+         window.__CC_LOCALE__ = {}; window.__CC_STATS_UNIT__ = {}; window.__CC_TRAY_I18N__ = {};",
+        port_script(port, token),
+        serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        serde_json::to_string(stats_unit).unwrap_or_else(|_| "\"compact\"".into()),
+        i18n::native_value(locale, &["tray"])
+    );
+
+    let win = WebviewWindowBuilder::new(app, MINI_POPUP, WebviewUrl::App("tray.html".into()))
+        .title("CCConfig")
+        .inner_size(MINI_WIDTH, MINI_HEIGHT)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(true)
+        .visible(false)
+        .theme(Some(theme_of(dark)))
+        .initialization_script(&script)
+        .build()?;
+
+    apply_popup_background(&win, dark);
+    Ok(win)
+}
+
 fn stored_popup_height(app: &tauri::AppHandle) -> f64 {
     app.try_state::<TrayPopupState>()
         .and_then(|state| state.height.lock().ok().map(|h| *h))
@@ -574,20 +631,31 @@ fn stored_popup_height(app: &tauri::AppHandle) -> f64 {
         .clamp(POPUP_MIN_HEIGHT, POPUP_MAX_HEIGHT)
 }
 
-/// 按托盘图标位置摆弹窗：默认右对齐图标、向下展开；图标在下半屏（Windows 任务栏、
-/// 底部状态栏）时改为向上展开，并保证整个弹窗落在这块屏幕的工作区内。
-fn reposition_popup(app: &tauri::AppHandle) {
-    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
-        return;
-    };
-    let Some(state) = app.try_state::<TrayPopupState>() else {
-        return;
-    };
-    let Some(anchor) = state.anchor.lock().ok().and_then(|a| *a) else {
-        return;
-    };
+fn mini_popup_width(app: &tauri::AppHandle) -> f64 {
+    app.try_state::<MiniPopupState>()
+        .and_then(|state| state.width.lock().ok().map(|w| *w))
+        .filter(|w| *w > 0.0)
+        .unwrap_or(MINI_WIDTH)
+        .clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH)
+}
 
-    let height = stored_popup_height(app);
+fn mini_popup_height(app: &tauri::AppHandle) -> f64 {
+    app.try_state::<MiniPopupState>()
+        .and_then(|state| state.height.lock().ok().map(|h| *h))
+        .filter(|h| *h > 0.0)
+        .unwrap_or(MINI_HEIGHT)
+        .clamp(MINI_MIN_HEIGHT, MINI_MAX_HEIGHT)
+}
+
+/// 按托盘图标位置摆窗口：默认右对齐图标、向下展开；图标在下半屏（Windows 任务栏、
+/// 底部状态栏）时改为向上展开，并保证整个窗口落在这块屏幕的工作区内。
+fn place_popup_near_anchor(
+    win: &WebviewWindow,
+    app: &tauri::AppHandle,
+    anchor: TrayAnchor,
+    width: f64,
+    height: f64,
+) {
     let monitor = monitor_at(app, anchor.x, anchor.y);
     let scale = monitor.as_ref().map(|m| m.scale_factor()).unwrap_or(1.0);
     let (work_x, work_y, work_w, work_h) = monitor
@@ -603,7 +671,7 @@ fn reposition_popup(app: &tauri::AppHandle) {
         })
         .unwrap_or((0.0, 0.0, 1920.0, 1080.0));
 
-    let width_px = (POPUP_WIDTH * scale).round().max(1.0);
+    let width_px = (width * scale).round().max(1.0);
     let height_px = (height * scale).round().max(1.0);
     let gap = POPUP_GAP * scale;
     let margin = 8.0 * scale;
@@ -625,7 +693,42 @@ fn reposition_popup(app: &tauri::AppHandle) {
         x.round() as i32,
         y.round() as i32,
     )));
-    let _ = win.set_size(Size::Logical(LogicalSize::new(POPUP_WIDTH, height)));
+    let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
+}
+
+fn reposition_popup(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window(TRAY_POPUP) else {
+        return;
+    };
+    let Some(state) = app.try_state::<TrayPopupState>() else {
+        return;
+    };
+    let Some(anchor) = state.anchor.lock().ok().and_then(|a| *a) else {
+        return;
+    };
+    place_popup_near_anchor(&win, app, anchor, POPUP_WIDTH, stored_popup_height(app));
+}
+
+/// 小浮窗按最近一次点击的托盘图标定位；还没有锚点时居中。
+fn position_mini_popup(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window(MINI_POPUP) else {
+        return;
+    };
+    let anchor = app
+        .try_state::<TrayPopupState>()
+        .and_then(|state| state.anchor.lock().ok().and_then(|a| *a));
+    match anchor {
+        Some(anchor) => place_popup_near_anchor(
+            &win,
+            app,
+            anchor,
+            mini_popup_width(app),
+            mini_popup_height(app),
+        ),
+        None => {
+            let _ = win.center();
+        }
+    }
 }
 
 /// 每次展开都重新注入语言（主窗口里可能刚改过），再让页面重载数据。
@@ -741,9 +844,142 @@ fn tray_popup_resize(app: tauri::AppHandle, height: f64) {
     }
 }
 
+/// 自定义拖动区域按下时交给系统移动窗口（整窗可拖）
+#[tauri::command]
+fn tray_popup_drag(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window(TRAY_POPUP) {
+        let _ = win.start_dragging();
+    }
+}
+
 #[tauri::command]
 fn tray_popup_hide(app: tauri::AppHandle) {
     hide_popup_window(&app);
+}
+
+// ==================== 小浮窗 → Rust 的命令 ====================
+
+/// 大浮窗的「缩小」：收起大浮窗，打开独立小浮窗。
+#[tauri::command]
+fn mini_popup_open(app: tauri::AppHandle) {
+    hide_popup_window(&app);
+    let Some(win) = app.get_webview_window(MINI_POPUP) else {
+        // 启动时创建失败时退回主窗口，避免按钮点了没反应
+        show_main(&app);
+        return;
+    };
+    if let Some(state) = app.try_state::<MiniPopupState>() {
+        if let Ok(mut moved) = state.moved.lock() {
+            *moved = false;
+        }
+    }
+    inject_mini_context(&app, &win);
+    position_mini_popup(&app);
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
+/// 每次展开小浮窗都刷新语言与统计单位，再让页面重新拉一次数据。
+fn inject_mini_context(app: &tauri::AppHandle, win: &WebviewWindow) {
+    let locale = current_locale(app);
+    let locale_code = match locale {
+        i18n::Locale::Zh => "zh-CN",
+        i18n::Locale::En => "en-US",
+    };
+    let stats_unit = current_stats_unit(app);
+    let script = format!(
+        "window.__CC_LOCALE__ = {}; window.__CC_STATS_UNIT__ = {}; window.__CC_TRAY_I18N__ = {}; \
+         window.__ccMiniReload && window.__ccMiniReload();",
+        serde_json::to_string(locale_code).unwrap_or_else(|_| "\"zh-CN\"".into()),
+        serde_json::to_string(stats_unit).unwrap_or_else(|_| "\"compact\"".into()),
+        i18n::native_value(locale, &["tray"])
+    );
+    let _ = win.eval(&script);
+}
+
+/// 关闭小浮窗只收起它，不碰大浮窗，也不打开主窗口。
+#[tauri::command]
+fn mini_popup_hide(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window(MINI_POPUP) {
+        let _ = win.hide();
+    }
+}
+
+#[tauri::command]
+fn mini_popup_resize(app: tauri::AppHandle, width: f64, height: f64) {
+    let w = width.clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH);
+    let h = height.clamp(MINI_MIN_HEIGHT, MINI_MAX_HEIGHT);
+    let Some(state) = app.try_state::<MiniPopupState>() else {
+        return;
+    };
+    let mut changed = false;
+    if let Ok(mut stored) = state.width.lock() {
+        if (*stored - w).abs() >= 0.5 {
+            *stored = w;
+            changed = true;
+        }
+    }
+    if let Ok(mut stored) = state.height.lock() {
+        if (*stored - h).abs() >= 0.5 {
+            *stored = h;
+            changed = true;
+        }
+    }
+    if !changed {
+        return;
+    }
+    let Some(win) = app.get_webview_window(MINI_POPUP) else {
+        return;
+    };
+    let moved = app
+        .try_state::<MiniPopupState>()
+        .and_then(|state| state.moved.lock().ok().map(|m| *m))
+        .unwrap_or(false);
+    // 没被拖过就继续贴着托盘，避免首次量出真实宽度后留出偏移
+    let anchor = app
+        .try_state::<TrayPopupState>()
+        .and_then(|state| state.anchor.lock().ok().and_then(|a| *a));
+    match anchor {
+        Some(anchor) if !moved => place_popup_near_anchor(&win, &app, anchor, w, h),
+        _ => {
+            let _ = win.set_size(Size::Logical(LogicalSize::new(w, h)));
+        }
+    }
+}
+
+#[tauri::command]
+fn mini_popup_drag(app: tauri::AppHandle) {
+    if let Some(state) = app.try_state::<MiniPopupState>() {
+        if let Ok(mut moved) = state.moved.lock() {
+            *moved = true;
+        }
+    }
+    if let Some(win) = app.get_webview_window(MINI_POPUP) {
+        let _ = win.start_dragging();
+    }
+}
+
+/// 小浮窗的「放大」：回到大浮窗（主窗口仍从大浮窗底部进入）。
+#[tauri::command]
+fn mini_popup_expand(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window(MINI_POPUP) {
+        let _ = win.hide();
+    }
+    let anchor = app
+        .try_state::<TrayPopupState>()
+        .and_then(|state| state.anchor.lock().ok().and_then(|a| *a));
+    match anchor {
+        Some(anchor) => show_tray_popup(&app, anchor),
+        None => {
+            if let Some(win) = app.get_webview_window(TRAY_POPUP) {
+                let _ = win.center();
+                let _ = win.show();
+                let _ = win.set_focus();
+            } else {
+                show_main(&app);
+            }
+        }
+    }
 }
 
 /// 设置 → 客户端 → 开机自启：当前是否已注册（以系统里的实际状态为准，不另存 DB）。
@@ -1132,6 +1368,11 @@ fn restart_sidecar(app: &tauri::AppHandle) {
             } else if let Err(e) = build_tray_popup(app, port, &token) {
                 eprintln!("[ccconfig] 托盘弹窗创建失败: {e}");
             }
+            if let Some(mini) = app.get_webview_window(MINI_POPUP) {
+                let _ = mini.eval(&port_script(port, &token));
+            } else if let Err(e) = build_mini_popup(app, port, &token) {
+                eprintln!("[ccconfig] 小浮窗创建失败: {e}");
+            }
             eprintln!("[ccconfig] sidecar 已重启，端口 {port}");
         }
         Err(e) => eprintln!("[ccconfig] 重启 sidecar 失败: {e}"),
@@ -1217,6 +1458,12 @@ fn main() {
             tray_popup_action,
             tray_popup_resize,
             tray_popup_hide,
+            tray_popup_drag,
+            mini_popup_open,
+            mini_popup_hide,
+            mini_popup_resize,
+            mini_popup_drag,
+            mini_popup_expand,
             get_autostart,
             set_autostart,
             get_hide_dock_icon,
@@ -1264,6 +1511,7 @@ fn main() {
                 sidecar_dir: sidecar_dir.clone(),
             });
             app.manage(TrayPopupState::default());
+            app.manage(MiniPopupState::default());
             app.manage(UpdateState::default());
 
             // 托盘先建，保证即使 sidecar 起不来用户也有入口
@@ -1309,6 +1557,9 @@ fn main() {
                     // 失败不致命：左键回落到直接打开主窗口。
                     if let Err(e) = build_tray_popup(&handle, port, &token) {
                         eprintln!("[ccconfig] 托盘弹窗创建失败（左键将打开主窗口）: {e}");
+                    }
+                    if let Err(e) = build_mini_popup(&handle, port, &token) {
+                        eprintln!("[ccconfig] 小浮窗创建失败: {e}");
                     }
                     spawn_watchdog(handle.clone());
                 }

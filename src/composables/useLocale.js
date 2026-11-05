@@ -57,6 +57,8 @@ const syncRuntime = () => {
   try {
     // 渲染进程是语言权威值：preload / 桌面 sidecar 的 Intl 语言可能与 WebView 不一致
     window.services?.setLocale?.(resolvedLocale.value)
+    // uTools 功能指令名与描述跟着语言重放；桌面版按能力检测自行跳过。
+    window.services?.syncQuickPanelFeature?.()
   } catch (e) {
     /* ignore */
   }
