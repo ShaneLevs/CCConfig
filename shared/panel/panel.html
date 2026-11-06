@@ -185,6 +185,7 @@
     flex: none;
     min-width: 0;
   }
+  .mini-rate { padding-left: 10px; border-left: 0.5px solid var(--divider); }
   .mini-label {
     font-size: 9.5px;
     color: var(--muted);
@@ -426,18 +427,21 @@
   /* ---------- 统计卡片 ---------- */
   .stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 7px;
     margin-top: 8px;
   }
   .stats[hidden] { display: none; }
   .stat {
+    grid-column: span 2;
     background: var(--card);
     border: 0.5px solid var(--card-edge);
     border-radius: 10px;
     padding: 9px 11px 8px;
     min-width: 0;
   }
+  /* 五项统计：第一行调用 / 成功率 / 实时 TPS，第二行 Token / 缓存命中 */
+  .stat:nth-child(n + 4) { grid-column: span 3; }
   .stat-label {
     font-size: 10.5px;
     color: var(--muted);
@@ -1363,6 +1367,10 @@
         <span class="mini-label" id="mini-usage-label"></span>
         <span class="mini-tokens" id="mini-tokens">—</span>
       </div>
+      <div class="mini-usage mini-rate">
+        <span class="mini-label" id="mini-rate-label"></span>
+        <span class="mini-tokens" id="mini-rate">—</span>
+      </div>
       <div class="mini-rings" id="mini-rings" hidden></div>
     </div>
     <div class="mini-actions">
@@ -1394,6 +1402,8 @@
   const miniInner = $('mini-inner')
   const miniUsageLabel = $('mini-usage-label')
   const miniTokens = $('mini-tokens')
+  const miniRateLabel = $('mini-rate-label')
+  const miniRate = $('mini-rate')
   const miniRings = $('mini-rings')
   const miniClose = $('mini-close')
   const miniExpand = $('mini-expand')
@@ -1733,6 +1743,7 @@
     const cards = [
       [t('requests'), fmtInt(requests)],
       [t('successRate'), fmtPct(successes, requests)],
+      [t('outputTps'), Number((lastStatus.stats && lastStatus.stats.outputTps) || 0).toFixed(1) + ' tps'],
       [t('tokens'), fmtTokens(prompt + output)],
       [t('cacheHitRate'), fmtPct(cached, prompt)],
     ]
@@ -2381,10 +2392,12 @@
   }
 
   // ---------- 渲染：小浮窗 ----------
-  // 一行只放两块：本次网关 Token 用量 + 第一条可用订阅的两个余量圆环。
+  // 一行放三块：本次网关 Token 用量 + 实时输出速率 + 第一条可用订阅的两个余量圆环。
   const MINI_REFRESH_MS = 60 * 1000
+  const LIVE_STATUS_REFRESH_MS = 500
   const RING_RADIUS = 17
   const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+  let lastMiniWidth = 0
 
   function firstSubscription() {
     const list = Array.isArray(lastSubs) ? lastSubs : []
@@ -2414,9 +2427,11 @@
 
   function renderMini() {
     if (miniUsageLabel) miniUsageLabel.textContent = t('miniSession')
+    if (miniRateLabel) miniRateLabel.textContent = t('miniOutputTps')
     const stats = (lastStatus && lastStatus.stats) || {}
     const tokens = Number(stats.promptTokens || 0) + Number(stats.outputTokens || 0)
     if (miniTokens) miniTokens.textContent = fmtTokens(tokens)
+    if (miniRate) miniRate.textContent = Number(stats.outputTps || 0).toFixed(1) + ' tps'
     const sub = firstSubscription()
     const windows = sub ? sub.windows.slice(0, 2) : []
     if (miniRings) {
@@ -2434,8 +2449,14 @@
       miniExpand.title = t('miniExpand')
       miniExpand.setAttribute('aria-label', t('miniExpand'))
     }
-    // 文本长度会变（Token 单位、订阅有无），宽度需要重新量
-    if (mode === 'mini') reportHeight()
+    // TPS 高频刷新时只有宽度真的变化才让宿主改窗口尺寸，避免每 500ms 调一次 resize。
+    if (mode === 'mini') {
+      const width = miniContentWidth()
+      if (width !== lastMiniWidth) {
+        lastMiniWidth = width
+        reportHeight()
+      }
+    }
   }
 
   // 小浮窗只拉这两块数据，比整页 reload 轻得多
@@ -2464,6 +2485,28 @@
     miniTimer = 0
   }
 
+  let liveStatusTimer = 0
+  async function refreshLiveStatus() {
+    if (offline || document.visibilityState === 'hidden') return
+    try {
+      lastStatus = (await rpc('getAutoRouteStatus')) || {}
+      renderStats(!statsEl.hidden)
+      if (mode === 'mini') renderMini()
+    } catch (error) {
+      diag('panel-live-status', error)
+    }
+  }
+
+  function stopLiveStatusTimer() {
+    if (liveStatusTimer) clearInterval(liveStatusTimer)
+    liveStatusTimer = 0
+  }
+
+  function startLiveStatusTimer() {
+    stopLiveStatusTimer()
+    liveStatusTimer = setInterval(refreshLiveStatus, LIVE_STATUS_REFRESH_MS)
+  }
+
   function setPanelMode(next) {
     const target = next === 'mini' ? 'mini' : 'panel'
     if (target === mode) return
@@ -2475,6 +2518,7 @@
     } else {
       stopMiniTimer()
     }
+    startLiveStatusTimer()
     // 高度与模式一起上报：宿主按模式换窗口宽度，也据此关闭桌面版的失焦收起
     reportHeight()
   }
@@ -2603,6 +2647,7 @@
     renderSubs(subs)
     renderMini()
     renderUsage()
+    startLiveStatusTimer()
     setTab(activeTab)
     reportHeight()
 

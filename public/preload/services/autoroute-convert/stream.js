@@ -2,6 +2,8 @@
 // 上游 SSE → target.readStream（canonical 事件流）→ source.createFrameWriter（入站协议帧）→ 客户端
 // 非流式路径不经过本模块（server 直接 buffer + parse/format）。
 
+const { outputTokenDeltaFromCanonical } = require("../output-rate");
+
 const sseHeaders = () => ({
   "content-type": "text/event-stream; charset=utf-8",
   "cache-control": "no-cache",
@@ -26,7 +28,7 @@ const collectBody = async (res, limit = 32 * 1024 * 1024) => {
 // onClientGone: 客户端提前断开时回调（上游随之被中止，统计侧据此记 499）
 // modelOverride: 非空时把 start 事件的 model（上游真实模型名）换成映射名，三个 FrameWriter 都从
 //   start 事件取 model，改这一处即可让整条流的响应 model 与 /v1/models 暴露的映射名一致
-const pipeStream = async ({ upstreamRes, target, source, res, onClientGone, modelOverride }) => {
+const pipeStream = async ({ upstreamRes, target, source, res, onClientGone, onOutputTokens, modelOverride }) => {
   // 客户端在等待上游响应头的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
   if (res.destroyed || res.writableEnded) {
     try {
@@ -56,6 +58,10 @@ const pipeStream = async ({ upstreamRes, target, source, res, onClientGone, mode
     for await (const event of target.readStream(upstreamRes)) {
       if (modelOverride && event && event.type === "start") event.model = modelOverride;
       if (event.type === "end" && event.usage) endUsage = event.usage;
+      if (typeof onOutputTokens === "function") {
+        const tokens = outputTokenDeltaFromCanonical(event);
+        if (tokens > 0) onOutputTokens(tokens);
+      }
       if (closed) break;
       for (const frame of writer.push(event)) {
         if (!closed) res.write(frame);

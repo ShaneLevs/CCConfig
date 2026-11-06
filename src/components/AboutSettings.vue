@@ -4,7 +4,7 @@ import { LogoGithubIcon } from 'tdesign-icons-vue-next'
 import { useAppUpdate } from '../composables/useAppUpdate'
 
 // 设置弹窗「关于」页签：插件 logo + 客户端版本（构建时由 vite define 注入）+ GitHub 入口
-// + 桌面版自动更新（检查 → 下载 → 重启安装）
+// + 桌面版更新（自动检查提示 → 手动下载 → 重启安装）
 const { t } = useI18n()
 const ASSET_BASE = import.meta.env.BASE_URL
 const version = __APP_VERSION__
@@ -12,12 +12,14 @@ const GITHUB_URL = 'https://github.com/ShaneLevs/CCConfig'
 
 const {
   isDesktop,
+  hasUpdate,
   state: updateState,
   percent,
   statusText,
   actionText,
   showAction,
   check,
+  install,
   restart,
 } = useAppUpdate()
 
@@ -27,6 +29,7 @@ const openGithub = () => {
 
 const handleUpdateAction = () => {
   if (updateState.value === 'ready') restart()
+  else if (updateState.value === 'available') install()
   else check()
 }
 </script>
@@ -43,6 +46,7 @@ const handleUpdateAction = () => {
     </button>
 
     <div v-if="isDesktop" class="about-update">
+      <span v-if="hasUpdate" class="about-update__dot" aria-hidden="true"></span>
       <div
         class="about-update__status"
         :class="{ 'about-update__status--error': updateState === 'error' }"
@@ -121,6 +125,7 @@ const handleUpdateAction = () => {
   text-decoration: underline;
 }
 .about-update {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -129,6 +134,15 @@ const handleUpdateAction = () => {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid var(--td-component-stroke);
+}
+.about-update__dot {
+  position: absolute;
+  top: 5px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--td-error-color);
 }
 .about-update__status {
   font-size: 12px;

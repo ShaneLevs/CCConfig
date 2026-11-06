@@ -24,13 +24,16 @@
       "update": {
         "idle": "Check for a new version",
         "checking": "Checking for updates…",
+        "available": "Version v{version} is available",
         "latest": "You're on the latest version, v{version}",
         "downloading": "Downloading update {progress}%",
         "downloadingUnknown": "Downloading update…",
         "installing": "Installing update…",
         "ready": "Update downloaded. Restart to finish.",
         "check": "Check for updates",
+        "downloadInstall": "Download and install",
         "retry": "Retry",
+        "retryInstall": "Download and install again",
         "restart": "Restart and install",
         "failed": "Could not check for updates. Please try again.",
         "installFailed": "Could not download the update. Please try again."

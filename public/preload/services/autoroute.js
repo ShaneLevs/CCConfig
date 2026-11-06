@@ -28,6 +28,7 @@ const { getTarget } = require("./autoroute-convert/target");
 const { pipeStream, collectBody } = require("./autoroute-convert/stream");
 const { rewriteJsonModel, createSseModelRewriter } = require("./autoroute-convert/model-alias");
 const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText, retryAfterMs, isRetryableStatus, refusedOptionalFields, refusedBetaHeader } = require("./autoroute-convert/canonical");
+const { createSseOutputTokenProbe, createOutputRateMeter } = require("./output-rate");
 
 // 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
 // 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccconfig_overridden_env_<nativeId> 先例）。
@@ -121,7 +122,17 @@ const writeAutoRouteConfig = (patch) =>
 
 // ==================== 运行状态 ====================
 
-const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, stats: emptyStats() };
+const outputRateMeter = createOutputRateMeter();
+const serverState = { server: null, port: 0, startedAt: 0, logs: [], logSeq: 0, activeStreams: 0, stats: emptyStats() };
+
+const beginStreamRate = () => {
+  serverState.activeStreams++;
+};
+
+const endStreamRate = () => {
+  if (serverState.activeStreams > 0) serverState.activeStreams--;
+  if (serverState.activeStreams === 0) outputRateMeter.reset();
+};
 
 // 本次运行统计（随网关重启清零）：仅统计已路由转发的模型调用（entry.target 非空），
 // 模型未启用 / /v1/models 等控制面请求不计入。
@@ -304,7 +315,12 @@ const getAutoRouteStatus = () => ({
   port: serverState.server ? serverState.port : readAutoRouteConfig().port,
   baseUrl: serverState.server ? `http://127.0.0.1:${serverState.port}` : "",
   logs: [...serverState.logs],
-  stats: { ...serverState.stats },
+  // outputTps 是最近一秒所有在途流式请求的聚合输出速率；流结束即归零，不属于历史统计。
+  stats: {
+    ...serverState.stats,
+    outputTps: outputRateMeter.rate(),
+    activeStreams: serverState.activeStreams,
+  },
   // 历史统计（按本地日期聚合）：today 今日、month 本月、total 累积、since 最早一天。
   // 网关页与托盘共用「本次 / 今日 / 本月 / 累积」四个口径。
   history: getHistorySummary(),
@@ -797,6 +813,8 @@ const handleRequest = async (req, res) => {
         // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
         // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
         const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        const outputProbe = createSseOutputTokenProbe((tokens) => outputRateMeter.record(tokens));
+        beginStreamRate();
         if (liveLog) liveLog.usage = usage; // 与旁路扫描共用同一对象 → 流式期间 token 数可见地累加
         let pending = "";
         let clientGone = false;
@@ -821,6 +839,7 @@ const handleRequest = async (req, res) => {
         const tapText = (text) => {
           if (!text) return;
           try {
+            outputProbe.push(text);
             pending += text;
             const found = scanUsageFromText(pending);
             for (const k of Object.keys(usage)) if (found[k] > usage[k]) usage[k] = found[k];
@@ -830,7 +849,16 @@ const handleRequest = async (req, res) => {
           }
           if (sse) writeOut(sse.push(text));
         };
+        // 流关闭时只冲刷一次，避免 end + close 双触发同一残帧。
+        let outputProbeFlushed = false;
+        const flushOutputProbe = () => {
+          if (outputProbeFlushed) return;
+          outputProbeFlushed = true;
+          outputProbe.flush();
+        };
         const settle = (error) => {
+          flushOutputProbe();
+          endStreamRate();
           finish({
             protocol: sourceProtocol,
             model: model.id,
@@ -854,6 +882,7 @@ const handleRequest = async (req, res) => {
         upstreamRes.on("data", (chunk) => tapText(decoder.write(chunk)));
         upstreamRes.once("end", () => {
           tapText(decoder.end());
+          flushOutputProbe();
           // 改写路径要自己吐残行 + 收尾（原样透传由 pipe 负责 end）
           if (sse) {
             writeOut(sse.flush());
@@ -870,6 +899,7 @@ const handleRequest = async (req, res) => {
           settle();
         });
         upstreamRes.once("error", (e) => {
+          flushOutputProbe();
           if (sse && !res.destroyed && !res.writableEnded) {
             writeOut(sse.flush());
             res.end();
@@ -914,7 +944,21 @@ const handleRequest = async (req, res) => {
 
     if (wantsStream) {
       let clientGone = false;
-      const usage = await pipeStream({ upstreamRes, target, source, res, onClientGone: () => (clientGone = true), modelOverride: displayModel });
+      beginStreamRate();
+      let usage = null;
+      try {
+        usage = await pipeStream({
+          upstreamRes,
+          target,
+          source,
+          res,
+          onClientGone: () => (clientGone = true),
+          onOutputTokens: (tokens) => outputRateMeter.record(tokens),
+          modelOverride: displayModel,
+        });
+      } finally {
+        endStreamRate();
+      }
       finish({
         protocol: sourceProtocol,
         model: model.id,
@@ -981,12 +1025,16 @@ const startAutoRoute = () => {
       // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
       serverState.logs = [];
       serverState.stats = emptyStats();
+      serverState.activeStreams = 0;
+      outputRateMeter.reset();
       resolve(getAutoRouteStatus());
     });
   });
 };
 
 const stopAutoRoute = () => {
+  serverState.activeStreams = 0;
+  outputRateMeter.reset();
   // 停止前把尚未落库的历史统计写掉，避免关网关/退出时丢最后几条
   try { flushHistory(); } catch (e) { console.error("[autoroute] 停止时保存历史统计失败:", e.message || e); }
   return new Promise((resolve) => {

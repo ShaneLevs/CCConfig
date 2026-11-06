@@ -112,6 +112,7 @@
       "supportedEndpoints": "支持的接口",
       "statRequests": "调用次数",
       "statSuccessRate": "成功率",
+      "statOutputTps": "实时输出速率",
       "statTokens": "Token 消耗",
       "statCacheHit": "缓存命中率",
       "statScopeSession": "本次",

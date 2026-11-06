@@ -450,9 +450,11 @@ const statsSource = computed(() => {
   if (statsScope.value === "month") return historyInfo.value.month || {};
   return historyInfo.value.total || {};
 });
-// 本次没有调用但历史有数据时也要展示（否则切不回累积）
+// 网关运行时就展示统计区：首次请求完成前 stats.requests 仍为 0，但实时 TPS 应立即可见。
+// 网关没运行时，只要本次或历史有数据仍保留统计（否则切不回累积）。
 const hasStats = computed(
   () =>
+    !!status.value.running ||
     ((status.value.stats && status.value.stats.requests) || 0) > 0 ||
     ((historyInfo.value.total && historyInfo.value.total.requests) || 0) > 0
 );
@@ -473,6 +475,8 @@ const statsSummary = computed(() => {
     successRate: requests ? pct((s.successes || 0) / requests) : "—",
     tokens: prompt || output ? tokens(prompt + output) : "—",
     cacheHit: prompt ? pct(cached / prompt) : "—",
+    // TPS 是当前在途流式输出的实时值，不随「本次 / 今日 / 本月 / 累积」切换。
+    outputTps: ((status.value.stats && status.value.stats.outputTps) || 0).toFixed(1) + " tps",
   };
 });
 
@@ -485,8 +489,8 @@ onMounted(() => {
   loadAll();
   loading.value = false;
   window.addEventListener("focus", reloadConfig);
-  // 1s 轮询：getAutoRouteStatus 是 preload 内存读取，开销可忽略；配合「进行中」行做到准实时
-  logTimer = setInterval(refreshStatus, 1000);
+  // 500ms 轮询：getAutoRouteStatus 是 preload 内存读取，开销可忽略；配合「进行中」行与实时 TPS
+  logTimer = setInterval(refreshStatus, 500);
 });
 onUnmounted(() => {
   window.removeEventListener("focus", reloadConfig);
@@ -658,6 +662,10 @@ onUnmounted(() => {
         <div class="autoroute-stat">
           <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statSuccessRate') }}</span>
           <span class="autoroute-stat-value">{{ statsSummary.successRate }}</span>
+        </div>
+        <div class="autoroute-stat">
+          <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statOutputTps') }}</span>
+          <span class="autoroute-stat-value">{{ statsSummary.outputTps }}</span>
         </div>
         <div class="autoroute-stat">
           <span class="autoroute-stat-label">{{ t('commonApp.autoRoute.statTokens') }}</span>

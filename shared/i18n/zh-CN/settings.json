@@ -24,13 +24,16 @@
       "update": {
         "idle": "检查是否有新版本",
         "checking": "正在检查更新…",
+        "available": "发现新版本 v{version}",
         "latest": "已是最新版本 v{version}",
         "downloading": "正在下载更新 {progress}%",
         "downloadingUnknown": "正在下载更新…",
         "installing": "正在安装更新…",
         "ready": "更新已下载，重启后生效",
         "check": "检查更新",
+        "downloadInstall": "下载并安装",
         "retry": "重试",
+        "retryInstall": "重新下载并安装",
         "restart": "重启并安装",
         "failed": "检查更新失败，请稍后重试。",
         "installFailed": "下载更新失败，请稍后重试。"

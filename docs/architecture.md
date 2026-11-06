@@ -149,8 +149,8 @@ Claude:
       与原先的 usage 旁路扫描并行）、转换非流式覆盖 formatResponse 的顶层 model、转换流式走 pipeStream 的 modelOverride
       （三个 FrameWriter 都只从 start 事件取 model，所以只改那一处）。关掉即恢复字节级透传——客户端按响应模型名
       推断上下文窗口 / 定价时（映射名不在其内置表里会退化成默认值）可用它自救。网关自己的请求日志不受影响：仍记真实模型 ID + alias
-    最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 1s 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
-    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
+    最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 500ms 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
+    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次，含实时 outputTps）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。实时 TPS 来自流式增量内容的滑动窗口估算，不属于历史统计；网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
       同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
       跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
@@ -709,7 +709,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
 - uTools 版顶部多一条 32px 标题栏（品牌名 + 关闭按钮），只在 `html.cc-panel-utools` 下渲染，桌面托盘不受影响。拖动优先用 CSS `-webkit-app-region: drag`；该区域若未生效，页面会收到 `mousedown`，再按指针屏幕位移发 `drag-window` 动作，由主窗口 preload 用 `getPosition()` / `setPosition()` 按起点换算窗口位置（屏幕坐标与窗口位置同为 DIP）。关闭按钮复用 `hide` 动作。标题栏由 preload 在 `DOMContentLoaded` 时打上 class，页面在同事件补报一次高度，避免窗口底部的动作条被裁掉。
 - 底部动作按宿主能力映射：uTools 的 show-main 走 `showMainWindow() + redirect()`，quit 显示为「关闭」并关掉自定义窗口；桌面版仍走 `tray_popup_action` 的 show-main / quit。Esc 与 hide 都只收起或关闭面板。
 - 面板有两种形态：完整面板与 `html.cc-mini` 小浮窗（`mode` 由 `reportHeight` 一并上报）。uTools 版仍是同一个自定义窗口内切换，宽度从 400 切到按内容量出的值（96–360），高度 48–120；桌面版的小浮窗是独立窗口 `mini-popup`，和托盘弹窗 `tray-popup` 互不影响。
-- 小浮窗一行只显示两块：本次网关 Token 用量（`getAutoRouteStatus().stats` 的 prompt + output）与第一条可用订阅的两个余量圆环，每 60 秒只重新拉这两项，不跑整页 `reload`。
+- 小浮窗一行显示三块：本次网关 Token 用量（`getAutoRouteStatus().stats` 的 prompt + output）、实时输出 TPS 与第一条可用订阅的两个余量圆环；TPS 随网关状态每 500ms 轻量刷新，订阅每 60 秒拉一次，不跑整页 `reload`。
 - 大浮窗底部「缩小」在桌面版调用 `mini_popup_open`：收起大浮窗、显示独立小浮窗。小浮窗常驻置顶、失焦不收起，整窗可拖（`mini_popup_drag` 走原生 `start_dragging`，拖动过后改尺寸不再吸附回托盘）。关闭只收起小浮窗（`mini_popup_hide`），不打开主窗口；hover 的「放大」回到大浮窗（`mini_popup_expand`），主窗口仍从大浮窗底部进入。托盘图标始终只切换大浮窗，和小浮窗是否打开过无关。
 - 自定义窗口关闭能力由 uTools Runtime 管理；官方文档说明主窗口隐藏后插件可能在用户设定的时间（默认 3 分钟）内自动退出，没有文档化的保活手段，也没有在 `onPluginOut` 中强杀窗口。返回的 `BrowserWindow` 不支持实例事件监听，所以拖动结束、关闭都靠页面事件走 IPC。真实宿主里的全局快捷键切换、常驻时长与后台回收行为仍需装机验收。
 

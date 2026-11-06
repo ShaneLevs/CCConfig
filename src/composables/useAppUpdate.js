@@ -1,19 +1,19 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-// 设置 → 关于 → 自动更新（仅桌面版）。
-// 状态放在模块级：设置弹窗切走再切回时组件会重建，下载进度不能跟着丢。
+// 设置 → 关于 → 自动更新（仅桌面版）。状态放模块级，供设置按钮和关于页共同使用。
 const isDesktop = document.documentElement.classList.contains('is-desktop')
 
-// idle | checking | latest | downloading | installing | ready | error
+// idle | checking | available | latest | downloading | installing | ready | error
 const state = ref('idle')
 const info = ref(null)
+const updateAvailable = ref(false)
 const errorKey = ref('')
+const failedStage = ref('')
 const progress = ref({ stage: 'idle', downloaded: 0, total: null })
 
-let started = false
-let mountedCount = 0
 let pollTimer = null
+let checkPromise = null
 
 const invoke = (cmd, args) => {
   const internals = window.__TAURI_INTERNALS__
@@ -36,9 +36,13 @@ const pollProgress = async () => {
     progress.value = next
     // 命令在后台完成时（例如弹窗已切走）也能从 Rust 侧状态追上最终结果
     if (next.stage === 'installing') state.value = 'installing'
-    if (next.stage === 'ready') state.value = 'ready'
+    if (next.stage === 'ready') {
+      updateAvailable.value = false
+      state.value = 'ready'
+    }
     if (next.stage === 'error') {
       errorKey.value = 'settings.about.update.installFailed'
+      failedStage.value = 'install'
       state.value = 'error'
     }
   } catch (e) {
@@ -54,40 +58,61 @@ const startPolling = () => {
 const install = async () => {
   state.value = 'downloading'
   errorKey.value = ''
+  failedStage.value = ''
   progress.value = { stage: 'downloading', downloaded: 0, total: null }
   startPolling()
   try {
     await invoke('install_update')
+    updateAvailable.value = false
     state.value = 'ready'
   } catch (e) {
     console.error('install_update failed:', e)
     errorKey.value = 'settings.about.update.installFailed'
+    failedStage.value = 'install'
     state.value = 'error'
   } finally {
     stopPolling()
   }
 }
 
-const check = async () => {
-  if (!isDesktop || state.value === 'checking' || state.value === 'downloading' || state.value === 'installing') {
-    return
-  }
+const runCheck = async () => {
   state.value = 'checking'
   errorKey.value = ''
+  failedStage.value = ''
+  const previousAvailable = updateAvailable.value
   try {
     const result = await invoke('check_update')
     info.value = result
+    updateAvailable.value = Boolean(result.available)
     if (result.available) {
-      // 发现新版本后直接开始下载，用户只需在完成后重启
-      await install()
+      // 自动检查只负责提示；下载安装由用户在「关于」页手动触发。
+      state.value = 'available'
     } else {
       state.value = 'latest'
     }
   } catch (e) {
     console.error('check_update failed:', e)
     errorKey.value = 'settings.about.update.failed'
-    state.value = 'error'
+    failedStage.value = 'check'
+    // 已发现新版本时，偶发联网失败不清红点；自动检查的后台错误也不打断主流程。
+    updateAvailable.value = previousAvailable
+    state.value = previousAvailable ? 'available' : 'error'
+  } finally {
+    checkPromise = null
   }
+}
+
+const check = async () => {
+  if (
+    !isDesktop ||
+    state.value === 'downloading' ||
+    state.value === 'installing' ||
+    state.value === 'ready'
+  ) {
+    return
+  }
+  if (!checkPromise) checkPromise = runCheck()
+  return checkPromise
 }
 
 const restart = async () => {
@@ -112,6 +137,10 @@ export function useAppUpdate() {
     switch (state.value) {
       case 'checking':
         return t('settings.about.update.checking')
+      case 'available':
+        return t('settings.about.update.available', {
+          version: info.value?.version || '',
+        })
       case 'latest':
         return t('settings.about.update.latest', {
           version: info.value?.currentVersion || __APP_VERSION__,
@@ -133,33 +162,30 @@ export function useAppUpdate() {
 
   const actionText = computed(() => {
     if (state.value === 'ready') return t('settings.about.update.restart')
-    if (state.value === 'error') return t('settings.about.update.retry')
+    if (state.value === 'error') {
+      return failedStage.value === 'install'
+        ? t('settings.about.update.retryInstall')
+        : t('settings.about.update.retry')
+    }
+    if (updateAvailable.value) return t('settings.about.update.downloadInstall')
     return t('settings.about.update.check')
   })
 
   const showAction = computed(() =>
-    ['idle', 'latest', 'error', 'ready'].includes(state.value),
+    ['idle', 'available', 'latest', 'error', 'ready'].includes(state.value),
   )
 
   onMounted(() => {
-    mountedCount += 1
     if (!isDesktop) return
-    // 弹窗切走时轮询会停；回到「关于」继续跟踪同一个后台下载
-    if (state.value === 'downloading' || state.value === 'installing') {
-      startPolling()
-    } else if (!started) {
-      started = true
-      check()
-    }
+    // 下载中切回「关于」时恢复进度轮询；检查由主窗口显示事件负责。
+    if (state.value === 'downloading' || state.value === 'installing') startPolling()
   })
 
-  onUnmounted(() => {
-    mountedCount = Math.max(0, mountedCount - 1)
-    if (mountedCount === 0) stopPolling()
-  })
+  onUnmounted(stopPolling)
 
   return {
     isDesktop,
+    hasUpdate: updateAvailable,
     state,
     progress,
     percent,
@@ -167,6 +193,7 @@ export function useAppUpdate() {
     actionText,
     showAction,
     check,
+    install,
     restart,
   }
 }

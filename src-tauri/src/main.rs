@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    LogicalSize, Manager, PhysicalPosition, Position, RunEvent, Size, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    webview::PageLoadEvent, LogicalSize, Manager, PhysicalPosition, Position, RunEvent, Size,
+    WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_updater::UpdaterExt;
 
@@ -350,6 +350,22 @@ fn port_script(port: u16, token: &str) -> String {
     )
 }
 
+/// WebView 没有可靠的跨平台 Tauri window show 事件；所有「打开主窗口」最终都走 show_main。
+/// 每次真正显示后通知前端检查更新；页面尚未完成后端会重复派发，由前端合并并发检查。
+const MAIN_SHOWN_SCRIPT: &str =
+    "window.dispatchEvent(new Event('ccconfig-main-shown'));";
+
+fn notify_main_shown(win: &WebviewWindow) {
+    let _ = win.eval(MAIN_SHOWN_SCRIPT);
+}
+
+fn show_main_window(win: &WebviewWindow) {
+    let _ = win.show();
+    let _ = win.unminimize();
+    let _ = win.set_focus();
+    notify_main_shown(win);
+}
+
 /// `show` = false 用于开机自启：窗口照常建好（托盘「打开主窗口」随后可直接 show），
 /// 但不抢焦点、不弹到用户面前。
 fn build_main_window(
@@ -384,13 +400,17 @@ fn build_main_window(
     let builder = builder
         .visible(false)
         .theme(Some(theme_of(dark)))
+        .on_page_load(|win, payload| {
+            if payload.event() == PageLoadEvent::Finished && win.is_visible().unwrap_or(false) {
+                notify_main_shown(&win);
+            }
+        })
         .initialization_script(&script);
 
     let win = builder.build()?;
     apply_main_background(&win, dark);
     if show {
-        let _ = win.show();
-        let _ = win.set_focus();
+        show_main_window(&win);
     }
     Ok(())
 }
@@ -1296,9 +1316,7 @@ fn handle_tray_event(tray: &TrayIcon, event: TrayIconEvent) {
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
-        let _ = win.show();
-        let _ = win.unminimize();
-        let _ = win.set_focus();
+        show_main_window(&win);
         return;
     }
     if let Some(win) = app.get_webview_window(GUIDE_WINDOW) {

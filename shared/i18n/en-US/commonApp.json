@@ -112,6 +112,7 @@
       "supportedEndpoints": "Supported endpoints",
       "statRequests": "Requests",
       "statSuccessRate": "Success rate",
+      "statOutputTps": "Live output rate",
       "statTokens": "Token usage",
       "statCacheHit": "Cache hit rate",
       "statScopeSession": "This run",

@@ -62,6 +62,7 @@ import AgentSideRail from "../components/AgentSideRail.vue";
 import OverlayScrollbar from "../components/OverlayScrollbar.vue";
 import { useAppContext } from "../composables/useAppContext";
 import { useAutoRouteStatus } from "../composables/useAutoRouteStatus";
+import { useAppUpdate } from "../composables/useAppUpdate";
 import { useAgentVisibility } from "../composables/useAgentVisibility";
 import { providePageContext } from "../composables/usePageRefresh";
 import { APP_TABS, DEEP_LINK_ROUTES } from "./appTabs";
@@ -83,6 +84,7 @@ const { refreshAutoRouteEnabled } = useAutoRouteStatus();
 const settingsTab = ref("general");
 // 桌面版 bridge 在 Vue 挂载前就给 <html> 打了 is-desktop，uTools 版没有这个类
 const isDesktop = document.documentElement.classList.contains("is-desktop");
+const { hasUpdate, check: checkForUpdate } = useAppUpdate();
 // 弹窗尺寸固定（宽度写在模板里，高度见 .settings-body）：切换页签不再改弹窗大小，
 // 各页签内容在固定高度内自适应（超出则内容区滚动）。
 const showSettings = ref(false);
@@ -181,6 +183,8 @@ onMounted(() => {
   refreshAutoRouteEnabled();
   updateAgentRail();
   window.addEventListener("resize", updateAgentRail);
+  // Rust 的 show_main 在真正打开主窗口时派发该事件（含首次显示）。
+  window.addEventListener("ccconfig-main-shown", checkForUpdate);
 
   // 根据入口命令预选对应应用
   const appMap = {
@@ -228,6 +232,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateAgentRail);
+  window.removeEventListener("ccconfig-main-shown", checkForUpdate);
 });
 </script>
 
@@ -265,15 +270,18 @@ onUnmounted(() => {
             </Dropdown>
           </Transition>
           <span class="page-title">{{ pageTitleSuffix }}</span>
-          <Button
-            shape="circle"
-            variant="text"
-            theme="default"
-            class="settings-btn"
-            @click="showSettings = true"
-          >
-            <template #icon><SettingIcon /></template>
-          </Button>
+          <span class="settings-btn-wrap">
+            <Button
+              shape="circle"
+              variant="text"
+              theme="default"
+              class="settings-btn"
+              @click="showSettings = true"
+            >
+              <template #icon><SettingIcon /></template>
+            </Button>
+            <span v-if="hasUpdate" class="settings-update-dot" />
+          </span>
         </div>
         <div class="header-right">
           <AppTabBar :app="activeApp" v-model:active-tab="activeTab" />
@@ -514,7 +522,12 @@ onUnmounted(() => {
             <RadioButton value="general">{{ t('settings.tab.general') }}</RadioButton>
             <RadioButton value="agents">{{ t('settings.tab.agents') }}</RadioButton>
             <RadioButton v-if="isDesktop" value="client">{{ t('settings.tab.client') }}</RadioButton>
-            <RadioButton value="about">{{ t('settings.tab.about') }}</RadioButton>
+            <RadioButton value="about">
+              <span class="settings-tab-label">
+                {{ t('settings.tab.about') }}
+                <span v-if="hasUpdate" class="settings-tab-dot" aria-hidden="true" />
+              </span>
+            </RadioButton>
           </RadioGroup>
 
           <div class="settings-content">
@@ -619,6 +632,10 @@ onUnmounted(() => {
   background-color: var(--td-bg-color-container-hover);
 }
 
+.settings-btn-wrap {
+  position: relative;
+  display: inline-flex;
+}
 .settings-btn {
   color: var(--td-text-color-secondary);
 }
@@ -635,6 +652,31 @@ onUnmounted(() => {
 .settings-tabs {
   flex-shrink: 0;
   margin-bottom: 12px;
+}
+.settings-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.settings-tab-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--td-error-color);
+}
+.settings-update-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--td-bg-color-container);
+  border-radius: 50%;
+  background: var(--td-error-color);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
 }
 .settings-content {
   flex: 1;

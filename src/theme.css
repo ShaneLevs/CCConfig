@@ -479,6 +479,26 @@
   --td-brand-color-light-hover: rgba(82, 196, 26, 0.26);
 }
 
+/* ==================== 桌面版 loading 指示器绕圈漂移修正 ==================== */
+/* 只在 macOS 桌面版生效：用 TDesign 自带的指示器与动画，不替换组件、不改调用方。
+   TDesign 的指示器是 <svg class="t-loading__gradient t-icon-loading">，环本体画在
+   foreignObject 里的 div（conic-gradient + radial mask）。WKWebView 合成 foreignObject 时
+   不会把它一起带上 svg 的 transform：svg 在转，环却绕图标外一点公转（14px 按钮约 3px，
+   36px 约 34px），肉眼看就是「绕着边缘某个点转」。Chromium（uTools）与 Firefox 无此问题，
+   所以用 :root.is-desktop:not(.is-windows) 门控，其余环境完全走 TDesign 原样。
+   修法是把同一段旋转下沉到内层 div——普通 HTML 元素按自身盒子中心旋转；用独立的 rotate
+   属性而不是 transform，以免覆盖 circleAdapter 给 Safari 分支写的内联 transform: scale()。
+   升级 tdesign-vue-next 后可复查是否仍需：1.20.11 的 circleAdapter 与 loading 样式仍原样。 */
+:root.is-desktop:not(.is-windows) .t-loading__gradient.t-icon-loading {
+  animation: none;
+}
+:root.is-desktop:not(.is-windows) .t-loading__gradient .t-loading__gradient-conic {
+  animation: cc-loading-spin 1s linear infinite;
+}
+@keyframes cc-loading-spin {
+  to { rotate: 360deg; }
+}
+
 /* Switch 开启状态使用绿色 */
 .t-switch.t-is-checked {
   background-color: var(--td-success-color) !important;
