@@ -32,7 +32,7 @@ npm run bump -- 1.0.2  # 同步 5 处版本号，勿手改单个文件
 - **跨设备同步**：本地库不参与 uTools 云同步，可移植文档（`portable-docs.js`：通用供应商/模型、通用 MCP、env 字段候选、分组顺序、`ccconfig_config_*`）由 `utools-sync.js` 双写回 `utools.db`，并靠 uTools「数据同步」在设备间流转。写入即时镜像；装载/进入时做 host ↔ local ↔ `ccconfig_utools_sync_state` 快照的三向合并。`replicateStateFromCloud()` 为 `1` 时只拉不推并轮询，拉完重跑一次旧库导入再完整合并。桌面端无 `utools.db`，`start()` 返回 `false`。新增可移植文档必须登记到 `portable-docs.js`，机器档不要登记。
 - **旧名兼容**：历史名 CCSwitch 只能作为数据兼容常量存在。JS 集中在 `services/legacy.js`；`db-migrate.js` 幂等迁移 `ccswitch_*` 文档和旧密文；Rust 常量在 `main.rs` / `node_runtime.rs`，桌面 shim 也保留旧目录与 nativeId 缓存回退。设备 ID 哈希种子和旧文档 ID 永不可改。uTools 旧宿主 DB 由 `db-import.js` 一次性导入共享库，导入时重写 `_<宿主 nativeId>` 并保留宿主旧库。
 - **Skill**：停用目录在 skills 根目录**同级** `.disabled/`，不能放进根目录内。扫描必须用 `fs-utils.js` 的 `isDirEntry` / `isFileEntry` / `countEntries` 跟随软链；删除必须用 `rmEntry`，软链只删链接。不要裸用 `Dirent.isDirectory()` 或递归 `fs.rmSync`。通用 Skill 场景按机器存 `ccconfig_skill_scenes_<nativeId>`；未安装的绑定记入 `missing`，安装后自动补启用。
-- **网关**：`autoroute.js` + `autoroute-convert/`，默认 `127.0.0.1:17877`，支持 Anthropic Messages、OpenAI Chat、Responses；不校验 key，只允许本机回环。映射行顺序就是下发顺序。映射模式默认把响应 `model` 改写为映射名，否则使用统计会记录上游真实名。出站有透传/转换 × 流式/非流式四条路径，修改转换规则必须同步四处、`canonical.js` 头注释和 `docs/architecture.md`。
+- **网关**：`autoroute.js` + `autoroute-convert/`，默认 `127.0.0.1:17877`，支持 Anthropic Messages、OpenAI Chat、Responses；不校验 key，只允许本机回环。网关配置与历史统计按「电脑 + 运行形态」隔离（`_<nativeId>_<desktop|utools>`），桌面版与 uTools 版可同时运行在不同端口；bind 失败会退避重试约 9s，避开更新后旧 sidecar 释放端口的窗口。映射行顺序就是下发顺序。映射模式默认把响应 `model` 改写为映射名，否则使用统计会记录上游真实名。出站有透传/转换 × 流式/非流式四条路径，修改转换规则必须同步四处、`canonical.js` 头注释和 `docs/architecture.md`。
 - **订阅用量**：`subscriptions.js` 读取本机浏览器 Cookie，加密后按机器存 `ccconfig_subscriptions_<nativeId>`，只向 UI 暴露 `hasCookie`。新增站点只需扩展 `ADAPTERS`。详情见 `docs/architecture.md`。
 
 ## Agent 写入纪律

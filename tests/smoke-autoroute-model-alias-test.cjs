@@ -175,8 +175,8 @@ const configure = (port, upstreamPort, { api, mode, rewriteModel }) => {
       ],
     },
   })
-  store.set('ccconfig_autoroute_config_smoketest', {
-    _id: 'ccconfig_autoroute_config_smoketest',
+  store.set('ccconfig_autoroute_config_smoketest_utools', {
+    _id: 'ccconfig_autoroute_config_smoketest_utools',
     _rev: nextRev(),
     data: {
       enabled: true, port, key: GATEWAY_KEY, mode,

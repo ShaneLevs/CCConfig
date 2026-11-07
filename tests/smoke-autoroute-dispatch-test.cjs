@@ -79,7 +79,7 @@ const writeCommonProviders = (providers) => {
 const setGatewayModels = (modelIds, api = 'openai-completions') => {
   writeCommonProviders([makeProvider(modelIds, { api })])
   window.utools.db.put({
-    _id: 'ccconfig_autoroute_config_test-native',
+    _id: 'ccconfig_autoroute_config_test-native_utools',
     data: {
       enabled: true,
       port: 17877,
@@ -562,7 +562,7 @@ console.log('19. 映射顺序即下发顺序')
 // 验证 resolveAutoRouteModels 与 dispatchAutoRoute 都严格按它写 agent（数组型存储）
 writeCommonProviders([makeProvider(['m-a', 'm-b', 'm-c'])])
 window.utools.db.put({
-  _id: 'ccconfig_autoroute_config_test-native',
+  _id: 'ccconfig_autoroute_config_test-native_utools',
   data: {
     enabled: true,
     port: 17877,
@@ -594,9 +594,9 @@ const zcodeDocOrder = (() => {
 eq(zcodeDocOrder, ['pro', 'plus', 'flash'], 'zcode：modelOrder 顺序 = 映射行顺序')
 // 再换一个顺序（模拟用户又把 pro 拖到最底下）：agent 侧清单跟着变
 window.utools.db.put({
-  ...window.utools.db.get('ccconfig_autoroute_config_test-native'),
+  ...window.utools.db.get('ccconfig_autoroute_config_test-native_utools'),
   data: {
-    ...window.utools.db.get('ccconfig_autoroute_config_test-native').data,
+    ...window.utools.db.get('ccconfig_autoroute_config_test-native_utools').data,
     mappings: [
       { alias: 'plus', provider: 'gw-upstream', modelId: 'm-b' },
       { alias: 'flash', provider: 'gw-upstream', modelId: 'm-a' },

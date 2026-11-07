@@ -64,8 +64,8 @@ const configure = (port, upstreamPort, api) => {
       }],
     },
   })
-  store.set(`ccconfig_autoroute_config_${profile}`, {
-    _id: `ccconfig_autoroute_config_${profile}`,
+  store.set(`ccconfig_autoroute_config_${profile}_utools`, {
+    _id: `ccconfig_autoroute_config_${profile}_utools`,
     _rev: nextRev(),
     data: {
       enabled: true, port, key: gatewayKey, mode: 'direct', mappingSeeded: true,

@@ -150,7 +150,7 @@ Claude:
       （三个 FrameWriter 都只从 start 事件取 model，所以只改那一处）。关掉即恢复字节级透传——客户端按响应模型名
       推断上下文窗口 / 定价时（映射名不在其内置表里会退化成默认值）可用它自救。网关自己的请求日志不受影响：仍记真实模型 ID + alias
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 500ms 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
-    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush）；getAutoRouteStatus 返回 stats（本次，含实时 outputTps）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。实时 TPS 来自流式增量内容的滑动窗口估算，不属于历史统计；网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
+    统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>_<desktop|utools>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush；旧机器档 ccconfig_autoroute_usage_<nativeId> 只作首次读取的种子）；getAutoRouteStatus 返回 stats（本次，含实时 outputTps）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。实时 TPS 来自流式增量内容的滑动窗口估算，不属于历史统计；网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
       同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
       跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
@@ -167,7 +167,8 @@ Claude:
     上游容错（sendUpstream）：429/5xx/网络抖动按 Retry-After（≤15s）或指数退避重试 2 次；400/422 点名可选字段（stream_options / reasoning_effort / response_format / thinking …）或拒收 anthropic-beta 头时去掉该字段（或头）立即重试，并按供应商记住不再发
     连接生命周期（长时间常驻必须）：每个入站请求一个上游守卫，客户端一旦断开（含只发出请求、还没收到响应头的阶段）立刻 destroy 它名下所有在途上游并记 499；等响应头超过 10 分钟视为上游卡死，销毁请求回 504（不重试，只覆盖响应头之前，不影响已开始的流式响应；注意流式的响应头 = 首字节 TTFT，非流式要等整段生成完才发头，两者共用同一阈值）；所有在途上游登记在 pendingUpstreams，停网关时一并销毁（server.closeAllConnections 管不到出站 socket）
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
-    配置存本地数据库（ccconfig_autoroute_config），插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
+    配置存本地数据库（ccconfig_autoroute_config_<nativeId>_<desktop|utools>）：桌面版与 uTools 版同机运行时端口/开关/key 各自独立，旧机器档 ccconfig_autoroute_config_<nativeId> 与更早的共用档只作首次读取的迁移种子。插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
+    启动容错：bind 遇到 EADDRINUSE 时按 0.3/0.6/1.2/1.8/2.4/3s 退避重试（约 9s），覆盖更新 / 重装后旧 sidecar 尚未退出的窗口；真正被其他程序长期占用才报「端口已占用」
     桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库
   网关下发到 agent（dispatch.dispatchAutoRoute）= **覆盖式重建 router 供应商**，不是合并：
     名称固定 router（同时是 Codex 的 model_providers.<id>，TOML 裸键只能英文）；baseUrl 指向网关、key 为网关占位符

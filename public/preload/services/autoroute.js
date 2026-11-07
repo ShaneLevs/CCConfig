@@ -30,12 +30,14 @@ const { rewriteJsonModel, createSseModelRewriter } = require("./autoroute-conver
 const { buildUpstreamUrl, buildUpstreamHeaders, errorBody, extractUpstreamErrorMessage, scanUsageFromText, retryAfterMs, isRetryableStatus, refusedOptionalFields, refusedBetaHeader } = require("./autoroute-convert/canonical");
 const { createSseOutputTokenProbe, createOutputRateMeter } = require("./output-rate");
 
-// 网关配置按电脑隔离：uTools DB 跟随账号跨设备同步，而网关是本机服务（开关/端口/key/模型勾选
-// 都只对本机有意义），文档 ID 追加设备码区分（同「Env 额外字段」ccconfig_overridden_env_<nativeId> 先例）。
-// 旧版共用文档 ccconfig_autoroute_config 作为升级回退：机器首次读取尚无本机文档时继承旧配置作为起点，
-// 之后各自独立演进；旧文档保留不删（其他机器可能还没迁移过）。
+// 网关配置按「电脑 + 运行形态」隔离：网关是本机服务（开关/端口/key/模型勾选都只对本机有意义），
+// 而同一台电脑上桌面版与 uTools 版可以同时运行、各自监听不同端口，所以文档 ID 在设备码之后再
+// 追加 desktop / utools。旧版机器档与更早的共用档只作为升级种子：首次读取时继承一次，
+// 之后两种运行形态各自独立演进；旧文档保留不删（另一形态可能还没迁移过）。
 const LEGACY_DOC_ID = "ccconfig_autoroute_config";
-const getDocId = () => `ccconfig_autoroute_config_${db.getNativeId()}`;
+const runtimeKey = () => (globalThis.__CCCONFIG_DESKTOP__ === true ? "desktop" : "utools");
+const getDocId = () => `ccconfig_autoroute_config_${db.getNativeId()}_${runtimeKey()}`;
+const getLegacyMachineDocId = () => `ccconfig_autoroute_config_${db.getNativeId()}`;
 
 const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], mappingSeeded: false, rewriteModel: true };
 const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
@@ -90,8 +92,14 @@ const persistConfig = (config) => {
 
 const readAutoRouteConfig = () => {
   let data = {};
+  let needsPersist = false;
   try {
-    const doc = db.get(getDocId()) || db.get(LEGACY_DOC_ID);
+    let doc = db.get(getDocId());
+    if (!doc) {
+      // 升级迁移：先继承旧机器档，再回退到更早的跨设备共用档；继承后立即写入本运行形态的文档
+      doc = db.get(getLegacyMachineDocId()) || db.get(LEGACY_DOC_ID);
+      needsPersist = !!doc;
+    }
     if (doc && doc.data) data = doc.data;
   } catch (e) {
     /* ignore */
@@ -108,10 +116,13 @@ const readAutoRouteConfig = () => {
     if (config.mappings.length === 0) {
       config.mappings = PRESET_ALIASES.map((alias) => ({ alias, provider: "", modelId: "" }));
     }
+    needsPersist = true;
+  }
+  if (needsPersist) {
     try {
       persistConfig(config);
     } catch (e) {
-      /* 读取路径的补种失败不阻塞：本次返回的 config 已带好映射，下次读取会再试 */
+      /* 读取路径的补种/迁移失败不阻塞：本次返回的 config 已完成清洗，下次读取会再试 */
     }
   }
   return config;
@@ -143,13 +154,16 @@ function emptyStats() {
 // ==================== 历史统计（按天落库） ====================
 // 与 agent 统计落库同思路，但网关是独立口径：经过网关的调用可能同时出现在某个 agent 的
 // 本地日志里，不能并进「通用统计」求和。这里只存每日聚合计数，不存请求日志。
-// 文档按机器隔离：ccconfig_autoroute_usage_<nativeId>。
+// 文档按「电脑 + 运行形态」隔离：桌面版与 uTools 版可以各跑一个网关（不同端口），
+// 共用一份历史档会在并发写入时互相覆盖 _rev / 天数，因此再追加 desktop / utools。
+// 旧机器档 ccconfig_autoroute_usage_<nativeId> 作为首次读取的种子。
 const HISTORY_DOC_PREFIX = "ccconfig_autoroute_usage_";
 
 let historyState = null; // { days, rev }
 let historyDirty = false;
 
-const getHistoryDocId = () => `${HISTORY_DOC_PREFIX}${db.getNativeId()}`;
+const getHistoryDocId = () => `${HISTORY_DOC_PREFIX}${db.getNativeId()}_${runtimeKey()}`;
+const getLegacyHistoryDocId = () => `${HISTORY_DOC_PREFIX}${db.getNativeId()}`;
 
 // 本地日期：页面上的「今日」按用户时区理解，不与 agent 统计的 UTC 日期混用
 const localDateKey = (time) => {
@@ -174,7 +188,7 @@ const loadHistory = () => {
   const days = {};
   let rev;
   try {
-    const doc = db.get(getHistoryDocId());
+    const doc = db.get(getHistoryDocId()) || db.get(getLegacyHistoryDocId());
     if (doc && doc.days && typeof doc.days === "object") {
       for (const [date, raw] of Object.entries(doc.days)) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(date)) days[date] = normalizeDay(raw);
@@ -997,42 +1011,83 @@ const handleRequest = async (req, res) => {
 
 // ==================== 启停 ====================
 
-const startAutoRoute = () => {
-  if (serverState.server) return Promise.resolve(getAutoRouteStatus());
-  const config = readAutoRouteConfig();
-  return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      handleRequest(req, res).catch(() => {
-        /* handleRequest 内部已兜底，此处防御未预期异常 */
-        try {
-          if (!res.headersSent) sendError(res, "anthropic", 500, t("serviceAgent.autoroute.internalErrorShort"));
-        } catch (e) {
-          /* ignore */
-        }
-      });
-    });
-    server.once("error", (e) => {
-      serverState.server = null;
-      reject(new Error(e && e.code === "EADDRINUSE"
-        ? t("serviceAgent.autoroute.portInUse", { port: config.port })
-        : (e && e.message) || String(e)));
-    });
-    server.listen(config.port, "127.0.0.1", () => {
-      serverState.server = server;
-      serverState.port = config.port;
-      serverState.startedAt = Date.now();
-      upstreamsStopping = false;
-      // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
-      serverState.logs = [];
-      serverState.stats = emptyStats();
-      serverState.activeStreams = 0;
-      outputRateMeter.reset();
-      resolve(getAutoRouteStatus());
+// 更新 / 重装后旧进程可能还占着网关端口几秒：桌面 sidecar 靠 3s × 2 次的父进程探活退出，
+// 新实例若在旧 sidecar 释放端口前启动，单次 bind 必然 EADDRINUSE。这里给足 9s 左右的重试窗口，
+// 旧进程退出后自动接管，不需要用户手动「重启网关」。真正被其他程序长期占用时才会报错。
+const BIND_RETRY_DELAYS = [300, 600, 1200, 1800, 2400, 3000];
+const CANCELED = "ECANCELED";
+
+let startPromise = null;
+let startToken = 0;
+
+const listenGatewayOnce = (config) => new Promise((resolve, reject) => {
+  const server = http.createServer((req, res) => {
+    handleRequest(req, res).catch(() => {
+      /* handleRequest 内部已兜底，此处防御未预期异常 */
+      try {
+        if (!res.headersSent) sendError(res, "anthropic", 500, t("serviceAgent.autoroute.internalErrorShort"));
+      } catch (e) {
+        /* ignore */
+      }
     });
   });
+  const onListenError = (e) => reject(e);
+  server.once("error", onListenError);
+  server.listen(config.port, "127.0.0.1", () => {
+    // bind 阶段结束：后续 error 只记日志，不能再 reject（Promise 已结算）
+    server.removeListener("error", onListenError);
+    server.on("error", (e) => {
+      console.error("[autoroute] 网关服务错误:", (e && e.message) || e);
+      if (serverState.server === server) serverState.server = null;
+    });
+    serverState.server = server;
+    serverState.port = config.port;
+    serverState.startedAt = Date.now();
+    upstreamsStopping = false;
+    // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
+    serverState.logs = [];
+    serverState.stats = emptyStats();
+    serverState.activeStreams = 0;
+    outputRateMeter.reset();
+    resolve(getAutoRouteStatus());
+  });
+});
+
+const startAutoRoute = () => {
+  if (serverState.server) return Promise.resolve(getAutoRouteStatus());
+  if (startPromise) return startPromise;
+  const config = readAutoRouteConfig();
+  const token = ++startToken;
+  startPromise = (async () => {
+    for (let attempt = 0; ; attempt++) {
+      if (token !== startToken) {
+        const e = new Error("gateway start canceled");
+        e.code = CANCELED;
+        throw e;
+      }
+      try {
+        return await listenGatewayOnce(config);
+      } catch (e) {
+        if (!e || e.code !== "EADDRINUSE") throw e;
+        const delay = BIND_RETRY_DELAYS[attempt];
+        if (delay === undefined) {
+          throw new Error(t("serviceAgent.autoroute.portInUse", { port: config.port }));
+        }
+        console.error(`[autoroute] 端口 ${config.port} 暂被占用，${delay}ms 后重试（${attempt + 1}/${BIND_RETRY_DELAYS.length}）`);
+        await sleep(delay);
+      }
+    }
+  })().finally(() => { startPromise = null; });
+  return startPromise;
 };
 
 const stopAutoRoute = () => {
+  // 取消尚未完成的重试：可能在退避等待，也可能刚 bind 成功
+  startToken += 1;
+  if (startPromise) {
+    const pending = startPromise;
+    return pending.catch(() => {}).then(() => stopAutoRoute());
+  }
   serverState.activeStreams = 0;
   outputRateMeter.reset();
   // 停止前把尚未落库的历史统计写掉，避免关网关/退出时丢最后几条
