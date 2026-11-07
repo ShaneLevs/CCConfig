@@ -209,7 +209,8 @@
     text-overflow: ellipsis;
   }
   /* 每个余量圆环都是一块独立组件（.mini-ring-slot），贴边单列时自然各占一行。
-     后续增加月度统计等展示时同样新增一块，不要再把多个圆环塞进同一容器。 */
+     后续增加月度统计等展示时同样新增一块，不要再把多个圆环塞进同一容器。
+     圆环底部有意留开口，百分比数字画在开口里，与圆弧同属一个 SVG（见 miniRing()）。 */
   .mini-ring-slot {
     display: flex;
     flex: none;
@@ -218,42 +219,39 @@
   .mini-ring-slot[hidden] { display: none; }
   .mini-ring-item {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
     flex: none;
   }
+  /* 圆环是一个缺底开口的环境：圆弧从百分比数字左侧起笔，绕过顶部落到右侧，
+     数字就嵌在开口里，成为圆环的一部分（不是一个单独的标签）。 */
   .mini-ring {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     flex: none;
-    transform: rotate(-90deg);
   }
   .mini-ring-track {
     fill: none;
     stroke: var(--track);
-    stroke-width: 3;
+    stroke-width: 2.8;
+    stroke-linecap: round;
   }
   .mini-ring-fill {
     fill: none;
-    stroke-width: 3;
+    stroke-width: 2.8;
     stroke-linecap: round;
-    transition: stroke-dashoffset 0.3s ease;
+    transition: stroke-dasharray 0.3s ease;
   }
-  .mini-ring text {
-    font-size: 8.8px;
+  .mini-ring-window {
+    font-size: 8.6px;
     font-weight: 500;
     fill: var(--muted);
-    transform: rotate(90deg);
-    transform-origin: 20px 20px;
   }
   .mini-ring-percent {
-    font-size: 10px;
+    font-size: 10.8px;
     font-weight: 600;
-    line-height: 1;
-    color: var(--text);
+    fill: var(--text);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    letter-spacing: -0.03em;
   }
   .mini-actions {
     position: absolute;
@@ -2461,11 +2459,17 @@
   }
 
   // ---------- 渲染：小浮窗 ----------
-  // 一行放三块：本次网关 Token 用量 + 实时输出速率 + 第一条可用订阅的两个余量圆环。
+  // 一行放四块独立组件：本次网关 Token 用量 + 实时输出速率 + 每个订阅余量圆环各占一块。
   const MINI_REFRESH_MS = 60 * 1000
   const LIVE_STATUS_REFRESH_MS = 500
-  const RING_RADIUS = 17
+  const RING_RADIUS = 15.5
   const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+  const RING_CY = 17.5
+  // 圆环底部给百分比数字留的开口（以圆环正下方为中心，左右各 60°）。
+  // 圆弧从开口左沿起笔，顺时针绕顶到开口右沿，数字就落在开口里，成为圆环的一部分。
+  const RING_GAP_HALF_DEG = 60
+  const RING_GAP_LEN = RING_CIRCUMFERENCE * (RING_GAP_HALF_DEG / 180)
+  const RING_ARC = RING_CIRCUMFERENCE - RING_GAP_LEN
   let lastMiniWidth = 0
 
   // 贴边方向由 Rust 在拖动停止后判定：left / right 切换单列，'' 回到一行。
@@ -2502,25 +2506,32 @@
     return String((win && win.label) || '')
   }
 
+  // 圆环与百分比是一体：圆弧从数字左侧起笔绕顶到右侧，数字填在底部开口里。
   function miniRing(win) {
     const label = miniWindowLabel(win)
     const value = clampPct(win && win.percent)
     const tone = value <= 10 ? 'bad' : value <= 30 ? 'warn' : 'good'
-    const offset = RING_CIRCUMFERENCE * (1 - value / 100)
-    const shown = Math.round(value)
-    const text = label + ' ' + shown + '%'
+    const fill = (RING_ARC * value) / 100
+    // 圆弧从开口左沿起笔（而非 3 点钟方向），所以整体要转 90° + 半个开口角
+    const startDeg = 90 + RING_GAP_HALF_DEG
+    const shown = Math.round(value) + '%'
+    const text = label + ' ' + shown
     return (
       '<div class="mini-ring-item" role="img" aria-label="' + esc(text) + '">' +
         '<svg class="mini-ring" viewBox="0 0 40 40" aria-hidden="true">' +
           '<title>' + esc(text) + '</title>' +
-          '<circle class="mini-ring-track" cx="20" cy="20" r="' + RING_RADIUS + '"></circle>' +
-          '<circle class="mini-ring-fill" cx="20" cy="20" r="' + RING_RADIUS + '"' +
-            ' stroke="var(--' + tone + ')"' +
-            ' stroke-dasharray="' + RING_CIRCUMFERENCE.toFixed(2) + '"' +
-            ' stroke-dashoffset="' + offset.toFixed(2) + '"></circle>' +
-          '<text x="20" y="20" text-anchor="middle" dominant-baseline="central">' + esc(label) + '</text>' +
+          '<g transform="rotate(' + startDeg + ' 20 ' + RING_CY + ')">' +
+            '<circle class="mini-ring-track" cx="20" cy="' + RING_CY + '" r="' + RING_RADIUS + '"' +
+              ' stroke-dasharray="' + RING_ARC.toFixed(2) + ' ' + RING_GAP_LEN.toFixed(2) + '"></circle>' +
+            '<circle class="mini-ring-fill" cx="20" cy="' + RING_CY + '" r="' + RING_RADIUS + '"' +
+              ' stroke="var(--' + tone + ')"' +
+              ' stroke-dasharray="' + fill.toFixed(2) + ' ' + (RING_CIRCUMFERENCE - fill).toFixed(2) + '"></circle>' +
+          '</g>' +
+          '<text class="mini-ring-window" x="20" y="13.4" text-anchor="middle" dominant-baseline="central">' +
+            esc(label) + '</text>' +
+          '<text class="mini-ring-percent" x="20" y="30.2" text-anchor="middle" dominant-baseline="central">' +
+            esc(shown) + '</text>' +
         '</svg>' +
-        '<span class="mini-ring-percent">' + shown + '%</span>' +
       '</div>'
     )
   }
