@@ -48,7 +48,10 @@ const MINI_MIN_WIDTH: f64 = 96.0;
 const MINI_MAX_WIDTH: f64 = 360.0;
 const MINI_HEIGHT: f64 = 60.0;
 const MINI_MIN_HEIGHT: f64 = 48.0;
-const MINI_MAX_HEIGHT: f64 = 120.0;
+/// 贴边单列时内容更高（用量 / 速率 / 圆环三行），上限相应放宽
+const MINI_MAX_HEIGHT: f64 = 220.0;
+/// 小浮窗离屏幕左右工作区边缘多近时吸附贴边（逻辑像素）
+const MINI_DOCK_THRESHOLD: f64 = 32.0;
 /// 弹窗与托盘图标之间的间距
 const POPUP_GAP: f64 = 8.0;
 /// 托盘点击与「失焦收起」的最小间隔：macOS 点托盘时弹窗会先失焦，
@@ -168,6 +171,13 @@ fn set_update_progress(app: &tauri::AppHandle, stage: &str, downloaded: u64, tot
     }
 }
 
+/// 小浮窗贴边方向。贴边后页面切为单列，窗口吸附在对应的工作区边缘。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MiniDock {
+    Left,
+    Right,
+}
+
 #[derive(Default)]
 struct MiniPopupState {
     /// 页面量出来的小浮窗宽高（逻辑像素）
@@ -175,6 +185,14 @@ struct MiniPopupState {
     height: Mutex<f64>,
     /// 用户拖动过：之后的尺寸变化不再自动吸附回托盘
     moved: Mutex<bool>,
+    /// 当前贴边方向；None 表示自由浮动
+    dock: Mutex<Option<MiniDock>>,
+    /// 最近一次窗口移动时间：拖动停止后才结算贴边，避免拖动过程中反复换布局
+    last_move: Mutex<Option<Instant>>,
+    /// 本次拖动开始时的窗口位置；原地单击不触发贴边切换
+    drag_origin: Mutex<Option<(i32, i32)>>,
+    /// 已有后台线程在等待拖动结束
+    dock_watcher: Mutex<bool>,
 }
 
 #[derive(Default)]
@@ -640,6 +658,16 @@ fn build_mini_popup(app: &tauri::AppHandle, port: u16, token: &str) -> tauri::Re
         .build()?;
 
     apply_popup_background(&win, dark);
+
+    // 用户拖动结束后按到左右边缘的距离吸附；程序化定位（打开 / 尺寸变化）
+    // 也走 Moved，但 moved 为 false 时会被忽略。
+    let handle = app.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::Moved(_) = event {
+            schedule_mini_dock_check(&handle);
+        }
+    });
+
     Ok(win)
 }
 
@@ -665,6 +693,181 @@ fn mini_popup_height(app: &tauri::AppHandle) -> f64 {
         .filter(|h| *h > 0.0)
         .unwrap_or(MINI_HEIGHT)
         .clamp(MINI_MIN_HEIGHT, MINI_MAX_HEIGHT)
+}
+
+fn mini_popup_dock(app: &tauri::AppHandle) -> Option<MiniDock> {
+    app.try_state::<MiniPopupState>()
+        .and_then(|state| state.dock.lock().ok().and_then(|d| *d))
+}
+
+/// 告诉页面当前贴边方向；页面据此切换单列布局并重新上报宽高。
+fn notify_mini_dock(win: &WebviewWindow, dock: Option<MiniDock>) {
+    let side = match dock {
+        Some(MiniDock::Left) => "left",
+        Some(MiniDock::Right) => "right",
+        None => "",
+    };
+    let script = format!(
+        "window.__ccMiniDock && window.__ccMiniDock({});",
+        serde_json::to_string(side).unwrap_or_else(|_| "\"\"".into())
+    );
+    let _ = win.eval(&script);
+}
+
+/// 按窗口当前所在的显示器判断要不要贴边：离左/右工作区边缘 32px 内就吸附。
+/// 只改位置与页面布局，尺寸交给页面重排后经 mini_popup_resize 回传。
+fn settle_mini_dock(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window(MINI_POPUP) else {
+        return;
+    };
+    if !win.is_visible().unwrap_or(false) {
+        return;
+    }
+    let Some(monitor) = win.current_monitor().ok().flatten() else {
+        return;
+    };
+    let scale = monitor.scale_factor();
+    let area = monitor.work_area();
+    let (pos, size) = match (win.outer_position(), win.outer_size()) {
+        (Ok(pos), Ok(size)) => (pos, size),
+        _ => return,
+    };
+    // 按下后原地松手（单击）不改变贴边状态，避免点一下就重排
+    let origin = app
+        .try_state::<MiniPopupState>()
+        .and_then(|state| state.drag_origin.lock().ok().and_then(|origin| *origin));
+    if origin == Some((pos.x, pos.y)) {
+        return;
+    }
+
+    let left = area.position.x as f64;
+    let top = area.position.y as f64;
+    let right = left + area.size.width as f64;
+    let bottom = top + area.size.height as f64;
+    let gap_left = (pos.x as f64 - left) / scale;
+    let gap_right = (right - (pos.x as f64 + size.width as f64)) / scale;
+
+    let dock = if gap_left <= MINI_DOCK_THRESHOLD && gap_left <= gap_right {
+        Some(MiniDock::Left)
+    } else if gap_right <= MINI_DOCK_THRESHOLD {
+        Some(MiniDock::Right)
+    } else {
+        None
+    };
+
+    let previous = mini_popup_dock(app);
+    if let Some(state) = app.try_state::<MiniPopupState>() {
+        if let Ok(mut stored) = state.dock.lock() {
+            *stored = dock;
+        }
+    }
+    if previous != dock {
+        notify_mini_dock(&win, dock);
+    }
+
+    // 贴边时横向完全贴住工作区，纵向限制在屏幕内（贴边后变高也不出界）
+    if let Some(side) = dock {
+        let target_x = match side {
+            MiniDock::Left => left,
+            MiniDock::Right => right - size.width as f64,
+        };
+        let margin = 8.0 * scale;
+        let y = (pos.y as f64)
+            .min(bottom - size.height as f64 - margin)
+            .max(top + margin);
+        if (pos.x as f64 - target_x).abs() > 1.0 || (pos.y as f64 - y).abs() > 1.0 {
+            let _ = win.set_position(Position::Physical(PhysicalPosition::new(
+                target_x.round() as i32,
+                y.round() as i32,
+            )));
+        }
+    }
+}
+
+/// 贴边后页面重排出新的宽高，窗口保持贴住同一边（右侧贴边时向左扩展）。
+fn place_mini_docked(win: &WebviewWindow, side: MiniDock, width: f64, height: f64) {
+    let Some(monitor) = win.current_monitor().ok().flatten() else {
+        let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
+        return;
+    };
+    let scale = monitor.scale_factor();
+    let area = monitor.work_area();
+    let left = area.position.x as f64;
+    let top = area.position.y as f64;
+    let right = left + area.size.width as f64;
+    let bottom = top + area.size.height as f64;
+    let width_px = (width * scale).round().max(1.0);
+    let height_px = (height * scale).round().max(1.0);
+    let margin = 8.0 * scale;
+
+    let x = match side {
+        MiniDock::Left => left,
+        MiniDock::Right => right - width_px,
+    };
+    let current_y = win.outer_position().map(|p| p.y as f64).unwrap_or(top);
+    let y = current_y.min(bottom - height_px - margin).max(top + margin);
+
+    // 先定位再设逻辑尺寸：右侧贴边时 x 依赖新宽度
+    let _ = win.set_position(Position::Physical(PhysicalPosition::new(
+        x.round() as i32,
+        y.round() as i32,
+    )));
+    let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
+}
+
+/// 拖动停止 320ms 后再结算贴边。原生拖动可能阻塞事件线程，
+/// 所以不能只在 drag 结束时判断，移动事件每次都会把计时往后推。
+fn schedule_mini_dock_check(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<MiniPopupState>() else {
+        return;
+    };
+    let moved = state.moved.lock().map(|m| *m).unwrap_or(false);
+    if !moved {
+        return;
+    }
+    if let Ok(mut last) = state.last_move.lock() {
+        *last = Some(Instant::now());
+    }
+    {
+        let mut running = match state.dock_watcher.lock() {
+            Ok(running) => running,
+            Err(_) => return,
+        };
+        if *running {
+            return;
+        }
+        *running = true;
+    }
+
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(120));
+            let Some(state) = handle.try_state::<MiniPopupState>() else {
+                break;
+            };
+            if !state.moved.lock().map(|m| *m).unwrap_or(false) {
+                break;
+            }
+            let settled = state
+                .last_move
+                .lock()
+                .ok()
+                .and_then(|last| *last)
+                .map(|last| last.elapsed() >= Duration::from_millis(320))
+                .unwrap_or(true);
+            if !settled {
+                continue;
+            }
+            settle_mini_dock(&handle);
+            break;
+        }
+        if let Some(state) = handle.try_state::<MiniPopupState>() {
+            if let Ok(mut running) = state.dock_watcher.lock() {
+                *running = false;
+            }
+        }
+    });
 }
 
 /// 按托盘图标位置摆窗口：默认右对齐图标、向下展开；图标在下半屏（Windows 任务栏、
@@ -892,7 +1095,18 @@ fn mini_popup_open(app: tauri::AppHandle) {
         if let Ok(mut moved) = state.moved.lock() {
             *moved = false;
         }
+        // 每次从大浮窗收起后重新展开都回到托盘旁的一行形态，恢复默认尺寸
+        if let Ok(mut dock) = state.dock.lock() {
+            *dock = None;
+        }
+        if let Ok(mut width) = state.width.lock() {
+            *width = MINI_WIDTH;
+        }
+        if let Ok(mut height) = state.height.lock() {
+            *height = MINI_HEIGHT;
+        }
     }
+    notify_mini_dock(&win, None);
     inject_mini_context(&app, &win);
     position_mini_popup(&app);
     let _ = win.show();
@@ -951,6 +1165,11 @@ fn mini_popup_resize(app: tauri::AppHandle, width: f64, height: f64) {
     let Some(win) = app.get_webview_window(MINI_POPUP) else {
         return;
     };
+    // 贴边时页面会从一行切到单列，宽高都变；保持吸附在原来那一侧
+    if let Some(side) = mini_popup_dock(&app) {
+        place_mini_docked(&win, side, w, h);
+        return;
+    }
     let moved = app
         .try_state::<MiniPopupState>()
         .and_then(|state| state.moved.lock().ok().map(|m| *m))
@@ -969,14 +1188,20 @@ fn mini_popup_resize(app: tauri::AppHandle, width: f64, height: f64) {
 
 #[tauri::command]
 fn mini_popup_drag(app: tauri::AppHandle) {
-    if let Some(state) = app.try_state::<MiniPopupState>() {
-        if let Ok(mut moved) = state.moved.lock() {
-            *moved = true;
-        }
-    }
     if let Some(win) = app.get_webview_window(MINI_POPUP) {
+        let origin = win.outer_position().ok().map(|p| (p.x, p.y));
+        if let Some(state) = app.try_state::<MiniPopupState>() {
+            if let Ok(mut moved) = state.moved.lock() {
+                *moved = true;
+            }
+            if let Ok(mut stored) = state.drag_origin.lock() {
+                *stored = origin;
+            }
+        }
         let _ = win.start_dragging();
     }
+    // 原生拖动可能不派发 Moved（或返回时已经拖完），这里补一次结算
+    schedule_mini_dock_check(&app);
 }
 
 /// 小浮窗的「放大」：回到大浮窗（主窗口仍从大浮窗底部进入）。

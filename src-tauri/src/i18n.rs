@@ -122,6 +122,9 @@ mod tests {
         "showWindow",
         "restartGateway",
         "quit",
+        "miniWindowSession",
+        "miniWindowWeek",
+        "miniWindowMonth",
     ];
 
     #[test]

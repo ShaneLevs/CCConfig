@@ -155,7 +155,7 @@
 
   /* ---------- 小浮窗（mini 模式） ---------- */
   html.cc-mini .panel-head,
-  html.cc-mini .tabs,
+  html.cc-mini .tab-row,
   html.cc-mini #offline-note,
   html.cc-mini #scroll,
   html.cc-mini .footer,
@@ -206,9 +206,17 @@
   .mini-rings {
     display: flex;
     flex: none;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 7px;
   }
   .mini-rings[hidden] { display: none; }
+  .mini-ring-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+  }
   .mini-ring {
     width: 32px;
     height: 32px;
@@ -227,12 +235,19 @@
     transition: stroke-dashoffset 0.3s ease;
   }
   .mini-ring text {
-    font-size: 11px;
-    font-weight: 600;
-    fill: var(--text);
-    font-variant-numeric: tabular-nums;
+    font-size: 8.8px;
+    font-weight: 500;
+    fill: var(--muted);
     transform: rotate(90deg);
     transform-origin: 20px 20px;
+  }
+  .mini-ring-percent {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .mini-actions {
     position: absolute;
@@ -274,15 +289,58 @@
   .mini-action:hover { background: var(--press); color: var(--text); }
   .mini-action svg { width: 10px; height: 10px; display: block; }
 
+  /* 贴边模式：吸附在屏幕左/右边缘时，一行三块改为自上而下单列 */
+  html.cc-mini.cc-mini-dock .mini {
+    height: auto;
+    padding: 10px 38px 10px 12px;
+  }
+  html.cc-mini.cc-mini-dock .mini-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+  }
+  html.cc-mini.cc-mini-dock .mini-usage { width: 100%; }
+  html.cc-mini.cc-mini-dock .mini-rate {
+    padding-left: 0;
+    padding-top: 7px;
+    border-left: 0;
+    border-top: 0.5px solid var(--divider);
+  }
+  html.cc-mini.cc-mini-dock .mini-rings { align-self: stretch; }
+  html.cc-mini[data-mini-dock="left"] #panel {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  html.cc-mini[data-mini-dock="right"] #panel {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
   /* ---------- 页签（网关 / 用量） ---------- */
+  .tab-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 14px 0;
+  }
   .tabs {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
     gap: 2px;
-    margin: 10px 14px 0;
     padding: 2px;
     border-radius: 9px;
     background: var(--track);
   }
+  /* 用量页没有统计卡片，页签旁补一个实时速率，让大浮窗两个页签都能看到 */
+  .tab-rate {
+    flex: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tab-rate[hidden] { display: none; }
   .tabs button {
     flex: 1 1 0;
     margin: 0;
@@ -1260,9 +1318,12 @@
     </button>
   </div>
 
-  <div class="tabs" id="tabs">
-    <button type="button" class="on" data-tab="gateway"></button>
-    <button type="button" data-tab="usage"></button>
+  <div class="tab-row">
+    <div class="tabs" id="tabs">
+      <button type="button" class="on" data-tab="gateway"></button>
+      <button type="button" data-tab="usage"></button>
+    </div>
+    <span class="tab-rate" id="tab-rate" hidden></span>
   </div>
 
   <div class="offline-note" id="offline-note" hidden></div>
@@ -1409,6 +1470,7 @@
   const miniExpand = $('mini-expand')
   const tabs = $('tabs')
   const tabButtons = Array.from(tabs.querySelectorAll('[data-tab]'))
+  const tabRate = $('tab-rate')
   const offlineNote = $('offline-note')
   const gatewayPane = $('gateway-pane')
   const usagePane = $('usage-pane')
@@ -1610,7 +1672,18 @@
     for (const button of tabButtons) button.classList.toggle('on', button.dataset.tab === activeTab)
     gatewayPane.hidden = activeTab !== 'gateway'
     usagePane.hidden = activeTab !== 'usage'
+    renderTabRate()
     reportHeight()
+  }
+
+  // 实时输出速率只取本次在途流的值，不随「本次 / 今日 / 本月 / 累积」切换。
+  // 网关页有统计卡片，用量页没有，所以在页签旁补一个，切换页签也能看到。
+  function renderTabRate() {
+    if (!tabRate) return
+    const rate = Math.round(Number((lastStatus.stats && lastStatus.stats.outputTps) || 0))
+    tabRate.hidden = activeTab !== 'usage' || offline || !lastStatus.running
+    tabRate.title = t('outputTps')
+    tabRate.textContent = t('miniOutputTps') + ' ' + rate + ' tps'
   }
 
   function renderStaticLabels() {
@@ -1729,6 +1802,7 @@
   function renderStats(visible) {
     statsEl.hidden = !visible
     scopeRow.hidden = !visible
+    renderTabRate()
     if (!visible) {
       statsEl.innerHTML = ''
       return
@@ -1743,7 +1817,7 @@
     const cards = [
       [t('requests'), fmtInt(requests)],
       [t('successRate'), fmtPct(successes, requests)],
-      [t('outputTps'), Number((lastStatus.stats && lastStatus.stats.outputTps) || 0).toFixed(1) + ' tps'],
+      [t('outputTps'), Math.round(Number((lastStatus.stats && lastStatus.stats.outputTps) || 0)) + ' tps'],
       [t('tokens'), fmtTokens(prompt + output)],
       [t('cacheHitRate'), fmtPct(cached, prompt)],
     ]
@@ -2399,6 +2473,20 @@
   const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
   let lastMiniWidth = 0
 
+  // 贴边方向由 Rust 在拖动停止后判定：left / right 切换单列，'' 回到一行。
+  function setMiniDock(side) {
+    const next = side === 'left' || side === 'right' ? side : ''
+    const root = document.documentElement
+    root.classList.toggle('cc-mini-dock', next !== '')
+    if (next) root.dataset.miniDock = next
+    else delete root.dataset.miniDock
+    if (mode !== 'mini') return
+    // 布局变了就强制重新上报：即使宽度恰好没变，高度也一定不同
+    lastMiniWidth = 0
+    reportHeight()
+  }
+  window.__ccMiniDock = setMiniDock
+
   function firstSubscription() {
     const list = Array.isArray(lastSubs) ? lastSubs : []
     return list.find((sub) => (
@@ -2406,22 +2494,39 @@
     )) || null
   }
 
-  function miniRing(label, percent) {
-    const value = clampPct(percent)
+  // 圆环中心的小字：5小时 / 周 / 月。OpenDesign 目前只有 5 小时与周窗口，
+  // 未来出现 28–31 天窗口时按「月」显示。
+  function miniWindowLabel(win) {
+    const key = String((win && win.key) || '')
+    if (key === 'session') return t('miniWindowSession')
+    if (key === 'week') return t('miniWindowWeek')
+    if (key === 'month') return t('miniWindowMonth')
+    const dayMatch = /^d(\d+)$/.exec(key)
+    const days = dayMatch ? Number(dayMatch[1]) : 0
+    if (days >= 28 && days <= 31) return t('miniWindowMonth')
+    return String((win && win.label) || '')
+  }
+
+  function miniRing(win) {
+    const label = miniWindowLabel(win)
+    const value = clampPct(win && win.percent)
     const tone = value <= 10 ? 'bad' : value <= 30 ? 'warn' : 'good'
     const offset = RING_CIRCUMFERENCE * (1 - value / 100)
     const shown = Math.round(value)
+    const text = label + ' ' + shown + '%'
     return (
-      '<svg class="mini-ring" viewBox="0 0 40 40" role="img" aria-label="' +
-        esc(label + ' ' + shown + '%') + '">' +
-        '<title>' + esc(label) + '</title>' +
-        '<circle class="mini-ring-track" cx="20" cy="20" r="' + RING_RADIUS + '"></circle>' +
-        '<circle class="mini-ring-fill" cx="20" cy="20" r="' + RING_RADIUS + '"' +
-          ' stroke="var(--' + tone + ')"' +
-          ' stroke-dasharray="' + RING_CIRCUMFERENCE.toFixed(2) + '"' +
-          ' stroke-dashoffset="' + offset.toFixed(2) + '"></circle>' +
-        '<text x="20" y="20" text-anchor="middle" dominant-baseline="central">' + shown + '%</text>' +
-      '</svg>'
+      '<div class="mini-ring-item" role="img" aria-label="' + esc(text) + '">' +
+        '<svg class="mini-ring" viewBox="0 0 40 40" aria-hidden="true">' +
+          '<title>' + esc(text) + '</title>' +
+          '<circle class="mini-ring-track" cx="20" cy="20" r="' + RING_RADIUS + '"></circle>' +
+          '<circle class="mini-ring-fill" cx="20" cy="20" r="' + RING_RADIUS + '"' +
+            ' stroke="var(--' + tone + ')"' +
+            ' stroke-dasharray="' + RING_CIRCUMFERENCE.toFixed(2) + '"' +
+            ' stroke-dashoffset="' + offset.toFixed(2) + '"></circle>' +
+          '<text x="20" y="20" text-anchor="middle" dominant-baseline="central">' + esc(label) + '</text>' +
+        '</svg>' +
+        '<span class="mini-ring-percent">' + shown + '%</span>' +
+      '</div>'
     )
   }
 
@@ -2431,15 +2536,13 @@
     const stats = (lastStatus && lastStatus.stats) || {}
     const tokens = Number(stats.promptTokens || 0) + Number(stats.outputTokens || 0)
     if (miniTokens) miniTokens.textContent = fmtTokens(tokens)
-    if (miniRate) miniRate.textContent = Number(stats.outputTps || 0).toFixed(1) + ' tps'
+    if (miniRate) miniRate.textContent = Math.round(Number(stats.outputTps || 0)) + ' tps'
     const sub = firstSubscription()
     const windows = sub ? sub.windows.slice(0, 2) : []
     if (miniRings) {
       miniRings.hidden = windows.length === 0
       miniRings.title = sub ? String(sub.title || '') : ''
-      miniRings.innerHTML = windows.map((w) => (
-        miniRing(String((w && w.label) || (sub && sub.title) || ''), w && w.percent)
-      )).join('')
+      miniRings.innerHTML = windows.map((w) => miniRing(w)).join('')
     }
     if (miniClose) {
       miniClose.title = t('miniClose')

@@ -710,8 +710,9 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
 - uTools 版顶部多一条 32px 标题栏（品牌名 + 关闭按钮），只在 `html.cc-panel-utools` 下渲染，桌面托盘不受影响。拖动优先用 CSS `-webkit-app-region: drag`；该区域若未生效，页面会收到 `mousedown`，再按指针屏幕位移发 `drag-window` 动作，由主窗口 preload 用 `getPosition()` / `setPosition()` 按起点换算窗口位置（屏幕坐标与窗口位置同为 DIP）。关闭按钮复用 `hide` 动作。标题栏由 preload 在 `DOMContentLoaded` 时打上 class，页面在同事件补报一次高度，避免窗口底部的动作条被裁掉。
 - 底部动作按宿主能力映射：uTools 的 show-main 走 `showMainWindow() + redirect()`，quit 显示为「关闭」并关掉自定义窗口；桌面版仍走 `tray_popup_action` 的 show-main / quit。Esc 与 hide 都只收起或关闭面板。
 - 面板有两种形态：完整面板与 `html.cc-mini` 小浮窗（`mode` 由 `reportHeight` 一并上报）。uTools 版仍是同一个自定义窗口内切换，宽度从 400 切到按内容量出的值（96–360），高度 48–120；桌面版的小浮窗是独立窗口 `mini-popup`，和托盘弹窗 `tray-popup` 互不影响。
-- 小浮窗一行显示三块：本次网关 Token 用量（`getAutoRouteStatus().stats` 的 prompt + output）、实时输出 TPS 与第一条可用订阅的两个余量圆环；TPS 随网关状态每 500ms 轻量刷新，订阅每 60 秒拉一次，不跑整页 `reload`。
-- 大浮窗底部「缩小」在桌面版调用 `mini_popup_open`：收起大浮窗、显示独立小浮窗。小浮窗常驻置顶、失焦不收起，整窗可拖（`mini_popup_drag` 走原生 `start_dragging`，拖动过后改尺寸不再吸附回托盘）。关闭只收起小浮窗（`mini_popup_hide`），不打开主窗口；hover 的「放大」回到大浮窗（`mini_popup_expand`），主窗口仍从大浮窗底部进入。托盘图标始终只切换大浮窗，和小浮窗是否打开过无关。
+- 小浮窗一行显示三块：本次网关 Token 用量（`getAutoRouteStatus().stats` 的 prompt + output）、实时输出 TPS 与第一条可用订阅的两个余量圆环；TPS 随网关状态每 500ms 轻量刷新，订阅每 60 秒拉一次，不跑整页 `reload`。圆环中心用小字标注窗口（`5小时` / `周` / `月`，按 `window.key` 映射，`d28`–`d31` 也算月），剩余百分比放在圆环下方。桌面版把窗口拖到屏幕左/右工作区边缘 32px 内并松开后，Rust 在拖动停止 320ms 后吸附到该边缘（`settle_mini_dock`），页面收到 `__ccMiniDock('left'|'right')` 切为 `html.cc-mini-dock` 单列：三块自上而下排列，贴边一侧的圆角拉平。拖离边缘后恢复一行。
+- 大浮窗里实时 TPS 取整显示（不带小数）：网关页在统计卡片中展示，用量页在页签右侧的 `#tab-rate` 展示；两处都取 `getAutoRouteStatus().stats.outputTps`，网关未运行时隐藏。
+- 大浮窗底部「缩小」在桌面版调用 `mini_popup_open`：收起大浮窗、显示独立小浮窗。小浮窗常驻置顶、失焦不收起，整窗可拖（`mini_popup_drag` 走原生 `start_dragging`，拖动过后改尺寸不再吸附回托盘）。每次重新展开都回到托盘旁的一行形态；贴边状态随拖动结束由 `settle_mini_dock` 判定，尺寸变化由 `place_mini_docked` 保持贴住原边缘。关闭只收起小浮窗（`mini_popup_hide`），不打开主窗口；hover 的「放大」回到大浮窗（`mini_popup_expand`），主窗口仍从大浮窗底部进入。托盘图标始终只切换大浮窗，和小浮窗是否打开过无关。
 - 自定义窗口关闭能力由 uTools Runtime 管理；官方文档说明主窗口隐藏后插件可能在用户设定的时间（默认 3 分钟）内自动退出，没有文档化的保活手段，也没有在 `onPluginOut` 中强杀窗口。返回的 `BrowserWindow` 不支持实例事件监听，所以拖动结束、关闭都靠页面事件走 IPC。真实宿主里的全局快捷键切换、常驻时长与后台回收行为仍需装机验收。
 
 ### 启动失败与引导页（桌面版）

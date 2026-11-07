@@ -476,7 +476,7 @@ const statsSummary = computed(() => {
     tokens: prompt || output ? tokens(prompt + output) : "—",
     cacheHit: prompt ? pct(cached / prompt) : "—",
     // TPS 是当前在途流式输出的实时值，不随「本次 / 今日 / 本月 / 累积」切换。
-    outputTps: ((status.value.stats && status.value.stats.outputTps) || 0).toFixed(1) + " tps",
+    outputTps: Math.round(Number((status.value.stats && status.value.stats.outputTps) || 0)) + " tps",
   };
 });
 
