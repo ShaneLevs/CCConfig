@@ -48,8 +48,8 @@ const MINI_MIN_WIDTH: f64 = 96.0;
 const MINI_MAX_WIDTH: f64 = 360.0;
 const MINI_HEIGHT: f64 = 60.0;
 const MINI_MIN_HEIGHT: f64 = 48.0;
-/// 贴边单列时内容更高（用量 / 速率 / 圆环三行），上限相应放宽
-const MINI_MAX_HEIGHT: f64 = 220.0;
+/// 贴边单列时内容更高（本次用量 / 输出速率 / 每个圆环各占一行），上限相应放宽
+const MINI_MAX_HEIGHT: f64 = 240.0;
 /// 小浮窗离屏幕左右工作区边缘多近时吸附贴边（逻辑像素）
 const MINI_DOCK_THRESHOLD: f64 = 32.0;
 /// 弹窗与托盘图标之间的间距

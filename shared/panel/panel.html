@@ -12,8 +12,13 @@
     i18n() / locale() / statsUnit()
 
   两个页签：
-  - 网关：运行状态 + 统计口径 + 数据卡片 + 接入模式配置（模型直连 / 模型映射，改动即时落库）+ Skill 场景
+  - 网关：运行状态 + 统计口径 + 数据卡片（调用次数 / 成功率 / Token 消耗 / 缓存命中率）
+    + 接入模式配置（模型直连 / 模型映射，改动即时落库）+ Skill 场景
   - 用量：通用统计的 Token 柱状图（按模型 / Agent）+ 订阅用量
+
+  实时输出速率不在大浮窗里出现（不再占一张卡片，页签旁也不补小字），只在小浮窗里显示。
+  小浮窗的每个余量圆环都是一块独立组件（.mini-ring-slot[data-mini-ring]），贴边单列时
+  才能各占一行；后续加月度统计之类的展示同样新增一块，不要再把多个圆环塞进同一容器。
 
   桌面版的玻璃背景由原生视图绘制，页面根节点保持透明；uTools 版用 CSS 画出可点击背景。
 -->
@@ -203,13 +208,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .mini-rings {
+  /* 每个余量圆环都是一块独立组件（.mini-ring-slot），贴边单列时自然各占一行。
+     后续增加月度统计等展示时同样新增一块，不要再把多个圆环塞进同一容器。 */
+  .mini-ring-slot {
     display: flex;
     flex: none;
-    align-items: flex-start;
-    gap: 7px;
+    align-items: center;
   }
-  .mini-rings[hidden] { display: none; }
+  .mini-ring-slot[hidden] { display: none; }
   .mini-ring-item {
     display: flex;
     flex-direction: column;
@@ -298,6 +304,8 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 7px;
+    /* 单列时内容宽度只剩一块圆环，给个下限避免窗口被量得过窄 */
+    min-width: 84px;
   }
   html.cc-mini.cc-mini-dock .mini-usage { width: 100%; }
   html.cc-mini.cc-mini-dock .mini-rate {
@@ -306,7 +314,16 @@
     border-left: 0;
     border-top: 0.5px solid var(--divider);
   }
-  html.cc-mini.cc-mini-dock .mini-rings { align-self: stretch; }
+  html.cc-mini.cc-mini-dock .mini-ring-slot {
+    align-self: stretch;
+    padding-top: 7px;
+    border-top: 0.5px solid var(--divider);
+  }
+  /* 两块圆环都显示时只在第一块上方画分隔线 */
+  html.cc-mini.cc-mini-dock .mini-ring-slot:not([hidden]) ~ .mini-ring-slot:not([hidden]) {
+    padding-top: 0;
+    border-top: 0;
+  }
   html.cc-mini[data-mini-dock="left"] #panel {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
@@ -332,15 +349,6 @@
     border-radius: 9px;
     background: var(--track);
   }
-  /* 用量页没有统计卡片，页签旁补一个实时速率，让大浮窗两个页签都能看到 */
-  .tab-rate {
-    flex: none;
-    color: var(--muted);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .tab-rate[hidden] { display: none; }
   .tabs button {
     flex: 1 1 0;
     margin: 0;
@@ -491,15 +499,14 @@
   }
   .stats[hidden] { display: none; }
   .stat {
-    grid-column: span 2;
+    grid-column: span 3;
     background: var(--card);
     border: 0.5px solid var(--card-edge);
     border-radius: 10px;
     padding: 9px 11px 8px;
     min-width: 0;
   }
-  /* 五项统计：第一行调用 / 成功率 / 实时 TPS，第二行 Token / 缓存命中 */
-  .stat:nth-child(n + 4) { grid-column: span 3; }
+  /* 四项统计：第一行调用 / 成功率，第二行 Token / 缓存命中 */
   .stat-label {
     font-size: 10.5px;
     color: var(--muted);
@@ -1323,7 +1330,6 @@
       <button type="button" class="on" data-tab="gateway"></button>
       <button type="button" data-tab="usage"></button>
     </div>
-    <span class="tab-rate" id="tab-rate" hidden></span>
   </div>
 
   <div class="offline-note" id="offline-note" hidden></div>
@@ -1432,7 +1438,8 @@
         <span class="mini-label" id="mini-rate-label"></span>
         <span class="mini-tokens" id="mini-rate">—</span>
       </div>
-      <div class="mini-rings" id="mini-rings" hidden></div>
+      <div class="mini-ring-slot" data-mini-ring hidden></div>
+      <div class="mini-ring-slot" data-mini-ring hidden></div>
     </div>
     <div class="mini-actions">
       <button type="button" class="mini-action" id="mini-expand" data-no-drag>
@@ -1465,12 +1472,12 @@
   const miniTokens = $('mini-tokens')
   const miniRateLabel = $('mini-rate-label')
   const miniRate = $('mini-rate')
-  const miniRings = $('mini-rings')
+  // 余量圆环一块一颗：贴边单列时每块各自占一行，不再并排挤在同一行
+  const miniRingSlots = Array.from(document.querySelectorAll('[data-mini-ring]'))
   const miniClose = $('mini-close')
   const miniExpand = $('mini-expand')
   const tabs = $('tabs')
   const tabButtons = Array.from(tabs.querySelectorAll('[data-tab]'))
-  const tabRate = $('tab-rate')
   const offlineNote = $('offline-note')
   const gatewayPane = $('gateway-pane')
   const usagePane = $('usage-pane')
@@ -1672,18 +1679,7 @@
     for (const button of tabButtons) button.classList.toggle('on', button.dataset.tab === activeTab)
     gatewayPane.hidden = activeTab !== 'gateway'
     usagePane.hidden = activeTab !== 'usage'
-    renderTabRate()
     reportHeight()
-  }
-
-  // 实时输出速率只取本次在途流的值，不随「本次 / 今日 / 本月 / 累积」切换。
-  // 网关页有统计卡片，用量页没有，所以在页签旁补一个，切换页签也能看到。
-  function renderTabRate() {
-    if (!tabRate) return
-    const rate = Math.round(Number((lastStatus.stats && lastStatus.stats.outputTps) || 0))
-    tabRate.hidden = activeTab !== 'usage' || offline || !lastStatus.running
-    tabRate.title = t('outputTps')
-    tabRate.textContent = t('miniOutputTps') + ' ' + rate + ' tps'
   }
 
   function renderStaticLabels() {
@@ -1802,7 +1798,6 @@
   function renderStats(visible) {
     statsEl.hidden = !visible
     scopeRow.hidden = !visible
-    renderTabRate()
     if (!visible) {
       statsEl.innerHTML = ''
       return
@@ -1814,10 +1809,10 @@
     const prompt = Number(stats.promptTokens || 0)
     const cached = Number(stats.cachedTokens || 0)
     const output = Number(stats.outputTokens || 0)
+    // 大浮窗不展示实时输出速率（该数值只在小浮窗里出现）
     const cards = [
       [t('requests'), fmtInt(requests)],
       [t('successRate'), fmtPct(successes, requests)],
-      [t('outputTps'), Math.round(Number((lastStatus.stats && lastStatus.stats.outputTps) || 0)) + ' tps'],
       [t('tokens'), fmtTokens(prompt + output)],
       [t('cacheHitRate'), fmtPct(cached, prompt)],
     ]
@@ -2538,12 +2533,16 @@
     if (miniTokens) miniTokens.textContent = fmtTokens(tokens)
     if (miniRate) miniRate.textContent = Math.round(Number(stats.outputTps || 0)) + ' tps'
     const sub = firstSubscription()
-    const windows = sub ? sub.windows.slice(0, 2) : []
-    if (miniRings) {
-      miniRings.hidden = windows.length === 0
-      miniRings.title = sub ? String(sub.title || '') : ''
-      miniRings.innerHTML = windows.map((w) => miniRing(w)).join('')
-    }
+    const windows = sub ? sub.windows.slice(0, miniRingSlots.length) : []
+    const subTitle = sub ? String(sub.title || '') : ''
+    // 一块组件只放一个圆环：贴边单列时两块各自占一行
+    miniRingSlots.forEach((slot, index) => {
+      const win = windows[index]
+      slot.hidden = !win
+      if (win) slot.title = subTitle
+      else slot.removeAttribute('title')
+      slot.innerHTML = win ? miniRing(win) : ''
+    })
     if (miniClose) {
       miniClose.title = t('miniClose')
       miniClose.setAttribute('aria-label', t('miniClose'))

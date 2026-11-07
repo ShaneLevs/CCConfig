@@ -6,7 +6,6 @@
       "gatewayRunning": "Gateway running · Port {port}",
       "requests": "Requests",
       "successRate": "Success rate",
-      "outputTps": "Live output rate",
       "tokens": "Tokens",
       "cacheHitRate": "Cache hit rate",
       "skillScene": "Skill scenes",

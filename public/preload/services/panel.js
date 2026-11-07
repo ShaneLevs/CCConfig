@@ -16,7 +16,8 @@ const MINI_MIN_WIDTH = 96
 const MINI_MAX_WIDTH = 360
 const MINI_HEIGHT = 60
 const MINI_MIN_HEIGHT = 48
-const MINI_MAX_HEIGHT = 120
+// 贴边单列时本次用量 / 输出速率 / 每个圆环各占一行，上限要够高
+const MINI_MAX_HEIGHT = 240
 const PANEL_MARGIN = 8
 const PANEL_CODE = 'quickPanel'
 const PANEL_CMD = 'CCConfig 面板'
