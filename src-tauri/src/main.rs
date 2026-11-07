@@ -42,9 +42,11 @@ const MINI_POPUP: &str = "mini-popup";
 const POPUP_WIDTH: f64 = 400.0;
 const POPUP_MIN_HEIGHT: f64 = 120.0;
 const POPUP_MAX_HEIGHT: f64 = 560.0;
-/// 小浮窗尺寸：一行放本次用量与订阅余量，宽度按页面量出的内容自适应
+/// 小浮窗尺寸：一行放本次用量与订阅余量，宽度按页面量出的内容自适应。
+/// 下限按贴边单列时最窄的内容定：那里只剩一块 38px 的圆环 + 24px 内边距，
+/// hover 才出现的按钮是浮层，不占宽度。
 const MINI_WIDTH: f64 = 320.0;
-const MINI_MIN_WIDTH: f64 = 96.0;
+const MINI_MIN_WIDTH: f64 = 48.0;
 const MINI_MAX_WIDTH: f64 = 360.0;
 const MINI_HEIGHT: f64 = 60.0;
 const MINI_MIN_HEIGHT: f64 = 48.0;

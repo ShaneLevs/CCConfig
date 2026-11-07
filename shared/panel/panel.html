@@ -172,8 +172,9 @@
     position: relative;
     align-items: center;
     height: 60px;
-    /* 右侧给 hover 操作按钮留位置；宽度由页面量出内容后让宿主自适应 */
-    padding: 0 38px 0 12px;
+    /* 宽度由页面量出内容后让宿主自适应。hover 才出现的放大/关闭按钮是绝对定位的浮层，
+       不占布局宽度，它们盖在内容上方（内容区自己给右上角留一点呼吸空间）。 */
+    padding: 0 12px;
     /* 小浮窗不能设成窗口拖动区域：拖动区域不派发鼠标事件，hover 和按钮都会失效。
        拖动改由页面 mousedown + 适配层 dragWindow 完成。 */
   }
@@ -210,7 +211,8 @@
   }
   /* 每个余量圆环都是一块独立组件（.mini-ring-slot），贴边单列时自然各占一行。
      后续增加月度统计等展示时同样新增一块，不要再把多个圆环塞进同一容器。
-     圆环底部有意留开口，百分比数字画在开口里，与圆弧同属一个 SVG（见 miniRing()）。 */
+     圆环底部有意留开口，百分比数字画在开口里，与圆弧同属一个 SVG（见 miniRing()）。
+     窗口宽度完全由内容决定，这里不要给右侧加内边距去避让浮层按钮。 */
   .mini-ring-slot {
     display: flex;
     flex: none;
@@ -253,6 +255,8 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.03em;
   }
+  /* 放大 / 关闭按钮是浮层，不参与布局宽度：只在 hover 时出现，盖在内容右上角。
+     如果给它们预留内边距，贴边单列（内容最窄只有一块 38px 圆环）的窗口会被放大一倍宽。 */
   .mini-actions {
     position: absolute;
     z-index: 2;
@@ -293,17 +297,15 @@
   .mini-action:hover { background: var(--press); color: var(--text); }
   .mini-action svg { width: 10px; height: 10px; display: block; }
 
-  /* 贴边模式：吸附在屏幕左/右边缘时，一行三块改为自上而下单列 */
+  /* 贴边模式：吸附在屏幕左/右边缘时，一行四块改为自上而下单列 */
   html.cc-mini.cc-mini-dock .mini {
     height: auto;
-    padding: 10px 38px 10px 12px;
+    padding: 10px 12px;
   }
   html.cc-mini.cc-mini-dock .mini-inner {
     flex-direction: column;
     align-items: flex-start;
     gap: 7px;
-    /* 单列时内容宽度只剩一块圆环，给个下限避免窗口被量得过窄 */
-    min-width: 84px;
   }
   html.cc-mini.cc-mini-dock .mini-usage { width: 100%; }
   html.cc-mini.cc-mini-dock .mini-rate {

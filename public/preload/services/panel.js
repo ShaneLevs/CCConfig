@@ -12,7 +12,7 @@ const PANEL_MIN_HEIGHT = 120
 const PANEL_MAX_HEIGHT = 600
 // 小浮窗：一行放本次用量与订阅余量，宽度由页面按内容量出来后上报
 const MINI_WIDTH = 320
-const MINI_MIN_WIDTH = 96
+const MINI_MIN_WIDTH = 48
 const MINI_MAX_WIDTH = 360
 const MINI_HEIGHT = 60
 const MINI_MIN_HEIGHT = 48
