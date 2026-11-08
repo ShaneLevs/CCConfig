@@ -240,8 +240,11 @@ const readConfig = () => parse(fs.readFileSync(configPath(), 'utf8'))
     const stats = codex.readCodexUsage()
     const today = stats.contributions.find((d) => d.date === day)
     assert.ok(today)
-    assert.strictEqual(today.tokens, 120)
-    assert.strictEqual(today.inputTokens, 100, '输入含缓存，与 UsagePage 口径一致')
+    // 真实日志里 total_token_usage / total_tokens 恒 = input + output（不含缓存），
+    // 而 cached_input_tokens 可以大于 input_tokens，所以 input_tokens 是未缓存输入。
+    // 统一口径下当天总量 = 未缓存输入 100 + 缓存读 40 + 输出 20 = 160。
+    assert.strictEqual(today.tokens, 160, '总量 = 未缓存输入 + 缓存读 + 输出')
+    assert.strictEqual(today.inputTokens, 140, 'day.inputTokens 含缓存（100 + 40）')
     assert.strictEqual(today.outputTokens, 20)
     assert.strictEqual(stats.summary.sessionCount, 1)
     assert.strictEqual(stats.modelStats[0].name, 'model-a')

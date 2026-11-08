@@ -275,17 +275,15 @@ const getHistorySummary = () => {
   };
 };
 
-// usage 语义差异归一：anthropic 的 input_tokens 不含缓存（cache_read/cache_creation 分列），
-// openai 的 prompt_tokens/input_tokens 已含 cached → 统一折成 promptTokens（含缓存）+ cachedTokens。
+// usage 语义归一：canonical / scanUsageFromText 输出的 inputTokens 一律是「未缓存输入」
+// （缓存单列在 cacheReadTokens / cacheWriteTokens，与上游协议无关，见 canonical.normalizeUsage），
+// 这里统一折成 promptTokens（含缓存）+ cachedTokens 记入网关统计与历史。
+// 以前按 entry.target 分支处理，转换路径拿到的已经是归一值，anthropic 分支会再把缓存加一遍。
 const recordStats = (entry) => {
   if (!entry || !entry.target || typeof entry.status !== "number") return;
   const u = entry.usage;
   const cached = (u && u.cacheReadTokens) || 0;
-  const prompt = u
-    ? (entry.target === "anthropic-messages"
-      ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0)
-      : u.inputTokens || 0)
-    : 0;
+  const prompt = u ? (u.inputTokens || 0) + cached + (u.cacheWriteTokens || 0) : 0;
   const output = (u && u.outputTokens) || 0;
   const success = entry.status < 400;
 

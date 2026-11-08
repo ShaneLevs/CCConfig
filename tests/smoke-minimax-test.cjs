@@ -278,7 +278,7 @@ check('统计：解析会话 JSONL 的 usage', () => {
   const s = mm.readMinimaxUsage()
   assert.strictEqual(s.summary.messageCount, 2, '只统计带 usage 的 assistant 消息')
   assert.strictEqual(s.summary.sessionCount, 1)
-  assert.strictEqual(s.summary.inputTokens, 150)
+  assert.strictEqual(s.summary.inputTokens, 156, '输入含缓存 = 总量 - 输出（未缓存 150 + cacheRead 5 + cacheWrite 1）')
   assert.strictEqual(s.summary.outputTokens, 30)
   assert.strictEqual(s.summary.cacheReadTokens, 5)
   assert.strictEqual(s.summary.cacheWriteTokens, 1)

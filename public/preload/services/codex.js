@@ -765,20 +765,24 @@ const emptyCodexUsage = () => ({
   recentSessions: [],
 })
 
-// Codex / OpenAI usage 的 input_tokens 已包含 cached_input_tokens，与 UsagePage
-// 的「输入含缓存」口径一致；这里原样保留 input，另外记录 cache 明细。
+// Codex / OpenAI usage 的归一。字段语义已用本机 0.166.0 真实会话日志核实：
+//   total_tokens = input_tokens + output_tokens（569/569 条恒成立，不含缓存）
+//   cached_input_tokens 经常大于 input_tokens（565/569 条）→ input_tokens 是「未缓存输入」
+// 所以不能像以前那样把 input_tokens 当「已含缓存」原样透出（那会让当天总量少算整个缓存，
+// 本机 2026-11-06 少算 40,589,440，误差近 6000 倍）。统一口径：
+//   inputTokens = 未缓存输入（与 usage.js / 各 agent 一致）；
+//   totalTokens = 含缓存输入 + 输出 = input + cached + cacheWrite + output。
 const normalizeCodexUsageTokens = (u) => {
   const input = Number(u?.input_tokens) || 0
   const cached = Number(u?.cached_input_tokens) || 0
   const cacheWrite = Number(u?.cache_write_input_tokens) || 0
   const output = Number(u?.output_tokens) || 0
-  const reasoning = Number(u?.reasoning_output_tokens) || 0
   return {
     inputTokens: input,
     cacheReadTokens: cached,
     cacheWriteTokens: cacheWrite,
     outputTokens: output,
-    totalTokens: Number(u?.total_tokens) || input + output,
+    totalTokens: input + cached + cacheWrite + output,
   }
 }
 

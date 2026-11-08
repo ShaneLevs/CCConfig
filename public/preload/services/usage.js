@@ -99,7 +99,19 @@ const calculateStats = (messageRecords, sessionMap, options = {}) => {
     if (r.cacheCreationTokens) d.models[r.model].cacheCreationTokens += r.cacheCreationTokens
   })
 
-  const contributions = fillEmptyContributions(Array.from(contributionMap.values()).sort((a, b) => a.date.localeCompare(b.date)))
+  // 双口径归一（全仓库唯一一处，reader 不必各写一遍 aggregate）：
+  //   day.inputTokens          = 含缓存输入 = tokens - outputTokens（统计卡片 / 日期区间筛选直接取它）
+  //   day.models[].inputTokens = 该模型的未缓存输入（页面重算模型维度时会再叠加 cache 字段）
+  // 各 reader 传进来的 inputTokens 语义不同：Claude / Pi / MiniMax / omp 是未缓存输入，
+  // Codex / OpenCode / ZCode 是协议原生字段。直接累加会让选日期区间后的「输入」卡片少算缓存，
+  // 所以这里不看 record.inputTokens，只用 tokens / outputTokens 反推含缓存输入（幂等）。
+  const dayList = Array.from(contributionMap.values())
+    .map((d) => ({ ...d, inputTokens: (d.tokens || 0) - (d.outputTokens || 0) }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const contributions = fillEmptyContributions(dayList)
+  // summary 同口径：输入（含缓存）+ 输出 = 总量
+  summary.inputTokens = summary.totalTokens - summary.outputTokens
   const avgTokensPerSession = sessionMap.size > 0 ? Math.round(summary.totalTokens / sessionMap.size) : 0
   const recentSessions = sessionArr.slice(0, 10)
 
@@ -183,7 +195,8 @@ const readAllAgentUsage = () => {
           dayMap.set(date, day)
         }
         day.tokens += d.tokens || 0
-        day.inputTokens += d.inputTokens || 0
+        // 落库档的 day.inputTokens 语义随 agent 不同（pi / minimax 历史上存过未缓存输入），
+        // 这里不累加它，循环结束后统一按「含缓存输入 = 总量 - 输出」反推（见下方）。
         day.outputTokens += d.outputTokens || 0
         // 每个 agent 每天只出现一次，直接赋值（不用累加）
         day.agentModels[agent] = {
@@ -209,6 +222,9 @@ const readAllAgentUsage = () => {
     }
   }
 
+  for (const day of dayMap.values()) {
+    day.inputTokens = (day.tokens || 0) - (day.outputTokens || 0)
+  }
   const merged = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date))
   // 完全无落库数据时返回空 contributions（长度 0）——
   // UsagePage 的空态/引导提示以 contributions.length === 0 为判据，填零的 365 天会让引导不显示
@@ -263,8 +279,15 @@ const readAgentUsageFromHistory = (agent) => {
     const days = doc?.days || {}
     const dates = Object.keys(days)
     if (dates.length === 0) return null
+    // 历史档的 day.inputTokens 可能来自旧版本（pi / minimax 曾存未缓存输入），
+    // 一律按「含缓存输入 = 总量 - 输出」重算，避免旧档让日期区间筛选的「输入」少算缓存
     const contributions = fillEmptyContributions(
-      dates.sort().map((date) => ({ date, ...days[date], models: days[date]?.models || {} })),
+      dates.sort().map((date) => ({
+        ...days[date],
+        date,
+        inputTokens: (days[date]?.tokens || 0) - (days[date]?.outputTokens || 0),
+        models: days[date]?.models || {},
+      })),
     )
     // 口径与 readAllAgentUsage 一致：summary.inputTokens = total - output；
     // 模型 tokens = input + output + cacheRead + cacheCreation

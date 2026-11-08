@@ -20,10 +20,13 @@
 //   { type: "media", kind: "image" | "file", mediaType, data? | url?, name? }
 // canonical 响应：
 //   { id, model, text, reasoning: [...], toolCalls: [{ id, name, arguments }], stopReason, usage }
-// usage：{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }（normalizeUsage 归一名协议字段），
-// 三个方向的 usage 必须完整：上游→canonical（target.readStream/parseResponse）、
-// canonical→入站响应（source.formatResponse / 各 FrameWriter，含 cache 字段）、网关统计（recordStats）
-// 都依赖它；任何一段丢掉 inputTokens / cache* 都会让日志行、「最近请求」与会话统计里的 token 归零。
+// usage：{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }（normalizeUsage 归一名协议字段）
+// **inputTokens 统一是「未缓存输入」**，缓存永远单列在 cacheReadTokens / cacheWriteTokens；
+// 含缓存输入 / 总量用 totalInputTokens() / totalTokens() 取。三方向必须完整：
+// 上游→canonical（target.readStream/parseResponse）、canonical→入站响应（source.formatResponse /
+// 各 FrameWriter）、网关统计（recordStats）都依赖它；任何一段丢掉 inputTokens / cache* 都会让
+// 日志行、「最近请求」与会话统计里的 token 归零或翻倍。
+// 两种协议族的 input 语义相反，归一必须按「缓存字段从哪来」判定（见 normalizeUsage）。
 // stopReason ∈ "stop" | "length" | "tool"
 // 流式以 canonical 事件流为中心：
 //   start / text_delta / reasoning_delta / reasoning_signature / tool_start / tool_delta / end / error
@@ -357,45 +360,81 @@ const stopFromAnthropicReason = (r) => {
   return "stop";
 };
 
-const normalizeUsage = (u = {}) => ({
-  inputTokens: Number(u.inputTokens || u.input_tokens || u.prompt_tokens) || 0,
-  outputTokens: Number(u.outputTokens || u.output_tokens || u.completion_tokens) || 0,
-  cacheReadTokens:
+// 各协议 usage → canonical（inputTokens = 未缓存输入）。
+// 缓存字段的两种来历决定了 raw input 是否已含缓存，这是唯一可靠的判据：
+//   Anthropic Messages：input_tokens **不含**缓存，cache_read/cache_creation 单列
+//     → 直接取 input_tokens（显式 cacheReadTokens 字段也属于这一类）
+//   OpenAI Chat / Responses：prompt_tokens / input_tokens **已含** cached，
+//     cached 放在 prompt_tokens_details / input_tokens_details.cached_tokens
+//     → 未缓存输入 = 总数 - cached - cache_write
+// 以前一律把 raw input 当「总量」直接透出，结果同一份上游 usage 在转换路径上
+// 要么被重复加一次缓存（Anthropic 上游 → Chat 入站），要么整段缓存丢失
+// （Chat 上游 → Anthropic 入站），下游 agent（Pi / Codex）记到 input=6、cacheRead=10554 这种
+// cached 大于 input 的非法值，统计自然对不上。
+const normalizeUsage = (u = {}) => {
+  const rawInput = Number(u.inputTokens || u.input_tokens || u.prompt_tokens) || 0;
+  const outputTokens = Number(u.outputTokens || u.output_tokens || u.completion_tokens) || 0;
+  const detailsCached =
     Number(
-      u.cacheReadTokens ||
-        u.cache_read_input_tokens ||
-        (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) ||
+      (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) ||
         (u.input_tokens_details && u.input_tokens_details.cached_tokens),
-    ) || 0,
-  cacheWriteTokens: Number(u.cacheWriteTokens || u.cache_creation_input_tokens) || 0,
-});
+    ) || 0;
+  const explicitRead = Number(u.cacheReadTokens || u.cache_read_input_tokens) || 0;
+  const cacheReadTokens = explicitRead || detailsCached;
+  const cacheWriteTokens = Number(u.cacheWriteTokens || u.cache_creation_input_tokens) || 0;
+  // cached 只出现在 *_details 里 = 已包含在 input 总数中；显式 cache_read 字段 = 未包含
+  const inputIncludesCache = explicitRead === 0 && detailsCached > 0;
+  return {
+    inputTokens: inputIncludesCache ? Math.max(0, rawInput - cacheReadTokens - cacheWriteTokens) : rawInput,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+  };
+};
+
+// 含缓存输入 = 未缓存输入 + 缓存读 + 缓存写
+const totalInputTokens = (usage) =>
+  usage ? (usage.inputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0) : 0;
 
 // 从原始响应文本（整段 JSON 或 SSE 流分片）扫描 usage 数值字段，取各字段最大值，返回 normalizeUsage 同形结果。
 // 供同协议直通流式路径旁路采集统计用：不解析事件结构，只正则抓已知 usage key；
 // key 带引号边界，不会把 cache_read_input_tokens 误配成 input_tokens。
+// 语义归一与 normalizeUsage 完全一致：只扫到 *_details.cached_tokens 时 input 已含缓存，要减回去。
 const USAGE_SCAN_KEYS = {
   inputTokens: ["input_tokens", "prompt_tokens"],
   outputTokens: ["output_tokens", "completion_tokens"],
-  cacheReadTokens: ["cache_read_input_tokens", "cached_tokens"],
+  explicitRead: ["cache_read_input_tokens"],
+  detailsCached: ["cached_tokens"],
   cacheWriteTokens: ["cache_creation_input_tokens"],
 };
 const scanUsageFromText = (text) => {
-  const out = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-  if (!text) return out;
+  const scanned = {};
+  if (!text) return normalizeUsage({});
   for (const [field, keys] of Object.entries(USAGE_SCAN_KEYS)) {
+    scanned[field] = 0;
     for (const k of keys) {
       const re = new RegExp('"' + k + '"\\s*:\\s*(\\d+)', "g");
       let m;
       while ((m = re.exec(text))) {
         const v = Number(m[1]);
-        if (v > out[field]) out[field] = v;
+        if (v > scanned[field]) scanned[field] = v;
       }
     }
   }
-  return out;
+  const cacheWrite = scanned.cacheWriteTokens;
+  const cacheRead = scanned.explicitRead || scanned.detailsCached;
+  const inputIncludesCache = scanned.explicitRead === 0 && scanned.detailsCached > 0;
+  return {
+    inputTokens: inputIncludesCache
+      ? Math.max(0, scanned.inputTokens - cacheRead - cacheWrite)
+      : scanned.inputTokens,
+    outputTokens: scanned.outputTokens,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+  };
 };
 
-const totalTokens = (usage) => (usage ? usage.inputTokens + usage.outputTokens : 0);
+const totalTokens = (usage) => (usage ? totalInputTokens(usage) + (usage.outputTokens || 0) : 0);
 
 // ==================== 协议化错误体 ====================
 
@@ -548,6 +587,7 @@ module.exports = {
   stopFromFinishReason,
   stopFromAnthropicReason,
   normalizeUsage,
+  totalInputTokens,
   scanUsageFromText,
   totalTokens,
   errorTypeForStatus,

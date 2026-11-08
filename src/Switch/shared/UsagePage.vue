@@ -14,6 +14,7 @@ import ContributionGrid from "./ContributionGrid.vue";
 import UsageTokenChart from "./UsageTokenChart.vue";
 import { usePageRefresh } from "../../composables/usePageRefresh";
 import { useUnitFormat } from "../../composables/useUnitFormat";
+import { modelTokensOf } from "../../composables/usageTokens";
 import "./styles/UsagePage.css";
 
 const { t } = useI18n();
@@ -76,7 +77,9 @@ const hasDateFilter = computed(() => dateRange.value.length === 2);
 
 // 按日期区间过滤并重新计算统计（兼容三种数据形状：
 // day 可能带 inputTokens（OpenCode）或只带 outputTokens（Claude/Pi，输入 = 总量 - 输出）；
-// model 可能带 cacheReadTokens/cacheCreationTokens）
+// model 可能带 cacheReadTokens/cacheCreationTokens）。
+// 模型维度的口径统一走 modelTokensOf：落库的 models[].inputTokens 是未缓存输入（叠加缓存即可），
+// 但旧档的 Codex 条目是已含缓存（不能再叠加），函数内部按「叠加后是否超过当天总量」判定。
 const filteredData = computed(() => {
   const raw = usageData.value;
   if (!hasDateFilter.value) return raw;
@@ -99,13 +102,10 @@ const filteredData = computed(() => {
           modelMap.set(modelName, { name: modelName, tokens: 0, inputTokens: 0, outputTokens: 0 });
         }
         const m = modelMap.get(modelName);
-        const cacheR = modelData.cacheReadTokens || 0;
-        const cacheC = modelData.cacheCreationTokens || 0;
-        const inp = modelData.inputTokens || 0;
-        const out = modelData.outputTokens || 0;
-        m.tokens += inp + out + cacheR + cacheC;
-        m.inputTokens += inp + cacheR + cacheC;
-        m.outputTokens += out;
+        const t = modelTokensOf(modelData, dayTotal);
+        m.tokens += t.tokens;
+        m.inputTokens += t.input;
+        m.outputTokens += t.output;
       }
     }
   }
@@ -138,17 +138,14 @@ const getStatValue = (key) => {
 };
 
 // 柱状图数据：由（已按日期区间过滤的）contributions 派生，每天带两个维度的分类合计
-// - 按模型：兼容单 agent 页（models 缺 cache 字段）与通用页（合并后含 cache）两种形状，
-//   与「模型使用分布」同口径：tokens = input + output + cacheRead + cacheCreation
+// - 按模型：与「模型使用分布」同口径（modelTokensOf：含缓存输入 + 输出）
 // - 按 Agent：取 agentModels（仅通用页有；单 agent 页没有该字段 → 该维度无可画数据）
 // 柱高由各维度分类之和决定，不另传 total，避免柱高与分段口径不一致。
 const chartDays = computed(() =>
   filteredData.value.contributions.map((day) => {
     const models = {};
     for (const [name, m] of Object.entries(day.models || {})) {
-      const tokens =
-        (m.inputTokens || 0) + (m.outputTokens || 0) +
-        (m.cacheReadTokens || 0) + (m.cacheCreationTokens || 0);
+      const { tokens } = modelTokensOf(m, day.tokens || 0);
       if (tokens) models[name] = tokens;
     }
     const agents = {};

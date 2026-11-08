@@ -19,6 +19,7 @@
     "last7Days": "Last 7 days",
     "last30Days": "Last 30 days",
     "datePlaceholder": "Select date range",
-    "tooltipLine": "Input: {input} Output: {output}"
+    "tooltipLine": "Input: {input} Output: {output}",
+    "tooltipCache": "Cache: {cache}"
   }
 }

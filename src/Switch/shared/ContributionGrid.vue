@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { Tooltip } from "tdesign-vue-next";
 import { agentLabel } from "../../composables/agentMeta";
 import { useUnitFormat } from "../../composables/useUnitFormat";
+import { modelTokensOf } from "../../composables/usageTokens";
 
 const { t, locale } = useI18n();
 const { formatStat } = useUnitFormat();
@@ -96,18 +97,30 @@ const maxWeeks = computed(() => {
 
 const fmt = (num) => formatStat(num, { decimals: 1 });
 
-// tooltip 里的模型行：按当天该模型用量降序（input/output 展示为格式化文本）
-const modelLinesOf = (models) =>
+// tooltip 里的模型行：按当天该模型用量降序。
+// 「输入」取含缓存口径（= 未缓存输入 + 缓存读 + 缓存写），否则只要命中缓存，模型行的
+// 输入 + 输出 就会远小于 agent 标题上的总量（Pi / Grok 这类缓存占比 98% 的 agent 相差一个数量级）。
+// 有缓存时另起一行单列缓存，便于看清「输入里有多少是缓存」。
+const modelLinesOf = (models, dayTotal) =>
   Object.entries(models || {})
-    .map(([name, data]) => ({
-      name,
-      input: fmt(data.inputTokens || 0),
-      output: fmt(data.outputTokens || 0),
-      tokens:
-        (data.inputTokens || 0) + (data.outputTokens || 0) +
-        (data.cacheReadTokens || 0) + (data.cacheCreationTokens || 0),
-    }))
+    .map(([name, data]) => {
+      // 不要叫 t：会遮住上面的 i18n t()
+      const tk = modelTokensOf(data, dayTotal);
+      return {
+        name,
+        input: fmt(tk.input),
+        output: fmt(tk.output),
+        cache: tk.cache > 0 ? fmt(tk.cache) : "",
+        tokens: tk.tokens,
+      };
+    })
     .sort((a, b) => b.tokens - a.tokens);
+
+// tooltip 模型行文本：「输入: x 输出: y」，有缓存时后面跟「缓存: z」
+const lineText = (m) => {
+  const base = t('usage.tooltipLine', { input: m.input, output: m.output });
+  return m.cache ? `${base} ${t('usage.tooltipCache', { cache: m.cache })}` : base;
+};
 
 // 按 agent 分组的 tooltip 数据：通用统计页的每日贡献带 agentModels（各 agent 当天的归属与模型明细），
 // 按当天用量降序分组；单 agent 统计页没有该字段 → 返回空数组，tooltip 走未分组的平铺渲染
@@ -120,7 +133,7 @@ const buildAgentGroups = (day) => {
       label: agentLabel(agent),
       tokens: group.tokens || 0,
       totalText: fmt(group.tokens || 0),
-      lines: modelLinesOf(group.models),
+      lines: modelLinesOf(group.models, group.tokens || 0),
     }))
     .filter((g) => g.lines.length > 0)
     .sort((a, b) => b.tokens - a.tokens);
@@ -160,7 +173,7 @@ const allWeeks = computed(() => {
       models: d ? d.models : undefined,
       level,
       totalText: d ? fmt(d.tokens) : "0",
-      modelLines: d ? modelLinesOf(d.models) : [],
+      modelLines: d ? modelLinesOf(d.models, d.tokens || 0) : [],
       agentGroups: d ? buildAgentGroups(d) : [],
     });
     if (currentWeek.length === 7) { result.push(currentWeek); currentWeek = []; }
@@ -242,7 +255,7 @@ const monthLabels = computed(() => {
                       </div>
                       <div v-for="m in group.lines" :key="m.name" class="tip-line tip-line-grouped">
                         <span class="tip-name">{{ m.name }}</span>
-                        <span class="tip-detail">{{ t('usage.tooltipLine', { input: m.input, output: m.output }) }}</span>
+                        <span class="tip-detail">{{ lineText(m) }}</span>
                       </div>
                     </div>
                   </template>
@@ -250,7 +263,7 @@ const monthLabels = computed(() => {
                   <template v-else>
                     <div v-for="m in day.modelLines" :key="m.name" class="tip-line">
                       <span class="tip-name">{{ m.name }}</span>
-                      <span class="tip-detail">{{ t('usage.tooltipLine', { input: m.input, output: m.output }) }}</span>
+                      <span class="tip-detail">{{ lineText(m) }}</span>
                     </div>
                   </template>
                 </div>

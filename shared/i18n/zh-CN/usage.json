@@ -19,6 +19,7 @@
     "last7Days": "近 7 天",
     "last30Days": "近 30 天",
     "datePlaceholder": "选择日期区间",
-    "tooltipLine": "输入: {input} 输出: {output}"
+    "tooltipLine": "输入: {input} 输出: {output}",
+    "tooltipCache": "缓存: {cache}"
   }
 }

@@ -152,10 +152,21 @@ Claude:
     最近请求：解析出目标模型即插入 status=null 的「进行中」行，完成时原地补全状态/耗时/usage（流式旁路扫描的 token 随流实时累加），页面 500ms 轮询 getAutoRouteStatus；映射模式额外带 alias 字段，日志行显示「映射名 → 实际模型」（多个映射可指向同一模型，只显示模型名无法区分）
     统计落库：会话统计 serverState.stats 随网关启动清零；同一口径按本地日期聚合到 ccconfig_autoroute_usage_<nativeId>_<desktop|utools>（days: 日期 → requests/successes/promptTokens/cachedTokens/outputTokens，每次请求完成即写，stopAutoRoute 再兜底 flush；旧机器档 ccconfig_autoroute_usage_<nativeId> 只作首次读取的种子）；getAutoRouteStatus 返回 stats（本次，含实时 outputTps）与 history.today/month/total/since，网关页与托盘统一切换「本次 / 今日 / 本月 / 累积」（网关页首次进入默认今日，托盘默认今日，无今日调用时依次回退本次 / 本月 / 累积）。实时 TPS 来自流式增量内容的滑动窗口估算，不属于历史统计；网关口径独立于各 agent 的本地日志统计，不能直接并入「通用统计」求和
     usage 采集（日志行 / 会话统计口径）：
-      同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值）
-      跨协议转换：取 canonical end 事件的 usage；入站响应（source.formatResponse / 各 FrameWriter）同样回写
-        input_tokens / output_tokens 与缓存字段（chat: prompt_tokens_details.cached_tokens，responses: input_tokens_details.cached_tokens），
-        否则客户端 anthropic/openai SDK 回写整条 usage 时会把输入 token / 缓存抹成 0
+      **canonical / scanUsageFromText 的 inputTokens 一律是「未缓存输入」**，缓存永远单列在
+        cacheReadTokens / cacheWriteTokens；含缓存总量用 totalInputTokens() 取。normalizeUsage 按
+        「缓存字段从哪来」判定 raw input 是否已含缓存（唯一可靠判据，两族协议语义相反）：
+          Anthropic Messages：input_tokens 不含缓存，cache_read/cache_creation 单列 → 直接取
+          OpenAI Chat/Responses：input/prompt_tokens 已含 cached，cached 在 *_details.cached_tokens
+            → 未缓存输入 = 总数 - cached - cache_write
+      source 侧按目标协议要求分别写出（这是「同一份 usage 进出站不能变」的关键）：
+        Anthropic 入站：input_tokens = 未缓存输入，cache_read/cache_creation 单列（同 canonical）
+        Chat 入站：prompt_tokens = 含缓存总量，缓存明细放 prompt_tokens_details.{cached_tokens,cache_write_tokens}
+          （Pi 的 parseChunkUsage 算 input = prompt_tokens - cached - cache_write，漏回填就把未缓存输入报成全部）
+        Responses 入站：input_tokens = 含缓存总量，明细放 input_tokens_details.*（同 Chat）
+        任何一处丢掉输入或缓存字段，客户端 SDK 回写整条 usage 时会把 token / 缓存抹成 0
+      同协议直通：流式扫原始 SSE、非流式扫整段 JSON（scanUsageFromText 取各字段最大值，语义归一与 normalizeUsage 一致）
+      跨协议转换：取 canonical end 事件的 usage；recordStats 统一按「未缓存输入 + 缓存读 + 缓存写」折成 promptTokens，
+        不再按 entry.target 分支（转换路径拿到的已是归一值，再按协议加一次缓存会重复计数）
       Anthropic 出站流式：message_start 的 usage 通常全 0，input_tokens 与缓存字段要到 message_delta 才有，两边都要取（非 0 才覆盖）
     跨协议转换规则（autoroute-convert/canonical.js 为中间层，source/target 各三协议）：
       推理强度：Anthropic thinking.budget_tokens ↔ OpenAI reasoning_effort / reasoning.effort 互折（低 4096 / 中 10000 / 高 24000 / 最高 32000；anthropic 侧 budget 被限制在 max_tokens-1024 以内，且不开 thinking 时不回放 thinking 块）
@@ -207,6 +218,9 @@ Pi Agent:
     （pi-subagents 写 sessions/<项目>/<父会话名>/<runId>/run-N/*.jsonl，fork 另有 forks/<runId>/）
     只扫一层会漏掉所有「派 agent」的用量；递归深度上限 MAX_SESSION_DEPTH，目录判定走 fs-utils.isDirEntry
     fork 子会话会复制父会话历史 → 按 (sessionId, timestamp, 用量) 去重，否则派一次 agent 父会话被重复计一遍
+  双口径（各 agent 共用，由 usage.calculateStats 统一归一，reader 不要各自再算一遍）：
+    day.inputTokens = 含缓存输入 = tokens - outputTokens；day.models[].inputTokens = 该模型的未缓存输入
+    summary.inputTokens = total - output（统计卡片标签是「输入（含缓存）」）
   **日期一律本地日期（usage.localDayKey）**：会话 timestamp 是 UTC ISO 串，直接 split('T')[0] 得到 UTC 日期，
     东八区 00:00–08:00 会把当天（含当次派出的子 agent）用量记到「昨天」，热力图「今日」恒为 0
 
@@ -291,7 +305,10 @@ Codex:
     网关目录为空时返回 409，绝不声称下发了一个 Codex 无法加载的空目录
   使用统计：CODEX_HOME/sessions/**/*.jsonl
     0.166 token_usage_record.usage 是单次响应增量；旧版 token_count.last_token_usage 为增量回退
-    禁止累加 token_count.total_token_usage；input_tokens 按「输入含缓存」口径，模型归属取 turn_context
+    禁止累加 token_count.total_token_usage；模型归属取 turn_context
+    **input_tokens 是未缓存输入**（实测 0.166.0：total_tokens 恒 = input + output，
+      cached_input_tokens 经常大于 input_tokens）→ 总量按 input + cached + cacheWrite + output 累加；
+      旧实现把它当「已含缓存」直接取 total_tokens，启缓存时当天总量会少算整个缓存量
 
 Kimi Code:
   ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）

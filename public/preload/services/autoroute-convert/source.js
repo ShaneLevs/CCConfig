@@ -13,6 +13,7 @@ const {
   resolveReasoning,
   stopFromFinishReason,
   stopFromAnthropicReason,
+  totalInputTokens,
 } = require("./canonical");
 
 // ==================== 工具选择 ====================
@@ -34,6 +35,22 @@ const mapToolChoiceToCanonical = (tc) => {
 };
 
 // ==================== Anthropic Messages 入站 ====================
+
+// canonical.usage → Anthropic usage 字段形状。
+// 两边口径现已一致：canonical 的 inputTokens 就是「未缓存输入」，缓存单列在
+// cacheReadTokens / cacheWriteTokens（见 canonical.js 的 normalizeUsage 注释），
+// 而 Anthropic Messages 的 input_tokens 也不含缓存 —— 直接对应即可。
+// 不能在任一方向把缓存再叠进 input：客户端（Claude Code 等）会累加 input + cache_read 当上下文用量，
+// 叠进去就是双算；反方向把含缓存总量当 input_tokens 写出去，又会把「新的未缓存 token」报成全部输入。
+const anthropicUsageShape = (u, outputOverride) => {
+  const usage = {
+    input_tokens: (u && u.inputTokens) || 0,
+    output_tokens: outputOverride !== undefined ? outputOverride : (u && u.outputTokens) || 0,
+  }
+  if (u && u.cacheReadTokens) usage.cache_read_input_tokens = u.cacheReadTokens
+  if (u && u.cacheWriteTokens) usage.cache_creation_input_tokens = u.cacheWriteTokens
+  return usage
+}
 
 // anthropic 的 image / document 块（base64 或 url 两种 source）
 const anthropicMedia = (b) => {
@@ -130,9 +147,8 @@ const anthropicSource = {
       content.push({ type: "tool_use", id: tc.id, name: tc.name, input: safeParseArguments(tc.arguments) });
     }
     const stopReason = canonical.stopReason === "tool" ? "tool_use" : canonical.stopReason === "length" ? "max_tokens" : "end_turn";
-    const usage = { input_tokens: canonical.usage.inputTokens, output_tokens: canonical.usage.outputTokens };
-    if (canonical.usage.cacheReadTokens) usage.cache_read_input_tokens = canonical.usage.cacheReadTokens;
-    if (canonical.usage.cacheWriteTokens) usage.cache_creation_input_tokens = canonical.usage.cacheWriteTokens;
+    // Anthropic 口径：input_tokens = 未缓存输入，cache_read / cache_creation 单列（与 canonical 一致）
+    const usage = anthropicUsageShape(canonical.usage);
     return {
       id: canonical.id || newId("msg"),
       type: "message",
@@ -208,10 +224,7 @@ class AnthropicFrameWriter {
       const u = event.usage || {};
       this.outputTokens = u.outputTokens || 0;
       const stopReason = event.stopReason === "tool" ? "tool_use" : event.stopReason === "length" ? "max_tokens" : "end_turn";
-      const usage = { output_tokens: this.outputTokens };
-      if (u.inputTokens) usage.input_tokens = u.inputTokens;
-      if (u.cacheReadTokens) usage.cache_read_input_tokens = u.cacheReadTokens;
-      if (u.cacheWriteTokens) usage.cache_creation_input_tokens = u.cacheWriteTokens;
+      const usage = anthropicUsageShape(u, this.outputTokens);
       frames.push(this.frame("message_delta", { delta: { stop_reason: stopReason, stop_sequence: null }, usage }));
       frames.push(this.frame("message_stop", {}));
       return frames;
@@ -261,6 +274,29 @@ const chatContentBlocks = (content) => {
     }
   }
   return blocks;
+};
+
+// canonical.usage → OpenAI Chat Completions usage 字段形状。
+// prompt_tokens 必须把缓存加回去（OpenAI 约定它是「含缓存的总输入」，与 Anthropic 相反）：
+// 漏加会让客户端记录到 prompt_tokens=6 而 cached=10554 这种 cached > prompt 的非法值，
+// Pi / omp 这类直接把 prompt_tokens 当输入的 agent 就会少算整个缓存量。
+// 实测依据：Pi 的 parseChunkUsage 算 input = max(0, prompt_tokens - cached_tokens - cache_write_tokens)，
+// 所以缓写也必须回填，否则这部分会被错当未缓存输入。
+const chatUsageShape = (u) => {
+  const totalInput = totalInputTokens(u);
+  const usage = {
+    prompt_tokens: totalInput,
+    completion_tokens: (u && u.outputTokens) || 0,
+    total_tokens: totalInput + ((u && u.outputTokens) || 0),
+  };
+  // 缓存明细回填（OpenAI 形状）：客户端/统计页靠它算缓存命中率，丢了就永远是 0
+  if ((u && u.cacheReadTokens) || (u && u.cacheWriteTokens)) {
+    usage.prompt_tokens_details = {
+      cached_tokens: (u && u.cacheReadTokens) || 0,
+      cache_write_tokens: (u && u.cacheWriteTokens) || 0,
+    };
+  }
+  return usage;
 };
 
 const chatSource = {
@@ -321,13 +357,9 @@ const chatSource = {
       message.tool_calls = canonical.toolCalls.map((tc) => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: tc.arguments } }));
     }
     const finishReason = canonical.stopReason === "tool" ? "tool_calls" : canonical.stopReason === "length" ? "length" : "stop";
-    const usage = {
-      prompt_tokens: canonical.usage.inputTokens,
-      completion_tokens: canonical.usage.outputTokens,
-      total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
-    };
-    // 缓存命中回填（OpenAI 形状）：客户端/统计页靠它算缓存命中率，丢了就永远是 0
-    if (canonical.usage.cacheReadTokens) usage.prompt_tokens_details = { cached_tokens: canonical.usage.cacheReadTokens };
+    // OpenAI 口径：prompt_tokens **含**缓存，cached 放在 prompt_tokens_details.cached_tokens
+    // （与 Anthropic 相反）。canonical 的 inputTokens 是未缓存输入，这里必须把缓存加回去。
+    const usage = chatUsageShape(canonical.usage);
     return {
       id: canonical.id || newId("chatcmpl"),
       object: "chat.completion",
@@ -373,9 +405,7 @@ class ChatFrameWriter {
       const frames = [this.chunk({}, event.stopReason === "tool" ? "tool_calls" : event.stopReason === "length" ? "length" : "stop")];
       const usage = event.usage;
       if (usage) {
-        const u = { prompt_tokens: usage.inputTokens, completion_tokens: usage.outputTokens, total_tokens: usage.inputTokens + usage.outputTokens };
-        if (usage.cacheReadTokens) u.prompt_tokens_details = { cached_tokens: usage.cacheReadTokens };
-        frames.push(`data: ${JSON.stringify({ id: this.id, object: "chat.completion.chunk", created: this.created, model: this.model || "", choices: [], usage: u })}\n\n`);
+        frames.push(`data: ${JSON.stringify({ id: this.id, object: "chat.completion.chunk", created: this.created, model: this.model || "", choices: [], usage: chatUsageShape(usage) })}\n\n`);
       }
       frames.push("data: [DONE]\n\n");
       return frames;
@@ -425,6 +455,23 @@ const responsesContentBlocks = (content) => {
     }
   }
   return blocks;
+};
+
+// canonical.usage → OpenAI Responses usage 字段形状（与 Chat 同族：input_tokens 含缓存）。
+const responsesUsageShape = (u) => {
+  const totalInput = totalInputTokens(u);
+  const usage = {
+    input_tokens: totalInput,
+    output_tokens: (u && u.outputTokens) || 0,
+    total_tokens: totalInput + ((u && u.outputTokens) || 0),
+  };
+  if ((u && u.cacheReadTokens) || (u && u.cacheWriteTokens)) {
+    usage.input_tokens_details = {
+      cached_tokens: (u && u.cacheReadTokens) || 0,
+      cache_write_tokens: (u && u.cacheWriteTokens) || 0,
+    };
+  }
+  return usage;
 };
 
 const responsesSource = {
@@ -506,15 +553,8 @@ const responsesSource = {
     for (const tc of canonical.toolCalls || []) {
       output.push({ type: "function_call", id: newId("fc"), call_id: tc.id, name: tc.name, arguments: tc.arguments, status: "completed" });
     }
-    const usage = {
-      input_tokens: canonical.usage.inputTokens,
-      output_tokens: canonical.usage.outputTokens,
-      total_tokens: canonical.usage.inputTokens + canonical.usage.outputTokens,
-    };
-    // 缓存命中回填（Responses 形状：input_tokens_details.cached_tokens）
-    if (canonical.usage.cacheReadTokens) {
-      usage.input_tokens_details = { cached_tokens: canonical.usage.cacheReadTokens };
-    }
+    // Responses 与 Chat 同族：input_tokens 含缓存，缓存明细放 input_tokens_details.cached_tokens
+    const usage = responsesUsageShape(canonical.usage);
     return {
       id: canonical.id || newId("resp"),
       object: "response",
@@ -625,10 +665,8 @@ class ResponsesFrameWriter {
       }
       return { type: "function_call", id: item.id, call_id: item.callId, name: item.name, arguments: item.args, status: "completed" };
     });
-    const input = (eventUsage && eventUsage.inputTokens) || 0;
-    const out = (eventUsage && eventUsage.outputTokens) || 0;
-    const usage = { input_tokens: input, output_tokens: out, total_tokens: input + out };
-    if (eventUsage && eventUsage.cacheReadTokens) usage.input_tokens_details = { cached_tokens: eventUsage.cacheReadTokens };
+    // canonical 的 inputTokens 是未缓存输入，Responses 要含缓存的总量（同 chatUsageShape）
+    const usage = responsesUsageShape(eventUsage);
     frames.push(this.ev("response.completed", { response: { ...this.responseBase(status, output), usage } }));
     return frames;
   }
