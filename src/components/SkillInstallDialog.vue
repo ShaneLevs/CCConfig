@@ -69,7 +69,7 @@ defineExpose({ open, openInstallWithUrl, openDir });
     <div class="install-form">
       <div class="skill-install-form-item"><label>{{ t('skill.install.link') }}</label><Input v-model="installUrl" :placeholder="supportsSkillsSh ? t('skill.install.linkPlaceholderSkillsSh') : t('skill.install.linkPlaceholder')" :disabled="isFetchingInfo || isInstalling" /></div>
       <div class="install-hint">{{ t('skill.install.hintSourcesPrefix') }} <span class="hint-link" @click="openExternal('https://skillhub.cn/skills')">SkillHub</span> {{ t('skill.install.hintSourcesMiddle') }} <span class="hint-link" @click="openExternal('https://www.modelscope.cn/skills')">{{ t('skill.install.sourceModelScope') }}</span> {{ t('skill.install.hintSourcesSuffix') }}</div>
-      <div v-if="supportsSkillsSh" class="install-hint">{{ t('skill.install.hintSkillsSh') }}</div>
+      <div v-if="supportsSkillsSh" class="install-hint">{{ t('skill.install.hintSkillsShPrefix') }} <span class="hint-link" @click="openExternal('https://skills.sh')">{{ t('skill.install.sourceSkillsSh') }}</span> {{ t('skill.install.hintSkillsShMiddle') }}</div>
       <div class="install-hint">{{ t('skill.install.hintManualPrefix') }} <span class="hint-link" @click="openDir">{{ manualDirLabel }}</span> {{ t('skill.install.hintManualSuffix') }}</div>
       <div v-if="isFetchingInfo" class="install-loading"><Loading size="small" /></div>
       <div v-if="installInfo" class="install-info-card">

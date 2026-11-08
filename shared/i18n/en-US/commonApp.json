@@ -61,9 +61,10 @@
       "testSuccess": "First token {ms} ms",
       "testSummary": "Tested {done}/{total} · {ok} succeeded · {fail} failed",
       "testNoModels": "This provider has no models configured",
-      "testRetry": "Test again",
+      "testClickToTest": "Click to test",
+      "testAll": "Test all",
       "testClose": "Close",
-      "testProviderHint": "Sends one minimal request per model using its configured API type; successful rows show first-token latency"
+      "testProviderHint": "Click a model to test it, or test all models (3 at a time); successful rows show first-token latency"
     },
     "batchAdd": {
       "title": "Batch add models",

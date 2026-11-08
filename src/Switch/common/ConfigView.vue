@@ -85,7 +85,9 @@ const loadProviders = () => {
 };
 
 // ==================== 供应商连接测试 ====================
-// 弹窗按模型逐条请求，结果随进度实时更新；序号用来丢弃已关闭/已重开弹窗的旧结果。
+// 打开弹窗只准备模型列表；点击单个模型或一键测试才发请求，结果随进度实时更新。
+// 序号用来丢弃已关闭弹窗的旧结果。
+const TEST_CONCURRENCY = 3;
 const testVisible = ref(false);
 const testProviderName = ref('');
 const testResults = ref([]);
@@ -109,42 +111,65 @@ const buildTestRows = (provider) =>
   }));
 
 const openTestDialog = (provider) => {
+  // 重新打开时丢弃旧弹窗仍在途的结果
+  testSession.value += 1;
+  testRunning.value = false;
   testProviderName.value = provider.name;
   testResults.value = buildTestRows(provider);
   testVisible.value = true;
-  startConnectionTests();
+};
+
+const runConnectionTest = async (item, session) => {
+  item.status = 'testing';
+  item.latencyMs = 0;
+  item.error = '';
+  let result;
+  try {
+    result = await window.services.testCommonModelConnection(testProviderName.value, item.id);
+  } catch (e) {
+    result = { ok: false, error: (e && e.message) || t('common.unknownError') };
+  }
+  if (session !== testSession.value) return;
+  if (result && result.ok) {
+    item.status = 'success';
+    item.latencyMs = Number(result.latencyMs) || 0;
+  } else {
+    item.status = 'error';
+    item.error = (result && result.error) || t('common.unknownError');
+  }
+};
+
+const testSingleModel = (item) => {
+  if (testRunning.value || item.status === 'testing') return;
+  runConnectionTest(item, testSession.value);
 };
 
 const startConnectionTests = async () => {
+  if (testRunning.value || !testResults.value.length) return;
   const session = ++testSession.value;
-  testRunning.value = true;
-  for (const item of testResults.value) {
-    if (session !== testSession.value) return;
-    item.status = 'testing';
+  const queue = testResults.value;
+  queue.forEach((item) => {
+    item.status = 'pending';
     item.latencyMs = 0;
     item.error = '';
-    let result;
-    try {
-      result = await window.services.testCommonModelConnection(testProviderName.value, item.id);
-    } catch (e) {
-      result = { ok: false, error: (e && e.message) || t('common.unknownError') };
+  });
+  testRunning.value = true;
+  let cursor = 0;
+  const worker = async () => {
+    while (session === testSession.value) {
+      const item = queue[cursor];
+      cursor += 1;
+      if (!item) return;
+      await runConnectionTest(item, session);
     }
-    if (session !== testSession.value) return;
-    if (result && result.ok) {
-      item.status = 'success';
-      item.latencyMs = Number(result.latencyMs) || 0;
-    } else {
-      item.status = 'error';
-      item.error = (result && result.error) || t('common.unknownError');
-    }
+  };
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(TEST_CONCURRENCY, queue.length) }, worker),
+    );
+  } finally {
+    if (session === testSession.value) testRunning.value = false;
   }
-  if (session === testSession.value) testRunning.value = false;
-};
-
-const retryConnectionTests = () => {
-  const provider = providers.value.find((item) => item.name === testProviderName.value);
-  if (provider) testResults.value = buildTestRows(provider);
-  startConnectionTests();
 };
 
 const handleTestDialogClosed = () => {
@@ -574,7 +599,13 @@ onMounted(refresh);
           }) }}
         </div>
         <div class="common-test-list">
-          <div v-for="item in testResults" :key="item.id" class="common-test-row">
+          <div
+            v-for="item in testResults"
+            :key="item.id"
+            class="common-test-row"
+            :class="{ 'common-test-row-clickable': !testRunning && item.status !== 'testing' }"
+            @click="testSingleModel(item)"
+          >
             <div class="common-test-model">
               <div class="common-test-model-head">
                 <span class="common-test-model-name">{{ item.name || item.id }}</span>
@@ -584,7 +615,7 @@ onMounted(refresh);
             </div>
             <div class="common-test-result">
               <span v-if="item.status === 'pending'" class="common-test-pending">
-                {{ t('commonApp.config.testStatusPending') }}
+                {{ testRunning ? t('commonApp.config.testStatusPending') : t('commonApp.config.testClickToTest') }}
               </span>
               <template v-else-if="item.status === 'testing'">
                 <Loading size="14px" />
@@ -610,14 +641,14 @@ onMounted(refresh);
       </template>
       <template #footer>
         <Button
-          variant="outline"
+          theme="primary"
           :loading="testRunning"
           :disabled="!testResults.length"
-          @click="retryConnectionTests"
+          @click="startConnectionTests"
         >
-          {{ t('commonApp.config.testRetry') }}
+          {{ t('commonApp.config.testAll') }}
         </Button>
-        <Button theme="primary" @click="testVisible = false">{{ t('commonApp.config.testClose') }}</Button>
+        <Button variant="outline" @click="testVisible = false">{{ t('commonApp.config.testClose') }}</Button>
       </template>
     </Dialog>
 
