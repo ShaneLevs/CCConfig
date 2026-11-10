@@ -482,7 +482,8 @@ Grok Build（xAI 官方编码 CLI，命令 `grok`）:
     modelCalls / primaryModelId / modelUsage{<模型ID>: UsageSummary}
     按 turns 逐轮汇总（多天会话能落到正确日期，日期取 endedAt 的本地日期），模型维度取 turn.modelUsage，
     无 modelUsage 时退回 primaryModelId；无 turns 的老档退回 session 汇总 + updatedAt 日期；读失败的会话跳过（正在写入）
-    口径：输入 = inputTokens + cachedReadTokens + cacheCreationTokens（含缓存），输出 = outputTokens；
+    口径：inputTokens 已含 cachedReadTokens / cacheCreationTokens（usage.json 的 totalTokens = inputTokens + outputTokens），
+      总量 = inputTokens + outputTokens，缓存是 inputTokens 的明细、不再叠加（否则统计约为网关的两倍）；
       day.inputTokens 含缓存（页面日期筛选直接取该字段），day.models[].inputTokens 为未缓存输入（页面重算再叠加缓存）；
       summary.inputTokens = 总 - 输出
     历史落库：ccconfig_agent_usage_grok_<nativeId>（与「通用」统计页同源），源目录被清理后回放历史不归零

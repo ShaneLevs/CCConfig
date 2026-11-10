@@ -30,7 +30,8 @@ const {
 //   { sessionId, updatedAt, session: UsageSummary, turns: [{ turnNumber, endedAt, ...UsageSummary }] }
 //   UsageSummary：inputTokens / outputTokens / cachedReadTokens / cacheCreationTokens /
 //   reasoningTokens / totalTokens / modelCalls / costUsdTicks / primaryModelId / modelUsage
-//   （serde camelCase）。口径与 DSH / Claude 一致：输入含缓存读 + 缓存写，输出单列。
+//   （serde camelCase）。Grok 的 inputTokens 是「含缓存的输入总量」（totalTokens = inputTokens + outputTokens），
+//   cachedReadTokens / cacheCreationTokens 只是它的明细，不再叠加；统计落库时缓存单列、输入存未缓存部分。
 // 已知取舍：整档 smol-toml 重写不保留 TOML 注释（同 codex / kimi / reasonix）。
 
 const GROK_HOME = () => process.env.GROK_HOME || path.join(os.homedir(), '.grok')
@@ -813,9 +814,11 @@ const getGrokSkillsDir = () => {
 // ==================== 使用统计（~/.grok/sessions）====================
 // 每个会话目录一份 usage.json（官方 --json / `grok usage` 的落盘版本）：
 //   session.modelUsage = { "<模型ID>": UsageSummary }，turns[] 为逐轮增量。
-// 口径（与 Claude / DSH / ZCode 统计页一致，UsagePage 的日期筛选依赖该形状）：
-//   输入（含缓存）= inputTokens + cachedReadTokens + cacheCreationTokens；输出 = outputTokens
-//   单日 tokens = 输入含缓存 + 输出；day.models[name] 存「未缓存输入 / 输出 / 缓存读 / 缓存写」
+// 口径（UsagePage 的日期筛选依赖该形状）：
+//   Grok 的 UsageSummary.inputTokens 已含 cachedReadTokens / cacheCreationTokens
+//   （usage.json 自带的 totalTokens 恒 = inputTokens + outputTokens），所以
+//   单日 tokens = inputTokens + outputTokens，未缓存输入 = inputTokens - 缓存明细；
+//   day.models[name] 存「未缓存输入 / 输出 / 缓存读 / 缓存写」。
 // 按 turn 而非 session 汇总：多天会话的用量能落到正确的日期上。turn.endedAt 为 RFC3339 时间。
 // 历史落库：ccconfig_agent_usage_grok_<nativeId>（与「通用」统计页同源），源文件被清理后回放历史。
 
@@ -915,20 +918,22 @@ const collectUsageRecords = () => {
         const output = toNumber(u.outputTokens)
         const cacheRead = toNumber(u.cachedReadTokens)
         const cacheWrite = toNumber(u.cacheCreationTokens)
-        const total = input + output + cacheRead + cacheWrite
+        // Grok 的 inputTokens 已含缓存：再叠加缓存明细会把总量翻倍（统计页 vs 网关的 2 倍差）
+        const uncachedInput = Math.max(0, input - cacheRead - cacheWrite)
+        const total = input + output
         if (total === 0) continue
         messageRecords.push({
           sessionId: session.sessionId,
           model: String(row.name || 'unknown').trim() || 'unknown',
           date,
           timestamp: turn.endedAt ? new Date(turn.endedAt).getTime() : 0,
-          inputTokens: input,
+          inputTokens: uncachedInput,
           outputTokens: output,
           cacheReadTokens: cacheRead,
           cacheCreationTokens: cacheWrite,
           totalTokens: total,
         })
-        sess.inputTokens += input
+        sess.inputTokens += uncachedInput
         sess.outputTokens += output
         sess.cacheReadTokens += cacheRead
         sess.cacheCreationTokens += cacheWrite
@@ -946,20 +951,21 @@ const collectUsageRecords = () => {
         const output = toNumber(u.outputTokens)
         const cacheRead = toNumber(u.cachedReadTokens)
         const cacheWrite = toNumber(u.cacheCreationTokens)
-        const total = input + output + cacheRead + cacheWrite
+        const uncachedInput = Math.max(0, input - cacheRead - cacheWrite)
+        const total = input + output
         if (!date || total === 0) continue
         messageRecords.push({
           sessionId: session.sessionId,
           model: String(row.name || 'unknown').trim() || 'unknown',
           date,
           timestamp: doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0,
-          inputTokens: input,
+          inputTokens: uncachedInput,
           outputTokens: output,
           cacheReadTokens: cacheRead,
           cacheCreationTokens: cacheWrite,
           totalTokens: total,
         })
-        sess.inputTokens += input
+        sess.inputTokens += uncachedInput
         sess.outputTokens += output
         sess.cacheReadTokens += cacheRead
         sess.cacheCreationTokens += cacheWrite

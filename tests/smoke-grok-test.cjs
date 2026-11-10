@@ -319,12 +319,13 @@ fs.writeFileSync(path.join(sessDir, 'usage.json'), JSON.stringify({
   ],
 }))
 const usage = grok.readGrokUsage(true)
-// 口径：输入含缓存（200+60 + 100+40 = 400）+ 输出 60 = 460
-eq(usage.summary.totalTokens, 460, '总数 = 输入含缓存 + 输出')
+// Grok 的 inputTokens 已含缓存（usage.json 的 totalTokens = inputTokens + outputTokens）：
+// 总数 = 200+40 + 100+20 = 360，缓存不能再叠加一遍（否则统计会翻倍）
+eq(usage.summary.totalTokens, 360, '总数 = inputTokens + 输出（inputTokens 已含缓存）')
 eq(usage.summary.outputTokens, 60, '输出')
-eq(usage.summary.inputTokens, 400, '输入含缓存')
+eq(usage.summary.inputTokens, 300, '输入含缓存')
 eq(usage.modelStats.map((m) => m.name).sort(), ['acme/opus', 'grok-4.6'], '模型分布按 turn 的 modelUsage 拆分')
-eq(usage.modelStats.find((m) => m.name === 'grok-4.6').tokens, 160, 'grok-4.6 = 100 + 40 + 20')
+eq(usage.modelStats.find((m) => m.name === 'grok-4.6').tokens, 120, 'grok-4.6 = 100 + 20（缓存是 100 的明细）')
 eq(usage.sessionCount, 1, '会话数')
 // 日期口径是「本地日期」（grok.js 的 dayKeyOf：toISOString 是 UTC，东八区凌晨会算到前一天），
 // 期望值也必须按本地日期算，否则东八区 00:00–08:00 跑测试会拿到 UTC 的昨天。
@@ -336,16 +337,16 @@ const localDay = (ms) => {
   return `${y}-${m}-${day}`
 }
 const dayYesterday = usage.contributions.find((d) => d.date === localDay(Date.now() - 864e5))
-ok(!!dayYesterday && dayYesterday.tokens === 300, '按 turn 的 endedAt 落到正确日期')
+ok(!!dayYesterday && dayYesterday.tokens === 240, '按 turn 的 endedAt 落到正确日期')
 // 落库：通用统计页文档
 const saved = JSON.parse(JSON.stringify(dbDocs.get('ccconfig_agent_usage_grok_test-native')))
 ok(!!saved && !!saved.days, '落库 ccconfig_agent_usage_grok_<nativeId>')
 // session 被清理 → 回放历史
 fs.rmSync(sessionsRoot, { recursive: true, force: true })
 const replayed = grok.readGrokUsage(true)
-eq(replayed.summary.totalTokens, 460, '源文件被清理后回放落库历史')
+eq(replayed.summary.totalTokens, 360, '源文件被清理后回放落库历史')
 const quick = grok.readGrokUsageFromHistory()
-ok(quick && quick.summary.totalTokens === 460, '快速路径只读历史')
+ok(quick && quick.summary.totalTokens === 360, '快速路径只读历史')
 
 // ==================== 10. 旧结构兼容（模型内联连接信息，无 model_provider） ====================
 // 上一版 Grok 视图把一个模型当作一个条目、连接信息全写在 [model.<id>] 上；现在的页面是
