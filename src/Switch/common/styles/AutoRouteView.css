@@ -17,13 +17,67 @@
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
 .autoroute-cascader { flex: 1; min-width: 320px; }
-/* 模型映射行：拖拽手柄（悬停显形） + 映射名 + 箭头 + 目标模型下拉 + 删除 */
-.autoroute-mapping-row { display: flex; align-items: center; gap: 8px; }
+/* 模型映射行：第一行拖拽手柄 + 映射名 + 调配策略 + 删除，下面按序排列最多 3 个目标模型 */
+.autoroute-mapping-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--td-component-stroke);
+}
+.autoroute-mapping-row:last-child { border-bottom: 0; }
+/* 只配置一个模型时回到原来的单行布局：序号 + 映射名 + 箭头 + 目标 + 删除。
+   添加第二个模型的入口只在悬停/聚焦时浮出，静止状态与原界面一致。 */
+.autoroute-mapping-row.is-single {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border-bottom: 0;
+}
+.autoroute-mapping-add {
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  background: var(--td-bg-color-container);
+  border: 0.5px solid var(--td-component-stroke);
+}
+.autoroute-mapping-row.is-single:hover .autoroute-mapping-add,
+.autoroute-mapping-row.is-single:focus-within .autoroute-mapping-add {
+  opacity: 1;
+  pointer-events: auto;
+}
 .autoroute-mapping-row.is-dragging {
   position: relative;
   z-index: 1;
   border-radius: var(--td-radius-default);
   background: var(--td-bg-color-container-hover);
+}
+.autoroute-mapping-head { display: flex; align-items: center; gap: 8px; }
+.autoroute-mapping-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 28px;
+}
+.autoroute-mapping-model-row { display: flex; align-items: center; gap: 8px; }
+.autoroute-mapping-model-index {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--td-bg-color-component);
+  color: var(--td-text-color-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 /* 序号列同时是拖拽手柄：默认只显示数字，悬停/聚焦时数字淡出、手柄图标淡入并换成 grab 光标 */
 .autoroute-mapping-index {
@@ -60,8 +114,10 @@
 .autoroute-mapping-row.is-dragging .autoroute-mapping-index { cursor: grabbing; }
 .autoroute-mapping-alias { width: 200px; flex-shrink: 0; }
 .autoroute-mapping-alias .t-input__inner { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); }
+.autoroute-mapping-strategy { width: 178px; flex-shrink: 0; }
 .autoroute-mapping-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-mapping-target { flex: 1; min-width: 220px; }
+.autoroute-add-mapping-model { align-self: flex-start; }
 .autoroute-mode-hint { flex: 1; min-width: 200px; }
 /* 级联弹层：TDesign 默认每列写死 148px，改为适应内容宽度 */
 .autoroute-cascader-popup .t-cascader__menu { width: auto; min-width: 200px; max-width: 40vw; }

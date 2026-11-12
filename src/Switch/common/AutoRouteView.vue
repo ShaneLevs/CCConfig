@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
-import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton } from "tdesign-vue-next";
+import { MessagePlugin, Button, Switch, Tag, Tooltip, Dialog, CheckboxGroup, Checkbox, Input, Cascader, RadioGroup, RadioButton, Select } from "tdesign-vue-next";
 import { CopyIcon, SendIcon, AddIcon, DeleteIcon, ChevronDownIcon, DragMoveIcon } from "tdesign-icons-vue-next";
 import { useAutoRouteStatus } from "../../composables/useAutoRouteStatus";
 import { useAgentVisibility } from "../../composables/useAgentVisibility";
@@ -30,8 +30,24 @@ const now = ref(Date.now()); // 轮询时间戳，用于「进行中」行的实
 
 const isMappingMode = computed(() => config.value.mode === "mapping");
 const mappingRows = computed(() => config.value.mappings || []);
-// 只有映射名 + 目标都填好的行才算可用（预置行未选目标时不计入模型数）
-const readyMappings = computed(() => mappingRows.value.filter((m) => m.alias && m.provider && m.modelId).length);
+// 一个映射名最多关联 3 个模型；旧配置读入时由 preload 迁移成 models 数组
+const MAX_MODELS_PER_MAPPING = 3;
+const MAPPING_STRATEGIES = ["first", "failover", "random", "round-robin"];
+const DEFAULT_MAPPING_STRATEGY = "first";
+const mappingTargets = (m) => (Array.isArray(m.models) && m.models.length ? m.models : [{ provider: "", modelId: "" }]);
+const mappingStrategy = (m) => (MAPPING_STRATEGIES.includes(m.strategy) ? m.strategy : DEFAULT_MAPPING_STRATEGY);
+const strategyOptions = computed(() => [
+  { label: t('commonApp.autoRoute.strategyFirst'), value: "first" },
+  { label: t('commonApp.autoRoute.strategyFailover'), value: "failover" },
+  { label: t('commonApp.autoRoute.strategyRandom'), value: "random" },
+  { label: t('commonApp.autoRoute.strategyRoundRobin'), value: "round-robin" },
+]);
+// 只有映射名 + 至少一个有效目标都填好的行才算可用（预置行未选目标时不计入模型数）
+const readyMappings = computed(() =>
+  mappingRows.value.filter((m) => m.alias && mappingTargets(m).some((target) => target.provider && target.modelId)).length
+);
+// 没有任何一行配置第二个模型时沿用原来的紧凑单模型界面，不显示策略与多模型提示
+const hasMultiModelMappings = computed(() => mappingRows.value.some((m) => mappingTargets(m).length > 1));
 const modelCount = computed(() => (isMappingMode.value ? readyMappings.value : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
 // 下发弹窗说明里的模型范围随模式变化
@@ -175,7 +191,11 @@ const addMapping = () => {
   }
   const used = new Set(mappings.map((m) => m.alias));
   const preset = PRESET_ALIASES.find((alias) => !used.has(alias));
-  saveMappings([...mappings, { alias: preset || "", provider: "", modelId: "" }]);
+  saveMappings([...mappings, {
+    alias: preset || "",
+    models: [{ provider: "", modelId: "" }],
+    strategy: DEFAULT_MAPPING_STRATEGY,
+  }]);
 };
 
 const onAliasChange = (index, val) => {
@@ -183,10 +203,36 @@ const onAliasChange = (index, val) => {
   saveMappings(mappings);
 };
 
-const onMappingTargetChange = (index, val) => {
-  const [provider = "", modelId = ""] = String(val || "").split("::");
-  const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, provider, modelId } : m));
+const updateMapping = (index, patch) => {
+  const mappings = mappingRows.value.map((m, i) => (i === index ? { ...m, ...patch(m) } : m));
   saveMappings(mappings);
+};
+
+const onMappingTargetChange = (index, modelIndex, val) => {
+  const [provider = "", modelId = ""] = String(val || "").split("::");
+  updateMapping(index, (m) => ({
+    models: mappingTargets(m).map((target, i) => (i === modelIndex ? { provider, modelId } : { ...target })),
+  }));
+};
+
+const onMappingStrategyChange = (index, val) => {
+  updateMapping(index, () => ({ strategy: MAPPING_STRATEGIES.includes(val) ? val : DEFAULT_MAPPING_STRATEGY }));
+};
+
+const addMappingModel = (index) => {
+  updateMapping(index, (m) => {
+    const models = mappingTargets(m);
+    if (models.length >= MAX_MODELS_PER_MAPPING) return {};
+    return { models: [...models, { provider: "", modelId: "" }] };
+  });
+};
+
+const removeMappingModel = (index, modelIndex) => {
+  updateMapping(index, (m) => {
+    const models = mappingTargets(m);
+    if (models.length <= 1) return {};
+    return { models: models.filter((_, i) => i !== modelIndex) };
+  });
 };
 
 // ==================== 映射行手动排序 ====================
@@ -201,7 +247,7 @@ const dragRows = computed(() => mappingDraft.value || mappingRows.value);
 let mappingPress = null;
 // 拖拽重排时行不能按数组下标做 key，否则复用的输入框会串值（拖动中每一行的下标都在变）。
 // 行 id 挂在映射对象上（ROW_ID 键）：`{...m}` 克隆自动带上，写库前的 sanitizeConfig 只保留
-// alias/provider/modelId，所以它不会落库；从库读回来的行没有这个键 → 首次渲染时分配新 id。
+// alias/models/strategy，所以它不会落库；从库读回来的行没有这个键 → 首次渲染时分配新 id。
 const ROW_ID = "__rowId";
 let rowSeq = 0;
 const rowKey = (row) => {
@@ -563,50 +609,126 @@ onUnmounted(() => {
       </template>
 
       <template v-else>
-        <div
-          v-for="(m, i) in dragRows"
-          :key="rowKey(m)"
-          class="autoroute-mapping-row"
-          :class="{ 'is-dragging': draggingIndex === i }"
-          :data-index="i"
-        >
-          <span
-            class="autoroute-mapping-index"
-            role="button"
-            tabindex="0"
-            :title="t('commonApp.autoRoute.dragMappingHint')"
-            :aria-label="t('commonApp.autoRoute.dragMappingHint')"
-            @pointerdown="startMappingDrag($event, i)"
-            @keydown="onMappingIndexKeydown($event, i)"
+        <template v-for="(m, i) in dragRows" :key="rowKey(m)">
+          <div
+            v-if="mappingTargets(m).length === 1"
+            class="autoroute-mapping-row is-single"
+            :class="{ 'is-dragging': draggingIndex === i }"
+            :data-index="i"
           >
-            <span class="autoroute-mapping-index-num">{{ i + 1 }}</span>
-            <DragMoveIcon class="autoroute-mapping-index-handle" />
-          </span>
-          <Input
-            :value="m.alias"
-            size="small"
-            class="autoroute-mapping-alias"
-            :placeholder="t('commonApp.autoRoute.mappingAliasPlaceholder')"
-            @change="(val) => onAliasChange(i, val)"
-          />
-          <span class="autoroute-mapping-arrow">→</span>
-          <Cascader
-            :value="m.provider && m.modelId ? `${m.provider}::${m.modelId}` : undefined"
-            :options="routeOptions"
-            size="small"
-            filterable
-            clearable
-            :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
-            class="autoroute-mapping-target"
-            :placeholder="t('commonApp.autoRoute.selectTargetPlaceholder')"
-            @change="(val) => onMappingTargetChange(i, val)"
-          />
-          <Tooltip :content="t('commonApp.autoRoute.removeMapping')" placement="top">
-            <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
-              <template #icon><DeleteIcon /></template>
-            </Button>
-          </Tooltip>
-        </div>
+            <span
+              class="autoroute-mapping-index"
+              role="button"
+              tabindex="0"
+              :title="t('commonApp.autoRoute.dragMappingHint')"
+              :aria-label="t('commonApp.autoRoute.dragMappingHint')"
+              @pointerdown="startMappingDrag($event, i)"
+              @keydown="onMappingIndexKeydown($event, i)"
+            >
+              <span class="autoroute-mapping-index-num">{{ i + 1 }}</span>
+              <DragMoveIcon class="autoroute-mapping-index-handle" />
+            </span>
+            <Input
+              :value="m.alias"
+              size="small"
+              class="autoroute-mapping-alias"
+              :placeholder="t('commonApp.autoRoute.mappingAliasPlaceholder')"
+              @change="(val) => onAliasChange(i, val)"
+            />
+            <span class="autoroute-mapping-arrow">→</span>
+            <Cascader
+              :value="mappingTargets(m)[0].provider && mappingTargets(m)[0].modelId ? `${mappingTargets(m)[0].provider}::${mappingTargets(m)[0].modelId}` : undefined"
+              :options="routeOptions"
+              size="small"
+              filterable
+              clearable
+              :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
+              class="autoroute-mapping-target"
+              :placeholder="t('commonApp.autoRoute.selectTargetPlaceholder')"
+              @change="(val) => onMappingTargetChange(i, 0, val)"
+            />
+            <Tooltip :content="t('commonApp.autoRoute.addMappingModel')" placement="top">
+              <Button size="small" variant="text" class="autoroute-mapping-add" @click="addMappingModel(i)">
+                <template #icon><AddIcon /></template>
+              </Button>
+            </Tooltip>
+            <Tooltip :content="t('commonApp.autoRoute.removeMapping')" placement="top">
+              <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
+                <template #icon><DeleteIcon /></template>
+              </Button>
+            </Tooltip>
+          </div>
+          <div
+            v-else
+            class="autoroute-mapping-row"
+            :class="{ 'is-dragging': draggingIndex === i }"
+            :data-index="i"
+          >
+            <div class="autoroute-mapping-head">
+              <span
+                class="autoroute-mapping-index"
+                role="button"
+                tabindex="0"
+                :title="t('commonApp.autoRoute.dragMappingHint')"
+                :aria-label="t('commonApp.autoRoute.dragMappingHint')"
+                @pointerdown="startMappingDrag($event, i)"
+                @keydown="onMappingIndexKeydown($event, i)"
+              >
+                <span class="autoroute-mapping-index-num">{{ i + 1 }}</span>
+                <DragMoveIcon class="autoroute-mapping-index-handle" />
+              </span>
+              <Input
+                :value="m.alias"
+                size="small"
+                class="autoroute-mapping-alias"
+                :placeholder="t('commonApp.autoRoute.mappingAliasPlaceholder')"
+                @change="(val) => onAliasChange(i, val)"
+              />
+              <Select
+                :value="mappingStrategy(m)"
+                :options="strategyOptions"
+                size="small"
+                class="autoroute-mapping-strategy"
+                @change="(val) => onMappingStrategyChange(i, val)"
+              />
+              <Tooltip :content="t('commonApp.autoRoute.removeMapping')" placement="top">
+                <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
+                  <template #icon><DeleteIcon /></template>
+                </Button>
+              </Tooltip>
+            </div>
+            <div class="autoroute-mapping-models">
+              <div v-for="(target, mi) in mappingTargets(m)" :key="mi" class="autoroute-mapping-model-row">
+                <span class="autoroute-mapping-model-index">{{ mi + 1 }}</span>
+                <Cascader
+                  :value="target.provider && target.modelId ? `${target.provider}::${target.modelId}` : undefined"
+                  :options="routeOptions"
+                  size="small"
+                  filterable
+                  clearable
+                  :popup-props="{ overlayClassName: 'autoroute-cascader-popup' }"
+                  class="autoroute-mapping-target"
+                  :placeholder="t('commonApp.autoRoute.selectTargetPlaceholder')"
+                  @change="(val) => onMappingTargetChange(i, mi, val)"
+                />
+                <Tooltip v-if="mappingTargets(m).length > 1" :content="t('commonApp.autoRoute.removeMappingModel')" placement="top">
+                  <Button size="small" variant="text" theme="danger" @click="removeMappingModel(i, mi)">
+                    <template #icon><DeleteIcon /></template>
+                  </Button>
+                </Tooltip>
+              </div>
+              <Button
+                v-if="mappingTargets(m).length < MAX_MODELS_PER_MAPPING"
+                size="small"
+                variant="text"
+                class="autoroute-add-mapping-model"
+                @click="addMappingModel(i)"
+              >
+                <template #icon><AddIcon /></template> {{ t('commonApp.autoRoute.addMappingModel') }}
+              </Button>
+            </div>
+          </div>
+        </template>
         <div class="autoroute-form-row">
           <Button
             size="small"
@@ -617,8 +739,11 @@ onUnmounted(() => {
             <template #icon><AddIcon /></template> {{ t('commonApp.autoRoute.addMapping') }}
           </Button>
           <span class="autoroute-hint">
-            {{ t('commonApp.autoRoute.mappingStatus', { ready: readyMappings, total: mappingRows.length, max: MAX_MAPPINGS }) }}
+            {{ t(hasMultiModelMappings ? 'commonApp.autoRoute.mappingStatus' : 'commonApp.autoRoute.mappingStatusSimple', { ready: readyMappings, total: mappingRows.length, max: MAX_MAPPINGS }) }}
           </span>
+        </div>
+        <div v-if="hasMultiModelMappings" class="autoroute-hint">
+          {{ t('commonApp.autoRoute.strategyHint') }}
         </div>
         <div class="autoroute-form-row">
           <span class="autoroute-label">{{ t('commonApp.autoRoute.rewriteModel') }}</span>
@@ -692,6 +817,7 @@ onUnmounted(() => {
         <span v-if="log.alias" class="autoroute-log-arrow">→</span>
         <span class="autoroute-log-model" :title="log.model || '-'" :class="{ 'is-mapped-target': log.alias }">{{ log.model || "-" }}</span>
         <span v-if="log.passthrough" class="autoroute-log-flag">{{ t('commonApp.autoRoute.passthrough') }}</span>
+        <Tag v-if="log.switches" size="small" variant="light" theme="warning">{{ t('commonApp.autoRoute.switchedTimes', { count: log.switches }) }}</Tag>
         <Tag v-if="isPending(log)" size="small" theme="primary" variant="light">{{ t('commonApp.autoRoute.pending') }}</Tag>
         <Tag v-else size="small" :theme="log.status < 400 ? 'success' : 'danger'">{{ log.status }}</Tag>
         <span v-if="logUsage(log)" class="autoroute-log-usage" :title="logUsage(log).title">{{ logUsage(log).text }}</span>

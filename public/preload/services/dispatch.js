@@ -1581,10 +1581,19 @@ const dispatchAutoRoute = (targets) => {
     throw new Error(t("service.dispatch.selectTargetAgent"));
   const baseUrl = `http://127.0.0.1:${config.port}`;
   // 映射模式下发给 agent 的模型 ID 用映射名（agent 侧固定的名字）；
-  // 浅拷贝保留 contextWindow / cost 等元数据，仅覆盖 id/name，网关侧把映射名路由到实际模型
-  const models = enabled.map(({ model, alias }) =>
-    config.mode === "mapping" && alias ? { ...model, id: alias, name: alias } : model
-  );
+  // 一个映射名可配置多个上游模型，agent 清单里仍只写一次（元数据取第一个有效模型），
+  // 浅拷贝保留 contextWindow / cost 等元数据，仅覆盖 id/name，网关侧按映射名路由到实际模型
+  const models = [];
+  const mappingSeen = new Set();
+  for (const { model, alias } of enabled) {
+    if (config.mode === "mapping" && alias) {
+      if (mappingSeen.has(alias)) continue;
+      mappingSeen.add(alias);
+      models.push({ ...model, id: alias, name: alias });
+    } else {
+      models.push(model);
+    }
+  }
   const results = [];
   for (const target of list) {
     const d = APP_DISPATCHERS[target && target.app];

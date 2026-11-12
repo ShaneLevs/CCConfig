@@ -41,6 +41,10 @@ const getLegacyMachineDocId = () => `ccconfig_autoroute_config_${db.getNativeId(
 
 const DEFAULT_CONFIG = { enabled: false, port: 17877, key: "", selection: [], mode: "direct", mappings: [], mappingSeeded: false, rewriteModel: true };
 const MAX_MAPPINGS = 10; // 模型映射上限：固定模型名写给 agent，换上游只需在此改映射
+const MAX_MODELS_PER_MAPPING = 3; // 一个映射名最多关联 3 个模型：主用 + 最多两个备选/轮换
+// 多模型调配策略：first 只用第一个；failover 按顺序失败切换；random 每次随机一个；round-robin 依次轮换
+const MAPPING_STRATEGIES = ["first", "failover", "random", "round-robin"];
+const DEFAULT_MAPPING_STRATEGY = "first";
 // 模型映射预置映射名：首次使用映射模式自动建好这三行（目标留空，由用户在页面上选或删除）
 const PRESET_ALIASES = ["flash", "plus", "pro"];
 const SOURCE_OF_API = { "anthropic-messages": "anthropic", "openai-completions": "chat", "openai-responses": "responses" };
@@ -51,19 +55,37 @@ const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
 
 // ==================== 配置（uTools DB，按电脑隔离） ====================
 
+const sanitizeMappingTarget = (target) => ({
+  provider: target && typeof target.provider === "string" ? target.provider : "",
+  modelId: target && typeof target.modelId === "string" ? target.modelId : "",
+});
+
 // 清洗模式与映射列表：映射行允许不完整（前端空行是草稿，填写过程中实时保存），
-// 仅丢弃非对象行；无效行在路由解析时（resolveOne）自动跳过，不影响网关运行
+// 仅丢弃非对象行；无效行在路由解析时（resolveOne）自动跳过，不影响网关运行。
+// 旧版本映射行是顶层 { provider, modelId }（单模型）；读取时迁移成 models 数组，写回新结构。
 const sanitizeConfig = (config) => {
   if (config.mode !== "direct" && config.mode !== "mapping") config.mode = "direct";
   if (!Array.isArray(config.mappings)) config.mappings = [];
   config.mappings = config.mappings
     .filter((m) => m && typeof m === "object")
     .slice(0, MAX_MAPPINGS)
-    .map((m) => ({
-      alias: typeof m.alias === "string" ? m.alias.trim() : "",
-      provider: typeof m.provider === "string" ? m.provider : "",
-      modelId: typeof m.modelId === "string" ? m.modelId : "",
-    }));
+    .map((m) => {
+      let models = Array.isArray(m.models) ? m.models : [];
+      // 旧配置/旧调用方只给顶层 provider + modelId：视为第一个模型
+      if (models.length === 0 && (typeof m.provider === "string" || typeof m.modelId === "string")) {
+        models = [{ provider: m.provider, modelId: m.modelId }];
+      }
+      models = models
+        .filter((target) => target && typeof target === "object")
+        .slice(0, MAX_MODELS_PER_MAPPING)
+        .map(sanitizeMappingTarget);
+      if (models.length === 0) models = [{ provider: "", modelId: "" }];
+      return {
+        alias: typeof m.alias === "string" ? m.alias.trim() : "",
+        models,
+        strategy: MAPPING_STRATEGIES.includes(m.strategy) ? m.strategy : DEFAULT_MAPPING_STRATEGY,
+      };
+    });
   config.mappingSeeded = config.mappingSeeded === true;
   // 映射模式把响应里的 model 改写成映射名（见 autoroute-convert/model-alias.js），默认开；
   // 只有显式关掉才停用，旧配置缺字段即视为开（用户要的正是「统计显示映射名」这个行为）
@@ -104,6 +126,12 @@ const readAutoRouteConfig = () => {
   } catch (e) {
     /* ignore */
   }
+  // 旧映射行（无 models 数组、只有顶层 provider + modelId）迁移一次并落库
+  const rawMappings = Array.isArray(data.mappings) ? data.mappings : [];
+  if (rawMappings.some((m) => m && typeof m === "object" && !Array.isArray(m.models)
+    && (typeof m.provider === "string" || typeof m.modelId === "string"))) {
+    needsPersist = true;
+  }
   const config = sanitizeConfig({ ...DEFAULT_CONFIG, ...data });
   if (!Array.isArray(config.selection)) config.selection = [];
   if (typeof config.port !== "number" || config.port < 1 || config.port > 65535) config.port = DEFAULT_CONFIG.port;
@@ -114,7 +142,11 @@ const readAutoRouteConfig = () => {
   if (!config.mappingSeeded) {
     config.mappingSeeded = true;
     if (config.mappings.length === 0) {
-      config.mappings = PRESET_ALIASES.map((alias) => ({ alias, provider: "", modelId: "" }));
+      config.mappings = PRESET_ALIASES.map((alias) => ({
+        alias,
+        models: [{ provider: "", modelId: "" }],
+        strategy: DEFAULT_MAPPING_STRATEGY,
+      }));
     }
     needsPersist = true;
   }
@@ -340,40 +372,67 @@ const getAutoRouteStatus = () => ({
 
 // ==================== 模型解析 ====================
 
-// selection → [{ provider, model, alias? }]（过滤掉已被删除的供应商/模型）
-// direct 模式：返回勾选的模型；mapping 模式：返回映射目标模型（供下发），alias 为网关暴露的模型名
-const resolveAutoRouteModels = (config) => {
-  const providers = readCommonProviders().providers;
+// 单个 { provider, modelId } → { provider, model }（过滤掉已被删除的供应商/模型）
+const resolveProviderModel = (providers, sel) => {
+  if (!sel || !sel.provider || !sel.modelId) return null;
+  const provider = providers.find((p) => p.name === sel.provider);
+  if (!provider) return null;
+  const model = (provider.models || []).find((m) => m.id === sel.modelId);
+  return model ? { provider, model } : null;
+};
+
+// mapping 模式：按映射行汇总为 [{ alias, strategy, models: [{ provider, model }] }]。
+// 同名映射取靠前的完整行；没有任何有效模型的映射行直接跳过。
+const resolveAutoRouteMappings = (config, providerList) => {
+  const providers = providerList || readCommonProviders().providers;
   const list = [];
-  const resolveOne = (sel) => {
-    if (!sel || !sel.provider || !sel.modelId) return null;
-    const provider = providers.find((p) => p.name === sel.provider);
-    if (!provider) return null;
-    const model = (provider.models || []).find((m) => m.id === sel.modelId);
-    return model ? { provider, model, ...(sel.alias ? { alias: sel.alias } : {}) } : null;
-  };
+  for (const mapping of config.mappings || []) {
+    const alias = typeof mapping.alias === "string" ? mapping.alias.trim() : "";
+    if (!alias) continue;
+    // 兼容未经 sanitizeConfig 的旧调用方：顶层 provider/modelId 视为唯一目标
+    const targets = Array.isArray(mapping.models) && mapping.models.length
+      ? mapping.models
+      : (mapping.provider || mapping.modelId ? [mapping] : []);
+    const models = [];
+    for (const target of targets) {
+      const entry = resolveProviderModel(providers, target);
+      if (entry) models.push(entry);
+    }
+    if (models.length === 0) continue;
+    const strategy = MAPPING_STRATEGIES.includes(mapping.strategy) ? mapping.strategy : DEFAULT_MAPPING_STRATEGY;
+    list.push({ alias, strategy, models });
+  }
+  return list;
+};
+
+// selection → [{ provider, model, alias? }]（过滤掉已被删除的供应商/模型）
+// direct 模式：返回勾选的模型；mapping 模式：展开每个映射的全部模型（供列表展示/下发，同名映射由调用方去重）
+const resolveAutoRouteModels = (config, providerList) => {
+  const providers = providerList || readCommonProviders().providers;
+  const list = [];
   if (config.mode === "mapping") {
-    for (const m of config.mappings || []) {
-      const entry = resolveOne(m);
-      if (entry) list.push(entry);
+    for (const mapping of resolveAutoRouteMappings(config, providers)) {
+      for (const entry of mapping.models) {
+        list.push({ ...entry, alias: mapping.alias, strategy: mapping.strategy });
+      }
     }
-  } else {
-    for (const sel of config.selection || []) {
-      const entry = resolveOne(sel);
-      if (entry) list.push(entry);
-    }
+    return list;
+  }
+  for (const sel of config.selection || []) {
+    const entry = resolveProviderModel(providers, sel);
+    if (entry) list.push(entry);
   }
   return list;
 };
 
 // model 字段 → 网关目标。direct 模式：模型 ID 精确匹配（按勾选顺序取第一个），
-// 兼容「供应商/模型ID」消歧；mapping 模式：仅匹配映射名（alias），未映射的模型一律不可用
-const resolveRoute = (enabled, requested, config) => {
+// 兼容「供应商/模型ID」消歧；mapping 模式：仅匹配映射名（alias），返回整行多模型配置
+const resolveRoute = (enabled, requested, config, mappingList) => {
   const name = typeof requested === "string" ? requested.trim() : "";
   if (!name) return null;
   if (config.mode === "mapping") {
-    for (const entry of enabled) {
-      if (entry.alias === name) return entry;
+    for (const mapping of mappingList || resolveAutoRouteMappings(config)) {
+      if (mapping.alias === name) return mapping;
     }
     return null;
   }
@@ -384,6 +443,28 @@ const resolveRoute = (enabled, requested, config) => {
     if (`${entry.provider.name}/${entry.model.id}` === name) return entry;
   }
   return null;
+};
+
+// 映射行的多模型调配：first 只用第一个；failover 返回整条顺序（请求时逐个尝试）；
+// random 每次随机选一个；round-robin 用进程内游标依次轮换（网关重启后从头开始）。
+// 游标按映射名保存，用户重排/增删模型后按新长度取模，不需要额外持久化。
+const mappingRoundRobinCursors = new Map();
+const selectMappingCandidates = (mapping) => {
+  const models = mapping.models || [];
+  if (!models.length) return [];
+  switch (mapping.strategy) {
+    case "failover":
+      return models;
+    case "random":
+      return [models[Math.floor(Math.random() * models.length)]];
+    case "round-robin": {
+      const cursor = mappingRoundRobinCursors.get(mapping.alias) || 0;
+      mappingRoundRobinCursors.set(mapping.alias, (cursor + 1) % models.length);
+      return [models[cursor % models.length]];
+    }
+    default:
+      return [models[0]];
+  }
 };
 
 // 已启用模型 → 对外的模型 ID 列表（/v1/models 与 /v1/codex/models 共用，保证两边 ID 一致）：
@@ -755,8 +836,10 @@ const handleRequest = async (req, res) => {
       return;
     }
 
-    const enabled = resolveAutoRouteModels(config);
-    const route = resolveRoute(enabled, body.model, config);
+    const providers = readCommonProviders().providers;
+    const mappingList = config.mode === "mapping" ? resolveAutoRouteMappings(config, providers) : null;
+    const enabled = resolveAutoRouteModels(config, providers);
+    const route = resolveRoute(enabled, body.model, config, mappingList);
     if (!route) {
       const hint = config.mode === "mapping"
         ? t("serviceAgent.autoroute.modelNotMapped", { model: body.model || t("serviceAgent.common.emptyValue") })
@@ -764,238 +847,280 @@ const handleRequest = async (req, res) => {
       fail(sourceProtocol, 404, hint, body.model || "");
       return;
     }
-    const { provider, model } = route;
     // 映射模式下不同映射名可能指向同一底层模型，日志里一并记映射名（alias）才能区分是哪个映射
     const alias = config.mode === "mapping" ? route.alias || "" : "";
     // 响应 model 改写（映射模式默认开）：agent 会把响应里的 model 记进自己的会话记录，
     // 不改的话各 agent 的「使用统计」里永远显示上游真实模型名而不是映射名（见 model-alias.js）
     const displayModel = alias && config.rewriteModel !== false ? alias : "";
-    // 已确定目标模型：先落一条进行中日志行，页面轮询立刻能看到这次调用
-    liveLog = beginLog({ protocol: sourceProtocol, model: model.id, ...(alias ? { alias } : {}) });
-
-    if (!getTarget(provider.api)) {
-      fail(sourceProtocol, 400, t("serviceAgent.autoroute.providerProtocolUnsupported", { name: provider.name, api: provider.api }), model.id);
+    // 映射模式按策略选出本次要尝试的模型序列（failover 为整条顺序，其余只有一个）；
+    // 直连模式永远只有一个目标。已确定首个模型时先落一条进行中日志行，页面轮询立刻能看到。
+    const candidates = config.mode === "mapping"
+      ? selectMappingCandidates(route)
+      : [{ provider: route.provider, model: route.model }];
+    if (candidates.length === 0) {
+      fail(sourceProtocol, 404, t("serviceAgent.autoroute.modelNotMapped", { model: body.model || "" }), body.model || "");
       return;
     }
-    const url = buildUpstreamUrl(provider.baseUrl, provider.api);
-    if (!url) {
-      fail(sourceProtocol, 400, t("serviceAgent.autoroute.providerBaseUrlInvalid", { name: provider.name }), model.id);
-      return;
-    }
+    liveLog = beginLog({ protocol: sourceProtocol, model: candidates[0].model.id, ...(alias ? { alias } : {}) });
 
-    const wantsStream = body.stream === true;
-    const isPassthrough = SOURCE_OF_API[provider.api] === sourceProtocol;
-    // 客户端协议头（anthropic-beta / openai-beta / anthropic-version / 可选 UA）透传给上游：
-    // 1M 上下文、interleaved thinking 等 beta 特性都靠 anthropic-beta 点名，漏发等于特性失效
-    const headers = buildUpstreamHeaders(provider, req.headers);
-    targetApi = provider.api;
+    // 单次上游尝试：成功时自行写响应并 finish；失败且尚未向客户端写任何字节时返回结构化错误，
+    // 由下面的候选循环决定是否切换到下一个模型（映射 failover 策略）。
+    const forwardAttempt = async ({ provider, model }) => {
+      targetApi = provider.api;
+      if (!getTarget(provider.api)) {
+        return { done: false, status: 400, error: t("serviceAgent.autoroute.providerProtocolUnsupported", { name: provider.name, api: provider.api }), model: model.id };
+      }
+      const url = buildUpstreamUrl(provider.baseUrl, provider.api);
+      if (!url) {
+        return { done: false, status: 400, error: t("serviceAgent.autoroute.providerBaseUrlInvalid", { name: provider.name }), model: model.id };
+      }
 
-    if (isPassthrough) {
-      // 同协议直通：仅重写 model，原样转发（保留图片、cache_control 等全部字段）
-      const up = await sendUpstream({ url, headers, body: { ...body, model: model.id }, provider, guard });
-      if (!up.ok) {
-        const retryAfter = up.headers && up.headers["retry-after"];
-        if (up.text) {
-          // 原样转发上游错误体（agent SDK 认得上游自己的错误格式），同时把可读原因记入日志
-          if (canWrite(res)) {
-            const h = { "content-type": (up.headers && up.headers["content-type"]) || "application/json; charset=utf-8" };
-            if (retryAfter) h["retry-after"] = retryAfter;
-            res.writeHead(up.status, h);
-            res.end(up.text);
-          }
-          finish({ protocol: sourceProtocol, model: model.id, status: up.status, passthrough: true, error: up.error });
-        } else {
-          fail(sourceProtocol, up.status, up.error, model.id, retryAfter);
+      const wantsStream = body.stream === true;
+      const isPassthrough = SOURCE_OF_API[provider.api] === sourceProtocol;
+      // 客户端协议头（anthropic-beta / openai-beta / anthropic-version / 可选 UA）透传给上游：
+      // 1M 上下文、interleaved thinking 等 beta 特性都靠 anthropic-beta 点名，漏发等于特性失效
+      const headers = buildUpstreamHeaders(provider, req.headers);
+
+      if (isPassthrough) {
+        // 同协议直通：仅重写 model，原样转发（保留图片、cache_control 等全部字段）
+        const up = await sendUpstream({ url, headers, body: { ...body, model: model.id }, provider, guard });
+        if (!up.ok) {
+          return {
+            done: false,
+            status: up.status,
+            error: up.error,
+            model: model.id,
+            retryAfter: up.headers && up.headers["retry-after"],
+            rawText: up.text,
+            rawHeaders: up.headers,
+          };
         }
-        return;
+        const upstreamRes = up.upstreamRes;
+        if (wantsStream) {
+          // 客户端在等待上游的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
+          if (!canWrite(res)) {
+            try {
+              upstreamRes.destroy();
+            } catch (e) {
+              /* ignore */
+            }
+            finish({ protocol: sourceProtocol, model: model.id, status: 499, passthrough: true });
+            return { done: true };
+          }
+          res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
+          // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
+          // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
+          const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+          const outputProbe = createSseOutputTokenProbe((tokens) => outputRateMeter.record(tokens));
+          beginStreamRate();
+          if (liveLog) liveLog.usage = usage; // 与旁路扫描共用同一对象 → 流式期间 token 数可见地累加
+          let pending = "";
+          let clientGone = false;
+          // 映射模式：按行改写 SSE 里的 model（其余字节原样），改写器内部缓冲半行
+          const sse = displayModel ? createSseModelRewriter(displayModel) : null;
+          // 上游分片可能切在多字节字符中间：直接 chunk.toString() 会把中文 / emoji 变成 U+FFFD。
+          // 以前这里只是旁路扫描（错一个字符不影响转发），现在改写路径要自己写出去，必须用
+          // StringDecoder 把不完整的字节留到下一片拼回去。
+          const decoder = new StringDecoder("utf8");
+          let waitingDrain = false;
+          const writeOut = (out) => {
+            if (!out || clientGone || res.destroyed || res.writableEnded) return;
+            // 客户端读得慢时回压：暂停上游，drain 后恢复（不这样做会无限堆在内存里）
+            if (res.write(out) || waitingDrain) return;
+            waitingDrain = true;
+            upstreamRes.pause();
+            res.once("drain", () => {
+              waitingDrain = false;
+              if (!upstreamRes.destroyed) upstreamRes.resume();
+            });
+          };
+          const tapText = (text) => {
+            if (!text) return;
+            try {
+              outputProbe.push(text);
+              pending += text;
+              const found = scanUsageFromText(pending);
+              for (const k of Object.keys(usage)) if (found[k] > usage[k]) usage[k] = found[k];
+              if (pending.length > 8192) pending = pending.slice(-2048); // 只留尾部，防数字被分片切开漏匹配；不截断长流内存
+            } catch (e) {
+              /* 统计旁路异常不影响转发 */
+            }
+            if (sse) writeOut(sse.push(text));
+          };
+          // 流关闭时只冲刷一次，避免 end + close 双触发同一残帧。
+          let outputProbeFlushed = false;
+          const flushOutputProbe = () => {
+            if (outputProbeFlushed) return;
+            outputProbeFlushed = true;
+            outputProbe.flush();
+          };
+          const settle = (error) => {
+            flushOutputProbe();
+            endStreamRate();
+            finish({
+              protocol: sourceProtocol,
+              model: model.id,
+              status: clientGone ? 499 : error ? 502 : 200,
+              passthrough: true,
+              usage,
+              ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : error ? { error } : {}),
+            });
+          };
+          // 客户端断开（Codex/Claude Code 取消）→ 立即中止上游，避免白烧 token
+          res.once("close", () => {
+            if (res.writableFinished) return;
+            clientGone = true;
+            try {
+              upstreamRes.destroy();
+            } catch (e) {
+              /* ignore */
+            }
+            settle();
+          });
+          upstreamRes.on("data", (chunk) => tapText(decoder.write(chunk)));
+          upstreamRes.once("end", () => {
+            tapText(decoder.end());
+            flushOutputProbe();
+            // 改写路径要自己吐残行 + 收尾（原样透传由 pipe 负责 end）
+            if (sse) {
+              writeOut(sse.flush());
+              if (!res.destroyed && !res.writableEnded) res.end();
+            }
+            settle();
+          });
+          upstreamRes.once("close", () => {
+            // 上游没发 end 就断了（异常中断）：同样把响应收尾，否则客户端会挂到自己的超时
+            if (sse && !res.destroyed && !res.writableEnded) {
+              writeOut(sse.flush());
+              res.end();
+            }
+            settle();
+          });
+          upstreamRes.once("error", (e) => {
+            flushOutputProbe();
+            if (sse && !res.destroyed && !res.writableEnded) {
+              writeOut(sse.flush());
+              res.end();
+            }
+            settle((e && e.message) || t("serviceAgent.autoroute.upstreamStreamInterrupted"));
+          });
+          if (!sse) upstreamRes.pipe(res);
+          return { done: true };
+        }
+        const text = await collectBody(upstreamRes);
+        const status = upstreamRes.statusCode || 502;
+        // 原样转发上游错误体给客户端，同时把可读原因记入日志；响应体里抓 usage 供统计
+        finish({
+          protocol: sourceProtocol,
+          model: model.id,
+          status,
+          passthrough: true,
+          usage: scanUsageFromText(text),
+          ...(status >= 400 ? { error: extractUpstreamErrorMessage(text, status) } : {}),
+        });
+        if (canWrite(res)) {
+          res.writeHead(status, { "content-type": upstreamRes.headers["content-type"] || "application/json; charset=utf-8" });
+          // 成功响应把 model 换成映射名（失败体不动：错误体里的模型名是上游的真实信息，方便排查）
+          res.end(status < 400 ? rewriteJsonModel(text, displayModel) : text);
+        }
+        return { done: true };
+      }
+
+      // 跨协议转换
+      const source = getSource(sourceProtocol);
+      const target = getTarget(provider.api);
+      const canonical = source.parseRequest(body, model.id);
+      // 入站没给输出上限时，用主数据模型自己配的 maxTokens（Anthropic 必须带 max_tokens）
+      canonical.fallbackMaxTokens = Number(model.maxTokens) || 0;
+      const upstreamBody = target.buildRequest(canonical);
+      const up = await sendUpstream({ url, headers, body: upstreamBody, provider, guard });
+      if (!up.ok) {
+        return {
+          done: false,
+          status: up.status,
+          error: up.error,
+          model: model.id,
+          retryAfter: up.headers && up.headers["retry-after"],
+        };
       }
       const upstreamRes = up.upstreamRes;
+
       if (wantsStream) {
-        // 客户端在等待上游的这段时间里已经断开：直接释放上游，别往销毁的 socket 写
-        if (!canWrite(res)) {
-          try {
-            upstreamRes.destroy();
-          } catch (e) {
-            /* ignore */
-          }
-          finish({ protocol: sourceProtocol, model: model.id, status: 499, passthrough: true });
-          return;
-        }
-        res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
-        // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
-        // 流结束（end/close/error）才记日志，成功时 usage = 扫描到的各字段最大值
-        const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-        const outputProbe = createSseOutputTokenProbe((tokens) => outputRateMeter.record(tokens));
-        beginStreamRate();
-        if (liveLog) liveLog.usage = usage; // 与旁路扫描共用同一对象 → 流式期间 token 数可见地累加
-        let pending = "";
         let clientGone = false;
-        // 映射模式：按行改写 SSE 里的 model（其余字节原样），改写器内部缓冲半行
-        const sse = displayModel ? createSseModelRewriter(displayModel) : null;
-        // 上游分片可能切在多字节字符中间：直接 chunk.toString() 会把中文 / emoji 变成 U+FFFD。
-        // 以前这里只是旁路扫描（错一个字符不影响转发），现在改写路径要自己写出去，必须用
-        // StringDecoder 把不完整的字节留到下一片拼回去。
-        const decoder = new StringDecoder("utf8");
-        let waitingDrain = false;
-        const writeOut = (out) => {
-          if (!out || clientGone || res.destroyed || res.writableEnded) return;
-          // 客户端读得慢时回压：暂停上游，drain 后恢复（不这样做会无限堆在内存里）
-          if (res.write(out) || waitingDrain) return;
-          waitingDrain = true;
-          upstreamRes.pause();
-          res.once("drain", () => {
-            waitingDrain = false;
-            if (!upstreamRes.destroyed) upstreamRes.resume();
+        beginStreamRate();
+        let usage = null;
+        try {
+          usage = await pipeStream({
+            upstreamRes,
+            target,
+            source,
+            res,
+            onClientGone: () => (clientGone = true),
+            onOutputTokens: (tokens) => outputRateMeter.record(tokens),
+            modelOverride: displayModel,
           });
-        };
-        const tapText = (text) => {
-          if (!text) return;
-          try {
-            outputProbe.push(text);
-            pending += text;
-            const found = scanUsageFromText(pending);
-            for (const k of Object.keys(usage)) if (found[k] > usage[k]) usage[k] = found[k];
-            if (pending.length > 8192) pending = pending.slice(-2048); // 只留尾部，防数字被分片切开漏匹配；不截断长流内存
-          } catch (e) {
-            /* 统计旁路异常不影响转发 */
-          }
-          if (sse) writeOut(sse.push(text));
-        };
-        // 流关闭时只冲刷一次，避免 end + close 双触发同一残帧。
-        let outputProbeFlushed = false;
-        const flushOutputProbe = () => {
-          if (outputProbeFlushed) return;
-          outputProbeFlushed = true;
-          outputProbe.flush();
-        };
-        const settle = (error) => {
-          flushOutputProbe();
+        } finally {
           endStreamRate();
-          finish({
-            protocol: sourceProtocol,
-            model: model.id,
-            status: clientGone ? 499 : error ? 502 : 200,
-            passthrough: true,
-            usage,
-            ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : error ? { error } : {}),
-          });
-        };
-        // 客户端断开（Codex/Claude Code 取消）→ 立即中止上游，避免白烧 token
-        res.once("close", () => {
-          if (res.writableFinished) return;
-          clientGone = true;
-          try {
-            upstreamRes.destroy();
-          } catch (e) {
-            /* ignore */
-          }
-          settle();
+        }
+        finish({
+          protocol: sourceProtocol,
+          model: model.id,
+          status: clientGone ? 499 : 200,
+          converted: true,
+          usage,
+          ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : {}),
         });
-        upstreamRes.on("data", (chunk) => tapText(decoder.write(chunk)));
-        upstreamRes.once("end", () => {
-          tapText(decoder.end());
-          flushOutputProbe();
-          // 改写路径要自己吐残行 + 收尾（原样透传由 pipe 负责 end）
-          if (sse) {
-            writeOut(sse.flush());
-            if (!res.destroyed && !res.writableEnded) res.end();
-          }
-          settle();
-        });
-        upstreamRes.once("close", () => {
-          // 上游没发 end 就断了（异常中断）：同样把响应收尾，否则客户端会挂到自己的超时
-          if (sse && !res.destroyed && !res.writableEnded) {
-            writeOut(sse.flush());
-            res.end();
-          }
-          settle();
-        });
-        upstreamRes.once("error", (e) => {
-          flushOutputProbe();
-          if (sse && !res.destroyed && !res.writableEnded) {
-            writeOut(sse.flush());
-            res.end();
-          }
-          settle((e && e.message) || t("serviceAgent.autoroute.upstreamStreamInterrupted"));
-        });
-        if (!sse) upstreamRes.pipe(res);
+        return { done: true };
+      }
+
+      const text = await collectBody(upstreamRes);
+      let upstreamJson;
+      try {
+        upstreamJson = JSON.parse(text);
+      } catch (e) {
+        return { done: false, status: 502, error: t("serviceAgent.autoroute.invalidUpstreamResponse"), model: model.id };
+      }
+      const canonicalRes = target.parseResponse(upstreamJson);
+      const out = source.formatResponse(canonicalRes);
+      // 映射模式：响应 model 换成映射名（三个入站协议的 formatResponse 都带顶层 model）
+      if (displayModel && out && typeof out === "object") out.model = displayModel;
+      sendJson(res, 200, out);
+      finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage: canonicalRes.usage });
+      return { done: true };
+    };
+
+    let lastFailure = null;
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      if (i > 0 && liveLog) {
+        liveLog.model = candidate.model.id;
+        liveLog.switches = i;
+      }
+      const result = await forwardAttempt(candidate);
+      if (result.done) return;
+      if (result.status === 499 || guard.gone) {
+        fail(sourceProtocol, 499, result.error || t("serviceAgent.autoroute.clientDisconnected"), candidate.model.id);
         return;
       }
-      const text = await collectBody(upstreamRes);
-      const status = upstreamRes.statusCode || 502;
-      // 原样转发上游错误体给客户端，同时把可读原因记入日志；响应体里抓 usage 供统计
-      finish({
-        protocol: sourceProtocol,
-        model: model.id,
-        status,
-        passthrough: true,
-        usage: scanUsageFromText(text),
-        ...(status >= 400 ? { error: extractUpstreamErrorMessage(text, status) } : {}),
-      });
-      if (canWrite(res)) {
-        res.writeHead(status, { "content-type": upstreamRes.headers["content-type"] || "application/json; charset=utf-8" });
-        // 成功响应把 model 换成映射名（失败体不动：错误体里的模型名是上游的真实信息，方便排查）
-        res.end(status < 400 ? rewriteJsonModel(text, displayModel) : text);
-      }
-      return;
+      lastFailure = result;
     }
 
-    // 跨协议转换
-    const source = getSource(sourceProtocol);
-    const target = getTarget(provider.api);
-    const canonical = source.parseRequest(body, model.id);
-    // 入站没给输出上限时，用主数据模型自己配的 maxTokens（Anthropic 必须带 max_tokens）
-    canonical.fallbackMaxTokens = Number(model.maxTokens) || 0;
-    const upstreamBody = target.buildRequest(canonical);
-    const up = await sendUpstream({ url, headers, body: upstreamBody, provider, guard });
-    if (!up.ok) {
-      fail(sourceProtocol, up.status, up.error, model.id, up.headers && up.headers["retry-after"]);
-      return;
+    // 所有候选模型都失败：最后一条带原始错误体时按原样转发（agent SDK 认得上游错误格式），
+    // 否则按入站协议生成错误响应。
+    const failure = lastFailure || {
+      status: 502,
+      error: t("serviceAgent.autoroute.upstreamRequestFailed"),
+      model: candidates[0].model.id,
+    };
+    if (failure.rawText && canWrite(res)) {
+      const h = { "content-type": (failure.rawHeaders && failure.rawHeaders["content-type"]) || "application/json; charset=utf-8" };
+      if (failure.retryAfter) h["retry-after"] = failure.retryAfter;
+      res.writeHead(failure.status, h);
+      res.end(failure.rawText);
+      finish({ protocol: sourceProtocol, model: failure.model, status: failure.status, passthrough: true, error: failure.error });
+    } else {
+      fail(sourceProtocol, failure.status, failure.error, failure.model, failure.retryAfter);
     }
-    const upstreamRes = up.upstreamRes;
-
-    if (wantsStream) {
-      let clientGone = false;
-      beginStreamRate();
-      let usage = null;
-      try {
-        usage = await pipeStream({
-          upstreamRes,
-          target,
-          source,
-          res,
-          onClientGone: () => (clientGone = true),
-          onOutputTokens: (tokens) => outputRateMeter.record(tokens),
-          modelOverride: displayModel,
-        });
-      } finally {
-        endStreamRate();
-      }
-      finish({
-        protocol: sourceProtocol,
-        model: model.id,
-        status: clientGone ? 499 : 200,
-        converted: true,
-        usage,
-        ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : {}),
-      });
-      return;
-    }
-
-    const text = await collectBody(upstreamRes);
-    let upstreamJson;
-    try {
-      upstreamJson = JSON.parse(text);
-    } catch (e) {
-      fail(sourceProtocol, 502, t("serviceAgent.autoroute.invalidUpstreamResponse"), model.id);
-      return;
-    }
-    const canonicalRes = target.parseResponse(upstreamJson);
-    const out = source.formatResponse(canonicalRes);
-    // 映射模式：响应 model 换成映射名（三个入站协议的 formatResponse 都带顶层 model）
-    if (displayModel && out && typeof out === "object") out.model = displayModel;
-    sendJson(res, 200, out);
-    finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage: canonicalRes.usage });
   } catch (e) {
     const message = (e && e.message) || String(e);
     try {
@@ -1147,6 +1272,7 @@ module.exports = {
   readAutoRouteConfig,
   writeAutoRouteConfig,
   resolveAutoRouteModels,
+  resolveAutoRouteMappings,
   startAutoRoute,
   stopAutoRoute,
   startAutoRouteIfEnabled,

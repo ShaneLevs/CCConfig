@@ -570,9 +570,9 @@ window.utools.db.put({
     mode: 'mapping',
     selection: [],
     mappings: [
-      { alias: 'pro', provider: 'gw-upstream', modelId: 'm-c' },
-      { alias: 'plus', provider: 'gw-upstream', modelId: 'm-b' },
-      { alias: 'flash', provider: 'gw-upstream', modelId: 'm-a' },
+      { alias: 'pro', models: [{ provider: 'gw-upstream', modelId: 'm-c' }, { provider: 'gw-upstream', modelId: 'm-a' }], strategy: 'failover' },
+      { alias: 'plus', models: [{ provider: 'gw-upstream', modelId: 'm-b' }], strategy: 'first' },
+      { alias: 'flash', models: [{ provider: 'gw-upstream', modelId: 'm-a' }], strategy: 'first' },
     ],
     mappingSeeded: true,
   },
@@ -598,9 +598,9 @@ window.utools.db.put({
   data: {
     ...window.utools.db.get('ccconfig_autoroute_config_test-native_utools').data,
     mappings: [
-      { alias: 'plus', provider: 'gw-upstream', modelId: 'm-b' },
-      { alias: 'flash', provider: 'gw-upstream', modelId: 'm-a' },
-      { alias: 'pro', provider: 'gw-upstream', modelId: 'm-c' },
+      { alias: 'plus', models: [{ provider: 'gw-upstream', modelId: 'm-b' }], strategy: 'first' },
+      { alias: 'flash', models: [{ provider: 'gw-upstream', modelId: 'm-a' }], strategy: 'first' },
+      { alias: 'pro', models: [{ provider: 'gw-upstream', modelId: 'm-c' }, { provider: 'gw-upstream', modelId: 'm-a' }], strategy: 'round-robin' },
     ],
   },
 })
@@ -611,13 +611,13 @@ eq(pi.readPiModels().providers.router.models.map((m) => m.id), ['plus', 'flash',
 const autoroute = require('../public/preload/services/autoroute')
 autoroute.writeAutoRouteConfig({
   mappings: [
-    { alias: 'a', provider: 'gw-upstream', modelId: 'm-a', __rowId: 7 },
-    { alias: 'b', provider: 'gw-upstream', modelId: 'm-b', __rowId: 8 },
+    { alias: 'a', models: [{ provider: 'gw-upstream', modelId: 'm-a' }], strategy: 'first', __rowId: 7 },
+    { alias: 'b', models: [{ provider: 'gw-upstream', modelId: 'm-b' }], strategy: 'failover', __rowId: 8 },
   ],
 })
 eq(
   Object.keys(autoroute.readAutoRouteConfig().mappings[0]).sort(),
-  ['alias', 'modelId', 'provider'],
+  ['alias', 'models', 'strategy'],
   'autoroute：页面本地行 id 不落库',
 )
 
