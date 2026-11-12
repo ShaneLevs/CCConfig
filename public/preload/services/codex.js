@@ -765,24 +765,25 @@ const emptyCodexUsage = () => ({
   recentSessions: [],
 })
 
-// Codex / OpenAI usage 的归一。字段语义已用本机 0.166.0 真实会话日志核实：
-//   total_tokens = input_tokens + output_tokens（569/569 条恒成立，不含缓存）
-//   cached_input_tokens 经常大于 input_tokens（565/569 条）→ input_tokens 是「未缓存输入」
-// 所以不能像以前那样把 input_tokens 当「已含缓存」原样透出（那会让当天总量少算整个缓存，
-// 本机 2026-11-06 少算 40,589,440，误差近 6000 倍）。统一口径：
-//   inputTokens = 未缓存输入（与 usage.js / 各 agent 一致）；
-//   totalTokens = 含缓存输入 + 输出 = input + cached + cacheWrite + output。
+// Codex / OpenAI usage 的归一：
+//   当前 Codex 的 input_tokens 已含 cached_input_tokens / cache_write_input_tokens，
+//   且 total_tokens = input_tokens + output_tokens。模型明细需要与 usage.js 统一，
+//   所以这里把缓存从 input 中拆出来，inputTokens 只存未缓存输入。
+// 旧版 CCConfig 网关曾把「未缓存输入」误写成 Responses 的 input_tokens，此时会出现
+// cached + cacheWrite > input；这类历史日志没有可用的含缓存 input 总数，只能按三项相加还原。
 const normalizeCodexUsageTokens = (u) => {
   const input = Number(u?.input_tokens) || 0
   const cached = Number(u?.cached_input_tokens) || 0
   const cacheWrite = Number(u?.cache_write_input_tokens) || 0
   const output = Number(u?.output_tokens) || 0
+  const cacheTotal = cached + cacheWrite
+  const inputIncludesCache = cacheTotal <= input
   return {
-    inputTokens: input,
+    inputTokens: inputIncludesCache ? Math.max(0, input - cacheTotal) : input,
     cacheReadTokens: cached,
     cacheWriteTokens: cacheWrite,
     outputTokens: output,
-    totalTokens: input + cached + cacheWrite + output,
+    totalTokens: inputIncludesCache ? input + output : input + cacheTotal + output,
   }
 }
 

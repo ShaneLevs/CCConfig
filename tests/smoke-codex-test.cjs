@@ -240,19 +240,51 @@ const readConfig = () => parse(fs.readFileSync(configPath(), 'utf8'))
     const stats = codex.readCodexUsage()
     const today = stats.contributions.find((d) => d.date === day)
     assert.ok(today)
-    // 真实日志里 total_token_usage / total_tokens 恒 = input + output（不含缓存），
-    // 而 cached_input_tokens 可以大于 input_tokens，所以 input_tokens 是未缓存输入。
-    // 统一口径下当天总量 = 未缓存输入 100 + 缓存读 40 + 输出 20 = 160。
-    assert.strictEqual(today.tokens, 160, '总量 = 未缓存输入 + 缓存读 + 输出')
-    assert.strictEqual(today.inputTokens, 140, 'day.inputTokens 含缓存（100 + 40）')
+    // 真实日志里 input_tokens 已含缓存，total_tokens = input + output。
+    // 统一口径下当天总量 = 含缓存输入 100 + 输出 20 = 120；模型明细存未缓存输入 60。
+    assert.strictEqual(today.tokens, 120, '缓存不能再次叠加到 input_tokens')
+    assert.strictEqual(today.inputTokens, 100, 'day.inputTokens 含缓存（60 + 40）')
     assert.strictEqual(today.outputTokens, 20)
+    assert.deepStrictEqual(today.models['model-a'], {
+      inputTokens: 60,
+      outputTokens: 20,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 0,
+    })
     assert.strictEqual(stats.summary.sessionCount, 1)
     assert.strictEqual(stats.modelStats[0].name, 'model-a')
+    assert.strictEqual(stats.modelStats[0].tokens, 120)
     assert.ok(dbDocs.get('ccconfig_agent_usage_codex_test'))
+  })
+
+  await check('兼容旧网关把未缓存输入写进 input_tokens 的日志', () => {
+    const root = path.join(process.env.CODEX_HOME, 'sessions', '2026', '11', '02')
+    fs.mkdirSync(root, { recursive: true })
+    const ts = '2026-11-02T08:00:00.000Z'
+    fs.writeFileSync(path.join(root, 'rollout-old-gateway.jsonl'), [
+      JSON.stringify({ timestamp: ts, ordinal: 0, type: 'session_meta', payload: {
+        session_id: 'old-gateway', timestamp: ts, cwd: '/Users/me/project', provenance: { model: 'model-b' },
+      } }),
+      JSON.stringify({ timestamp: ts, ordinal: 1, type: 'token_usage_record', payload: {
+        response_id: 'r-old', usage: {
+          input_tokens: 10,
+          cached_input_tokens: 40,
+          cache_write_input_tokens: 0,
+          output_tokens: 5,
+          total_tokens: 15,
+        },
+      } }),
+    ].join('\n'))
+    const record = codex.readCodexUsage().messageRecords.find((r) => r.sessionId === 'old-gateway')
+    assert.ok(record)
+    assert.strictEqual(record.totalTokens, 55, '旧日志总量 = 未缓存输入 + 缓存 + 输出')
+    assert.strictEqual(record.inputTokens, 10)
+    assert.strictEqual(record.cacheReadTokens, 40)
   })
 
   await check('旧格式只读 last_token_usage，不拿累计值重复累加', () => {
     fs.rmSync(path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '30'), { recursive: true, force: true })
+    fs.rmSync(path.join(process.env.CODEX_HOME, 'sessions', '2026', '11', '02'), { recursive: true, force: true })
     const sessionDir = path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '31')
     fs.mkdirSync(sessionDir, { recursive: true })
     const ts = new Date().toISOString()
@@ -265,6 +297,7 @@ const readConfig = () => parse(fs.readFileSync(configPath(), 'utf8'))
   })
 
   await check('空会话不计入 sessionCount，已有 usage 的会话仍正常统计', () => {
+    fs.rmSync(path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '31'), { recursive: true, force: true })
     const root = path.join(process.env.CODEX_HOME, 'sessions', '2026', '11', '01')
     fs.mkdirSync(root, { recursive: true })
     const ts = new Date().toISOString()
@@ -277,7 +310,7 @@ const readConfig = () => parse(fs.readFileSync(configPath(), 'utf8'))
     fs.writeFileSync(path.join(root, 'empty.jsonl'), sessionMeta('empty-session'))
     fs.writeFileSync(path.join(root, 'used.jsonl'), [sessionMeta('used-session'), usageRecord].join('\n'))
     const stats = codex.readCodexUsage()
-    assert.strictEqual(stats.summary.sessionCount, 2, '旧格式会话 + 有效新会话；空会话不计入')
+    assert.strictEqual(stats.summary.sessionCount, 1, '本检查只新建一个有效会话；空会话不计入')
     assert.ok(!stats.recentSessions.some((s) => s.sessionId === 'empty-session'))
   })
 

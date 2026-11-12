@@ -306,9 +306,10 @@ Codex:
   使用统计：CODEX_HOME/sessions/**/*.jsonl
     0.166 token_usage_record.usage 是单次响应增量；旧版 token_count.last_token_usage 为增量回退
     禁止累加 token_count.total_token_usage；模型归属取 turn_context
-    **input_tokens 是未缓存输入**（实测 0.166.0：total_tokens 恒 = input + output，
-      cached_input_tokens 经常大于 input_tokens）→ 总量按 input + cached + cacheWrite + output 累加；
-      旧实现把它当「已含缓存」直接取 total_tokens，启缓存时当天总量会少算整个缓存量
+    **input_tokens 已含 cached_input_tokens / cache_write_input_tokens**（total_tokens = input + output）
+      → 当天总量取 input + output，模型明细存「input - 缓存」的未缓存输入，缓存单列；
+      再叠加缓存会让 Codex 统计接近翻倍（2026-11-11 实测 1.0 亿被算成 1.97 亿）；
+      兼容旧版网关把未缓存输入误写成 input_tokens 的日志（cache 总数 > input 时才按三项相加）
 
 Kimi Code:
   ~/.kimi-code/config.toml（KIMI_CODE_HOME 可重定向）→ smol-toml 读写（解析失败抛错）
