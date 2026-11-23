@@ -7,6 +7,7 @@ import {
 import { RefreshIcon } from "tdesign-icons-vue-next";
 import { CTX_OPTIONS, TOKENS_OPTIONS } from "../../../constants";
 import { formatNumber } from "../../../utils/format";
+import { findModelPreset, getPresetValues } from "../../../utils/modelPresets";
 
 const { t } = useI18n();
 
@@ -31,6 +32,7 @@ const batchSelected = ref([]);        // 勾选的模型 ID 列表（表格多�
 const batchEdits = ref({});           // 模型 ID → 行内编辑值 { input, contextWindow, maxTokens, reasoning }
 const batchSubmitting = ref(false);
 const batchFilter = ref('');          // 列表过滤关键字（模型 ID / 拉取名称）
+const presetMatchedCount = ref(0);    // 本次拉取中命中本地预设的行数
 
 const fetchBatchModels = async () => {
   const prov = props.provider;
@@ -83,16 +85,27 @@ const onBatchSelectChange = (keys) => {
   batchSelected.value = keys;
 };
 
-// 行内编辑值：优先用已有编辑，否则用拉取到的元信息，再否则默认值
-const DEFAULT_BATCH_EDIT = () => ({ input: ['text'], contextWindow: 0, maxTokens: 0, reasoning: false });
+// 行内编辑值：优先用已有编辑，否则用拉取到的元信息/本地预设，再否则默认值
+const emptyCost = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+const DEFAULT_BATCH_EDIT = () => ({
+  input: ['text'], contextWindow: 0, maxTokens: 0, reasoning: false,
+  capabilities: [], cost: emptyCost(),
+});
 
 const ensureBatchEdit = (m) => {
   if (batchEdits.value[m.id]) return;
+  const presetResult = findModelPreset(m.id);
+  const preset = presetResult
+    ? getPresetValues(presetResult.preset, presetResult.contextWindowOverride)
+    : null;
+  if (preset) presetMatchedCount.value += 1;
   batchEdits.value[m.id] = {
-    input: ['text'],
-    contextWindow: m.contextWindow || 0,
-    maxTokens: m.maxTokens || 0,
-    reasoning: !!m.reasoning,
+    input: preset?.input?.length ? [...preset.input] : ['text'],
+    contextWindow: m.contextWindow || preset?.contextWindow || 0,
+    maxTokens: m.maxTokens || preset?.maxTokens || 0,
+    reasoning: !!(m.reasoning || preset?.reasoning),
+    capabilities: preset?.capabilities ? [...preset.capabilities] : [],
+    cost: preset?.cost ? { ...preset.cost } : emptyCost(),
   };
 };
 
@@ -192,8 +205,8 @@ const handleBatchAdd = async () => {
       input: e.input && e.input.length > 0 ? e.input : ['text'],
       output: ['text'],
       reasoningEfforts: [],
-      capabilities: [],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      capabilities: Array.isArray(e.capabilities) ? [...e.capabilities] : [],
+      cost: e.cost && typeof e.cost === 'object' ? { ...e.cost } : emptyCost(),
       compat: {},
       options: {},
       extraHeaders: {},
@@ -227,6 +240,7 @@ watch(() => props.visible, (v) => {
   batchSelected.value = [];
   batchEdits.value = {};
   batchError.value = '';
+  presetMatchedCount.value = 0;
   batchFilter.value = '';
   fetchBatchModels();
 });
@@ -343,6 +357,9 @@ watch(() => props.visible, (v) => {
       </Table>
       <div v-else class="common-form-hint">{{ t('commonApp.batchAdd.noModels') }}</div>
 
+      <div v-if="presetMatchedCount > 0" class="common-form-hint common-preset-hint">
+        {{ t('model.presetMatchedCount', { matched: presetMatchedCount, total: batchModels.length }) }}
+      </div>
       <div class="common-form-hint">{{ t('commonApp.batchAdd.hint') }}</div>
     </div>
   </Dialog>

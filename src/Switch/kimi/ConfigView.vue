@@ -11,9 +11,11 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // services 未加载时的兜底枚举（渲染早于 preload 挂载时不报错）；与服务层 OPENAI_FAMILY 一致
 const OPENAI_FAMILY = ["openai", "openai_responses"];
@@ -279,9 +281,29 @@ const onModelIdInput = (v) => {
   }
 };
 
+const onModelIdBlur = () => {
+  applyModelPreset(addModelForm.value, addModelForm.value.model, (preset, fill) => {
+    fill("displayName", preset.name);
+    fill("maxContextSize", preset.contextWindow);
+    fill("maxInputSize", preset.maxInputTokens);
+    if (addProviderType.value === "anthropic") fill("maxOutputSize", preset.maxTokens);
+    const capabilities = [];
+    if (preset.reasoning) capabilities.push("thinking");
+    if (preset.input.includes("image")) capabilities.push("image_in");
+    if (preset.input.includes("video")) capabilities.push("video_in");
+    if (preset.input.includes("audio")) capabilities.push("audio_in");
+    if (preset.capabilities.includes("tools")) capabilities.push("tool_use");
+    fill("capabilities", capabilities);
+    fill("supportEfforts", preset.reasoningEfforts.filter((level) =>
+      ["low", "medium", "high", "xhigh", "max"].includes(level),
+    ));
+  });
+};
+
 const openAddModelDialog = (providerName) => {
   addModelProvider.value = providerName;
   addModelForm.value = emptyModelForm();
+  resetBaseline(addModelForm.value);
   aliasTouched.value = false;
   fetchedModels.value = [];
   fetchModelError.value = "";
@@ -561,6 +583,7 @@ onMounted(refresh);
             clearable
             placeholder="deepseek-chat"
             @change="onModelIdInput"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="kimi-form-hint">{{ t("kimi.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="kimi-form-hint kimi-fetch-error">
@@ -568,6 +591,9 @@ onMounted(refresh);
             <span class="kimi-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else class="kimi-form-hint">{{ t("kimi.config.fetchHint") }}</div>
+          <div v-if="matchedPreset" class="kimi-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="kimi-form-item">
           <label>{{ t("kimi.config.aliasLabel") }}</label>

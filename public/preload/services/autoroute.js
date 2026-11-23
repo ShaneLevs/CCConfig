@@ -445,16 +445,36 @@ const resolveRoute = (enabled, requested, config, mappingList) => {
   return null;
 };
 
-// 映射行的多模型调配：first 只用第一个；failover 返回整条顺序（请求时逐个尝试）；
+// 映射行的多模型调配：first 只用第一个；failover 从当前默认模型开始按顺序尝试；
 // random 每次随机选一个；round-robin 用进程内游标依次轮换（网关重启后从头开始）。
-// 游标按映射名保存，用户重排/增删模型后按新长度取模，不需要额外持久化。
+// failover 成功切到后面的模型后，本次网关运行期间记住它：后续请求从该模型开始，
+// 直到网关重新启动（进程级状态，不落库）。游标/当前模型都按映射名保存。
 const mappingRoundRobinCursors = new Map();
+const mappingFailoverActive = new Map(); // alias -> { provider, modelId }
+const resetMappingStrategyState = () => {
+  mappingRoundRobinCursors.clear();
+  mappingFailoverActive.clear();
+};
+const rememberFailoverActive = (alias, provider, model) => {
+  if (alias && provider && model) mappingFailoverActive.set(alias, { provider: provider.name, modelId: model.id });
+};
 const selectMappingCandidates = (mapping) => {
   const models = mapping.models || [];
   if (!models.length) return [];
   switch (mapping.strategy) {
-    case "failover":
-      return models;
+    case "failover": {
+      const active = mappingFailoverActive.get(mapping.alias);
+      if (!active) return models;
+      const index = models.findIndex(({ provider, model }) =>
+        provider.name === active.provider && model.id === active.modelId);
+      if (index < 0) {
+        // 用户已删掉/改掉当前模型：回到第一个，避免继续把请求发给不存在的目标
+        mappingFailoverActive.delete(mapping.alias);
+        return models;
+      }
+      // 当前模型排到首位，其余按原顺序接在后面（失败时仍可继续向后切换）
+      return [...models.slice(index), ...models.slice(0, index)];
+    }
     case "random":
       return [models[Math.floor(Math.random() * models.length)]];
     case "round-robin": {
@@ -905,7 +925,7 @@ const handleRequest = async (req, res) => {
               /* ignore */
             }
             finish({ protocol: sourceProtocol, model: model.id, status: 499, passthrough: true });
-            return { done: true };
+            return { done: true, status: 499 };
           }
           res.writeHead(200, { "content-type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
           // 旁路采集：扫原始 SSE 分片里的 usage 数值字段供统计（不影响转发的字节流）；
@@ -1005,7 +1025,7 @@ const handleRequest = async (req, res) => {
             settle((e && e.message) || t("serviceAgent.autoroute.upstreamStreamInterrupted"));
           });
           if (!sse) upstreamRes.pipe(res);
-          return { done: true };
+          return { done: true, status: 200 };
         }
         const text = await collectBody(upstreamRes);
         const status = upstreamRes.statusCode || 502;
@@ -1023,7 +1043,7 @@ const handleRequest = async (req, res) => {
           // 成功响应把 model 换成映射名（失败体不动：错误体里的模型名是上游的真实信息，方便排查）
           res.end(status < 400 ? rewriteJsonModel(text, displayModel) : text);
         }
-        return { done: true };
+        return { done: true, status };
       }
 
       // 跨协议转换
@@ -1070,7 +1090,7 @@ const handleRequest = async (req, res) => {
           usage,
           ...(clientGone ? { error: t("serviceAgent.autoroute.clientDisconnected") } : {}),
         });
-        return { done: true };
+        return { done: true, status: clientGone ? 499 : 200 };
       }
 
       const text = await collectBody(upstreamRes);
@@ -1086,7 +1106,7 @@ const handleRequest = async (req, res) => {
       if (displayModel && out && typeof out === "object") out.model = displayModel;
       sendJson(res, 200, out);
       finish({ protocol: sourceProtocol, model: model.id, status: 200, converted: true, usage: canonicalRes.usage });
-      return { done: true };
+      return { done: true, status: 200 };
     };
 
     let lastFailure = null;
@@ -1097,7 +1117,13 @@ const handleRequest = async (req, res) => {
         liveLog.switches = i;
       }
       const result = await forwardAttempt(candidate);
-      if (result.done) return;
+      if (result.done) {
+        // 失败切换成功落到后面的模型：本次网关运行期间把它作为该映射名的默认首选
+        if (result.status < 400 && i > 0 && config.mode === "mapping" && route.strategy === "failover") {
+          rememberFailoverActive(alias, candidate.provider, candidate.model);
+        }
+        return;
+      }
       if (result.status === 499 || guard.gone) {
         fail(sourceProtocol, 499, result.error || t("serviceAgent.autoroute.clientDisconnected"), candidate.model.id);
         return;
@@ -1167,6 +1193,8 @@ const listenGatewayOnce = (config) => new Promise((resolve, reject) => {
     serverState.port = config.port;
     serverState.startedAt = Date.now();
     upstreamsStopping = false;
+    // 新一次网关运行：failover 记住的成功模型与 round-robin 游标都从头开始
+    resetMappingStrategyState();
     // 新一次运行：请求日志与本次统计从零开始（历史统计不重置）
     serverState.logs = [];
     serverState.stats = emptyStats();
@@ -1213,6 +1241,7 @@ const stopAutoRoute = () => {
   }
   serverState.activeStreams = 0;
   outputRateMeter.reset();
+  resetMappingStrategyState();
   // 停止前把尚未落库的历史统计写掉，避免关网关/退出时丢最后几条
   try { flushHistory(); } catch (e) { console.error("[autoroute] 停止时保存历史统计失败:", e.message || e); }
   return new Promise((resolve) => {

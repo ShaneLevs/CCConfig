@@ -16,9 +16,11 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // API 协议与认证类型，与服务层 ZCODE_API_TYPES / ZCODE_ACCESS_TYPES 一致
 const apiTypeOptions = [
@@ -231,6 +233,7 @@ const modelOptions = computed(() =>
 const openAddModelDialog = (providerId) => {
   addModelProvider.value = providerId;
   addModelForm.value = emptyModelForm();
+  resetBaseline(addModelForm.value);
   addLevels.text = "";
   addLevels.editing = false;
   fetchedModels.value = [];
@@ -285,7 +288,25 @@ const openEditModelDialog = (p, m) => {
   };
   editLevels.text = "";
   editLevels.editing = false;
+  resetBaseline(editModelForm.value);
   editModelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  applyModelPreset(addModelForm.value, addModelForm.value.model, (preset, fill) => {
+    fill("contextWindow", preset.contextWindow);
+    fill("maxOutputTokens", preset.maxTokens);
+    fill("image", preset.input.includes("image"));
+    fill("video", preset.input.includes("video"));
+    fill("audio", preset.input.includes("audio"));
+    fill("pdf", preset.input.includes("pdf"));
+    fill("jsonSchema", preset.capabilities.includes("json_schema"));
+    fill("webSearch", preset.capabilities.includes("web_search"));
+    fill("midSystem", preset.capabilities.includes("mid_system"));
+    fill("reasoningLevels", preset.reasoningEfforts.filter((level) =>
+      ["low", "medium", "high", "xhigh", "max"].includes(level),
+    ));
+  });
 };
 
 const handleSaveModel = () => {
@@ -496,6 +517,7 @@ onMounted(refresh);
             clearable
             placeholder="glm-5.3-flash"
             @change="addModelForm.model = $event"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="zcode-form-hint">{{ t("zcode.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="zcode-form-hint zcode-fetch-error">
@@ -503,6 +525,9 @@ onMounted(refresh);
             <span class="zcode-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else class="zcode-form-hint">{{ t("zcode.config.modelFetchHint") }}</div>
+          <div v-if="matchedPreset" class="zcode-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="zcode-form-item zcode-form-inline">
           <label>{{ t("zcode.config.enabledLabel") }}</label>

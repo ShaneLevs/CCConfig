@@ -784,10 +784,7 @@
   }
   .mapping-row.is-single .mapping-alias { flex: none; width: 76px; min-width: 0; }
   .mapping-add-model {
-    position: absolute;
-    right: 26px;
-    top: 50%;
-    transform: translateY(-50%);
+    flex: none;
     width: 19px;
     height: 23px;
     margin: 0;
@@ -2191,7 +2188,13 @@
         const label = targetLabel(target)
         const openKey = index + ':' + slot
         let html = (
-          '<div class="mapping-model-row">' +
+          '<div class="mapping-model-row' + (slot === 1 ? ' has-strategy' : '') + '">' +
+            (slot === 1
+              ? '<span class="mapping-strategy-wrap">' +
+                  '<select class="mapping-strategy" data-strategy="' + index + '">' + strategyOptions + '</select>' +
+                  '<span class="mapping-strategy-chev" aria-hidden="true">⌄</span>' +
+                '</span>'
+              : '') +
             '<span class="mapping-model-index">' + (slot + 1) + '</span>' +
             '<button class="mapping-target' + (label ? ' has-value' : '') + '" type="button"' +
               ' data-target="' + index + '" data-slot="' + slot + '"' +
@@ -2217,10 +2220,6 @@
             '<input class="mapping-alias" type="text" spellcheck="false" autocomplete="off"' +
               ' data-alias="' + index + '" value="' + esc(mapping.alias || '') + '"' +
               ' placeholder="' + esc(t('mappingAlias')) + '" />' +
-            '<span class="mapping-strategy-wrap">' +
-              '<select class="mapping-strategy" data-strategy="' + index + '">' + strategyOptions + '</select>' +
-              '<span class="mapping-strategy-chev" aria-hidden="true">⌄</span>' +
-            '</span>' +
             '<button class="mapping-del" type="button" data-del="' + index + '"' +
               ' title="' + esc(t('removeMapping')) + '" aria-label="' + esc(t('removeMapping')) + '">×</button>' +
           '</div>' +

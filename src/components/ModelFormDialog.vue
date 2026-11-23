@@ -7,6 +7,7 @@ import {
 import DynamicKvEditor from "./DynamicKvEditor.vue";
 import ModelLimitsFields from "./ModelLimitsFields.vue";
 import { useAutoFetchModels } from "../composables/useAutoFetchModels";
+import { useModelPresetAutofill } from "../composables/useModelPresetAutofill";
 import {
   MODEL_API_TYPE_OPTIONS,
   MODEL_CAPABILITY_OPTIONS,
@@ -68,6 +69,32 @@ const thinkingModeOptions = MODEL_THINKING_MODE_OPTIONS;
 const {
   autoModels, autoModelsLoading, autoModelsError, modelOptions, fetchAutoModels, resetAutoModels, onModelIdSelect,
 } = useAutoFetchModels();
+
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
+
+// 模型 ID 失焦：按本地预设表补齐空字段；供应商 /models 返回的值优先保留。
+const onModelIdBlur = () => {
+  if (!isAdd.value) return;
+  applyModelPreset(form.value, form.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxInputTokens", preset.maxInputTokens);
+    fill("maxTokens", preset.maxTokens);
+    fill("input", preset.input);
+    fill("output", preset.output);
+    fill("reasoning", preset.reasoning);
+    fill("reasoningEfforts", preset.reasoningEfforts.filter((level) =>
+      effortOptions.some((option) => option.value === level),
+    ));
+    fill("capabilities", preset.capabilities);
+    fill("cost", preset.cost);
+  });
+};
+
+const handleModelIdSelect = (val) => {
+  onModelIdSelect(val, form);
+  onModelIdBlur();
+};
 
 const defaultForm = () => ({
   id: "",
@@ -175,6 +202,7 @@ watch(
         baseURL: m.baseURL || "",
       };
     }
+    resetBaseline(form.value);
   }
 );
 
@@ -248,7 +276,8 @@ const handleConfirm = () => {
           clearable
           :placeholder="t('model.selectOrEnter')"
           :popup-props="{ overlayStyle: { maxHeight: '280px', overflowY: 'auto' } }"
-          @select="(val) => onModelIdSelect(val, form)"
+          @select="handleModelIdSelect"
+          @blur="onModelIdBlur"
         />
         <Input v-else v-model="newModelId" :placeholder="t('model.idPlaceholder')" />
         <template v-if="isAdd">
@@ -259,6 +288,9 @@ const handleConfirm = () => {
           </div>
           <div v-else-if="autoModels.length > 0" class="common-form-hint">
             {{ t('model.fetchedCount', { count: autoModels.length }) }}
+          </div>
+          <div v-if="matchedPreset" class="common-form-hint common-preset-hint">
+            {{ t('model.presetMatched', { name: matchedPreset.name }) }}
           </div>
         </template>
       </div>

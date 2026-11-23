@@ -17,7 +17,7 @@
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
 .autoroute-cascader { flex: 1; min-width: 320px; }
-/* 模型映射行：第一行拖拽手柄 + 映射名 + 调配策略 + 删除，下面按序排列最多 3 个目标模型 */
+/* 模型映射行：第一行拖拽手柄 + 映射名 + 删除，调配策略放在第二个模型所在行；下面按序排列最多 3 个目标模型 */
 .autoroute-mapping-row {
   display: flex;
   flex-direction: column;
@@ -36,11 +36,9 @@
   padding: 0;
   border-bottom: 0;
 }
+.autoroute-mapping-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .autoroute-mapping-add {
-  position: absolute;
-  right: 32px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
@@ -114,7 +112,7 @@
 .autoroute-mapping-row.is-dragging .autoroute-mapping-index { cursor: grabbing; }
 .autoroute-mapping-alias { width: 200px; flex-shrink: 0; }
 .autoroute-mapping-alias .t-input__inner { font-family: var(--td-font-family-code, Menlo, Consolas, monospace); }
-.autoroute-mapping-strategy { width: 178px; flex-shrink: 0; }
+.autoroute-mapping-strategy { width: 200px; flex-shrink: 0; }
 .autoroute-mapping-arrow { color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-mapping-target { flex: 1; min-width: 220px; }
 .autoroute-add-mapping-model { align-self: flex-start; }

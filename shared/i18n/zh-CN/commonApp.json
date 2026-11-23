@@ -112,7 +112,7 @@
       "strategyFailover": "报错自动切换",
       "strategyRandom": "随机调用",
       "strategyRoundRobin": "依次调用",
-      "strategyHint": "“报错自动切换”按顺序尝试，前一个失败才用下一个；“随机调用”每次请求随机选一个；“依次调用”按顺序轮流使用。",
+      "strategyHint": "“报错自动切换”按顺序尝试，前一个失败才用下一个，切换成功后本次网关运行期间默认使用成功的模型（网关重启后从第一个重新开始）；“随机调用”每次请求随机选一个；“依次调用”按顺序轮流使用。",
       "mappingStatus": "{ready}/{total} 行已配置模型（每行最多 3 个模型，最多 {max} 行）。默认预置 flash / plus / pro；名字可改，同名取靠前的映射。拖动行首序号可调整顺序，下发到 agent 时按此顺序。",
       "mappingStatusSimple": "{ready}/{total} 行已选目标（上限 {max}）。默认预置 flash / plus / pro；名字可改，同名取靠前的映射。拖动行首序号可调整顺序，下发到 agent 时按此顺序。",
       "dragMappingHint": "拖动调整顺序（下发到 agent 时的模型顺序）",

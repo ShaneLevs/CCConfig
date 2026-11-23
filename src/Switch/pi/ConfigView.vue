@@ -13,9 +13,11 @@ import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // Pi 官方文档支持的 API 类型
 const API_TYPE_OPTIONS = [
@@ -231,6 +233,7 @@ const handleDeleteProvider = async (providerName) => {
 const openAddModelDialog = (providerName) => {
   addModelProvider.value = providerName;
   addModelForm.value = { id: '', name: '', contextWindow: 0, maxTokens: 0, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: [] };
+  resetBaseline(addModelForm.value);
   autoModels.value = [];
   autoModelsLoading.value = false;
   autoModelsError.value = "";
@@ -283,6 +286,22 @@ const applyAutoModel = (m) => {
 const onModelIdSelect = (val) => {
   const m = autoModels.value.find(x => x.id === val);
   if (m) applyAutoModel(m);
+};
+
+const onModelIdBlur = () => {
+  applyModelPreset(addModelForm.value, addModelForm.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxTokens", preset.maxTokens);
+    fill("input", preset.input);
+    fill("reasoning", preset.reasoning);
+    fill("cost", preset.cost);
+  });
+};
+
+const handleModelIdSelect = (val) => {
+  onModelIdSelect(val);
+  onModelIdBlur();
 };
 
 // 打开模型编辑弹窗
@@ -631,7 +650,8 @@ onMounted(refresh);
             filterable
             clearable
             :placeholder="t('pi.model.inputOrSelect')"
-            @select="onModelIdSelect"
+            @select="handleModelIdSelect"
+            @blur="onModelIdBlur"
           />
           <div v-if="autoModelsLoading" class="pi-form-hint">{{ t("pi.model.fetching") }}</div>
           <div v-else-if="autoModelsError" class="pi-form-hint pi-fetch-error">
@@ -640,6 +660,9 @@ onMounted(refresh);
           </div>
           <div v-else-if="autoModels.length > 0" class="pi-form-hint">
             {{ t("pi.model.fetchedCount", { count: autoModels.length }) }}
+          </div>
+          <div v-if="matchedPreset" class="pi-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
           </div>
         </div>
         <div class="pi-form-item">

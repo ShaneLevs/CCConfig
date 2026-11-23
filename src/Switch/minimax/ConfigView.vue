@@ -14,9 +14,11 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // defaultModel 引用 custom 供应商的前缀，与服务层 CUSTOM_PREFIX 一致
 const CUSTOM_PREFIX = "custom_provider";
@@ -234,6 +236,7 @@ const modelOptions = computed(() =>
 const openAddModelDialog = (providerId) => {
   addModelProvider.value = providerId;
   addModelForm.value = emptyModelForm();
+  resetBaseline(addModelForm.value);
   fetchedModels.value = [];
   fetchModelError.value = "";
   addModelDialog.value = true;
@@ -271,7 +274,20 @@ const openEditModelDialog = (p, m) => {
     effortOptions: [...(m.effortOptions || [])],
     inputTypes: [...(m.inputTypes || [])],
   };
+  resetBaseline(editModelForm.value);
   editModelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  applyModelPreset(addModelForm.value, addModelForm.value.model, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("outputWindow", preset.maxTokens);
+    fill("effortOptions", preset.reasoningEfforts.filter((level) =>
+      ["default", "minimal", "low", "medium", "high", "xhigh", "max"].includes(level),
+    ));
+    fill("inputTypes", preset.input.filter((type) => type !== "text"));
+  });
 };
 
 const handleSaveModel = () => {
@@ -494,6 +510,7 @@ onMounted(refresh);
             clearable
             placeholder="deepseek-chat"
             @change="addModelForm.model = $event"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="minimax-form-hint">{{ t("minimax.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="minimax-form-hint minimax-fetch-error">
@@ -501,6 +518,9 @@ onMounted(refresh);
             <span class="minimax-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else class="minimax-form-hint">{{ t("minimax.config.fetchHint") }}</div>
+          <div v-if="matchedPreset" class="minimax-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="minimax-form-item">
           <label>{{ t("minimax.config.displayName") }}</label>

@@ -13,6 +13,8 @@
     "fetchFailed": "Auto-fetch failed: {message}",
     "retry": "Retry",
     "fetchedCount": "Fetched {count} model(s); selecting one fills in the name and limits",
+    "presetMatched": "Matched preset: {name}",
+    "presetMatchedCount": "Matched presets for {matched}/{total} models",
     "displayName": "Display name",
     "displayNamePlaceholder": "Leave empty to use the model ID",
     "displayNameEditPlaceholder": "Display name",

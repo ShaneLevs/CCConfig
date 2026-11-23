@@ -15,9 +15,11 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // 协议与思考档位枚举，与服务层 PROTOCOL_VALUES / EFFORT_VALUES 一致
 const protocolOptions = [
@@ -194,6 +196,7 @@ const modelOptions = computed(() =>
 const openAddModelDialog = (providerId) => {
   addModelProvider.value = providerId;
   addModelForm.value = emptyModelForm();
+  resetBaseline(addModelForm.value);
   fetchedModels.value = [];
   fetchModelError.value = "";
   addModelDialog.value = true;
@@ -235,7 +238,23 @@ const openEditModelDialog = (p, m) => {
     supportsEffort: !!m.supportsEffort,
     effortLevels: [...(m.effortLevels || [])],
   };
+  resetBaseline(editModelForm.value);
   editModelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  applyModelPreset(addModelForm.value, addModelForm.value.model, (preset, fill) => {
+    fill("displayName", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxOutputTokens", preset.maxTokens);
+    fill("vision", preset.input.includes("image"));
+    fill("thinkingEnabled", preset.reasoning);
+    const levels = preset.reasoningEfforts.filter((level) =>
+      ["low", "medium", "high", "xhigh", "max"].includes(level),
+    );
+    fill("effortLevels", levels);
+    fill("supportsEffort", levels.length > 0);
+  });
 };
 
 const handleSaveModel = () => {
@@ -434,6 +453,7 @@ onMounted(refresh);
             clearable
             placeholder="qwen3.8-flash"
             @change="addModelForm.model = $event"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="qoder-form-hint">{{ t("qoder.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="qoder-form-hint qoder-fetch-error">
@@ -441,6 +461,9 @@ onMounted(refresh);
             <span class="qoder-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else class="qoder-form-hint">{{ t("qoder.config.fetchHint") }}</div>
+          <div v-if="matchedPreset" class="qoder-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="qoder-form-item">
           <label>{{ t("qoder.config.displayNameLabel") }}</label>

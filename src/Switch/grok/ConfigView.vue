@@ -23,9 +23,11 @@ import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // 与服务层 GROK_API_BACKENDS 一致：官方只有三种线上协议
 const backendOptions = [
@@ -260,6 +262,7 @@ const openAddModelDialog = (providerName) => {
   modelDialogProvider.value = providerName || "";
   editingModelKey.value = "";
   modelForm.value = emptyModelForm();
+  resetBaseline(modelForm.value);
   originalModelHeaders.value = {};
   fetchedModels.value = [];
   fetchModelError.value = "";
@@ -282,6 +285,7 @@ const openEditModelDialog = (m) => {
     extraHeaders: headersToRows(m.extraHeaders),
     advancedOpen: !!(m.description || m.temperature != null || m.topP != null || Object.keys(m.extraHeaders || {}).length),
   };
+  resetBaseline(modelForm.value);
   originalModelHeaders.value = m.extraHeaders || {};
   fetchedModels.value = [];
   fetchModelError.value = "";
@@ -290,6 +294,15 @@ const openEditModelDialog = (m) => {
 };
 
 const isModelDialogAdd = computed(() => !editingModelKey.value);
+
+const onModelIdBlur = () => {
+  if (!isModelDialogAdd.value) return;
+  applyModelPreset(modelForm.value, modelForm.value.model, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxCompletionTokens", preset.maxTokens);
+  });
+};
 
 const handleSaveModel = () => {
   const provider = modelDialogProvider.value;
@@ -667,6 +680,7 @@ onMounted(refresh);
             clearable
             placeholder="z-ai/glm-5"
             @change="modelForm.model = $event"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="grok-form-hint">{{ t("grok.config.fetchingModels") }}</div>
           <div v-else-if="fetchModelError" class="grok-form-hint grok-fetch-error">
@@ -674,6 +688,9 @@ onMounted(refresh);
             <span class="grok-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else class="grok-form-hint">{{ t("grok.config.modelIdHint") }}</div>
+          <div v-if="matchedPreset" class="grok-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="grok-form-item">
           <label>name</label>

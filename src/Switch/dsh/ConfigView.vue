@@ -20,9 +20,11 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // 协议 / 思考格式 / 推理强度：来自 preload 常量表（与 dsh 侧枚举一致）
 const SVC = window.services || {};
@@ -172,6 +174,7 @@ const openAddModel = (kind, route = "") => {
   modelTarget.value = { kind, route };
   modelEditing.value = "";
   modelForm.value = emptyModelForm();
+  resetBaseline(modelForm.value);
   resetFetch();
   modelDialog.value = true;
   handleFetchModels(targetBaseURL.value, targetApiKey.value);
@@ -185,9 +188,20 @@ const openEditModel = (kind, route, m) => {
     contextWindow: m.contextWindow || 0, maxTokens: m.maxTokens || 0,
     image: !!m.image, _raw: { ...(m._raw || {}) },
   };
+  resetBaseline(modelForm.value);
   resetFetch();
   modelDialog.value = true;
   handleFetchModels(targetBaseURL.value, targetApiKey.value);
+};
+
+const onModelIdBlur = () => {
+  if (modelEditing.value) return;
+  applyModelPreset(modelForm.value, modelForm.value.modelId, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxTokens", preset.maxTokens);
+    fill("image", preset.input.includes("image"));
+  });
 };
 
 const handleSaveModel = () => {
@@ -776,10 +790,14 @@ onMounted(refresh);
             clearable
             :placeholder="t('dsh.config.firstModelPlaceholder')"
             @change="modelForm.modelId = $event"
+            @blur="onModelIdBlur"
           />
           <div v-if="fetchingModels" class="dsh-form-hint">{{ t("dsh.config.fetchingCandidates") }}</div>
           <div v-else-if="fetchModelError" class="dsh-form-hint dsh-fetch-error">{{ fetchModelError }}</div>
           <div v-else class="dsh-form-hint">{{ t("dsh.config.modelFetchHint") }}</div>
+          <div v-if="matchedPreset" class="dsh-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="dsh-form-item">
           <label>{{ t("dsh.config.displayName") }}</label>

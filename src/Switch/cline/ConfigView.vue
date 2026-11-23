@@ -21,9 +21,11 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // 与服务层 CLINE_CAPABILITIES 一致
 const CAPABILITY_OPTIONS = ["streaming", "tools", "images", "reasoning"];
@@ -236,6 +238,7 @@ const openAddModelDialog = (p) => {
     id: "", name: "", contextWindow: 0, maxTokens: 0,
     capabilities: ["streaming", "tools"],
   };
+  resetBaseline(modelForm.value);
   modelDialog.value = true;
 };
 
@@ -252,7 +255,23 @@ const openEditModelDialog = (p, m) => {
       ? [...m.capabilities]
       : ["streaming", "tools"],
   };
+  resetBaseline(modelForm.value);
   modelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  if (modelMode.value !== "create") return;
+  applyModelPreset(modelForm.value, modelForm.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxTokens", preset.maxTokens);
+    fill("capabilities", [
+      ...(preset.capabilities.includes("streaming") ? ["streaming"] : []),
+      ...(preset.capabilities.includes("tools") ? ["tools"] : []),
+      ...(preset.input.includes("image") ? ["images"] : []),
+      ...(preset.reasoning ? ["reasoning"] : []),
+    ]);
+  });
 };
 
 const submitModel = () => {
@@ -557,8 +576,11 @@ onMounted(() => setTimeout(refresh, 50));
       <div class="cline-edit-form">
         <div class="cline-form-item">
           <label>{{ t("cline.config.modelIdLabel") }} <span class="cline-form-required">*</span></label>
-          <Input v-model="modelForm.id" placeholder="deepseek-chat" />
+          <Input v-model="modelForm.id" placeholder="deepseek-chat" @blur="onModelIdBlur" />
           <span class="cline-form-hint">{{ t("cline.config.modelIdHint") }}</span>
+          <div v-if="matchedPreset" class="cline-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="cline-form-item">
           <label>{{ t("cline.config.nameLabel") }}</label>

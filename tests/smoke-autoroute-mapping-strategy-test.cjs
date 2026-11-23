@@ -192,6 +192,25 @@ const setConfig = (mappings, mode = 'mapping') => {
     ok(log2 && log2.model === 'good-a' && log2.alias === 'failover', `日志记录最终模型与映射名（实际 ${log2 && log2.model}/${log2 && log2.alias}）`)
     ok(log2 && log2.switches === 1, `日志记录切换次数（实际 ${log2 && log2.switches}）`)
 
+    // ---------- 4b. failover 成功后本次网关运行期间保持切换 ----------
+    console.log('failover 会话级保持')
+    setConfig([{ alias: 'failover-sticky', models: [{ provider: 'mock', modelId: 'bad-1' }, { provider: 'mock', modelId: 'good-a' }, { provider: 'mock', modelId: 'good-b' }], strategy: 'failover' }])
+    hits.length = 0
+    const r2c = await post(port, request('failover-sticky'))
+    ok(r2c.status === 200, `首次请求切换后成功（实际 ${r2c.status}）`)
+    ok(JSON.stringify(hits) === JSON.stringify(['bad-1', 'good-a']), `首次请求按顺序切换（实际 ${JSON.stringify(hits)}）`)
+    hits.length = 0
+    const r2d = await post(port, request('failover-sticky'))
+    ok(r2d.status === 200, `后续请求仍成功（实际 ${r2d.status}）`)
+    ok(JSON.stringify(hits) === JSON.stringify(['good-a']), `后续请求直接从成功模型开始（实际 ${JSON.stringify(hits)}）`)
+
+    await autoroute.stopAutoRoute()
+    await autoroute.startAutoRoute()
+    hits.length = 0
+    const r2e = await post(port, request('failover-sticky'))
+    ok(r2e.status === 200, `网关重新启动后请求成功（实际 ${r2e.status}）`)
+    ok(JSON.stringify(hits) === JSON.stringify(['bad-1', 'good-a']), `网关重新启动后从第一个模型重新开始（实际 ${JSON.stringify(hits)}）`)
+
     // failover 全部失败：返回最后一个错误
     setConfig([{ alias: 'failover-all-bad', models: [{ provider: 'mock', modelId: 'bad-1' }, { provider: 'mock', modelId: 'bad-2' }], strategy: 'failover' }])
     hits.length = 0

@@ -12,6 +12,7 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { findModelPreset, getPresetValues } from "../../utils/modelPresets";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -443,9 +444,13 @@ const openOverrideDialog = (provider, modelId) => {
   overrideProvider.value = provider.name;
   overrideModel.value = modelId;
   const ov = provider.modelOverrides?.[modelId] || {};
+  const presetResult = findModelPreset(modelId);
+  const preset = presetResult
+    ? getPresetValues(presetResult.preset, presetResult.contextWindowOverride)
+    : null;
   overrideForm.value = {
-    contextWindow: Number(ov.context_window) || 0,
-    maxOutputTokens: Number(ov.max_output_tokens) || 0,
+    contextWindow: Number(ov.context_window) || preset?.contextWindow || 0,
+    maxOutputTokens: Number(ov.max_output_tokens) || preset?.maxTokens || 0,
   };
   overrideExtraKeys.value = Object.keys(ov).filter(
     (k) => k !== "context_window" && k !== "max_output_tokens",

@@ -15,9 +15,11 @@ import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { formatNumber } from "../../utils/format";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { usePageRefresh } from "../../composables/usePageRefresh";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // Codex 模型配置（Desktop / CLI 共用 ~/.codex/config.toml）。
 // 文件结构与 Pi Agent 的 models.json 同构：[model_providers.<id>] 多供应商注册表
@@ -220,6 +222,7 @@ const openAddModelDialog = (providerId) => {
   addModelId.value = "";
   editingModelId.value = "";
   addModelForm.value = emptyModelForm();
+  resetBaseline(addModelForm.value);
   fetchedModels.value = [];
   fetchModelError.value = "";
   addModelDialog.value = true;
@@ -238,9 +241,21 @@ const openEditModelDialog = (providerId, modelId) => {
     contextWindow: Number(cfg.contextWindow) || 0,
     input: Array.isArray(cfg.input) && cfg.input.length ? [...cfg.input] : ["text"],
   };
+  resetBaseline(addModelForm.value);
   fetchedModels.value = [];
   fetchModelError.value = "";
   addModelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  if (modelDialogMode.value !== "create") return;
+  const id = String(addModelForm.value.id || addModelId.value || "").trim();
+  addModelForm.value.id = id;
+  applyModelPreset(addModelForm.value, id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("input", preset.input);
+  });
 };
 
 const addModelOptions = computed(() =>
@@ -689,6 +704,7 @@ onMounted(refreshNow);
                 addModelForm.id = value;
               }
             }"
+            @blur="onModelIdBlur"
           />
           <div v-if="modelDialogMode === 'create' && fetchingModels" class="codex-form-hint">{{ t("codex.config.fetchingModels") }}</div>
           <div v-else-if="modelDialogMode === 'create' && fetchModelError" class="codex-form-hint codex-fetch-error">
@@ -696,6 +712,9 @@ onMounted(refreshNow);
             <span class="codex-fetch-retry" @click="handleFetchModels">{{ t("common.retry") }}</span>
           </div>
           <div v-else-if="modelDialogMode === 'create'" class="codex-form-hint">{{ t("codex.config.fetchHint") }}</div>
+          <div v-if="matchedPreset" class="codex-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
         </div>
         <div class="codex-form-item">
           <label>{{ t("codex.config.modelDisplayName") }}</label>

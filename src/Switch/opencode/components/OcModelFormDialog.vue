@@ -5,6 +5,7 @@ import { Dialog, Input, InputNumber, Select, Checkbox, AutoComplete } from "tdes
 import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../../components/DynamicKvEditor.vue";
 import { useAutoFetchModels } from "../../../composables/useAutoFetchModels";
+import { useModelPresetAutofill } from "../../../composables/useModelPresetAutofill";
 
 // opencode 模型添加/编辑弹窗（二合一）：add 模式带 /models 自动拉取（选中条件回填），
 // edit 模式额外暴露 SDK Options 与额外字段编辑器。表单对象由父级构建传入（initialForm），
@@ -53,6 +54,8 @@ const {
   autoModels, autoModelsLoading, autoModelsError, modelOptions, fetchAutoModels, resetAutoModels,
 } = useAutoFetchModels();
 
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
+
 const form = ref({});
 
 // 选中模型：条件回填（仅在拉取到值时覆盖，不清空用户已填内容）
@@ -66,11 +69,29 @@ const onAutoModelSelect = (val) => {
   if (m.reasoning) form.value.reasoning = true;
 };
 
+const onModelIdBlur = () => {
+  if (!isAdd.value) return;
+  applyModelPreset(form.value, form.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("context", preset.contextWindow);
+    fill("output", preset.maxTokens);
+    fill("reasoning", preset.reasoning);
+    fill("modalitiesInput", preset.input);
+    fill("modalitiesOutput", preset.output);
+  });
+};
+
+const handleAutoModelSelect = (val) => {
+  onAutoModelSelect(val);
+  onModelIdBlur();
+};
+
 watch(
   () => props.visible,
   (v) => {
     if (!v) return;
     form.value = { ...props.initialForm };
+    resetBaseline(form.value);
     if (isAdd.value) {
       resetAutoModels();
       // 打开弹窗即自动拉取模型列表，无需手动点击
@@ -107,7 +128,8 @@ const handleConfirm = () => {
           filterable
           clearable
           :placeholder="t('opencode.model.inputOrSelect')"
-          @select="onAutoModelSelect"
+          @select="handleAutoModelSelect"
+          @blur="onModelIdBlur"
         />
         <Input v-else v-model="form.id" :placeholder="t('opencode.model.idPlaceholder')" />
         <template v-if="isAdd">
@@ -118,6 +140,9 @@ const handleConfirm = () => {
           </div>
           <div v-else-if="autoModels.length > 0" class="oc-form-hint">
             {{ t("opencode.model.fetchedCount", { count: autoModels.length }) }}
+          </div>
+          <div v-if="matchedPreset" class="oc-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
           </div>
         </template>
       </div>

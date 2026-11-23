@@ -16,9 +16,28 @@ import {
 } from "tdesign-icons-vue-next";
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { findModelPreset, getPresetValues } from "../../utils/modelPresets";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const hermesPresetContext = new WeakMap();
+
+// Hermes 模型行只有模型 ID + 上下文长度：失焦时按预设补齐上下文。
+const fillHermesModel = (row) => {
+  if (!row) return;
+  const result = findModelPreset(row.modelId);
+  if (!result) {
+    const last = hermesPresetContext.get(row);
+    if (last && Number(row.contextLength) === last) row.contextLength = null;
+    hermesPresetContext.delete(row);
+    return;
+  }
+  const values = getPresetValues(result.preset, result.contextWindowOverride);
+  const last = hermesPresetContext.get(row);
+  const current = Number(row.contextLength) || 0;
+  if (!current || current === last) row.contextLength = values.contextWindow || null;
+  hermesPresetContext.set(row, values.contextWindow);
+};
 
 // API 模式与服务层 HERMES_API_MODES 一致（chat_completions / anthropic_messages / codex_responses / bedrock_converse）
 const apiModeOptions = [
@@ -322,7 +341,7 @@ onMounted(refresh);
           <label>{{ t("hermes.config.modelsLabel") }}</label>
           <div class="hermes-model-rows">
             <div v-for="(m, idx) in addForm.models" :key="idx" class="hermes-model-row">
-              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholder')" />
+              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholder')" @blur="fillHermesModel(m)" />
               <InputNumber v-model="m.contextLength" :min="0" :step="1000" :placeholder="t('hermes.config.contextPlaceholder')" class="hermes-model-row-ctx" />
               <span class="hermes-model-row-del" @click="removeModelRow(addForm, idx)"><DeleteIcon size="14px" /></span>
             </div>
@@ -363,7 +382,7 @@ onMounted(refresh);
           <label>{{ t("hermes.config.modelsLabel") }}</label>
           <div class="hermes-model-rows">
             <div v-for="(m, idx) in editForm.models" :key="idx" class="hermes-model-row">
-              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholderEdit')" />
+              <Input v-model="m.modelId" :placeholder="t('hermes.config.modelIdPlaceholderEdit')" @blur="fillHermesModel(m)" />
               <InputNumber v-model="m.contextLength" :min="0" :step="1000" :placeholder="t('hermes.config.contextPlaceholder')" class="hermes-model-row-ctx" />
               <span class="hermes-model-row-del" @click="removeModelRow(editForm, idx)"><DeleteIcon size="14px" /></span>
             </div>

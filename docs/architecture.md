@@ -137,7 +137,8 @@ Claude:
     model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；不校验 key（仅监听本机回环地址，Authorization Bearer / x-api-key 传任意值或留空均放行）
     模型映射（mapping 模式）：固定映射名 alias → 最多 3 个主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
       每个映射行的 strategy 决定多模型调配：first（默认）只用第一个；failover 按顺序尝试，前一个上游报错才切换下一个
-      （只在响应头写出前可切换，流式一旦开始回传就无法改路由）；random 每次请求随机选一个；round-robin 用进程内游标按顺序轮换
+      （只在响应头写出前可切换，流式一旦开始回传就无法改路由；切换成功后本次网关运行期间默认从成功的模型开始，网关重新启动后从第一个模型重新开始）
+      random 每次请求随机选一个；round-robin 用进程内游标按顺序轮换
       （网关重启后从第一个重新开始，游标按映射名保存）。日志行记录最终实际模型，发生切换时带 switches 次数
       **映射行顺序 = 下发顺序**：mappings 数组顺序即顺序，resolveAutoRouteModels 按序展开（一个映射名对应多个模型时，
       agent 侧仍只下发一次该映射名，元数据取第一个有效模型），dispatchAutoRoute 按序逐个写 agent，

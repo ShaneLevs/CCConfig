@@ -13,6 +13,8 @@
     "fetchFailed": "自动获取失败：{message}",
     "retry": "重试",
     "fetchedCount": "已自动获取 {count} 个模型，选中后自动填充名称/上下文等",
+    "presetMatched": "已匹配预设：{name}",
+    "presetMatchedCount": "已自动匹配 {matched}/{total} 个模型预设",
     "displayName": "显示名称",
     "displayNamePlaceholder": "留空则使用模型 ID",
     "displayNameEditPlaceholder": "显示名称",

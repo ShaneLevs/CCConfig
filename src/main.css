@@ -84,3 +84,8 @@ body::-webkit-scrollbar {
 :root[theme-mode="dark"] .t-switch:not(.t-is-checked):not(.t-is-disabled):hover {
   background-color: var(--td-gray-color-5);
 }
+
+/* 模型预设匹配成功提示：各 Agent 弹窗共用，跟随 TDesign success 色。 */
+.common-preset-hint {
+  color: var(--td-success-color-5);
+}

@@ -112,7 +112,7 @@
       "strategyFailover": "Fail over",
       "strategyRandom": "Random",
       "strategyRoundRobin": "Round-robin",
-      "strategyHint": "Fail over tries models in order and only moves on when the previous one fails; Random picks one model per request; Round-robin rotates through models in order.",
+      "strategyHint": "Fail over tries models in order and only moves on when the previous one fails; after a successful switch, that model becomes the default for the rest of this gateway run and resets to the first model when the gateway restarts. Random picks one model per request; Round-robin rotates through models in order.",
       "mappingStatus": "{ready}/{total} rows have models (up to 3 models per row, max {max} rows). Defaults are flash / plus / pro; names are editable and the first mapping with a duplicate name wins. Drag the row number to reorder — dispatch writes models to agents in this order.",
       "mappingStatusSimple": "{ready}/{total} rows have a target (max {max}). Defaults are flash / plus / pro; names are editable and the first mapping with a duplicate name wins. Drag the row number to reorder — dispatch writes models to agents in this order.",
       "dragMappingHint": "Drag to reorder (the model order agents receive when dispatching)",

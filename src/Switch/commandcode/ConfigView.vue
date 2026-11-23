@@ -21,9 +21,11 @@ import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
+import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
 
 // 与服务层 CC_APIS 一致；顺序即下拉顺序，默认第一项（配置文件省略该字段时的值）
 const API_OPTIONS = [
@@ -267,6 +269,7 @@ const openAddModelDialog = (p) => {
   modelProviderApi.value = p.api || "";
   editingModelId.value = "";
   modelForm.value = emptyModelForm();
+  resetBaseline(modelForm.value);
   modelDialog.value = true;
 };
 
@@ -277,7 +280,21 @@ const openEditModelDialog = (p, m) => {
   modelProviderApi.value = p.api || "";
   editingModelId.value = m.id;
   modelForm.value = modelFromEntry(m);
+  resetBaseline(modelForm.value);
   modelDialog.value = true;
+};
+
+const onModelIdBlur = () => {
+  if (modelMode.value !== "create") return;
+  applyModelPreset(modelForm.value, modelForm.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxOutput", preset.maxTokens);
+    fill("reasoningEfforts", preset.reasoningEfforts.filter((level) =>
+      ["low", "medium", "high", "xhigh", "max"].includes(level),
+    ));
+    fill("cost", preset.cost);
+  });
 };
 
 const submitModel = () => {
@@ -572,8 +589,11 @@ onMounted(refresh);
         </div>
         <div class="commandcode-form-item">
           <label>{{ t("commandcode.config.modelIdLabel") }} <span class="commandcode-form-required">*</span></label>
-          <Input v-model="modelForm.id" :placeholder="t('commandcode.config.modelIdLabel')" />
+          <Input v-model="modelForm.id" :placeholder="t('commandcode.config.modelIdLabel')" @blur="onModelIdBlur" />
           <div class="commandcode-form-hint">{{ t("commandcode.config.modelIdHint") }}</div>
+          <div v-if="matchedPreset" class="commandcode-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
+          </div>
           <div v-if="modelMode === 'edit'" class="commandcode-form-hint">{{ t("commandcode.config.editIdSyncHint") }}</div>
         </div>
         <div class="commandcode-form-item">

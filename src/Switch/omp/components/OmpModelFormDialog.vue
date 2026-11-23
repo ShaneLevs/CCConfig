@@ -5,6 +5,7 @@ import { Dialog, Input, InputNumber, Textarea, MessagePlugin, Select, Space, Che
 import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
 import { useAutoFetchModels } from "../../../composables/useAutoFetchModels";
+import { useModelPresetAutofill } from "../../../composables/useModelPresetAutofill";
 
 // omp 模型添加/编辑弹窗（二合一）：高级区为「思考级别 + 费用 + 其他参数 YAML」，
 // 编辑模式可改模型 ID（重命名由父级以删旧建新方式落库）。
@@ -107,6 +108,35 @@ const {
   autoModels, autoModelsLoading, autoModelsError, modelOptions, fetchAutoModels, resetAutoModels, onModelIdSelect,
 } = useAutoFetchModels();
 
+const { matchedPreset, resetBaseline, apply: applyModelPreset } = useModelPresetAutofill();
+
+const onModelIdBlur = () => {
+  if (!isAdd.value) return;
+  applyModelPreset(form.value, form.value.id, (preset, fill) => {
+    fill("name", preset.name);
+    fill("contextWindow", preset.contextWindow);
+    fill("maxTokens", preset.maxTokens);
+    fill("input", preset.input);
+    fill("reasoning", preset.reasoning);
+    fill("cost", preset.cost);
+    const levels = preset.reasoningEfforts.filter((level) =>
+      ["low", "medium", "high", "xhigh", "max"].includes(level),
+    );
+    if (levels.length) {
+      fill("thinking", {
+        mode: "effort",
+        minLevel: levels[0],
+        maxLevel: levels[levels.length - 1],
+      });
+    }
+  });
+};
+
+const handleModelIdSelect = (val) => {
+  onModelIdSelect(val, form);
+  onModelIdBlur();
+};
+
 const defaultForm = () => ({
   id: "",
   name: "",
@@ -154,6 +184,7 @@ watch(
         otherYaml: dumpOtherFields(m),
       };
     }
+    resetBaseline(form.value);
   }
 );
 
@@ -205,7 +236,8 @@ const handleConfirm = () => {
           filterable
           clearable
           :placeholder="t('model.selectOrEnter')"
-          @select="(val) => onModelIdSelect(val, form)"
+          @select="handleModelIdSelect"
+          @blur="onModelIdBlur"
         />
         <Input v-else v-model="newModelId" :placeholder="t('model.idPlaceholder')" />
         <template v-if="isAdd">
@@ -216,6 +248,9 @@ const handleConfirm = () => {
           </div>
           <div v-else-if="autoModels.length > 0" class="omp-form-hint">
             {{ t("model.fetchedCount", { count: autoModels.length }) }}
+          </div>
+          <div v-if="matchedPreset" class="omp-form-hint common-preset-hint">
+            {{ t("model.presetMatched", { name: matchedPreset.name }) }}
           </div>
         </template>
       </div>
