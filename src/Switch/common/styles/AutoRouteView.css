@@ -17,7 +17,7 @@
 .autoroute-label { font-size: 12px; color: var(--td-text-color-placeholder); flex-shrink: 0; }
 .autoroute-port { width: 110px; }
 .autoroute-cascader { flex: 1; min-width: 320px; }
-/* 模型映射行：第一行拖拽手柄 + 映射名 + 删除，调配策略放在第二个模型所在行；下面按序排列最多 3 个目标模型 */
+/* 模型映射行：第一行拖拽手柄 + 映射名 + 调配策略 + 删除，下面按序排列最多 3 个目标模型 */
 .autoroute-mapping-row {
   display: flex;
   flex-direction: column;
@@ -26,8 +26,8 @@
   border-bottom: 0.5px solid var(--td-component-stroke);
 }
 .autoroute-mapping-row:last-child { border-bottom: 0; }
-/* 只配置一个模型时回到原来的单行布局：序号 + 映射名 + 箭头 + 目标 + 删除。
-   添加第二个模型的入口只在悬停/聚焦时浮出，静止状态与原界面一致。 */
+/* 只配置一个模型时回到原来的单行布局：序号 + 映射名 + 箭头 + 目标 + 添加/删除。
+   添加第二个模型的入口常显，避免用户找不到多模型配置。 */
 .autoroute-mapping-row.is-single {
   position: relative;
   flex-direction: row;
@@ -39,16 +39,8 @@
 .autoroute-mapping-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .autoroute-mapping-add {
   flex-shrink: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
   background: var(--td-bg-color-container);
   border: 0.5px solid var(--td-component-stroke);
-}
-.autoroute-mapping-row.is-single:hover .autoroute-mapping-add,
-.autoroute-mapping-row.is-single:focus-within .autoroute-mapping-add {
-  opacity: 1;
-  pointer-events: auto;
 }
 .autoroute-mapping-row.is-dragging {
   position: relative;

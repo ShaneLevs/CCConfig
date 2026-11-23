@@ -686,6 +686,13 @@ onUnmounted(() => {
                 :placeholder="t('commonApp.autoRoute.mappingAliasPlaceholder')"
                 @change="(val) => onAliasChange(i, val)"
               />
+              <Select
+                :value="mappingStrategy(m)"
+                :options="strategyOptions"
+                size="small"
+                class="autoroute-mapping-strategy"
+                @change="(val) => onMappingStrategyChange(i, val)"
+              />
               <Tooltip :content="t('commonApp.autoRoute.removeMapping')" placement="top">
                 <Button size="small" variant="text" theme="danger" @click="removeMapping(i)">
                   <template #icon><DeleteIcon /></template>
@@ -697,16 +704,7 @@ onUnmounted(() => {
                 v-for="(target, mi) in mappingTargets(m)"
                 :key="mi"
                 class="autoroute-mapping-model-row"
-                :class="{ 'has-strategy': mi === 1 }"
               >
-                <Select
-                  v-if="mi === 1"
-                  :value="mappingStrategy(m)"
-                  :options="strategyOptions"
-                  size="small"
-                  class="autoroute-mapping-strategy"
-                  @change="(val) => onMappingStrategyChange(i, val)"
-                />
                 <span class="autoroute-mapping-model-index">{{ mi + 1 }}</span>
                 <Cascader
                   :value="target.provider && target.modelId ? `${target.provider}::${target.modelId}` : undefined"

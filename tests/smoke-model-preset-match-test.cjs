@@ -37,6 +37,14 @@ const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src/data/mod
     }
   })
 
+  check('模型家族短名匹配到唯一模型', () => {
+    assert.strictEqual(find('deepseek-flash').preset.id, 'deepseek-v4.1-flash')
+    assert.strictEqual(find('deepseek-v4.1-flash-1017').preset.id, 'deepseek-v4.1-flash')
+    assert.strictEqual(find('deepseek-pro').preset.id, 'deepseek-v4-pro')
+    assert.strictEqual(find('glm').preset.id, 'glm-5.3')
+    assert.strictEqual(find('qwen-flash').preset.id, 'qwen3.8-flash')
+  })
+
   check('日期后缀匹配基础模型', () => {
     assert.strictEqual(find('claude-sonnet-4-5-20250929').preset.id, 'claude-sonnet-4-5')
     assert.strictEqual(find('gpt-5.4-mini-2025-08-07').preset.id, 'gpt-5.4-mini')

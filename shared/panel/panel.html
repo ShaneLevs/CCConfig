@@ -774,7 +774,7 @@
     margin-top: 8px;
   }
   .mapping-row:first-child { margin-top: 0; }
-  /* 只配置一个模型时回到原来的单行布局；添加第二个模型的入口只在悬停/聚焦时浮出 */
+  /* 只配置一个模型时回到原来的单行布局；添加第二个模型的入口常显 */
   .mapping-row.is-single {
     position: relative;
     flex-direction: row;
@@ -798,15 +798,8 @@
     line-height: 1;
     cursor: default;
     outline: none;
-    opacity: 0;
-    pointer-events: none;
     -webkit-appearance: none;
     appearance: none;
-  }
-  .mapping-row.is-single:hover .mapping-add-model,
-  .mapping-row.is-single:focus-within .mapping-add-model {
-    opacity: 1;
-    pointer-events: auto;
   }
   .mapping-add-model:hover { background: var(--hover); color: var(--text); }
   .mapping-row-head { display: flex; align-items: center; gap: 5px; }
@@ -2188,13 +2181,7 @@
         const label = targetLabel(target)
         const openKey = index + ':' + slot
         let html = (
-          '<div class="mapping-model-row' + (slot === 1 ? ' has-strategy' : '') + '">' +
-            (slot === 1
-              ? '<span class="mapping-strategy-wrap">' +
-                  '<select class="mapping-strategy" data-strategy="' + index + '">' + strategyOptions + '</select>' +
-                  '<span class="mapping-strategy-chev" aria-hidden="true">⌄</span>' +
-                '</span>'
-              : '') +
+          '<div class="mapping-model-row">' +
             '<span class="mapping-model-index">' + (slot + 1) + '</span>' +
             '<button class="mapping-target' + (label ? ' has-value' : '') + '" type="button"' +
               ' data-target="' + index + '" data-slot="' + slot + '"' +
@@ -2220,6 +2207,10 @@
             '<input class="mapping-alias" type="text" spellcheck="false" autocomplete="off"' +
               ' data-alias="' + index + '" value="' + esc(mapping.alias || '') + '"' +
               ' placeholder="' + esc(t('mappingAlias')) + '" />' +
+            '<span class="mapping-strategy-wrap">' +
+              '<select class="mapping-strategy" data-strategy="' + index + '">' + strategyOptions + '</select>' +
+              '<span class="mapping-strategy-chev" aria-hidden="true">⌄</span>' +
+            '</span>' +
             '<button class="mapping-del" type="button" data-del="' + index + '"' +
               ' title="' + esc(t('removeMapping')) + '" aria-label="' + esc(t('removeMapping')) + '">×</button>' +
           '</div>' +

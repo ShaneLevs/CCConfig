@@ -688,7 +688,9 @@
       "name": "DeepSeek V4 Pro",
       "family": "deepseek-pro",
       "type": "chat",
-      "aliases": [],
+      "aliases": [
+        "deepseek-pro"
+      ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
       "maxTokens": 384000,
@@ -722,7 +724,9 @@
       "family": "deepseek-flash",
       "type": "chat",
       "aliases": [
-        "deepseek-v4-1-flash"
+        "deepseek-v4-1-flash",
+        "deepseek-flash",
+        "deepseek-v4.1-flash-1017"
       ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
@@ -759,7 +763,8 @@
       "family": "deepseek-flash-free",
       "type": "chat",
       "aliases": [
-        "deepseek-v4-1-flash-free"
+        "deepseek-v4-1-flash-free",
+        "deepseek-flash-free"
       ],
       "contextWindow": 200000,
       "maxInputTokens": null,
@@ -795,7 +800,9 @@
       "name": "Flint 40B",
       "family": "flint-free",
       "type": "chat",
-      "aliases": [],
+      "aliases": [
+        "flint-free"
+      ],
       "contextWindow": 262144,
       "maxInputTokens": null,
       "maxTokens": 65536,
@@ -871,7 +878,8 @@
       "family": "gemini-flash-lite",
       "type": "chat",
       "aliases": [
-        "gemini-3-5-flash-lite"
+        "gemini-3-5-flash-lite",
+        "gemini-flash-lite"
       ],
       "contextWindow": 1048576,
       "maxInputTokens": null,
@@ -1179,7 +1187,8 @@
       "family": "glm",
       "type": "chat",
       "aliases": [
-        "glm-5-3"
+        "glm-5-3",
+        "glm"
       ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
@@ -1214,7 +1223,8 @@
       "family": "glm-flash",
       "type": "chat",
       "aliases": [
-        "glm-5-3-flash"
+        "glm-5-3-flash",
+        "glm-flash"
       ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
@@ -1465,7 +1475,8 @@
       "family": "gpt-codex-mini",
       "type": "chat",
       "aliases": [
-        "gpt-5-1-codex-mini"
+        "gpt-5-1-codex-mini",
+        "gpt-codex-mini"
       ],
       "contextWindow": 400000,
       "maxInputTokens": 272000,
@@ -1616,7 +1627,8 @@
       "family": "gpt-codex-spark",
       "type": "chat",
       "aliases": [
-        "gpt-5-3-codex-spark"
+        "gpt-5-3-codex-spark",
+        "gpt-codex-spark"
       ],
       "contextWindow": 128000,
       "maxInputTokens": 128000,
@@ -1700,7 +1712,8 @@
       "family": "gpt-mini",
       "type": "chat",
       "aliases": [
-        "gpt-5-4-mini"
+        "gpt-5-4-mini",
+        "gpt-mini"
       ],
       "contextWindow": 400000,
       "maxInputTokens": 272000,
@@ -2014,7 +2027,8 @@
       "family": "gpt-terra",
       "type": "chat",
       "aliases": [
-        "gpt-5-6-terra"
+        "gpt-5-6-terra",
+        "gpt-terra"
       ],
       "contextWindow": 1050000,
       "maxInputTokens": 922000,
@@ -2541,7 +2555,8 @@
       "family": "grok-build",
       "type": "chat",
       "aliases": [
-        "grok-build-0-1"
+        "grok-build-0-1",
+        "grok-build"
       ],
       "contextWindow": 256000,
       "maxInputTokens": null,
@@ -2573,7 +2588,9 @@
       "name": "Hy4 flash",
       "family": "hy-flash-free",
       "type": "chat",
-      "aliases": [],
+      "aliases": [
+        "hy-flash-free"
+      ],
       "contextWindow": 1048576,
       "maxInputTokens": 983040,
       "maxTokens": 65536,
@@ -2704,7 +2721,8 @@
       "family": "kimi-code",
       "type": "chat",
       "aliases": [
-        "kimi-k2-7-code"
+        "kimi-k2-7-code",
+        "kimi-code"
       ],
       "contextWindow": 262144,
       "maxInputTokens": null,
@@ -2773,7 +2791,8 @@
       "family": "mimo-flash-free",
       "type": "chat",
       "aliases": [
-        "mimo-v2-6-flash-free"
+        "mimo-v2-6-flash-free",
+        "mimo-flash-free"
       ],
       "contextWindow": 200000,
       "maxInputTokens": null,
@@ -2900,7 +2919,9 @@
       "name": "Mistral Large 4",
       "family": "mistral-large",
       "type": "chat",
-      "aliases": [],
+      "aliases": [
+        "mistral-large"
+      ],
       "contextWindow": 524288,
       "maxInputTokens": null,
       "maxTokens": 262144,
@@ -2934,7 +2955,8 @@
       "family": "muse-ember",
       "type": "chat",
       "aliases": [
-        "muse-ember-1-0"
+        "muse-ember-1-0",
+        "muse-ember"
       ],
       "contextWindow": 1048576,
       "maxInputTokens": null,
@@ -3066,7 +3088,8 @@
       "family": "muse-wonder",
       "type": "chat",
       "aliases": [
-        "muse-wonder-1-0"
+        "muse-wonder-1-0",
+        "muse-wonder"
       ],
       "contextWindow": 1048576,
       "maxInputTokens": null,
@@ -3108,7 +3131,8 @@
       "family": "nemotron-lightning-free",
       "type": "chat",
       "aliases": [
-        "nemotron-3-5-lightning-free"
+        "nemotron-3-5-lightning-free",
+        "nemotron-lightning-free"
       ],
       "contextWindow": 262144,
       "maxInputTokens": null,
@@ -3139,7 +3163,8 @@
       "family": "nemotron-super-free",
       "type": "chat",
       "aliases": [
-        "nemotron-3-5-super-vl-free"
+        "nemotron-3-5-super-vl-free",
+        "nemotron-super-free"
       ],
       "contextWindow": 1048576,
       "maxInputTokens": 1048576,
@@ -3246,7 +3271,8 @@
       "family": "qwen-flash",
       "type": "chat",
       "aliases": [
-        "qwen3-8-flash"
+        "qwen3-8-flash",
+        "qwen-flash"
       ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
@@ -3284,7 +3310,8 @@
       "family": "qwen-max",
       "type": "chat",
       "aliases": [
-        "qwen3-8-max"
+        "qwen3-8-max",
+        "qwen-max"
       ],
       "contextWindow": 262144,
       "maxInputTokens": null,
@@ -3323,7 +3350,9 @@
       "name": "Qwen4 Max",
       "family": "qwen-max-free",
       "type": "chat",
-      "aliases": [],
+      "aliases": [
+        "qwen-max-free"
+      ],
       "contextWindow": 1000000,
       "maxInputTokens": null,
       "maxTokens": 262144,
