@@ -12,6 +12,7 @@ const commandCode = require("./command-code");
 const { t } = require("./i18n");
 const { isDirEntry, rmEntry } = require("./fs-utils");
 const { assertSkillName, assertPathInside } = require("./path-guard");
+const { assertSafeUrl, safeLookup } = require("./net-guard");
 
 // ==================== SkillHub API 辅助 ====================
 const SKILLHUB_API_BASE = "https://api.skillhub.cn";
@@ -37,8 +38,15 @@ function _skillhubApiUrl(pathname, params) {
 function _skillhubGetJson(pathname, params) {
   const https = require("node:https");
   return new Promise((resolve, reject) => {
+    let target;
+    try {
+      target = assertSafeUrl(_skillhubApiUrl(pathname, params));
+      if (target.protocol !== "https:") throw new Error(t("service.common.invalidUrl"));
+    } catch (e) {
+      return reject(e);
+    }
     https
-      .get(_skillhubApiUrl(pathname, params), { headers: SKILLHUB_HEADERS }, (res) => {
+      .get(target, { headers: SKILLHUB_HEADERS, lookup: safeLookup }, (res) => {
         if (res.statusCode === 404) return reject(new Error("Skill not found"));
         if (res.statusCode !== 200)
           return reject(new Error(t("service.skill.requestFailed", { status: res.statusCode })));
@@ -62,16 +70,26 @@ function _downloadToFile(url, filePath, onProgress, headers = SKILLHUB_HEADERS) 
   return new Promise((resolve, reject) => {
     const doGet = (targetUrl, redirectCount = 0) => {
       if (redirectCount > 10) return reject(new Error(t("service.skill.tooManyRedirects")));
+      let target;
+      try {
+        target = assertSafeUrl(targetUrl);
+        if (target.protocol !== "https:") throw new Error(t("service.common.invalidUrl"));
+      } catch (e) {
+        return reject(e);
+      }
       https
-        .get(targetUrl, { headers }, (res) => {
+        .get(target, { headers, lookup: safeLookup }, (res) => {
           if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
             if (!res.headers.location)
               return reject(new Error(t("service.skill.redirectMissingLocation")));
             res.resume();
-            doGet(
-              new URL(res.headers.location, targetUrl).toString(),
-              redirectCount + 1,
-            );
+            let next;
+            try {
+              next = new URL(res.headers.location, targetUrl).toString();
+            } catch (e) {
+              return reject(e);
+            }
+            doGet(next, redirectCount + 1);
             return;
           }
           if (res.statusCode !== 200)
@@ -294,7 +312,15 @@ function fetchSkillHubCategories() {
 function fetchModelScopeSkillInfo(skillPath) {
   const https = require("node:https");
   return new Promise((resolve, reject) => {
-    const url = `https://www.modelscope.cn/api/v1/skills/${skillPath}`;
+    let target;
+    try {
+      target = assertSafeUrl(
+        `https://www.modelscope.cn/api/v1/skills/${String(skillPath || "")}`,
+      );
+      if (target.protocol !== "https:") throw new Error(t("service.common.invalidUrl"));
+    } catch (e) {
+      return reject(e);
+    }
     const options = {
       headers: {
         accept: "application/json, text/plain, */*",
@@ -302,9 +328,10 @@ function fetchModelScopeSkillInfo(skillPath) {
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
         "x-modelscope-accept-language": "zh_CN",
       },
+      lookup: safeLookup,
     };
     https
-      .get(url, options, (res) => {
+      .get(target, options, (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {

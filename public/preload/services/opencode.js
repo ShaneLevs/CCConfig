@@ -5,6 +5,7 @@ const JSON5 = require('json5')
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
 const { assertSkillName, assertPathInside } = require('./path-guard')
+const { assertSafeUrl, safeLookup } = require('./net-guard')
 
 const OPENCODE_DIR = path.join(window.utools.getPath('home'), '.config', 'opencode')
 
@@ -205,9 +206,16 @@ const uninstallOpencodePlugin = async (pluginName) => {
 const searchOpencodePlugins = (query = 'opencode-plugin') => {
   const https = require('node:https')
   return new Promise((resolve, reject) => {
-    const url = `https://registry.npmjs.org/-/v1/search?text=keywords:${encodeURIComponent(query)}&size=30`
-    https.get(url, {
+    let target
+    try {
+      target = assertSafeUrl(`https://registry.npmjs.org/-/v1/search?text=keywords:${encodeURIComponent(query)}&size=30`)
+      if (target.protocol !== 'https:') throw new Error(t('service.common.invalidUrl'))
+    } catch (e) {
+      return reject(e)
+    }
+    https.get(target, {
       headers: { 'user-agent': 'CCConfig/1.0', 'accept': 'application/json' },
+      lookup: safeLookup,
       timeout: 10000,
     }, (res) => {
       let data = ''

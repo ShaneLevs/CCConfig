@@ -8,6 +8,7 @@ const { spawn } = require("node:child_process");
 const common = require("./common");
 const { t } = require("./i18n");
 const { isDirEntry } = require("./fs-utils");
+const { assertSafeUrl, safeLookup } = require("./net-guard");
 
 const MARKET_SITE = "https://www.skills.sh";
 const DETAIL_TTL = 30 * 60 * 1000;
@@ -33,9 +34,19 @@ let _nodeRuntimeOk = false;
 function _getText(url, { headers = {}, timeout = 20000, redirects = 0 } = {}) {
   return new Promise((resolve, reject) => {
     if (redirects > 6) return reject(new Error(t("service.skill.tooManyRedirects")));
+    let target;
+    try {
+      target = assertSafeUrl(url);
+      if (target.protocol !== "https:") throw new Error(t("service.common.invalidUrl"));
+    } catch (e) {
+      return reject(e);
+    }
     const req = https.get(
-      url,
-      { headers: { "user-agent": USER_AGENT, accept: "*/*", ...headers } },
+      target,
+      {
+        headers: { "user-agent": USER_AGENT, accept: "*/*", ...headers },
+        lookup: safeLookup,
+      },
       (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
           res.resume();
@@ -203,7 +214,7 @@ const UNSAFE_ARG_RE = /["'`$&|;<>()%!^\\\r\n\t]/;
 const _assertSafeTarget = (target) => {
   let parsed;
   try {
-    parsed = new URL(target);
+    parsed = assertSafeUrl(target);
   } catch (e) {
     throw new Error(t("service.skill.skillsSh.invalidInstallTarget"));
   }

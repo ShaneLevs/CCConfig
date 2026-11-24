@@ -258,7 +258,7 @@ const requestModel = (provider, model, api) =>
       }
     };
 
-    const start = (url, redirectCount) => {
+    const start = (url, redirectCount, requestHeaders = headers) => {
       let parsed;
       try {
         parsed = assertSafeUrl(url);
@@ -276,7 +276,7 @@ const requestModel = (provider, model, api) =>
         parsed,
         {
           method: "POST",
-          headers,
+          headers: requestHeaders,
           lookup: safeLookup,
           servername: parsed.protocol === "https:" ? parsed.hostname.replace(/^\[|\]$/g, "") : undefined,
         },
@@ -300,7 +300,21 @@ const requestModel = (provider, model, api) =>
             failWith(t("service.connectionTest.invalidBaseUrl"));
             return;
           }
-          start(nextUrl.toString(), redirectCount + 1);
+          const nextHeaders = { ...requestHeaders };
+          if (nextUrl.origin !== parsed.origin) {
+            for (const key of Object.keys(nextHeaders)) {
+              const lower = key.toLowerCase();
+              if (
+                lower === "authorization" ||
+                lower === "x-api-key" ||
+                lower === "x-goog-api-key" ||
+                lower === "cookie" ||
+                lower === "proxy-authorization"
+              )
+                delete nextHeaders[key];
+            }
+          }
+          start(nextUrl.toString(), redirectCount + 1, nextHeaders);
           return;
         }
 

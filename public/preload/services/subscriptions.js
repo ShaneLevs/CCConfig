@@ -20,6 +20,7 @@ const https = require('node:https')
 const crypto = require('./crypto')
 const { findCookies, inspectDir } = require('./browser-cookies')
 const { t } = require('./i18n')
+const { assertSafeUrl, safeLookup } = require('./net-guard')
 
 const DOC_PREFIX = 'ccconfig_subscriptions_'
 
@@ -81,9 +82,10 @@ const getJson = (url, cookie) =>
   new Promise((resolve, reject) => {
     let target
     try {
-      target = new URL(url)
-    } catch {
-      return reject(makeError(ERR_HTTP, `bad url: ${url}`))
+      target = assertSafeUrl(url)
+      if (target.protocol !== 'https:') throw new Error(t('service.common.invalidUrl'))
+    } catch (e) {
+      return reject(makeError(ERR_HTTP, e.message || `bad url: ${url}`))
     }
     const req = https.get(
       target,
@@ -92,6 +94,7 @@ const getJson = (url, cookie) =>
           Cookie: cookie,
           Accept: 'application/json',
         },
+        lookup: safeLookup,
         timeout: REQUEST_TIMEOUT_MS,
       },
       (res) => {

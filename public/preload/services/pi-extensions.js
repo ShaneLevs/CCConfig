@@ -4,6 +4,14 @@ const https = require("node:https");
 
 const { runPiCmd, PI_CMD_TIMEOUT } = require("./pi-common");
 const { t } = require("./i18n");
+const { assertSafeUrl, safeLookup } = require("./net-guard");
+
+// 固定 pi.dev 的页面请求也走 net-guard：拒绝内网目标，并让 DNS 解析结果经过校验。
+const _safeGet = (url, options, callback) => {
+  const target = assertSafeUrl(url);
+  if (target.protocol !== "https:") throw new Error(t("service.common.invalidUrl"));
+  return https.get(target, { ...options, lookup: safeLookup }, callback);
+};
 
 // ==================== Extensions (Packages) ====================
 
@@ -21,7 +29,7 @@ const fetchPiDevPackages = (params = {}, redirects = 0) => {
   const url = "https://pi.dev/packages" + (qs.length ? "?" + qs.join("&") : "");
 
   return new Promise((resolve, reject) => {
-    const req = https.get(
+    const req = _safeGet(
       url,
       {
         headers: {
@@ -149,7 +157,7 @@ const fetchPiDevPackage = (name = "", redirects = 0, useRaw = false) => {
     "https://pi.dev/packages/" + (useRaw ? clean : encodeURIComponent(clean));
 
   return new Promise((resolve, reject) => {
-    const req = https.get(
+    const req = _safeGet(
       url,
       {
         headers: {

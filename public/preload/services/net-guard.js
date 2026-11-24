@@ -27,33 +27,99 @@ const _ipv4Parts = (ip) => {
 const isPrivateIpv4 = (ip) => {
   const p = _ipv4Parts(ip);
   if (!p) return true;
-  const [a, b] = p;
+  const [a, b, c] = p;
   if (a === 0 || a === 10 || a === 127) return true;
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
   if (a === 169 && b === 254) return true; // link-local / metadata
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
-  if (a === 192 && b === 0) return true; // 192.0.0.0/24
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24, TEST-NET-1
+  if (a === 192 && b === 88 && c === 99) return true; // 6to4 relay anycast
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
-  if (a === 198 && b === 51) return true; // TEST-NET-2
-  if (a === 203 && b === 0) return true; // TEST-NET-3
+  if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2
+  if (a === 203 && b === 0 && c === 113) return true; // TEST-NET-3
   if (a >= 224) return true; // multicast / reserved
   return false;
 };
 
+// 把 IPv6 拆成 8 个 16 位整数；非法格式返回 null。支持 :: 压缩与内嵌 IPv4。
+const _ipv6Hextets = (ip) => {
+  let value = String(ip || "").toLowerCase().split("%")[0];
+  if (!value.includes(":")) return null;
+  const lastColon = value.lastIndexOf(":");
+  const tail = value.slice(lastColon + 1);
+  if (tail.includes(".")) {
+    const parts = _ipv4Parts(tail);
+    if (!parts) return null;
+    const high = ((parts[0] << 8) | parts[1]).toString(16);
+    const low = ((parts[2] << 8) | parts[3]).toString(16);
+    value = `${value.slice(0, lastColon + 1)}${high}:${low}`;
+  }
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tailParts = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  if (halves.length === 1) {
+    if (head.length !== 8) return null;
+    const parsed = head.map((part) =>
+      /^[0-9a-f]{1,4}$/.test(part) ? parseInt(part, 16) : NaN,
+    );
+    return parsed.some(Number.isNaN) ? null : parsed;
+  }
+  const fill = 8 - head.length - tailParts.length;
+  if (fill < 1) return null;
+  const parts = [...head, ...Array(fill).fill("0"), ...tailParts];
+  if (parts.length !== 8 || parts.some((part) => !/^[0-9a-f]{1,4}$/.test(part)))
+    return null;
+  return parts.map((part) => parseInt(part, 16));
+};
+
 const isPrivateIpv6 = (ip) => {
-  const value = String(ip || "").toLowerCase().split("%")[0];
-  if (value === "::" || value === "::1") return true;
-  // IPv4-mapped IPv6: ::ffff:127.0.0.1
-  const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIpv4(mapped[1]);
-  const first = value.split(":")[0];
-  if (!first) return true;
-  const firstByte = parseInt(first.slice(0, 2), 16);
-  if (Number.isNaN(firstByte)) return true;
-  if ((firstByte & 0xfe) === 0xfc) return true; // fc00::/7 unique local
-  if (firstByte === 0xfe && /^fe[89ab]/.test(first)) return true; // fe80::/10
-  if ((firstByte & 0xff) === 0xff) return true; // ff00::/8 multicast
+  const h = _ipv6Hextets(ip);
+  if (!h) return true;
+  // ::/96（含 :: / ::1）以及 IPv4-compatible 地址
+  if (
+    h[0] === 0 &&
+    h[1] === 0 &&
+    h[2] === 0 &&
+    h[3] === 0 &&
+    h[4] === 0 &&
+    h[5] === 0 &&
+    h[6] === 0
+  )
+    return true;
+  // IPv4-mapped IPv6: ::ffff:127.0.0.1 / ::ffff:7f00:1
+  if (h[0] === 0 && h[1] === 0 && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0xffff) {
+    return isPrivateIpv4(
+      `${h[6] >> 8}.${h[6] & 255}.${h[7] >> 8}.${h[7] & 255}`,
+    );
+  }
+  if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((h[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local
+  if ((h[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (h[0] === 0x2001 && h[1] === 0x0db8) return true; // documentation
+  if (h[0] === 0x2002) {
+    // 6to4: 2002:V4ADDR::/48，内嵌 IPv4 也必须校验
+    return isPrivateIpv4(
+      `${h[1] >> 8}.${h[1] & 255}.${h[2] >> 8}.${h[2] & 255}`,
+    );
+  }
+  if (
+    h[0] === 0x0064 &&
+    h[1] === 0xff9b &&
+    h[2] === 0 &&
+    h[3] === 0 &&
+    h[4] === 0 &&
+    h[5] === 0
+  ) {
+    // NAT64 64:ff9b::/96：内嵌 IPv4 是公网才放行
+    return isPrivateIpv4(
+      `${h[6] >> 8}.${h[6] & 255}.${h[7] >> 8}.${h[7] & 255}`,
+    );
+  }
+  if (h[0] === 0x0064 && h[1] === 0xff9b && h[2] === 1) return true; // NAT64 local-use
+  if (h[0] === 0x2001 && h[1] === 0x0000) return true; // Teredo
   return false;
 };
 
@@ -141,10 +207,21 @@ const _requestOnce = (url, options, deadline, redirectsLeft) => new Promise((res
           return reject(new Error(t("service.common.invalidUrl")));
         }
         const nextHeaders = { ...headers };
+        // 重定向后 Host 必须按新 URL 重新生成，不能沿用上一跳
+        for (const key of Object.keys(nextHeaders)) {
+          if (key.toLowerCase() === "host") delete nextHeaders[key];
+        }
         if (next.origin !== url.origin) {
           for (const key of Object.keys(nextHeaders)) {
             const lower = key.toLowerCase();
-            if (lower === "authorization" || lower === "x-api-key") delete nextHeaders[key];
+            if (
+              lower === "authorization" ||
+              lower === "x-api-key" ||
+              lower === "x-goog-api-key" ||
+              lower === "cookie" ||
+              lower === "proxy-authorization"
+            )
+              delete nextHeaders[key];
           }
         }
         return resolve(_requestOnce(next, { ...options, headers: nextHeaders }, deadline, redirectsLeft - 1));
