@@ -11,6 +11,7 @@
 // 统一先 lstat 判断，链接只删链接。
 const fs = require("node:fs");
 const path = require("node:path");
+const { assertPathInside } = require("./path-guard");
 
 const _lstat = (p) => {
   try {
@@ -77,8 +78,10 @@ const isSymlink = (p) => {
 };
 
 // 删除一个目录/文件条目：符号链接只删链接本身，绝不递归进目标目录。
+// 传入 root 时在删除前再校验一次路径边界，防止调用方漏掉名称/路径校验。
 // 返回 true 表示已删除（或本来就不存在）。
-const rmEntry = (p) => {
+const rmEntry = (p, { root } = {}) => {
+  if (root) assertPathInside(root, p);
   const st = _lstat(p);
   if (!st) return true;
   if (st.isSymbolicLink()) {

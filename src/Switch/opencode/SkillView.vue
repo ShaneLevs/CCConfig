@@ -93,7 +93,7 @@ defineExpose({ openInstallWithUrl });
 
 const openDir = () => {
   try {
-    window.services.openOpencodeSkillsDir();
+    window.utools.shellOpenPath(window.services.getOpencodeSkillsPath());
   } catch (e) {
     MessagePlugin.error(t('opencode.skill.cannotOpenDir'));
   }

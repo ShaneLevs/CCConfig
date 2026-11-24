@@ -26,6 +26,10 @@ It gives fifteen AI coding CLIs a single place to manage API providers, models, 
 - **Batch edit, import/export, appearance** — one-click URL+key updates per provider group, JSON file or obfuscated-string transfer, and a three-mode appearance setting (follow system / light / dark) with optional dark-mode animated backgrounds
 - **Bilingual UI** — Simplified Chinese and English, follows the system language by default and can be switched in Settings → General
 
+### Subscription privacy notice
+
+The subscription quota feature reads the local cookie database of browsers (Chromium-based apps such as Chrome, Edge, Brave, ego lite and Quark, plus Firefox and Safari) only after you add a subscription. On macOS it decrypts the corresponding "Safe Storage" key through the system Keychain. Cookies are stored locally with AES-256-CBC encryption and are sent only to the official domain of the subscription service (currently `open-design.ai` / `amr-api.open-design.ai`). They are never uploaded to CCConfig servers or shared with any model provider. You can remove a subscription under "Common Config → Subscription", or disable the feature in Settings; once disabled, browser cookies are no longer read.
+
 ## Supported apps
 
 | App | Config location |

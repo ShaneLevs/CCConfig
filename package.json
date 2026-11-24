@@ -1,6 +1,6 @@
 {
   "name": "ccconfig",
-  "version": "1.12.1",
+  "version": "1.13.0",
   "description": "Multi-app AI configuration manager for Claude Code, OpenCode, Pi, Codex, Kimi Code, MiniMax Code, Qoder, ZCode, Hermes, DSH, Grok Build and Command Code. Ships as a uTools plugin and a standalone desktop app (macOS / Windows).",
   "license": "MIT",
   "repository": {
@@ -45,14 +45,15 @@
   "scripts": {
     "dev": "vite",
     "postinstall": "node scripts/install-preload-deps.mjs",
-    "build": "npm run version:check && npm run i18n:check && npm run routes:check && vite build",
-    "build:app": "npm run version:check && npm run i18n:check && npm run routes:check && cross-env CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
+    "build": "npm run version:check && npm run i18n:check && npm run routes:check && npm run services:check && vite build",
+    "build:app": "npm run version:check && npm run i18n:check && npm run routes:check && npm run services:check && cross-env CCCONFIG_TARGET=app vite build && node scripts/prepare-sidecar.mjs",
     "tauri:dev": "npm run build:app && tauri dev",
     "tauri:build": "npm run build:app && tauri build && node scripts/collect-release.mjs",
     "bump": "node scripts/bump-version.mjs",
     "version:check": "node scripts/check-versions.mjs",
     "i18n:check": "node scripts/check-i18n.mjs",
     "routes:check": "node tests/smoke-app-routes-test.cjs",
+    "services:check": "node tests/smoke-service-api-test.cjs",
     "test": "node tests/run-all.cjs",
     "release:collect": "node scripts/collect-release.mjs"
   },

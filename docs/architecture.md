@@ -134,7 +134,7 @@ Claude:
     入站 POST /v1/messages（Anthropic）/ /v1/chat/completions（OpenAI Chat）/ /v1/responses（OpenAI Responses）+ GET /v1/models、GET /v1/codex/models（Codex 目录形状，1 MiB 上限，与 /v1/models 同一套模型 ID）
     出站支持 anthropic-messages / openai-completions / openai-responses，google-generative-ai 明确 400
     同协议透传（仅重写 model），跨协议经 canonical 中间格式转换（autoroute-convert/，含流式 SSE 双向转换）
-    model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；不校验 key（仅监听本机回环地址，Authorization Bearer / x-api-key 传任意值或留空均放行）
+    model 直查按勾选顺序取第一个，兼容「供应商/模型ID」消歧；推理接口校验下发给 agent 的随机 key（Authorization Bearer / x-api-key），/health 与只读模型列表放行
     模型映射（mapping 模式）：固定映射名 alias → 最多 3 个主数据模型，/v1/models 只返回映射名；首次初始化自动预置 flash / plus / pro 三行（目标留空，用户自选或删行；mappingSeeded 置位后删空不再回填）
       每个映射行的 strategy 决定多模型调配：first（默认）只用第一个；failover 按顺序尝试，前一个上游报错才切换下一个
       （只在响应头写出前可切换，流式一旦开始回传就无法改路由；切换成功后本次网关运行期间默认从成功的模型开始，网关重新启动后从第一个模型重新开始）
@@ -187,7 +187,7 @@ Claude:
     启动容错：bind 遇到 EADDRINUSE 时按 0.3/0.6/1.2/1.8/2.4/3s 退避重试（约 9s），覆盖更新 / 重装后旧 sidecar 尚未退出的窗口；真正被其他程序长期占用才报「端口已占用」
     桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行（每行最多 3 个模型与调配策略）；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库
   网关下发到 agent（dispatch.dispatchAutoRoute）= **覆盖式重建 router 供应商**，不是合并：
-    名称固定 router（同时是 Codex 的 model_providers.<id>，TOML 裸键只能英文）；baseUrl 指向网关、key 为网关占位符
+    名称固定 router（同时是 Codex 的 model_providers.<id>，TOML 裸键只能英文）；baseUrl 指向网关、key 为持久化的随机 key（推理接口会校验）
     每次下发先清空该 agent 里的 router 条目与其全部模型，再按「当前网关模型清单」整条重写，
     因此已从网关移除的模型不会残留（普通「通用模型下发」dispatchCommonModel 仍是合并语义）
     AUTOROUTE_REBUILD 为每个 agent 提供 before / clear / after 三个钩子（apis 不匹配时完全不清理，避免先删再报协议错）：

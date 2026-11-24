@@ -32,6 +32,13 @@ require.cache[require.resolve('../public/preload/services/common.js')] = {
   loaded: true,
   exports: { readCommonProviders: () => ({ providers: [PROVIDER] }) },
 }
+// 本测试用 127.0.0.1 的本地服务模拟供应商；net-guard 的公网地址限制在测试里放行。
+require.cache[require.resolve('../public/preload/services/net-guard.js')] = {
+  id: 'net-guard-stub',
+  filename: 'net-guard-stub',
+  loaded: true,
+  exports: { assertSafeUrl: (url) => new URL(url), safeLookup: undefined },
+}
 
 const connectionTest = require('../public/preload/services/connection-test.js')
 

@@ -3,9 +3,9 @@ const path = require('node:path')
 const os = require('node:os')
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const { assertSkillName, assertPathInside, assertRegisteredPath } = require('./path-guard')
 const {
   disabledSkillsDir,
-  disabledSkillPath,
   migrateDisabledSkills,
   setSkillEnabled,
 } = require('./skill-disabled')
@@ -837,14 +837,15 @@ const setCommandCodeSkillEnabled = (skillName, enabled) =>
   setSkillEnabled(CC_SKILLS_PATH(), skillName, enabled)
 
 const deleteCommandCodeSkill = (skillName, isDisabled) => {
-  const dir = CC_SKILLS_PATH()
-  const skillPath = isDisabled
-    ? disabledSkillPath(dir, skillName)
-    : path.join(dir, skillName)
-  if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
+    const name = assertSkillName(skillName)
+    const dir = CC_SKILLS_PATH()
+    const root = isDisabled ? disabledSkillsDir(dir) : dir
+    const skillPath = path.join(root, name)
+    assertPathInside(root, skillPath)
+    if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
     // 软链接只删链接本身
-    rmEntry(skillPath)
+    rmEntry(skillPath, { root })
     return { success: true }
   } catch (e) {
     return { success: false, error: e.message }
@@ -873,9 +874,20 @@ const TASTE_CATEGORY_RE = /^#{1,2}\s+(.+?)\s*$/
 
 const tasteRoot = (scope, projectRoot) => {
   if (scope === 'global') return CC_TASTE_GLOBAL_PATH()
-  const root = String(projectRoot || '').trim()
-  if (!root) throw new Error(t('serviceAgent.commandcode.tasteProjectRootRequired'))
-  return path.join(root, '.commandcode', 'taste')
+  const raw = String(projectRoot || '').trim()
+  if (!raw) throw new Error(t('serviceAgent.commandcode.tasteProjectRootRequired'))
+  const root = assertRegisteredPath(raw, listCommandCodeProjects([raw]).map((p) => p.root), os.homedir())
+  const taste = path.join(root, '.commandcode', 'taste')
+  assertPathInside(root, taste)
+  return taste
+}
+
+const assertTasteCategoryName = (name) => {
+  const value = String(name || '').trim()
+  if (!value || value === '.' || value === '..' || /[\\/]/.test(value)) {
+    throw new Error(t('serviceAgent.commandcode.tasteCategoryInvalid', { name: value }))
+  }
+  return value
 }
 
 const parseTasteEntries = (text) => {
@@ -956,7 +968,10 @@ const formatTasteEntry = (entry) => {
   return `- ${text}`
 }
 
-const categoryFileOf = (root, name) => path.join(root, name, 'taste.md')
+const categoryFileOf = (root, name) => {
+  const safe = assertTasteCategoryName(name)
+  return assertPathInside(root, path.join(root, safe, 'taste.md'))
+}
 
 // 读一个 scope 的全部分类（内联 + 引用子文件），返回扁平的 [{ name, inline, entries, filePath }]
 // 读路径宽容：项目作用域还没选目录时返回空包（页面首次进入 / 切到全局都会顺手读一次项目包），
@@ -975,7 +990,7 @@ const readTasteCategories = (scope, projectRoot) => {
     } else {
       // 引用子文件：正文在子文件里（官方布局 <category>/taste.md）
       const rel = cat.refPath.replace(/^\.\//, '')
-      const subPath = path.resolve(root, rel)
+      const subPath = assertPathInside(root, path.resolve(root, rel))
       const sub = parseTasteFile(subPath)
       // 子文件自身可能没有 # 分类标题，条目直接平铺
       const subEntries = sub.categories.length
@@ -1073,7 +1088,7 @@ const getCommandCodeTasteSummary = (projectRoot) => {
 const persistTaste = (root, mainPath, categories) => {
   const kept = new Set(categories.map((c) => String(c.name || '').trim()))
   const removeCategoryDir = (name) => {
-    const dir = path.join(root, name)
+    const dir = assertPathInside(root, path.join(root, assertTasteCategoryName(name)))
     const sub = path.join(dir, 'taste.md')
     if (fs.existsSync(sub)) {
       try { fs.unlinkSync(sub) } catch (e) { /* ignore */ }
@@ -1097,9 +1112,9 @@ const persistTaste = (root, mainPath, categories) => {
       removeCategoryDir(cat.name)
     } else {
       // 超过内联上限：写子文件，主档留引用
-      const subDir = path.join(root, cat.name)
+      const subDir = assertPathInside(root, path.join(root, assertTasteCategoryName(cat.name)))
       fs.mkdirSync(subDir, { recursive: true })
-      const subPath = path.join(subDir, 'taste.md')
+      const subPath = categoryFileOf(root, cat.name)
       const body = entries.map(formatTasteEntry).join('\n') + '\n'
       fs.writeFileSync(subPath, body, { encoding: 'utf-8' })
       lines.push(`See [${cat.name}/taste.md](./${cat.name}/taste.md)`)
@@ -1112,7 +1127,9 @@ const persistTaste = (root, mainPath, categories) => {
     dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory())
   } catch (e) { /* ignore */ }
   for (const d of dirs) {
-    if (!kept.has(d.name)) removeCategoryDir(d.name)
+    if (!kept.has(d.name)) {
+      try { removeCategoryDir(d.name) } catch (e) { /* 非法目录名不动 */ }
+    }
   }
   fs.mkdirSync(root, { recursive: true })
   fs.writeFileSync(mainPath, lines.join('\n').replace(/\n+$/, '\n'), { encoding: 'utf-8' })
@@ -1137,9 +1154,8 @@ const mutateTaste = (scope, projectRoot, fn) => {
 const validateTaste = (categories) => {
   const seen = new Set()
   for (const cat of categories) {
-    const name = String(cat.name || '').trim()
+    const name = assertTasteCategoryName(cat.name)
     if (!name) throw new Error(t('serviceAgent.commandcode.tasteCategoryRequired'))
-    if (/[\\/]/.test(name)) throw new Error(t('serviceAgent.commandcode.tasteCategoryInvalid', { name }))
     if (seen.has(name)) throw new Error(t('serviceAgent.commandcode.tasteCategoryDuplicate', { name }))
     seen.add(name)
     for (const e of cat.entries) {

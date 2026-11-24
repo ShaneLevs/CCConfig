@@ -26,6 +26,10 @@
 - **批量编辑 / 导入导出 / 外观** — 按供应商聚合一键改 URL+Key，JSON 文件或压缩加密字符串导入导出；外观支持跟随系统 / 固定浅色 / 固定深色，深色下可选动态背景特效
 - **中英双语** — 默认跟随系统语言，可在「设置 → 通用」中切换简体中文 / English
 
+### 订阅用量隐私说明
+
+订阅用量功能仅在用户添加订阅后读取本机浏览器（Chrome、Edge、Brave、ego lite、Quark 等 Chromium 系应用，以及 Firefox、Safari）的 Cookie 数据库；macOS 上会通过系统 Keychain 解密对应浏览器的 Safe Storage 密钥。Cookie 仅保存在本机并以 AES-256-CBC 加密，只会发送到该订阅服务的官方域名（当前为 `open-design.ai` / `amr-api.open-design.ai`），不会上传到 CCConfig 服务器，也不会提供给任何模型供应商。用户可在「通用配置 → 订阅」删除订阅，或在设置中关闭订阅用量；关闭后不再读取浏览器 Cookie。
+
 ## 支持的应用
 
 | 应用 | 配置文件 |

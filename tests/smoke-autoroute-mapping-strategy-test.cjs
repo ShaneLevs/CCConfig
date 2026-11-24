@@ -86,12 +86,12 @@ const startUpstream = () =>
     server.listen(0, '127.0.0.1', () => resolve(server))
   })
 
-const post = (port, payload) =>
+const post = (port, payload, authorization = 'Bearer sk-test') =>
   new Promise((resolve) => {
     const data = Buffer.from(JSON.stringify(payload))
     const req = http.request(
       `http://127.0.0.1:${port}/v1/messages`,
-      { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': data.length, authorization: 'Bearer test' } },
+      { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': data.length, ...(authorization ? { authorization } : {}) } },
       (res) => {
         let body = ''
         res.on('data', (c) => (body += c))
@@ -176,6 +176,10 @@ const setConfig = (mappings, mode = 'mapping') => {
     console.log('first 策略')
     setConfig([{ alias: 'first-only', models: [{ provider: 'mock', modelId: 'bad-1' }, { provider: 'mock', modelId: 'good-a' }], strategy: 'first' }])
     hits.length = 0
+    const noAuth = await post(port, request('first-only'), '')
+    ok(noAuth.status === 401, `无 key 请求返回 401（实际 ${noAuth.status}）`)
+    const wrongAuth = await post(port, request('first-only'), 'Bearer wrong-key')
+    ok(wrongAuth.status === 401, `错误 key 请求返回 401（实际 ${wrongAuth.status}）`)
     const r1 = await post(port, request('first-only'))
     ok(r1.status === 400, `第一个模型报错时直接失败（实际 ${r1.status}）`)
     ok(JSON.stringify(hits) === JSON.stringify(['bad-1']), `只调用第一个模型（实际 ${JSON.stringify(hits)}）`)

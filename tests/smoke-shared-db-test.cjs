@@ -74,6 +74,9 @@ const dbFiles = () => {
 }
 
 ok(!!window.ccconfigDb, 'preload 向渲染层暴露 window.ccconfigDb')
+const serviceKeys = Object.keys(window.services)
+ok(!serviceKeys.some((key) => key.startsWith('_')), 'window.services 不暴露内部下划线方法')
+ok(!serviceKeys.includes('exportConfigsToFile') && !serviceKeys.includes('importConfigsFromFile'), 'window.services 不暴露任意文件读写入口')
 eq(window.services.getNativeId(), sharedId, 'window.services.getNativeId 返回共享设备 ID')
 ok(/^[0-9a-f]{32}$/.test(sharedId), '共享设备 ID 为 32 位哈希')
 

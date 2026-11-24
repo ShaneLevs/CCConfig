@@ -34,6 +34,9 @@ global.window = {
 const subs = require('../public/preload/services/subscriptions')
 const { windowKeyOf, formatReset, writeDoc, readDoc } = subs._internal
 
+// 后续用例涉及更新订阅（会校验用户授权），先模拟用户已同意首次使用弹窗。
+subs.setSubscriptionConsent(true)
+
 let passed = 0
 let failed = 0
 const ok = (cond, name) => {

@@ -18,6 +18,39 @@
   color: var(--td-text-color-placeholder);
 }
 
+.subs-consent-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--td-warning-color);
+  border-radius: 8px;
+  color: var(--td-text-color-secondary);
+  background: var(--td-warning-color-1);
+  font-size: 12px;
+}
+
+.subs-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--td-text-color-secondary);
+}
+
+.subs-privacy p {
+  margin: 0;
+}
+
+.subs-privacy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}
+
 .subs-empty {
   padding: 60px 0;
 }

@@ -13,6 +13,9 @@
 //
 // 密钥只在 sidecar/preload 里解密，getSubscriptions() 返回给渲染层的数据不含 Cookie 原文。
 const db = require('./db')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const https = require('node:https')
 const crypto = require('./crypto')
 const { findCookies, inspectDir } = require('./browser-cookies')
@@ -32,10 +35,41 @@ const SOURCE_MANUAL = 'manual'
 const ERR_NETWORK = 'network'
 const ERR_HTTP = 'http'
 const ERR_EMPTY = 'empty'
+const ERR_DISABLED = 'disabled'
 // 手抄 Cookie 常见的格式错误（只粘了值、没带「名称=」），单独一个码以免提示成「接口没返回数据」
 const ERR_INVALID_COOKIE = 'invalid_cookie'
+const CONSENT_PREFIX = 'ccconfig_subscription_consent_'
 
 const makeError = (code, message, extra) => Object.assign(new Error(message), { code, ...extra })
+
+const consentDocId = () => `${CONSENT_PREFIX}${db.getNativeId() || ''}`
+
+const getSubscriptionConsent = () => {
+  try {
+    const doc = db.get(consentDocId())
+    return {
+      enabled: !!(doc && doc.data && doc.data.enabled === true),
+      answered: !!(doc && doc.data && doc.data.answered === true),
+    }
+  } catch (e) {
+    return { enabled: false, answered: false }
+  }
+}
+
+const setSubscriptionConsent = (enabled) => {
+  const docId = consentDocId()
+  const existing = db.get(docId)
+  const doc = { _id: docId, data: { enabled: !!enabled, answered: true }, updatedAt: Date.now() }
+  if (existing && existing._rev) doc._rev = existing._rev
+  db.put(doc)
+  return getSubscriptionConsent()
+}
+
+const requireSubscriptionConsent = () => {
+  if (!getSubscriptionConsent().enabled) {
+    throw makeError(ERR_DISABLED, 'subscription usage disabled')
+  }
+}
 
 // ==================== HTTP ====================
 
@@ -250,9 +284,38 @@ const getSubscriptions = () => readDoc().map(publicItem)
 const newId = () => `sub_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 
 // 用户手选的浏览器数据目录：去空、去重、最多 8 条（多余的无意义，且每条都会多试一次钥匙串）
+// 手选目录允许来自 pickCookieDir 的系统文件选择器，或位于已知浏览器数据根目录内；
+// 渲染层不能凭字符串直接指向任意本机目录。
+let approvedCookieDirs = new Set()
+const allowedCookieRoots = () => {
+  const home = os.homedir()
+  const roots = [
+    path.join(home, 'Library', 'Application Support'),
+    path.join(home, 'AppData', 'Local'),
+    path.join(home, 'AppData', 'Roaming'),
+    path.join(home, '.config'),
+    path.join(home, '.mozilla'),
+  ]
+  return roots.map((p) => path.resolve(p))
+}
+
 const normalizeDirs = (dirs) =>
   Array.from(
-    new Set((Array.isArray(dirs) ? dirs : []).map((d) => (typeof d === 'string' ? d.trim() : '')).filter(Boolean)),
+    new Set(
+      (Array.isArray(dirs) ? dirs : [])
+        .map((d) => (typeof d === 'string' ? d.trim() : ''))
+        .filter((d) => {
+          if (!d || !path.isAbsolute(d)) return false
+          const resolved = path.resolve(d)
+          if (approvedCookieDirs.has(resolved)) return true
+          const filename = path.basename(resolved).toLowerCase()
+          if (filename === 'cookies' || filename.endsWith('.sqlite')) return false
+          return allowedCookieRoots().some((root) => {
+            const rel = path.relative(root, resolved)
+            return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
+          })
+        }),
+    ),
   ).slice(0, 8)
 
 const cookieHeaderOf = (item) => {
@@ -303,6 +366,7 @@ const refreshOne = async (item) => {
  * 但 unauthorized 明确说明登录态没了 → 标记 cookieExpired，UI 引导重新登录。
  */
 const refreshSubscription = async (id) => {
+  requireSubscriptionConsent()
   const items = readDoc()
   const index = items.findIndex((i) => i.id === id)
   if (index < 0) throw new Error('not found')
@@ -340,6 +404,7 @@ const refreshSubscription = async (id) => {
 let refreshingAll = false
 
 const refreshAll = async ({ force = false } = {}) => {
+  requireSubscriptionConsent()
   if (refreshingAll) return getSubscriptions()
   const items = readDoc()
   const now = Date.now()
@@ -372,6 +437,7 @@ const refreshAll = async ({ force = false } = {}) => {
  * customDirs：用户手选的浏览器数据目录，优先级高于内置清单（读不到时的补救手段）。
  */
 const captureCookie = (provider, { customDirs = [] } = {}) => {
+  requireSubscriptionConsent()
   const adapter = getAdapter(provider)
   if (!adapter) return { found: false, error: 'unknown_provider' }
   const result = findCookies({
@@ -407,6 +473,7 @@ const captureCookie = (provider, { customDirs = [] } = {}) => {
 // 声明成 async：桌面版 bridge 因此走异步任务通道（不阻塞 WebView），
 // uTools 版直接 await 一个同步就能拿到的结果，两边语义一致。
 const pickCookieDir = async () => {
+  requireSubscriptionConsent()
   let picked = null
   try {
     picked = window.utools.showOpenDialog({
@@ -422,7 +489,16 @@ const pickCookieDir = async () => {
   if (!dir) return { ok: false, canceled: true }
   const info = inspectDir(dir)
   if (!info.ok) return { ok: false, dir, kind: info.kind || 'unknown', error: 'no_cookie_db' }
-  return { ok: true, dir, kind: info.kind, name: info.name, dbCount: info.dbCount }
+  const resolved = path.resolve(dir)
+  try {
+    if (!fs.statSync(resolved).isDirectory()) {
+      return { ok: false, dir, kind: info.kind || 'unknown', error: 'no_cookie_db' }
+    }
+  } catch (e) {
+    return { ok: false, dir, kind: info.kind || 'unknown', error: 'no_cookie_db' }
+  }
+  approvedCookieDirs.add(resolved)
+  return { ok: true, dir: resolved, kind: info.kind, name: info.name, dbCount: info.dbCount }
 }
 
 // 打开系统默认浏览器让用户登录（登录完回来点「读取 Cookie」即可）
@@ -445,6 +521,7 @@ const openLogin = (provider) => {
  * UI 据此弹「打开浏览器登录 → 再读取」的引导，而不是让用户手抄 Cookie。
  */
 const addSubscription = async ({ provider, label, cookie, cookieSource, cookieDirs } = {}) => {
+  requireSubscriptionConsent()
   const adapter = getAdapter(provider)
   if (!adapter) throw makeError(ERR_EMPTY, 'unknown_provider')
 
@@ -498,6 +575,7 @@ const updateSubscription = async ({ id, label, cookie, cookieSource, cookieDirs 
   if (typeof label === 'string') item.label = label
   if (cookieDirs !== undefined) item.cookieDirs = normalizeDirs(cookieDirs)
   if (cookie) {
+    requireSubscriptionConsent()
     const adapter = getAdapter(item.provider)
     if (!adapter) throw makeError(ERR_EMPTY, 'unknown_provider')
     const header = normalizeCookieInput(cookie, adapter)
@@ -633,6 +711,8 @@ const getSubscriptionsTray = () => {
 
 module.exports = {
   getProviders,
+  getSubscriptionConsent,
+  setSubscriptionConsent,
   getSubscriptions,
   addSubscription,
   updateSubscription,

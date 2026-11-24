@@ -3,11 +3,10 @@
 // 扩展市场在 pi-extensions，已装包启停在 pi-package-detail，这里统一再导出。
 const fs = require("node:fs");
 const path = require("node:path");
-const http = require("node:http");
-const https = require("node:https");
 const { execSync } = require("node:child_process");
 const usage = require("./usage");
 const { isDirEntry } = require("./fs-utils");
+const { guardedJsonRequest } = require("./net-guard");
 const { t } = require("./i18n");
 const {
   PI_DIR,
@@ -39,105 +38,56 @@ const writePiModels = (data) => writeJson(PI_MODELS_PATH(), data);
 // 真实 OpenAI 兼容端点在 /v1/models；baseUrl 已含 /v1 前缀时直接在其后拼接。
 // 依次尝试候选路径，直到拿到合法 JSON 模型列表。
 const fetchProviderModels = async (baseUrl, apiKey, timeout = 10_000) => {
-  const base = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
+  const raw = String(baseUrl || "").trim();
+  const base = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
   const root = base.endsWith("/") ? base : base + "/";
-
   const pathname = new URL(root).pathname;
   const hasV1Prefix = /\/v1\/?$/.test(pathname);
   const candidates = hasV1Prefix ? ["models"] : ["models", "v1/models"];
 
-  const tryOnce = (p) =>
-    new Promise((resolve, reject) => {
-      // 相对拼接，保留 baseUrl 自身路径（如 /v1 或代理前缀）
-      const url = new URL(p, root);
-      const mod = url.protocol === "https:" ? https : http;
-      const req = mod.get(
-        {
-          hostname: url.hostname,
-          port: url.port,
-          path: url.pathname,
-          headers: {
-            accept: "application/json",
-            // 同时带 Bearer 与 x-api-key：OpenAI 兼容中转站认 Bearer，Anthropic 原生接口认 x-api-key
-            ...(apiKey
-              ? { authorization: `Bearer ${apiKey}`, "x-api-key": apiKey }
-              : {}),
-          },
-          timeout,
-        },
-        (res) => {
-          // 重定向：跟随（location 为绝对地址时重新解析）
-          if (
-            res.statusCode >= 300 &&
-            res.statusCode < 400 &&
-            res.headers.location
-          ) {
-            res.resume();
-            return resolve(
-              fetchProviderModels(res.headers.location, apiKey, timeout),
-            );
-          }
-          // 非 2xx，或 content-type 明确不是 JSON（如中转站面板 HTML）→ 换下一个候选路径
-          const ct = (res.headers["content-type"] || "").toLowerCase();
-          if (
-            res.statusCode < 200 ||
-            res.statusCode >= 300 ||
-            (ct && !ct.includes("json"))
-          ) {
-            res.resume();
-            return reject(
-              new Error(
-                `HTTP ${res.statusCode}${ct ? ` (${ct.split(";")[0]})` : ""}`,
-              ),
-            );
-          }
-          let data = "";
-          res.on("data", (c) => (data += c));
-          res.on("end", () => {
-            try {
-              const parsed = JSON.parse(data);
-              const list = parsed.data || parsed.models || parsed;
-              if (!Array.isArray(list))
-                return reject(new Error(t("serviceAgent.pi.invalidResponse")));
-              resolve(
-                list
-                  .map((m) => {
-                    const item = typeof m === "string" ? { id: m } : m || {};
-                    const id = item.id || item.name;
-                    if (!id) return null;
-                    return {
-                      id,
-                      name: item.name || item.id || id,
-                      contextWindow:
-                        item.context_window ||
-                        item.context_length ||
-                        item.contextWindow ||
-                        item.max_context_length ||
-                        0,
-                      maxTokens: item.max_tokens || item.maxTokens || 0,
-                      reasoning: !!(
-                        item.capabilities ||
-                        item.architecture?.modality ||
-                        ""
-                      )
-                        .toString()
-                        .includes("reasoning"),
-                    };
-                  })
-                  .filter(Boolean),
-              );
-            } catch (e) {
-              reject(e);
-            }
-          });
-        },
-      );
-      req.on("error", reject);
-      req.on("timeout", () => {
-        req.destroy();
-        reject(new Error("timeout"));
-      });
+  // 相对拼接保留 baseUrl 自身路径（如 /v1 或代理前缀）；所有请求由 net-guard
+  // 统一做协议、回环/内网、DNS 解析与逐跳重定向校验。
+  const tryOnce = async (p) => {
+    const url = new URL(p, root).toString();
+    const parsed = await guardedJsonRequest(url, {
+      timeout,
+      headers: {
+        accept: "application/json",
+        // 同时带 Bearer 与 x-api-key：OpenAI 兼容中转站认 Bearer，Anthropic 原生接口认 x-api-key
+        ...(apiKey
+          ? { authorization: `Bearer ${apiKey}`, "x-api-key": apiKey }
+          : {}),
+      },
     });
+    const list = parsed.data || parsed.models || parsed;
+    if (!Array.isArray(list))
+      throw new Error(t("serviceAgent.pi.invalidResponse"));
+    return list
+      .map((m) => {
+        const item = typeof m === "string" ? { id: m } : m || {};
+        const id = item.id || item.name;
+        if (!id) return null;
+        return {
+          id,
+          name: item.name || item.id || id,
+          contextWindow:
+            item.context_window ||
+            item.context_length ||
+            item.contextWindow ||
+            item.max_context_length ||
+            0,
+          maxTokens: item.max_tokens || item.maxTokens || 0,
+          reasoning: !!(
+            item.capabilities ||
+            item.architecture?.modality ||
+            ""
+          )
+            .toString()
+            .includes("reasoning"),
+        };
+      })
+      .filter(Boolean);
+  };
 
   let lastErr = null;
   for (const p of candidates) {

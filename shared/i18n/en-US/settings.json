@@ -51,6 +51,12 @@
       "desc": "How token counts are abbreviated in usage statistics.",
       "compact": "K / M / B",
       "cn": "Wan / Yi"
+    },
+    "subscriptionConsent": {
+      "title": "Subscription usage",
+      "desc": "Allow the plugin to read local browser cookies to query usage for your subscriptions. When disabled, browser cookies are not read.",
+      "enabled": "Subscription usage enabled",
+      "disabled": "Subscription usage disabled"
     }
   }
 }

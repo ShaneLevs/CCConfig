@@ -1,16 +1,56 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Select, Option, RadioGroup, RadioButton } from 'tdesign-vue-next'
+import { Select, Option, RadioGroup, RadioButton, Switch, MessagePlugin } from 'tdesign-vue-next'
 import { useLocale } from '../composables/useLocale'
 import { useAppearance } from '../composables/useAppearance'
 import { useUnitFormat } from '../composables/useUnitFormat'
 
-// 设置弹窗「通用」页签：语言 + 主题模式 + 统计单位 + 深色背景特效（都用下拉 / 单选，避免一排按钮占宽）
+// 设置弹窗「通用」页签：语言 + 主题模式 + 统计单位 + 订阅 Cookie 授权 + 深色背景特效
 const { t } = useI18n()
 const { preference, setPreference } = useLocale()
 const { themeMode, setThemeMode, backgroundEffect, setBackgroundEffect } = useAppearance()
 const { unitMode, setUnitMode } = useUnitFormat()
+
+const subscriptionConsent = ref(false)
+const subscriptionConsentSaving = ref(false)
+let consentRequestId = 0
+
+const loadSubscriptionConsent = () => {
+  const requestId = ++consentRequestId
+  try {
+    const state = window.services?.getSubscriptionConsent?.() || {}
+    if (requestId === consentRequestId) subscriptionConsent.value = !!state.enabled
+  } catch (e) {
+    if (requestId === consentRequestId) subscriptionConsent.value = false
+  }
+}
+
+const toggleSubscriptionConsent = (value) => {
+  const requestId = ++consentRequestId
+  subscriptionConsentSaving.value = true
+  try {
+    const state = window.services?.setSubscriptionConsent?.(!!value) || { enabled: !!value }
+    if (requestId === consentRequestId) subscriptionConsent.value = !!state.enabled
+    window.dispatchEvent(new CustomEvent('ccconfig:subscription-consent-changed', { detail: state }))
+  } catch (e) {
+    if (requestId === consentRequestId) subscriptionConsent.value = !value
+    MessagePlugin.error(e.message || t('common.saveFailed'))
+  } finally {
+    subscriptionConsentSaving.value = false
+  }
+}
+
+onMounted(() => {
+  loadSubscriptionConsent()
+  window.addEventListener('ccconfig:subscription-consent-changed', loadSubscriptionConsent)
+  window.addEventListener('focus', loadSubscriptionConsent)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('ccconfig:subscription-consent-changed', loadSubscriptionConsent)
+  window.removeEventListener('focus', loadSubscriptionConsent)
+})
 
 const languageOptions = computed(() => [
   { label: t('settings.language.system'), value: 'system' },
@@ -107,6 +147,20 @@ const backgroundOptions = computed(() => [
           {{ opt.label }}
         </RadioButton>
       </RadioGroup>
+    </div>
+
+    <div class="settings-divider" />
+
+    <div class="settings-row">
+      <div class="settings-label">
+        <div class="settings-title">{{ t('settings.subscriptionConsent.title') }}</div>
+        <div class="settings-desc">{{ t('settings.subscriptionConsent.desc') }}</div>
+      </div>
+      <Switch
+        :model-value="subscriptionConsent"
+        :loading="subscriptionConsentSaving"
+        @change="toggleSubscriptionConsent"
+      />
     </div>
 
     <div class="settings-divider" />

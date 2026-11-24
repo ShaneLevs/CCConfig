@@ -69,8 +69,6 @@ const {
   deleteMcpServer,
   getClaudeMcpPath,
   openClaudeMcpFile,
-  exportConfigsToFile,
-  importConfigsFromFile,
   compressConfigs,
   decompressConfigs,
   saveOverriddenEnv,
@@ -141,24 +139,39 @@ window.services = {
   getOverriddenEnv,
   saveHeatmapHistory,
   getHeatmapHistory,
-  exportConfigsToFile,
-  importConfigsFromFile,
   compressConfigs,
   decompressConfigs,
   encryptString,
   decryptString,
 
   // ==================== Skills（扫描 / 启停 / 路径） ====================
-  ...skills,
+  // 显式列出对外方法，避免 ...skills 把模块内部辅助函数一起挂到 window。
+  getSkills: skills.getSkills,
+  disableSkill: skills.disableSkill,
+  enableSkill: skills.enableSkill,
+  deleteSkill: skills.deleteSkill,
+  disableProjectSkill: skills.disableProjectSkill,
+  enableProjectSkill: skills.enableProjectSkill,
+  deleteProjectSkill: skills.deleteProjectSkill,
+  moveProjectSkillToGlobal: skills.moveProjectSkillToGlobal,
+  getSkillMdPath: skills.getSkillMdPath,
+  getSkillDirPath: skills.getSkillDirPath,
+  getSkillsPath: skills.getSkillsPath,
+  openProjectSkillsDir: skills.openProjectSkillsDir,
 
   // ==================== Skills Install（SkillHub / ModelScope → Claude / OpenCode / 通用） ====================
   ...skillsInstall,
 
   // ==================== Skills.sh（详情页链接 / npx 命令 → 通用 ~/.agents/skills） ====================
-  ...skillsSh,
+  fetchSkillsShInfo: skillsSh.fetchSkillsShInfo,
+  installCommonSkillFromSkillsSh: skillsSh.installCommonSkillFromSkillsSh,
+  isSkillsShInput: skillsSh.isSkillsShInput,
 
   // ==================== Claude Usage（JSONL 统计 / 热力图 / MCP 调用） ====================
-  ...claudeUsage,
+  readClaudeUsage: claudeUsage.readClaudeUsage,
+  readPersistedUsage: claudeUsage.readPersistedUsage,
+  getMcpUsage: claudeUsage.getMcpUsage,
+  copyClaudeCommand: claudeUsage.copyClaudeCommand,
 
   // ==================== Usage Async（后台线程统计，避免阻塞渲染层） ====================
   ...usageAsync,
@@ -378,6 +391,7 @@ window.services = {
   syncCodexModelCatalog: codex.syncCodexModelCatalog,
   disableCodexCatalog: codex.disableCodexCatalog,
   openCodexDir: codex.openCodexDir,
+  resetCodexConfig: codex.resetCodexConfig,
   // Promise：实际执行 codex --version，不再把残留的 ~/.codex 目录当作已安装
   isCodexInstalled: codex.isCodexInstalled,
   readCodexUsage: codex.readCodexUsage,
@@ -852,6 +866,8 @@ window.services = {
 
   // ==================== 订阅用量（读本机浏览器登录态查第三方套餐用量） ====================
   getSubscriptionProviders: subscriptions.getProviders,
+  getSubscriptionConsent: subscriptions.getSubscriptionConsent,
+  setSubscriptionConsent: subscriptions.setSubscriptionConsent,
   getSubscriptions: subscriptions.getSubscriptions,
   addSubscription: subscriptions.addSubscription,
   updateSubscription: subscriptions.updateSubscription,
@@ -872,6 +888,18 @@ window.services = {
     if (panelSupport.isSupported()) panel.handleEnter(action)
   },
 };
+
+// 静态允许清单是 window.services 的唯一对外边界：构建期检查会比对这里实际挂出的键。
+try {
+  const apiManifest = require("./services/api-manifest");
+  const allowed = new Set(Object.values(apiManifest).flat());
+  for (const key of Object.keys(window.services)) {
+    if (!allowed.has(key)) delete window.services[key];
+  }
+} catch (e) {
+  console.error("[services] API manifest 装载失败", e);
+  throw e;
+}
 
 // ==================== 智能体启停指令同步：生命周期自愈 ====================
 // 注意：uTools API 没有 onPluginReady 回调（误用会抛 TypeError 并中断后续注册，

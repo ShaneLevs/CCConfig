@@ -4,9 +4,9 @@ const path = require("node:path");
 const crypto = require("./crypto");
 const { t } = require("./i18n");
 const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
+const { assertSkillName, assertPathInside } = require("./path-guard");
 const {
   disabledSkillsDir,
-  disabledSkillPath,
   moveEntry,
   migrateDisabledSkills,
   setSkillEnabled,
@@ -297,16 +297,27 @@ const toDisplayMcpPath = (p) => {
   return p.startsWith(home + path.sep) ? "~/" + p.slice(home.length + 1) : p;
 };
 
-// 支持 ~ 前缀与相对路径，解析为绝对路径
+// 支持 ~ 前缀与相对路径，解析为绝对路径；仅接受用户主目录内的 .json 文件。
 const resolveMcpPath = (p) => {
   const raw = String(p || "").trim();
   if (!raw) return "";
-  if (raw === "~") return mcpHomePath();
-  if (raw.startsWith("~/") || raw.startsWith("~\\"))
-    return path.join(mcpHomePath(), raw.slice(2));
-  return path.isAbsolute(raw)
-    ? path.normalize(raw)
-    : path.join(mcpHomePath(), raw);
+  let resolved;
+  if (raw === "~") resolved = mcpHomePath();
+  else if (raw.startsWith("~/") || raw.startsWith("~\\"))
+    resolved = path.join(mcpHomePath(), raw.slice(2));
+  else if (path.isAbsolute(raw)) resolved = path.normalize(raw);
+  else resolved = path.join(mcpHomePath(), raw);
+  resolved = path.resolve(resolved);
+  const home = path.resolve(mcpHomePath());
+  const rel = path.relative(home, resolved);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(t("service.common.invalidPath"));
+  }
+  if (!/\.json$/i.test(resolved)) {
+    throw new Error(t("service.common.mcpOnlyJson", { paths: resolved }));
+  }
+  assertPathInside(home, resolved);
+  return resolved;
 };
 
 // 当前选中的本地 MCP 存放路径列表。未配置 → 默认 [~/.mcp.json]（兼容旧行为）
@@ -315,10 +326,12 @@ const getLocalMcpTargetPaths = () => {
     `${DOC_MCP_TARGETS}_${db.getNativeId() || ""}`,
     null,
   );
-  const list =
-    data && Array.isArray(data.paths)
-      ? data.paths.map(resolveMcpPath).filter(Boolean)
-      : [];
+  const list = [];
+  if (data && Array.isArray(data.paths)) {
+    for (const p of data.paths) {
+      try { list.push(resolveMcpPath(p)) } catch (e) { /* 历史越界档忽略 */ }
+    }
+  }
   const uniq = [...new Set(list)];
   return uniq.length ? uniq : [path.join(mcpHomePath(), ".mcp.json")];
 };
@@ -839,17 +852,22 @@ const setCommonSkillEnabled = (skillName, enabled) => {
 
 // 删除通用 Skill（已禁用时从停用目录删除）
 const deleteCommonSkill = (skillName) => {
-  if (!skillName) return { success: false, error: t("service.skill.nameRequired") };
-  const candidates = [
-    path.join(COMMON_SKILLS_DIR(), skillName),
-    disabledSkillPath(COMMON_SKILLS_DIR(), skillName),
-  ];
-  const dir = candidates.find((p) => fs.existsSync(p));
-  if (!dir) return { success: false, error: t("service.skill.dirMissing") };
   try {
+    const name = assertSkillName(skillName);
+    const root = COMMON_SKILLS_DIR();
+    const disabledRoot = disabledSkillsDir(root);
+    const candidates = [
+      { path: path.join(root, name), root },
+      { path: path.join(disabledRoot, name), root: disabledRoot },
+    ];
+    const found = candidates.find((item) => {
+      assertPathInside(item.root, item.path);
+      return fs.existsSync(item.path);
+    });
+    if (!found) return { success: false, error: t("service.skill.dirMissing") };
     // 软链接只删链接本身，不动源目录
-    rmEntry(dir);
-    removeSkillFromScenes(skillName);
+    rmEntry(found.path, { root: found.root });
+    removeSkillFromScenes(name);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };

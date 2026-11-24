@@ -4,9 +4,9 @@ const os = require('node:os')
 const { parse: parseToml, stringify: stringifyToml } = require('smol-toml')
 const { t } = require("./i18n")
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const { assertSkillName, assertPathInside } = require('./path-guard')
 const {
   disabledSkillsDir,
-  disabledSkillPath,
   migrateDisabledSkills,
   setSkillEnabled,
 } = require('./skill-disabled')
@@ -791,14 +791,15 @@ const setGrokSkillEnabled = (skillName, enabled) =>
   setSkillEnabled(GROK_SKILLS_PATH(), skillName, enabled)
 
 const deleteGrokSkill = (skillName, isDisabled) => {
-  const dir = GROK_SKILLS_PATH()
-  const skillPath = isDisabled
-    ? disabledSkillPath(dir, skillName)
-    : path.join(dir, skillName)
-  if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
+    const name = assertSkillName(skillName)
+    const dir = GROK_SKILLS_PATH()
+    const root = isDisabled ? disabledSkillsDir(dir) : dir
+    const skillPath = path.join(root, name)
+    assertPathInside(root, skillPath)
+    if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
     // 软链接只删链接本身
-    rmEntry(skillPath)
+    rmEntry(skillPath, { root })
     return { success: true }
   } catch (e) {
     return { success: false, error: e.message }

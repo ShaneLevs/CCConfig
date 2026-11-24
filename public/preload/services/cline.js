@@ -4,9 +4,9 @@ const os = require('node:os')
 const crypto = require('node:crypto')
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const { assertSkillName, assertPathInside } = require('./path-guard')
 const {
   disabledSkillsDir,
-  disabledSkillPath,
   migrateDisabledSkills,
   setSkillEnabled,
 } = require('./skill-disabled')
@@ -954,18 +954,15 @@ const setClineSkillEnabled = (skillName, enabled) =>
   setSkillEnabled(skillsPath(), skillName, enabled)
 
 const deleteClineSkill = (skillName, isDisabled) => {
-  const name = String(skillName || '').trim()
-  if (!name || name === SKILL_DISABLED_DIR || name.includes(path.sep) || name.includes('/')) {
-    return { success: false, error: t('service.skill.notFound') }
-  }
-  const dir = skillsPath()
-  const skillPath = isDisabled
-    ? disabledSkillPath(dir, name)
-    : path.join(dir, name)
-  if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
   try {
+    const name = assertSkillName(skillName)
+    const dir = skillsPath()
+    const root = isDisabled ? disabledSkillsDir(dir) : dir
+    const skillPath = path.join(root, name)
+    assertPathInside(root, skillPath)
+    if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
     // 软链接只删链接本身
-    rmEntry(skillPath)
+    rmEntry(skillPath, { root })
     return { success: true }
   } catch (e) {
     return { success: false, error: e.message }

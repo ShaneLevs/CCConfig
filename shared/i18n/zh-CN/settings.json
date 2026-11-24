@@ -51,6 +51,12 @@
       "desc": "使用统计中数字的缩写方式。",
       "compact": "K / M / B",
       "cn": "万 / 亿"
+    },
+    "subscriptionConsent": {
+      "title": "订阅用量",
+      "desc": "允许插件读取本机浏览器 Cookie，用于查询已订阅服务的用量。关闭后不再读取浏览器 Cookie。",
+      "enabled": "已启用订阅用量",
+      "disabled": "已关闭订阅用量"
     }
   }
 }

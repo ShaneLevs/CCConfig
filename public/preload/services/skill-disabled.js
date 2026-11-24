@@ -13,6 +13,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { isDirEntry, rmEntry } = require("./fs-utils");
+const { assertSkillName } = require("./path-guard");
 const { t } = require("./i18n");
 
 const DISABLED_DIR_NAME = ".disabled";
@@ -140,20 +141,14 @@ const listDisabledSkillNames = (skillsRoot) => {
     .map((e) => e.name);
 };
 
-const isValidSkillName = (name) =>
-  !!name &&
-  name !== "." &&
-  name !== ".." &&
-  name !== DISABLED_DIR_NAME &&
-  !name.includes(path.sep) &&
-  !name.includes("/");
-
 // 启用 / 停用 = 在 skills 根目录与新停用目录之间移动条目
 const setSkillEnabled = (skillsRoot, skillName, enabled) => {
   migrateDisabledSkills(skillsRoot);
-  const name = String(skillName || "").trim();
-  if (!isValidSkillName(name)) {
-    return { success: false, error: t("service.skill.notFound") };
+  let name;
+  try {
+    name = assertSkillName(skillName);
+  } catch (e) {
+    return { success: false, error: e.message };
   }
   const from = enabled
     ? disabledSkillPath(skillsRoot, name)

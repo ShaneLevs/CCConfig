@@ -11,6 +11,7 @@ const cline = require("./cline");
 const commandCode = require("./command-code");
 const { t } = require("./i18n");
 const { isDirEntry, rmEntry } = require("./fs-utils");
+const { assertSkillName, assertPathInside } = require("./path-guard");
 
 // ==================== SkillHub API 辅助 ====================
 const SKILLHUB_API_BASE = "https://api.skillhub.cn";
@@ -163,10 +164,19 @@ function _cleanupTempDir() {
     fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
+// 下载包/页面里的名字先净化成合法目录名，避免 SKILL.md 的 name 字段带路径分隔符。
+function _safeInstallName(value, fallback = "skill") {
+  const sanitized = String(value || "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "");
+  return assertSkillName(sanitized || fallback);
+}
+
 async function installFromSkillhub(targetBase, slug, version, namespace, onProgress) {
   const tempDir = _tempInstallDir();
-  const zipPath = path.join(tempDir, `${slug}-${version}.zip`);
-  const extractDir = path.join(tempDir, slug);
+  const safeSlug = _safeInstallName(slug, "skill");
+  const zipPath = path.join(tempDir, `${safeSlug}-${String(version || "latest").replace(/[^A-Za-z0-9._-]/g, "-")}.zip`);
+  const extractDir = path.join(tempDir, safeSlug);
 
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
   if (!fs.existsSync(extractDir))
@@ -179,7 +189,8 @@ async function installFromSkillhub(targetBase, slug, version, namespace, onProgr
   _extractZip(zipPath, extractDir);
 
   const { skillInfo, nameFromMd } = _pickShallowestSkill(extractDir);
-  const skillName = nameFromMd || slug;
+  const skillName = _safeInstallName(nameFromMd || safeSlug, safeSlug);
+  assertPathInside(targetBase, path.join(targetBase, skillName));
   const targetDir = path.join(targetBase, skillName);
 
   fs.rmSync(zipPath, { force: true });
@@ -193,10 +204,10 @@ async function installFromSkillhub(targetBase, slug, version, namespace, onProgr
 }
 
 async function installFromModelScope(targetBase, skillPath, onProgress) {
-  const encodedPath = skillPath.replace(/@/g, "%40");
+  const encodedPath = String(skillPath || "").replace(/@/g, "%40");
   const zipUrl = `https://www.modelscope.cn/skills/${encodedPath}/archive/zip/master.zip`;
   const tempDir = _tempInstallDir();
-  const safeName = skillPath.replace(/[/@]/g, "-");
+  const safeName = _safeInstallName(String(skillPath || "").replace(/[/@]/g, "-"), "skill");
   const zipPath = path.join(tempDir, `${safeName}.zip`);
   const extractDir = path.join(tempDir, safeName);
 
@@ -220,7 +231,8 @@ async function installFromModelScope(targetBase, skillPath, onProgress) {
   _extractZip(zipPath, extractDir);
 
   const { skillInfo, nameFromMd } = _pickShallowestSkill(extractDir);
-  const skillName = nameFromMd || skillPath.split("/").pop();
+  const skillName = _safeInstallName(nameFromMd || String(skillPath || "").split("/").pop(), safeName);
+  assertPathInside(targetBase, path.join(targetBase, skillName));
   const targetDir = path.join(targetBase, skillName);
 
   fs.unlinkSync(zipPath);
@@ -234,13 +246,16 @@ async function installFromModelScope(targetBase, skillPath, onProgress) {
 }
 
 function completeInstall(targetBase, skillName, extractDir) {
-  const targetDir = path.join(targetBase, skillName);
+  const name = assertSkillName(skillName);
+  const source = assertPathInside(_tempInstallDir(), extractDir);
+  const targetDir = path.join(targetBase, name);
+  assertPathInside(targetBase, targetDir);
   if (!fs.existsSync(targetBase))
     fs.mkdirSync(targetBase, { recursive: true });
   // 已存在的目标若是软链接（场景：用软链接挂载的 Skill 被重装），
   // 只删链接本身，绝不递归进去把源目录删掉。
-  if (fs.existsSync(targetDir)) rmEntry(targetDir);
-  fs.renameSync(extractDir, targetDir);
+  if (fs.existsSync(targetDir)) rmEntry(targetDir, { root: targetBase });
+  fs.renameSync(source, targetDir);
   _cleanupTempDir();
   return true;
 }

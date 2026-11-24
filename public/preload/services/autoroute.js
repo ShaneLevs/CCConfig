@@ -49,9 +49,26 @@ const DEFAULT_MAPPING_STRATEGY = "first";
 const PRESET_ALIASES = ["flash", "plus", "pro"];
 const SOURCE_OF_API = { "anthropic-messages": "anthropic", "openai-completions": "chat", "openai-responses": "responses" };
 
-// 下发给 agent 的占位 key：网关不校验 key，但部分 agent（Codex / Claude）要求 apiKey / auth token 非空，
-// 所以仍保留生成逻辑，仅用于 dispatch.js 写配置。
+// 下发给 agent 的随机 key：所有消耗供应商额度的请求都必须携带它。
+// 部分 agent（Codex / Claude）还要求 apiKey / auth token 非空，因此同时用于 dispatch.js 写配置。
 const generateKey = () => "sk-ccr-" + crypto.randomBytes(16).toString("hex");
+
+const gatewayTokenOf = (req) => {
+  const auth = String((req.headers && req.headers.authorization) || "");
+  const bearer = auth.match(/^Bearer\s+(.+)$/i);
+  if (bearer) return bearer[1].trim();
+  const apiKey = req.headers && req.headers["x-api-key"];
+  return typeof apiKey === "string" ? apiKey.trim() : "";
+};
+
+const gatewayAuthorized = (req, config) => {
+  const expected = String((config && config.key) || "");
+  const actual = gatewayTokenOf(req);
+  if (!expected || !actual) return false;
+  const a = Buffer.from(actual);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
 
 // ==================== 配置（uTools DB，按电脑隔离） ====================
 
@@ -135,7 +152,10 @@ const readAutoRouteConfig = () => {
   const config = sanitizeConfig({ ...DEFAULT_CONFIG, ...data });
   if (!Array.isArray(config.selection)) config.selection = [];
   if (typeof config.port !== "number" || config.port < 1 || config.port > 65535) config.port = DEFAULT_CONFIG.port;
-  if (!config.key) config.key = generateKey(); // 旧配置补占位符，仅用于下发
+  if (!config.key) {
+    config.key = generateKey(); // 旧配置补随机 key
+    needsPersist = true; // 必须写回：否则每次读取都会换 key，已下发的 Agent 会立刻鉴权失败
+  }
   // 模型映射首次初始化：用户从未碰过映射（mappingSeeded 未置位）且当前没有任何映射时，
   // 预置 flash / plus / pro 三行（目标留空，由用户在页面选或删），并立刻落库，
   // 保证用户把三行删空后不会被反复回填。
@@ -786,8 +806,15 @@ const handleRequest = async (req, res) => {
       return;
     }
 
-    // 不校验 key：网关只监听本机回环地址，供本机 agent 直接调用，任意 Authorization / x-api-key
-    // 或完全不传都放行（config.key 仅作为下发给 agent 的占位符，见 dispatch.js）。
+    // 健康检查和模型列表不消耗供应商额度，保持放行；推理接口要求下发给 agent 的随机 key。
+    // 这样同机其他进程即使知道端口，也不能直接调用并消耗用户额度。
+    const isPublicRead =
+      method === "GET" &&
+      ["/v1/models", "/models", "/v1/codex/models", "/codex/models"].includes(path);
+    if (!isPublicRead && !gatewayAuthorized(req, config)) {
+      fail(sourceProtocol, 401, t("serviceAgent.autoroute.unauthorized"));
+      return;
+    }
 
     if (method === "GET" && (path === "/v1/models" || path === "/models")) {
       const data = listGatewayModels(resolveAutoRouteModels(config), config).map(({ id, provider }) => ({

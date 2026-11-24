@@ -9,14 +9,29 @@ const { _buildProjectPathMap } = require("./claude-usage");
 const { isDirEntry, countEntries, rmEntry } = require("./fs-utils");
 const {
   disabledSkillsDir,
-  disabledSkillPath,
   migrateDisabledSkills,
   setSkillEnabled,
 } = require("./skill-disabled");
+const { assertSkillName, assertPathInside, assertRegisteredPath } = require("./path-guard");
 
 // 缓存：签名 = 技能目录 mtime:disabled 目录 mtime；projectPathMap 只构建一次
 let _skillsCache = null;
 let _cachedProjectPathMap = null;
+
+const _getProjectRegistry = () => {
+  const homeDir = window.utools.getPath("home");
+  const projectsDir = path.join(homeDir, ".claude", "projects");
+  if (!_cachedProjectPathMap) _cachedProjectPathMap = _buildProjectPathMap(projectsDir);
+  const paths = [..._cachedProjectPathMap.values()].filter(
+    (p) => typeof p === "string" && p && p !== "unknown" && path.isAbsolute(p),
+  );
+  return { homeDir, paths };
+};
+
+const _assertProjectPath = (projectPath) => {
+  const { homeDir, paths } = _getProjectRegistry();
+  return assertRegisteredPath(projectPath, paths, homeDir);
+};
 
 function getSkills() {
   try {
@@ -136,10 +151,16 @@ function getSkills() {
           if (
             !projectPath ||
             projectPath === "unknown" ||
+            !path.isAbsolute(projectPath) ||
             !fs.existsSync(projectPath)
           )
             continue;
-          if (path.resolve(projectPath) === path.resolve(homeDir)) continue;
+          const resolvedProject = path.resolve(projectPath);
+          if (
+            resolvedProject === path.resolve(homeDir) ||
+            path.dirname(resolvedProject) === resolvedProject
+          )
+            continue;
           const projectSkillsDir = path.join(
             projectPath,
             ".claude",
@@ -281,13 +302,14 @@ function enableSkill(skillName) {
 
 function deleteSkill(skillName, isDisabled) {
   try {
-    const skillPath = isDisabled
-      ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
-      : path.join(CLAUDE_SKILLS_PATH, skillName);
+    const name = assertSkillName(skillName);
+    const root = isDisabled ? disabledSkillsDir(CLAUDE_SKILLS_PATH) : CLAUDE_SKILLS_PATH;
+    const skillPath = path.join(root, name);
+    assertPathInside(root, skillPath);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
     // 软链接只删链接本身
-    rmEntry(skillPath);
+    rmEntry(skillPath, { root });
     _skillsCache = null;
     return { success: true };
   } catch (error) {
@@ -296,37 +318,44 @@ function deleteSkill(skillName, isDisabled) {
 }
 
 function disableProjectSkill(skillName, projectPath) {
-  const result = setSkillEnabled(
-    path.join(projectPath, ".claude", "skills"),
-    skillName,
-    false,
-  );
-  if (result.success) _skillsCache = null;
-  return result;
+  try {
+    const project = _assertProjectPath(projectPath);
+    const skillsRoot = path.join(project, ".claude", "skills");
+    assertPathInside(project, skillsRoot);
+    const result = setSkillEnabled(skillsRoot, skillName, false);
+    if (result.success) _skillsCache = null;
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 function enableProjectSkill(skillName, projectPath) {
-  const result = setSkillEnabled(
-    path.join(projectPath, ".claude", "skills"),
-    skillName,
-    true,
-  );
-  if (result.success) _skillsCache = null;
-  return result;
+  try {
+    const project = _assertProjectPath(projectPath);
+    const skillsRoot = path.join(project, ".claude", "skills");
+    assertPathInside(project, skillsRoot);
+    const result = setSkillEnabled(skillsRoot, skillName, true);
+    if (result.success) _skillsCache = null;
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 function deleteProjectSkill(skillName, projectPath, isDisabled) {
   try {
-    const skillPath = isDisabled
-      ? disabledSkillPath(
-          path.join(projectPath, ".claude", "skills"),
-          skillName,
-        )
-      : path.join(projectPath, ".claude", "skills", skillName);
+    const project = _assertProjectPath(projectPath);
+    const name = assertSkillName(skillName);
+    const skillsRoot = path.join(project, ".claude", "skills");
+    assertPathInside(project, skillsRoot);
+    const root = isDisabled ? disabledSkillsDir(skillsRoot) : skillsRoot;
+    const skillPath = path.join(root, name);
+    assertPathInside(root, skillPath);
     if (!fs.existsSync(skillPath))
       return { success: false, error: t("service.skill.notFound") };
     // 软链接只删链接本身
-    rmEntry(skillPath);
+    rmEntry(skillPath, { root });
     _skillsCache = null;
     return { success: true };
   } catch (error) {
@@ -336,8 +365,14 @@ function deleteProjectSkill(skillName, projectPath, isDisabled) {
 
 function moveProjectSkillToGlobal(skillName, projectPath) {
   try {
-    const srcPath = path.join(projectPath, ".claude", "skills", skillName);
-    const destPath = path.join(CLAUDE_SKILLS_PATH, skillName);
+    const project = _assertProjectPath(projectPath);
+    const name = assertSkillName(skillName);
+    const srcRoot = path.join(project, ".claude", "skills");
+    assertPathInside(project, srcRoot);
+    const srcPath = path.join(srcRoot, name);
+    const destPath = path.join(CLAUDE_SKILLS_PATH, name);
+    assertPathInside(srcRoot, srcPath);
+    assertPathInside(CLAUDE_SKILLS_PATH, destPath);
     if (!fs.existsSync(srcPath))
       return { success: false, error: t("service.skill.sourceNotFound") };
     if (fs.existsSync(destPath))
@@ -353,19 +388,18 @@ function moveProjectSkillToGlobal(skillName, projectPath) {
 
 function getSkillMdPath(skillName, scope, projectPath, isDisabled) {
   try {
-    let skillDir;
+    const name = assertSkillName(skillName);
+    let root;
     if (scope === "project") {
-      skillDir = isDisabled
-        ? disabledSkillPath(
-            path.join(projectPath, ".claude", "skills"),
-            skillName,
-          )
-        : path.join(projectPath, ".claude", "skills", skillName);
+      const project = _assertProjectPath(projectPath);
+      root = path.join(project, ".claude", "skills");
+      assertPathInside(project, root);
     } else {
-      skillDir = isDisabled
-        ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
-        : path.join(CLAUDE_SKILLS_PATH, skillName);
+      root = CLAUDE_SKILLS_PATH;
     }
+    const skillDir = path.join(isDisabled ? disabledSkillsDir(root) : root, name);
+    const actualRoot = isDisabled ? disabledSkillsDir(root) : root;
+    assertPathInside(actualRoot, skillDir);
     const mdPath = path.join(skillDir, "SKILL.md");
     if (!fs.existsSync(mdPath))
       return { success: false, error: t("service.skill.skillMdMissing") };
@@ -377,19 +411,18 @@ function getSkillMdPath(skillName, scope, projectPath, isDisabled) {
 
 function getSkillDirPath(skillName, scope, projectPath, isDisabled) {
   try {
-    let skillDir;
+    const name = assertSkillName(skillName);
+    let root;
     if (scope === "project") {
-      skillDir = isDisabled
-        ? disabledSkillPath(
-            path.join(projectPath, ".claude", "skills"),
-            skillName,
-          )
-        : path.join(projectPath, ".claude", "skills", skillName);
+      const project = _assertProjectPath(projectPath);
+      root = path.join(project, ".claude", "skills");
+      assertPathInside(project, root);
     } else {
-      skillDir = isDisabled
-        ? disabledSkillPath(CLAUDE_SKILLS_PATH, skillName)
-        : path.join(CLAUDE_SKILLS_PATH, skillName);
+      root = CLAUDE_SKILLS_PATH;
     }
+    const actualRoot = isDisabled ? disabledSkillsDir(root) : root;
+    const skillDir = path.join(actualRoot, name);
+    assertPathInside(actualRoot, skillDir);
     if (!fs.existsSync(skillDir))
       return { success: false, error: t("service.skill.folderMissing") };
     return { success: true, path: skillDir };
@@ -405,9 +438,15 @@ function getSkillsPath() {
 }
 
 function openProjectSkillsDir(projectPath) {
-  const skillsDir = path.join(projectPath, ".claude", "skills");
-  if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true });
-  window.utools.shellOpenPath(skillsDir);
+  try {
+    const project = _assertProjectPath(projectPath);
+    const skillsDir = path.join(project, ".claude", "skills");
+    assertPathInside(project, skillsDir);
+    if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true });
+    window.utools.shellOpenPath(skillsDir);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 module.exports = {

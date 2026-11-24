@@ -233,6 +233,14 @@ check('skill 启停 .disabled 往返', () => {
 
 // ==================== Taste ====================
 const projRoot = path.join(tmp, 'proj')
+// 项目级 Taste 只接受已登记项目目录：把测试项目登记到 Command Code 会话日志里。
+fs.mkdirSync(path.join(tmp, 'projects', 'proj-slug'), { recursive: true })
+fs.writeFileSync(
+  path.join(tmp, 'projects', 'proj-slug', 'session.jsonl'),
+  JSON.stringify({ type: 'session', version: 3, id: 'proj-session', cwd: projRoot }) + '\n',
+  'utf-8',
+)
+fs.mkdirSync(projRoot, { recursive: true })
 check('taste 初始化 + 内联写入', () => {
   cc.initCommandCodeTaste('project', projRoot)
   cc.addCommandCodeTasteEntry('project', projRoot, 'javascript', 'Use const instead of let. Confidence: 0.90', 0.9)

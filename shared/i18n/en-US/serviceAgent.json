@@ -152,6 +152,7 @@
       "saveConfigFailedReason": "Failed to save the gateway configuration: {message}",
       "invalidUpstreamUrl": "Invalid upstream URL: {url}",
       "upstreamRequestFailed": "Upstream request failed",
+      "unauthorized": "Gateway authentication failed. Re-dispatch the agent configuration.",
       "upstreamTimeout": "Upstream did not return response headers within {seconds}s; the request was aborted",
       "unknownEndpoint": "Unknown endpoint: {method} {path}",
       "invalidJsonBody": "Request body is not valid JSON",

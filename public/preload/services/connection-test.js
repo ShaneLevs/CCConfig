@@ -6,6 +6,7 @@
 const http = require("node:http");
 const https = require("node:https");
 const { t } = require("./i18n");
+const { assertSafeUrl, safeLookup } = require("./net-guard");
 const { readCommonProviders } = require("./common");
 
 const REQUEST_TIMEOUT_MS = 30000;
@@ -260,9 +261,9 @@ const requestModel = (provider, model, api) =>
     const start = (url, redirectCount) => {
       let parsed;
       try {
-        parsed = new URL(url);
+        parsed = assertSafeUrl(url);
       } catch (e) {
-        failWith(t("service.connectionTest.invalidBaseUrl"));
+        failWith(e.message || t("service.connectionTest.invalidBaseUrl"));
         return;
       }
       const transport = parsed.protocol === "https:" ? https : parsed.protocol === "http:" ? http : null;
@@ -271,7 +272,15 @@ const requestModel = (provider, model, api) =>
         return;
       }
 
-      req = transport.request(parsed, { method: "POST", headers }, (res) => {
+      req = transport.request(
+        parsed,
+        {
+          method: "POST",
+          headers,
+          lookup: safeLookup,
+          servername: parsed.protocol === "https:" ? parsed.hostname.replace(/^\[|\]$/g, "") : undefined,
+        },
+        (res) => {
         const status = res.statusCode || 0;
         const location = res.headers.location;
         if ([301, 302, 303, 307, 308].includes(status) && location) {
@@ -280,7 +289,18 @@ const requestModel = (provider, model, api) =>
             failWith(t("service.connectionTest.tooManyRedirects"));
             return;
           }
-          start(new URL(location, url).toString(), redirectCount + 1);
+          let nextUrl;
+          try {
+            nextUrl = new URL(location, url);
+          } catch (e) {
+            failWith(t("service.connectionTest.invalidBaseUrl"));
+            return;
+          }
+          if (parsed.protocol === "https:" && nextUrl.protocol === "http:") {
+            failWith(t("service.connectionTest.invalidBaseUrl"));
+            return;
+          }
+          start(nextUrl.toString(), redirectCount + 1);
           return;
         }
 

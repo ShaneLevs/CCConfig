@@ -4,6 +4,7 @@ const JSON5 = require('json5')
 
 const { t } = require('./i18n')
 const { isDirEntry, countEntries, rmEntry } = require('./fs-utils')
+const { assertSkillName, assertPathInside } = require('./path-guard')
 
 const OPENCODE_DIR = path.join(window.utools.getPath('home'), '.config', 'opencode')
 
@@ -265,10 +266,12 @@ const getOpencodeSkills = () => {
 
 const deleteOpencodeSkill = (skillName) => {
   try {
-    const skillPath = path.join(OPENCODE_SKILLS_PATH, skillName)
+    const name = assertSkillName(skillName)
+    const skillPath = path.join(OPENCODE_SKILLS_PATH, name)
+    assertPathInside(OPENCODE_SKILLS_PATH, skillPath)
     if (!fs.existsSync(skillPath)) return { success: false, error: t('service.skill.notFound') }
     // 软链接只删链接本身
-    rmEntry(skillPath)
+    rmEntry(skillPath, { root: OPENCODE_SKILLS_PATH })
     return { success: true }
   } catch (error) {
     return { success: false, error: error.message }

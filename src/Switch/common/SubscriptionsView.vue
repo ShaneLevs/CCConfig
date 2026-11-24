@@ -32,6 +32,66 @@ const items = ref([]);
 const loading = ref(false);
 const refreshingAll = ref(false);
 const busyId = ref("");
+const consentEnabled = ref(false);
+const consentAnswered = ref(false);
+const showPrivacy = ref(false);
+const privacyReadonly = ref(false);
+
+const loadConsent = () => {
+  try {
+    const state = window.services.getSubscriptionConsent?.() || {};
+    consentEnabled.value = !!state.enabled;
+    consentAnswered.value = !!state.answered;
+  } catch (e) {
+    consentEnabled.value = false;
+    consentAnswered.value = false;
+  }
+};
+
+const onConsentChanged = (event) => {
+  const state = event?.detail || {};
+  if (typeof state.enabled === 'boolean') consentEnabled.value = state.enabled;
+  if (typeof state.answered === 'boolean') consentAnswered.value = state.answered;
+};
+
+const openPrivacy = () => {
+  privacyReadonly.value = true;
+  showPrivacy.value = true;
+};
+
+const openConsent = () => {
+  privacyReadonly.value = false;
+  showPrivacy.value = true;
+};
+
+const acceptConsent = () => {
+  if (!privacyReadonly.value) {
+    try {
+      const state = window.services.setSubscriptionConsent?.(true) || { enabled: true, answered: true };
+      consentEnabled.value = !!state.enabled;
+      consentAnswered.value = true;
+      window.dispatchEvent(new CustomEvent('ccconfig:subscription-consent-changed', { detail: state }));
+      refreshNow();
+    } catch (e) {
+      MessagePlugin.error(e.message || t("common.saveFailed"));
+    }
+  }
+  showPrivacy.value = false;
+};
+
+const declineConsent = () => {
+  if (!privacyReadonly.value) {
+    try {
+      const state = window.services.setSubscriptionConsent?.(false) || { enabled: false, answered: true };
+      consentEnabled.value = !!state.enabled;
+      consentAnswered.value = true;
+      window.dispatchEvent(new CustomEvent('ccconfig:subscription-consent-changed', { detail: state }));
+    } catch (e) {
+      MessagePlugin.error(e.message || t("common.saveFailed"));
+    }
+  }
+  showPrivacy.value = false;
+};
 
 const loadSubscriptions = () => {
   try {
@@ -45,6 +105,10 @@ const loadSubscriptions = () => {
 // 进页面顺手刷新一遍（服务层有自己的 5 分钟节流，不会每次都打接口）
 // 注意 refreshSubscriptions 是异步方法（桌面版 bridge 返回 Promise），必须 await。
 const refreshAll = async (force = false) => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   refreshingAll.value = true;
   try {
     items.value = (await window.services.refreshSubscriptions({ force })) || items.value;
@@ -57,6 +121,10 @@ const refreshAll = async (force = false) => {
 };
 
 const refreshOne = async (item) => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   busyId.value = item.id;
   try {
     await window.services.refreshSubscription(item.id);
@@ -71,6 +139,10 @@ const refreshOne = async (item) => {
 };
 
 const relogin = async (item) => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   // 手填过 Cookie 的订阅没有「可重新读取的浏览器登录态」→ 不去白扫一遍浏览器（还可能弹钥匙串框），
   // 直接打开编辑弹窗让用户重粘：这是这一类登录态唯一有效的续命方式。
   if (item.cookieSource === "manual") {
@@ -134,6 +206,10 @@ watch(manualCookie, (val) => {
 });
 
 const openAdd = () => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   editTarget.value = null;
   form.value = { provider: providers.value[0]?.id || "open-design", label: "" };
   formDirs.value = [];
@@ -148,6 +224,10 @@ const openAdd = () => {
 };
 
 const openEdit = (item) => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   editTarget.value = item;
   form.value = { provider: item.provider, label: item.label || "" };
   formDirs.value = Array.isArray(item.cookieDirs) ? [...item.cookieDirs] : [];
@@ -167,6 +247,10 @@ const openEdit = (item) => {
  * 所以先让出一帧把 loading 画出来，避免点了没反应。
  */
 const readCookie = () => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   captureState.value = "reading";
   captureReason.value = "";
   setTimeout(() => {
@@ -232,6 +316,10 @@ const openLogin = () => {
 const saving = ref(false);
 
 const submit = async () => {
+  if (!consentEnabled.value) {
+    openConsent();
+    return;
+  }
   // 手填了 Cookie 就一定走「写入登录态」的分支（编辑时也一样：用户就是要换登录态）
   const cookie = effectiveCookie.value;
   if (editTarget.value && !cookie) {
@@ -358,36 +446,52 @@ const ACTIVE_TAB = "subscription";
 const { activeApp } = useAppContext();
 const isVisible = computed(() => activeApp.value === "common" && props.activeTab === ACTIVE_TAB);
 
-const reloadFromStore = () => loadSubscriptions();
-const reloadWithRefresh = (force = false) => {
+const reloadFromStore = () => {
+  loadConsent();
   loadSubscriptions();
-  if (items.value.length) refreshAll(force);
+};
+const reloadWithRefresh = (force = false) => {
+  loadConsent();
+  loadSubscriptions();
+  if (consentEnabled.value && items.value.length) refreshAll(force);
 };
 
 // 页签变可见：先读库，再按服务层的 5 分钟节流打一次接口（与进页面同一套动作）。
 // 切回本页时自动刷新，并让右上角刷新按钮保持加载态。
-const { autoRefreshing, refreshNow } = usePageRefresh("common", "subscription", () => reloadWithRefresh(false));
+const { autoRefreshing, refreshNow } = usePageRefresh("common", "subscription", () => {
+  if (consentEnabled.value) reloadWithRefresh(false);
+});
+
+const handlePageVisible = () => {
+  loadConsent();
+  if (consentEnabled.value) reloadFromStore();
+  else if (!consentAnswered.value) openConsent();
+};
 
 // 窗口重新聚焦 / 重新可见：桌面版主窗口被托盘「打开主窗口」show 出来时 WebView 不重建，
 // watch 不会触发，只能靠这两个事件补。
 const onWindowWake = () => {
-  if (isVisible.value) reloadFromStore();
+  if (isVisible.value) handlePageVisible();
 };
 
 onMounted(() => {
+  loadConsent();
   try {
     providers.value = window.services.getSubscriptionProviders() || [];
   } catch (e) {
     providers.value = [{ id: "open-design", label: "Open Design" }];
   }
-  refreshNow();
+  if (!consentAnswered.value) openConsent();
+  else if (consentEnabled.value) refreshNow();
   window.addEventListener("focus", onWindowWake);
   document.addEventListener("visibilitychange", onWindowWake);
+  window.addEventListener("ccconfig:subscription-consent-changed", onConsentChanged);
 });
 
 onUnmounted(() => {
   window.removeEventListener("focus", onWindowWake);
   document.removeEventListener("visibilitychange", onWindowWake);
+  window.removeEventListener("ccconfig:subscription-consent-changed", onConsentChanged);
 });
 </script>
 
@@ -396,6 +500,9 @@ onUnmounted(() => {
     <div class="subs-header">
       <span class="subs-tip">{{ t('commonApp.subscription.tip') }}</span>
       <Space size="small">
+        <Button size="small" variant="text" @click="openPrivacy">
+          {{ t('commonApp.subscription.privacyOpen') }}
+        </Button>
         <Button size="small" theme="primary" @click="openAdd">
           <template #icon><AddIcon /></template> {{ t('commonApp.subscription.add') }}
         </Button>
@@ -405,6 +512,13 @@ onUnmounted(() => {
           </Button>
         </Tooltip>
       </Space>
+    </div>
+
+    <div v-if="!consentEnabled" class="subs-consent-banner">
+      <span>{{ t('commonApp.subscription.privacyDisabledTip') }}</span>
+      <Button size="small" theme="primary" @click="openConsent">
+        {{ t('commonApp.subscription.privacyEnable') }}
+      </Button>
     </div>
 
     <div v-if="!items.length" class="subs-empty">
@@ -609,6 +723,29 @@ onUnmounted(() => {
               <div class="subs-dirs-hint is-block">{{ t('commonApp.subscription.manualHint') }}</div>
             </div>
           </div>
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- 首次使用 / 隐私说明 -->
+    <Dialog
+      v-model:visible="showPrivacy"
+      :header="t('commonApp.subscription.privacyTitle')"
+      width="560px"
+      :footer="false"
+    >
+      <div class="subs-privacy">
+        <p>{{ t('commonApp.subscription.privacyIntro') }}</p>
+        <p>{{ t('commonApp.subscription.privacyScope') }}</p>
+        <p>{{ t('commonApp.subscription.privacyDestination') }}</p>
+        <p>{{ t('commonApp.subscription.privacyDisable') }}</p>
+        <div class="subs-privacy-actions">
+          <Button v-if="!privacyReadonly" variant="outline" @click="declineConsent">
+            {{ t('commonApp.subscription.privacyLater') }}
+          </Button>
+          <Button theme="primary" @click="acceptConsent">
+            {{ privacyReadonly ? t('common.ok') : t('commonApp.subscription.privacyAccept') }}
+          </Button>
         </div>
       </div>
     </Dialog>

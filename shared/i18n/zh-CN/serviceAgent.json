@@ -152,6 +152,7 @@
       "saveConfigFailedReason": "保存自动网关配置失败：{message}",
       "invalidUpstreamUrl": "无效的上游地址: {url}",
       "upstreamRequestFailed": "上游请求失败",
+      "unauthorized": "网关鉴权失败：请重新下发 Agent 配置",
       "upstreamTimeout": "上游 {seconds} 秒内未返回响应头，请求已中止",
       "unknownEndpoint": "未知端点: {method} {path}",
       "invalidJsonBody": "请求体不是有效的 JSON",
