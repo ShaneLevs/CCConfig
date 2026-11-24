@@ -261,7 +261,8 @@ const requestModel = (provider, model, api) =>
     const start = (url, redirectCount, requestHeaders = headers) => {
       let parsed;
       try {
-        parsed = assertSafeUrl(url);
+        // 供应商连接测试同样面向用户填写的地址，允许本机/内网模型服务。
+        parsed = assertSafeUrl(url, { allowPrivate: true });
       } catch (e) {
         failWith(e.message || t("service.connectionTest.invalidBaseUrl"));
         return;
@@ -277,7 +278,8 @@ const requestModel = (provider, model, api) =>
         {
           method: "POST",
           headers: requestHeaders,
-          lookup: safeLookup,
+          lookup: (hostname, lookupOptions, callback) =>
+            safeLookup(hostname, lookupOptions, callback, true),
           servername: parsed.protocol === "https:" ? parsed.hostname.replace(/^\[|\]$/g, "") : undefined,
         },
         (res) => {

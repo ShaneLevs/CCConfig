@@ -46,11 +46,13 @@ const fetchProviderModels = async (baseUrl, apiKey, timeout = 10_000) => {
   const candidates = hasV1Prefix ? ["models"] : ["models", "v1/models"];
 
   // 相对拼接保留 baseUrl 自身路径（如 /v1 或代理前缀）；所有请求由 net-guard
-  // 统一做协议、回环/内网、DNS 解析与逐跳重定向校验。
+  // 统一做协议、DNS 解析与逐跳重定向校验。模型服务可能在本机或内网（Ollama、
+  // LM Studio、自建网关），这里显式放行私有网段。
   const tryOnce = async (p) => {
     const url = new URL(p, root).toString();
     const parsed = await guardedJsonRequest(url, {
       timeout,
+      allowPrivate: true,
       headers: {
         accept: "application/json",
         // 同时带 Bearer 与 x-api-key：OpenAI 兼容中转站认 Bearer，Anthropic 原生接口认 x-api-key
@@ -67,23 +69,30 @@ const fetchProviderModels = async (baseUrl, apiKey, timeout = 10_000) => {
         const item = typeof m === "string" ? { id: m } : m || {};
         const id = item.id || item.name;
         if (!id) return null;
+        const reasoningLevels = Array.isArray(item.supported_reasoning_levels)
+          ? item.supported_reasoning_levels
+              .map((level) => (typeof level === "string" ? level : level?.effort))
+              .filter(Boolean)
+          : Array.isArray(item.reasoning_levels)
+            ? item.reasoning_levels
+            : [];
         return {
           id,
-          name: item.name || item.id || id,
+          name: item.display_name || item.name || item.id || id,
           contextWindow:
             item.context_window ||
             item.context_length ||
             item.contextWindow ||
             item.max_context_length ||
             0,
-          maxTokens: item.max_tokens || item.maxTokens || 0,
+          maxTokens: item.max_tokens || item.maxTokens || item.max_output_tokens || 0,
           reasoning: !!(
-            item.capabilities ||
-            item.architecture?.modality ||
-            ""
-          )
-            .toString()
-            .includes("reasoning"),
+            item.reasoning ||
+            reasoningLevels.length ||
+            (item.capabilities || item.architecture?.modality || "")
+              .toString()
+              .includes("reasoning")
+          ),
         };
       })
       .filter(Boolean);

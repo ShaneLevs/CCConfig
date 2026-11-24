@@ -765,7 +765,7 @@ Cookie 来源（public/preload/services/browser-cookies.js）—— 浏览器清
 ### Claude 认证方式
 
 - 每配置可选 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`（互斥，切换时写一清一）。
-- 模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。
+- 模型输入框下拉候选对任意供应商实时拉取（复用 Pi 的 `fetchProviderModels`，`{baseUrl}/models` → `/v1/models` 回退，Bearer + x-api-key 双头，防抖 500ms，失败静默为空）。模型服务可在本机或内网，net-guard 对这类请求通过 `allowPrivate` 放行私有网段，云元数据与链路本地地址仍拒绝。
 - OpenCode Go：URL 精确等于 `https://opencode.ai/zen/go`（不带 /v1）时自动切 API_KEY 认证。
 
 ## 语言与外观

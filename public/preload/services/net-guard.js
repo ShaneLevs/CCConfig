@@ -1,8 +1,10 @@
-// 安全出站请求：只允许公网 http/https，拒绝回环/内网地址和跨协议降级。
+// 安全出站请求：默认只允许公网 http/https，拒绝回环/内网地址和跨协议降级。
 //
 // 渲染层可以传 baseUrl 给 fetchProviderModels，并会在请求头里带用户的 API Key。
 // 如果直接请求，renderer 就能借助 preload 访问本机端口、云元数据或内网服务，
 // 因此这里把 URL 校验、DNS 解析和重定向校验集中到一个入口。
+// 用户填写的模型服务地址可能就在本机或内网，只有这类模型请求通过 allowPrivate
+// 显式放行私有网段；云元数据、链路本地与保留地址始终拒绝。
 const dns = require("node:dns");
 const http = require("node:http");
 const https = require("node:https");
@@ -130,11 +132,63 @@ const isPrivateIp = (ip) => {
   return true;
 };
 
+const _ipv4FromHextets = (h) => `${h[6] >> 8}.${h[6] & 255}.${h[7] >> 8}.${h[7] & 255}`;
+
+// 允许模型服务使用的私有网段：回环、RFC1918、CGNAT（Tailscale 等）与 IPv6 ULA。
+// 169.254/16、fe80::/10 等链路本地地址和云元数据地址不在其中，allowPrivate 也不放行。
+const isPrivateNetworkIpv4 = (ip) => {
+  const p = _ipv4Parts(ip);
+  if (!p) return false;
+  const [a, b] = p;
+  if (a === 10 || a === 127) return true;
+  if (a === 100 && b >= 64 && b <= 127) return ip !== "100.100.100.200"; // 阿里云元数据
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+};
+
+const isPrivateNetworkIpv6 = (ip) => {
+  const h = _ipv6Hextets(ip);
+  if (!h) return false;
+  if (h.slice(0, 7).every((part) => part === 0) && h[7] === 1) return true; // ::1
+  if (h[0] === 0 && h[1] === 0 && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0xffff) {
+    return isPrivateNetworkIpv4(_ipv4FromHextets(h)); // IPv4-mapped
+  }
+  if ((h[0] & 0xfe00) === 0xfc00) {
+    // AWS IPv6 元数据 fd00:ec2::254 与 ULA 同段，单独排除
+    if (
+      h[0] === 0xfd00 &&
+      h[1] === 0x0ec2 &&
+      h[2] === 0 &&
+      h[3] === 0 &&
+      h[4] === 0 &&
+      h[5] === 0 &&
+      h[6] === 0 &&
+      h[7] === 0x254
+    )
+      return false;
+    return true;
+  }
+  return false;
+};
+
+const isPrivateNetworkIp = (ip) => {
+  const value = _stripBrackets(ip);
+  const kind = net.isIP(value);
+  if (kind === 4) return isPrivateNetworkIpv4(value);
+  if (kind === 6) return isPrivateNetworkIpv6(value);
+  return false;
+};
+
 const _invalidUrl = () => new Error(t("service.common.invalidUrl"));
 const _blockedAddress = () => new Error(t("service.common.blockedAddress"));
 
-/** 解析并校验 URL；返回标准 URL 对象。 */
-const assertSafeUrl = (input) => {
+/**
+ * 解析并校验 URL；返回标准 URL 对象。
+ * options.allowPrivate 仅供用户填写的模型服务地址使用。
+ */
+const assertSafeUrl = (input, options = {}) => {
+  const allowPrivate = !!(options && options.allowPrivate);
   let raw = String(input == null ? "" : input).trim();
   if (!raw) throw _invalidUrl();
   if (!/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw)) raw = `https://${raw}`;
@@ -147,23 +201,33 @@ const assertSafeUrl = (input) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw _invalidUrl();
   if (url.username || url.password) throw _invalidUrl();
   const host = _stripBrackets(url.hostname).toLowerCase().replace(/\.$/, "");
-  if (!host || host === "localhost" || host.endsWith(".localhost")) throw _blockedAddress();
-  if (net.isIP(host) && isPrivateIp(host)) throw _blockedAddress();
+  if (!host) throw _blockedAddress();
+  if (host === "localhost" || host.endsWith(".localhost")) {
+    if (allowPrivate) return url;
+    throw _blockedAddress();
+  }
+  if (net.isIP(host) && isPrivateIp(host)) {
+    if (allowPrivate && isPrivateNetworkIp(host)) return url;
+    throw _blockedAddress();
+  }
   return url;
 };
 
 /**
  * dns.lookup wrapper：所有解析结果都必须通过内网校验。
  * 使用 http(s).request 的 lookup 选项，让连接复用这里校验过的地址。
+ * allowPrivate 为 true 时只放行模型服务可用的私有网段。
  */
-const safeLookup = (hostname, options, callback) => {
+const safeLookup = (hostname, options, callback, allowPrivate = false) => {
   const requestAll = !!(options && options.all);
   dns.lookup(hostname, { ...(options || {}), all: true }, (error, addresses) => {
     if (error) return callback(error);
     const list = Array.isArray(addresses) ? addresses : [];
     if (!list.length) return callback(new Error(t("service.common.blockedAddress")));
     for (const item of list) {
-      if (isPrivateIp(item.address)) return callback(_blockedAddress());
+      if (isPrivateIp(item.address) && !(allowPrivate && isPrivateNetworkIp(item.address))) {
+        return callback(_blockedAddress());
+      }
     }
     if (requestAll) return callback(null, list);
     return callback(null, list[0].address, list[0].family);
@@ -187,7 +251,8 @@ const _requestOnce = (url, options, deadline, redirectsLeft) => new Promise((res
       path: `${url.pathname}${url.search}`,
       method: options.method || "GET",
       headers,
-      lookup: safeLookup,
+      lookup: (hostname, lookupOptions, callback) =>
+        safeLookup(hostname, lookupOptions, callback, !!options.allowPrivate),
       servername: url.protocol === "https:" ? _stripBrackets(url.hostname) : undefined,
       timeout: Math.min(remaining, options.timeout || DEFAULT_TIMEOUT),
     },
@@ -199,7 +264,9 @@ const _requestOnce = (url, options, deadline, redirectsLeft) => new Promise((res
         if (redirectsLeft <= 0) return reject(new Error(t("service.common.tooManyRedirects")));
         let next;
         try {
-          next = assertSafeUrl(new URL(location, url).toString());
+          next = assertSafeUrl(new URL(location, url).toString(), {
+            allowPrivate: options.allowPrivate,
+          });
         } catch (e) {
           return reject(e);
         }
@@ -249,7 +316,7 @@ const _requestOnce = (url, options, deadline, redirectsLeft) => new Promise((res
 
 /** GET/POST 文本请求，自动校验每次重定向。 */
 const guardedRequest = (input, options = {}) => {
-  const url = assertSafeUrl(input);
+  const url = assertSafeUrl(input, options);
   const deadline = Date.now() + (options.timeout || DEFAULT_TIMEOUT);
   return _requestOnce(url, options, deadline, options.maxRedirects == null ? MAX_REDIRECTS : options.maxRedirects);
 };
