@@ -207,9 +207,14 @@ const setConfig = (mappings, mode = 'mapping') => {
     const r2d = await post(port, request('failover-sticky'))
     ok(r2d.status === 200, `后续请求仍成功（实际 ${r2d.status}）`)
     ok(JSON.stringify(hits) === JSON.stringify(['good-a']), `后续请求直接从成功模型开始（实际 ${JSON.stringify(hits)}）`)
+    const activeAfterSwitch = autoroute.getAutoRouteStatus().mappingActive || []
+    ok(activeAfterSwitch.some((item) => item.alias === 'failover-sticky' && item.provider === 'mock' && item.modelId === 'good-a'), `状态里暴露当前在用模型（实际 ${JSON.stringify(activeAfterSwitch)}）`)
+    ok(!activeAfterSwitch.some((item) => item.alias === 'first-only'), 'first 策略不记在用状态（恒为第一个）')
+    ok(activeAfterSwitch.every((item) => item.alias && item.provider && item.modelId && Object.keys(item).length === 3), '在用状态只含 alias / provider / modelId（可 JSON 往返）')
 
     await autoroute.stopAutoRoute()
     await autoroute.startAutoRoute()
+    ok(!(autoroute.getAutoRouteStatus().mappingActive || []).some((item) => item.alias === 'failover-sticky'), '网关重新启动后在用状态清空')
     hits.length = 0
     const r2e = await post(port, request('failover-sticky'))
     ok(r2e.status === 200, `网关重新启动后请求成功（实际 ${r2e.status}）`)

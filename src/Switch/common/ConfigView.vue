@@ -34,6 +34,25 @@ const MODALITY_LABEL_KEYS = {
 };
 const modalityLabel = (value) => (MODALITY_LABEL_KEYS[value] ? t(MODALITY_LABEL_KEYS[value]) : value);
 
+// 模型列表第二列：压成一行展示，超出部分省略，完整内容放在 title 里。
+const modelMetaText = (m) => {
+  const parts = [
+    t('commonApp.config.contextValue', { value: formatNumber(m.contextWindow) }),
+    t('commonApp.config.maxOutputValue', { value: formatNumber(m.maxTokens) }),
+    ...(m.input || []).filter((x) => x !== 'text').map(modalityLabel),
+    m.reasoningEfforts && m.reasoningEfforts.length
+      ? t('commonApp.config.effortValue', { value: m.reasoningEfforts.join(' / ') })
+      : '',
+    m.capabilities && m.capabilities.length
+      ? t('commonApp.config.capabilitiesValue', { value: m.capabilities.join(' / ') })
+      : '',
+    m.cost && (m.cost.input || m.cost.output || m.cost.cacheRead || m.cost.cacheWrite)
+      ? t('commonApp.config.costValue', { input: m.cost.input, output: m.cost.output })
+      : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+
 // 常用请求头名（自动完成提示）
 const HEADER_KEY_OPTIONS = [
   "x-portkey-api-key",
@@ -532,27 +551,11 @@ onMounted(refresh);
             </div>
             <div class="common-model-item" v-for="m in prov.models" :key="m.id">
               <div class="common-model-info">
-                <span class="common-model-name common-copyable" :title="t('commonApp.config.clickToCopy')" @click="copyText(m.id)">{{ m.name || m.id }}</span>
+                <span class="common-model-name common-copyable" :title="`${m.id}\n${t('commonApp.config.clickToCopy')}`" @click="copyText(m.id)">{{ m.id }}</span>
+                <span v-if="m.name && m.name !== m.id" class="common-model-sub" :title="m.name">{{ m.name }}</span>
                 <Tag v-if="m.reasoning" size="small" theme="warning" variant="light">{{ t('commonApp.config.reasoningTag') }}</Tag>
               </div>
-              <div class="common-model-meta">
-                <span class="common-model-stat">{{ t('commonApp.config.contextValue', { value: formatNumber(m.contextWindow) }) }}</span>
-                <span class="common-model-stat">{{ t('commonApp.config.maxOutputValue', { value: formatNumber(m.maxTokens) }) }}</span>
-                <span
-                  v-for="mod in (m.input || []).filter((x) => x !== 'text')"
-                  :key="mod"
-                  class="common-model-stat"
-                >{{ modalityLabel(mod) }}</span>
-                <span v-if="m.reasoningEfforts && m.reasoningEfforts.length" class="common-model-stat">
-                  {{ t('commonApp.config.effortValue', { value: m.reasoningEfforts.join(' / ') }) }}
-                </span>
-                <span v-if="m.capabilities && m.capabilities.length" class="common-model-stat">
-                  {{ t('commonApp.config.capabilitiesValue', { value: m.capabilities.join(' / ') }) }}
-                </span>
-                <span v-if="m.cost && (m.cost.input || m.cost.output || m.cost.cacheRead || m.cost.cacheWrite)" class="common-model-stat">
-                  {{ t('commonApp.config.costValue', { input: m.cost.input, output: m.cost.output }) }}
-                </span>
-              </div>
+              <div v-if="modelMetaText(m)" class="common-model-meta" :title="modelMetaText(m)">{{ modelMetaText(m) }}</div>
               <div class="common-model-actions" @click.stop>
                 <Tooltip :content="t('commonApp.config.dispatchToAgent')" placement="top">
                   <Button size="small" variant="text" @click="openDispatchDialog(prov.name, m.id)">

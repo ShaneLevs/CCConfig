@@ -51,6 +51,7 @@
       "addMapping": "添加映射",
       "addMappingModel": "添加模型",
       "removeMappingModel": "删除此模型",
+      "modelInUse": "当前在用",
       "strategyFirst": "只使用第一个",
       "strategyFailover": "报错自动切换",
       "strategyRandom": "随机调用",

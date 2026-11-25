@@ -6,6 +6,7 @@ import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
 import { useAutoFetchModels } from "../../../composables/useAutoFetchModels";
 import { useModelPresetAutofill } from "../../../composables/useModelPresetAutofill";
+import { filterModelOption } from "../../../utils/modelOptions";
 
 // omp 模型添加/编辑弹窗（二合一）：高级区为「思考级别 + 费用 + 其他参数 YAML」，
 // 编辑模式可改模型 ID（重命名由父级以删旧建新方式落库）。
@@ -234,6 +235,7 @@ const handleConfirm = () => {
           :options="modelOptions"
           :loading="autoModelsLoading"
           filterable
+          :filter="filterModelOption"
           clearable
           :placeholder="t('model.selectOrEnter')"
           @select="handleModelIdSelect"

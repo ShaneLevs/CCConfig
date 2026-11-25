@@ -12,6 +12,7 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -260,7 +261,7 @@ const handleFetchModels = async () => {
 };
 
 const modelOptions = computed(() =>
-  fetchedModels.value.map((m) => ({ label: m.name || m.id, value: m.id }))
+  toModelAutoCompleteOptions(fetchedModels.value)
 );
 
 // 别名跟随输入：用户未手改过别名时，按官方惯例 <供应商>/<模型ID> 自动填。
@@ -580,6 +581,7 @@ onMounted(refresh);
             :options="modelOptions"
             :loading="fetchingModels"
             filterable
+            :filter="filterModelOption"
             clearable
             placeholder="deepseek-chat"
             @change="onModelIdInput"

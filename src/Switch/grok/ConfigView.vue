@@ -24,6 +24,7 @@ import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -229,7 +230,7 @@ const fetchedModels = ref([]);
 const fetchingModels = ref(false);
 const fetchModelError = ref("");
 
-const modelOptions = computed(() => fetchedModels.value.map((m) => ({ label: m.name || m.id, value: m.id })));
+const modelOptions = computed(() => toModelAutoCompleteOptions(fetchedModels.value));
 
 const fetchBase = computed(() => {
   const p = providers.value.find((x) => x.name === modelDialogProvider.value);
@@ -677,6 +678,7 @@ onMounted(refresh);
             :options="modelOptions"
             :loading="fetchingModels"
             filterable
+            :filter="filterModelOption"
             clearable
             placeholder="z-ai/glm-5"
             @change="modelForm.model = $event"

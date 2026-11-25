@@ -388,6 +388,10 @@ const getAutoRouteStatus = () => ({
   // 历史统计（按本地日期聚合）：today 今日、month 本月、total 累积、since 最早一天。
   // 网关页与托盘共用「本次 / 今日 / 本月 / 累积」四个口径。
   history: getHistorySummary(),
+  // 映射多模型的「当前在用」：只有 first（恒为第 1 个，页面自行推算）与 failover 有意义，
+  // random / round-robin 每次请求都换，不做标注。这里只暴露 failover 记住的切换结果（进程内、
+  // 网关重启即清空）；Map 必须转成数组，桌面版要过 /rpc 的 JSON 往返。
+  mappingActive: [...mappingFailoverActive].map(([alias, active]) => ({ alias, provider: active.provider, modelId: active.modelId })),
 });
 
 // ==================== 模型解析 ====================

@@ -14,6 +14,7 @@ import DynamicKvEditor from "../../components/DynamicKvEditor.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -249,7 +250,7 @@ const autoModelsError = ref("");
 
 // AutoComplete 下拉选项（显示名 → 模型 ID）
 const modelOptions = computed(() =>
-  autoModels.value.map(m => ({ label: m.name || m.id, value: m.id }))
+  toModelAutoCompleteOptions(autoModels.value)
 );
 
 const handleAutoFetchModels = async () => {
@@ -648,6 +649,7 @@ onMounted(refresh);
             :options="modelOptions"
             :loading="autoModelsLoading"
             filterable
+            :filter="filterModelOption"
             clearable
             :placeholder="t('pi.model.inputOrSelect')"
             @select="handleModelIdSelect"

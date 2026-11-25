@@ -69,6 +69,25 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+/* 当前在用模型（仅「只使用第一个」「报错自动切换」两个策略）：与全局绿勾选态同色
+   （主题把 --td-brand-color 改成了灰阶，这里直接用 success 绿） */
+.autoroute-mapping-model-index.is-active {
+  background: var(--td-success-color);
+  color: #fff;
+  font-weight: 600;
+}
+/* 模型序号兼作行内排序手柄（只有多模型行可拖）：只改光标、不隐掉数字，
+   否则上面「当前在用」的绿底数字会看不见 */
+.autoroute-mapping-model-index.is-sortable {
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.autoroute-mapping-model-index.is-sortable:hover { filter: brightness(0.94); }
+.autoroute-mapping-model-index.is-sortable:active { cursor: grabbing; }
+.autoroute-mapping-model-index.is-sortable:focus-visible { box-shadow: 0 0 0 2px var(--td-success-color-3); }
+/* 拖动中的模型行：降低不透明度做位置反馈 */
+.autoroute-mapping-model-row.is-model-dragging { opacity: 0.55; }
 /* 序号列同时是拖拽手柄：默认只显示数字，悬停/聚焦时数字淡出、手柄图标淡入并换成 grab 光标 */
 .autoroute-mapping-index {
   position: relative;

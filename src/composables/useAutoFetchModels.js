@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import { t } from "../i18n";
+import { toModelAutoCompleteOptions } from "../utils/modelOptions";
 
 // 「自动拉取模型列表」共享逻辑：调用 window.services.fetchProviderModels
 // （OpenAI 兼容 /models 接口），供各应用的添加/批量添加模型弹窗复用。
@@ -8,10 +9,8 @@ export function useAutoFetchModels() {
   const autoModelsLoading = ref(false);
   const autoModelsError = ref("");
 
-  // AutoComplete 下拉选项（显示名 → 模型 ID）
-  const modelOptions = computed(() =>
-    autoModels.value.map(m => ({ label: m.name || m.id, value: m.id }))
-  );
+  // AutoComplete 下拉选项：展示「显示名 · ID」，选中后写入模型 ID
+  const modelOptions = computed(() => toModelAutoCompleteOptions(autoModels.value));
 
   // prov 需为 { baseUrl, apiKey } 形状的供应商对象；missingMessage 为未配置 Base URL 的提示文案
   const fetchAutoModels = async (prov, missingMessage = t("common.noBaseUrl")) => {

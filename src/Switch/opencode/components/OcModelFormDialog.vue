@@ -6,6 +6,7 @@ import ModelLimitsFields from "../../../components/ModelLimitsFields.vue";
 import DynamicKvEditor from "../../../components/DynamicKvEditor.vue";
 import { useAutoFetchModels } from "../../../composables/useAutoFetchModels";
 import { useModelPresetAutofill } from "../../../composables/useModelPresetAutofill";
+import { filterModelOption } from "../../../utils/modelOptions";
 
 // opencode 模型添加/编辑弹窗（二合一）：add 模式带 /models 自动拉取（选中条件回填），
 // edit 模式额外暴露 SDK Options 与额外字段编辑器。表单对象由父级构建传入（initialForm），
@@ -126,6 +127,7 @@ const handleConfirm = () => {
           :options="modelOptions"
           :loading="autoModelsLoading"
           filterable
+          :filter="filterModelOption"
           clearable
           :placeholder="t('opencode.model.inputOrSelect')"
           @select="handleAutoModelSelect"

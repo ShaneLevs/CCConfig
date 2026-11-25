@@ -863,6 +863,12 @@
     font-size: 9.5px;
     font-variant-numeric: tabular-nums;
   }
+  /* 当前在用模型（仅「只使用第一个」「报错自动切换」）：与托盘里的绿点同色 */
+  .mapping-model-index.is-active {
+    background: var(--good);
+    color: #fff;
+    font-weight: 600;
+  }
   .mapping-target {
     display: flex;
     align-items: center;
@@ -2181,7 +2187,7 @@
         const label = targetLabel(target)
         const openKey = index + ':' + slot
         let html = (
-          '<div class="mapping-model-row">' +
+          '<div class="mapping-model-row" data-index="' + index + '" data-slot="' + slot + '">' +
             '<span class="mapping-model-index">' + (slot + 1) + '</span>' +
             '<button class="mapping-target' + (label ? ' has-value' : '') + '" type="button"' +
               ' data-target="' + index + '" data-slot="' + slot + '"' +
@@ -2218,6 +2224,44 @@
         '</div>'
       )
     }).join('')
+    syncMappingActive()
+  }
+
+  // 当前在用模型：只有「只使用第一个」与「报错自动切换」有稳定事实（first 恒为第 1 个，
+  // failover 读网关进程记住的切换结果，网关未运行不标）。random / round-robin 每次请求都换。
+  // 只改类名、不重渲染：轮询时重建整张表会打断正在输入的映射名与展开的目标选择面板。
+  function activeSlotOf(mapping) {
+    if (!lastStatus || !lastStatus.running) return -1
+    const strategy = mappingStrategy(mapping)
+    if (strategy !== 'first' && strategy !== 'failover') return -1
+    const targets = mappingTargets(mapping)
+    let slot = 0
+    const list = Array.isArray(lastStatus.mappingActive) ? lastStatus.mappingActive : []
+    const active = strategy === 'failover' && mapping.alias
+      ? list.find((item) => item && item.alias === mapping.alias)
+      : null
+    if (active) {
+      const found = targets.findIndex((target) => (
+        target.provider && target.modelId && target.provider === active.provider && target.modelId === active.modelId
+      ))
+      if (found < 0) return -1
+      slot = found
+    }
+    const target = targets[slot]
+    return target && target.provider && target.modelId ? slot : -1
+  }
+
+  function syncMappingActive() {
+    const mappings = Array.isArray(lastConfig.mappings) ? lastConfig.mappings : []
+    mappingList.querySelectorAll('.mapping-model-row').forEach((row) => {
+      const mapping = mappings[Number(row.dataset.index)]
+      const active = mapping ? activeSlotOf(mapping) === Number(row.dataset.slot) : false
+      const badge = row.querySelector('.mapping-model-index')
+      if (!badge) return
+      badge.classList.toggle('is-active', active)
+      if (active) badge.title = t('modelInUse')
+      else badge.removeAttribute('title')
+    })
   }
 
   async function saveMappings(mappings, options) {
@@ -2825,6 +2869,7 @@
     try {
       lastStatus = (await rpc('getAutoRouteStatus')) || {}
       renderStats(!statsEl.hidden)
+      syncMappingActive()
       if (mode === 'mini') renderMini()
     } catch (error) {
       diag('panel-live-status', error)

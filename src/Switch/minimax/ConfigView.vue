@@ -15,6 +15,7 @@ import {
 import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -230,7 +231,7 @@ const handleFetchModels = async () => {
 };
 
 const modelOptions = computed(() =>
-  fetchedModels.value.map((m) => ({ label: m.name || m.id, value: m.id }))
+  toModelAutoCompleteOptions(fetchedModels.value)
 );
 
 const openAddModelDialog = (providerId) => {
@@ -507,6 +508,7 @@ onMounted(refresh);
             :options="modelOptions"
             :loading="fetchingModels"
             filterable
+            :filter="filterModelOption"
             clearable
             placeholder="deepseek-chat"
             @change="addModelForm.model = $event"

@@ -21,6 +21,7 @@ import ApiKeyInput from "../../components/ApiKeyInput.vue";
 import ModelLimitsFields from "../../components/ModelLimitsFields.vue";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -144,12 +145,7 @@ const handleFetchModels = async (baseURL, apiKey) => {
 };
 
 const modelIdOptions = computed(() =>
-  fetchedModels.value
-    .filter((m) => m && m.id)
-    .map((m) => ({
-      label: m.name && m.name !== m.id ? t("dsh.config.modelOption", { name: m.name, id: m.id }) : m.id,
-      value: m.id,
-    }))
+  toModelAutoCompleteOptions(fetchedModels.value)
 );
 
 const targetModels = computed(() =>
@@ -760,6 +756,7 @@ onMounted(refresh);
               :options="modelIdOptions"
               :loading="fetchingModels"
               filterable
+              :filter="filterModelOption"
               clearable
               :placeholder="t('dsh.config.firstModelPlaceholder')"
               @change="providerForm.firstModel = $event"
@@ -787,6 +784,7 @@ onMounted(refresh);
             :options="modelIdOptions"
             :loading="fetchingModels"
             filterable
+            :filter="filterModelOption"
             clearable
             :placeholder="t('dsh.config.firstModelPlaceholder')"
             @change="modelForm.modelId = $event"

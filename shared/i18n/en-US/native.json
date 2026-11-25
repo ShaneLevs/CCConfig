@@ -51,6 +51,7 @@
       "addMapping": "Add mapping",
       "addMappingModel": "Add model",
       "removeMappingModel": "Remove this model",
+      "modelInUse": "In use now",
       "strategyFirst": "First only",
       "strategyFailover": "Fail over",
       "strategyRandom": "Random",

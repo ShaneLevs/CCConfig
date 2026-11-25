@@ -8,6 +8,7 @@ import DynamicKvEditor from "./DynamicKvEditor.vue";
 import ModelLimitsFields from "./ModelLimitsFields.vue";
 import { useAutoFetchModels } from "../composables/useAutoFetchModels";
 import { useModelPresetAutofill } from "../composables/useModelPresetAutofill";
+import { filterModelOption } from "../utils/modelOptions";
 import {
   MODEL_API_TYPE_OPTIONS,
   MODEL_CAPABILITY_OPTIONS,
@@ -273,6 +274,7 @@ const handleConfirm = () => {
           :options="modelOptions"
           :loading="autoModelsLoading"
           filterable
+          :filter="filterModelOption"
           clearable
           :placeholder="t('model.selectOrEnter')"
           :popup-props="{ overlayStyle: { maxHeight: '280px', overflowY: 'auto' } }"

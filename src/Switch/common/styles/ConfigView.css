@@ -27,8 +27,9 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: 45%;
   overflow: hidden;
-  flex: 1;
+  flex: 0 0 auto;
 }
 .common-model-name {
   font-size: 13px;
@@ -36,9 +37,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 0 0 auto;
 }
-.common-model-meta { display: flex; gap: 12px; font-size: 12px; color: var(--td-text-color-secondary); }
-.common-model-stat { white-space: nowrap; }
+.common-model-sub {
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.common-model-meta {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+}
+.common-model-info .t-tag { flex: 0 0 auto; }
 /* 点击复制（API Key / Base URL / 模型 ID） */
 .common-copyable { cursor: pointer; border-radius: 3px; padding: 0 2px; transition: background 0.15s; }
 .common-copyable:hover { background: var(--td-brand-color-1); }

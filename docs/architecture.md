@@ -140,6 +140,11 @@ Claude:
       （只在响应头写出前可切换，流式一旦开始回传就无法改路由；切换成功后本次网关运行期间默认从成功的模型开始，网关重新启动后从第一个模型重新开始）
       random 每次请求随机选一个；round-robin 用进程内游标按顺序轮换
       （网关重启后从第一个重新开始，游标按映射名保存）。日志行记录最终实际模型，发生切换时带 switches 次数
+      数组顺序就是调配顺序：网关页可拖动行首序号重排映射行（下发顺序），也可拖动模型序号重排行内模型
+      （即 first 的首选 / failover 的降级链 / round-robin 的轮换顺序）；两者都在松手时落库，
+      行内只允许本行内重排（跨行搬运会牵扯 alias / strategy 语义）。托盘弹窗只能增删改，不支持拖动排序
+      「当前在用」标记：getAutoRouteStatus 额外返回 mappingActive（failover 记住的切换结果，进程内、网关重启即清空）；
+      页面只对 first（恒为第 1 个）与 failover 把在用模型的序号标绿，random / round-robin 每次请求都换所以不标
       **映射行顺序 = 下发顺序**：mappings 数组顺序即顺序，resolveAutoRouteModels 按序展开（一个映射名对应多个模型时，
       agent 侧仍只下发一次该映射名，元数据取第一个有效模型），dispatchAutoRoute 按序逐个写 agent，
       因此网关页映射区的行首序号是拖拽手柄（悬停变手柄图标，上下拖动重排；↑/↓ 键等价），松手即落库；
@@ -185,7 +190,7 @@ Claude:
     客户端协议头透传：anthropic-beta（滤 oauth-*）/ anthropic-version / openai-beta 只发给同协议上游；UA 透传需供应商 passUserAgent=true；provider.headers 优先级最高
     配置存本地数据库（ccconfig_autoroute_config_<nativeId>_<desktop|utools>）：桌面版与 uTools 版同机运行时端口/开关/key 各自独立，旧机器档 ccconfig_autoroute_config_<nativeId> 与更早的共用档只作首次读取的迁移种子。插件装载 / 进入时幂等自启动；uTools 版随 uTools 退出停止，桌面版窗口隐藏时仍由 sidecar 持续提供服务
     启动容错：bind 遇到 EADDRINUSE 时按 0.3/0.6/1.2/1.8/2.4/3s 退避重试（约 9s），覆盖更新 / 重装后旧 sidecar 尚未退出的窗口；真正被其他程序长期占用才报「端口已占用」
-    桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行（每行最多 3 个模型与调配策略）；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库
+    桌面版托盘弹窗的「网关」页签直接复用这份配置（readAutoRouteConfig / writeAutoRouteConfig）：可切「模型直连 / 模型映射」、勾选直连模型、增删改映射行（每行最多 3 个模型与调配策略）；模型选项由 getGatewayRouteOptions 提供（只含供应商名与模型清单，不含解密后的 apiKey），改动即时落库。托盘的在用标记由 syncMappingActive 只改类名（不重渲染映射表，避免打断输入与展开中的目标选择面板）
   网关下发到 agent（dispatch.dispatchAutoRoute）= **覆盖式重建 router 供应商**，不是合并：
     名称固定 router（同时是 Codex 的 model_providers.<id>，TOML 裸键只能英文）；baseUrl 指向网关、key 为持久化的随机 key（推理接口会校验）
     每次下发先清空该 agent 里的 router 条目与其全部模型，再按「当前网关模型清单」整条重写，

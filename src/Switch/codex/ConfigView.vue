@@ -16,6 +16,7 @@ import { formatNumber } from "../../utils/format";
 import { useFirstProviderExpand } from "../../composables/useFirstProviderExpand";
 import { usePageRefresh } from "../../composables/usePageRefresh";
 import { useModelPresetAutofill } from "../../composables/useModelPresetAutofill";
+import { filterModelOption, toModelAutoCompleteOptions } from "../../utils/modelOptions";
 import "./styles/ConfigView.css";
 
 const { t } = useI18n();
@@ -259,7 +260,7 @@ const onModelIdBlur = () => {
 };
 
 const addModelOptions = computed(() =>
-  fetchedModels.value.map((m) => ({ label: m.name || m.id, value: m.id }))
+  toModelAutoCompleteOptions(fetchedModels.value)
 );
 
 const handleFetchModels = async () => {
@@ -695,6 +696,7 @@ onMounted(refreshNow);
             :options="addModelOptions"
             :loading="modelDialogMode === 'create' && fetchingModels"
             filterable
+            :filter="filterModelOption"
             :clearable="modelDialogMode === 'create'"
             :disabled="modelDialogMode === 'edit'"
             placeholder="deepseek-v4-flash"

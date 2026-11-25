@@ -82,7 +82,6 @@
       "noBaseUrl": "No Base URL configured; cannot fetch models automatically",
       "noModelsReturned": "The endpoint returned no models",
       "currentConfigOption": "{protocol} (current config, from delivery)",
-      "modelOption": "{name} ({id})",
       "officialTarget": "DeepSeek official ({route})",
       "providerTarget": "{name} ({route})"
     },

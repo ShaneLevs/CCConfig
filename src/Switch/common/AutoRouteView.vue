@@ -48,6 +48,34 @@ const readyMappings = computed(() =>
 );
 // 没有任何一行配置第二个模型时沿用原来的紧凑单模型界面，不显示策略与多模型提示
 const hasMultiModelMappings = computed(() => mappingRows.value.some((m) => mappingTargets(m).length > 1));
+// 「当前在用」标记：只有「只使用第一个」「报错自动切换」两个策略有稳定事实。
+// first 恒为第 1 个；failover 读取网关进程记住的切换结果（getAutoRouteStatus.mappingActive，
+// 网关重启/停止即失效，所以只在 running 时标）。random / round-robin 每次请求都换，不标。
+const failoverActive = computed(() => {
+  const map = new Map();
+  const list = (status.value && status.value.mappingActive) || [];
+  for (const item of list) {
+    if (item && item.alias && item.provider && item.modelId) map.set(item.alias, `${item.provider}::${item.modelId}`);
+  }
+  return map;
+});
+// 返回该映射行当前在用模型在 targets 中的下标；无标记（未运行 / 不支持标注 / 目标未选）返回 -1。
+// 收 targets 而不是内部再取 mappingTargets：行内拖动期间渲染的是草稿顺序，标记得跟着草稿走
+const activeModelSlot = (targets, mapping) => {
+  if (!status.value.running) return -1;
+  const strategy = mappingStrategy(mapping);
+  if (strategy !== "first" && strategy !== "failover") return -1;
+  let index = 0;
+  const active = strategy === "failover" && mapping.alias ? failoverActive.value.get(mapping.alias) : null;
+  if (active) {
+    const found = targets.findIndex((target) => target.provider && target.modelId && `${target.provider}::${target.modelId}` === active);
+    // 用户刚改掉/删掉被记住的模型时不留标记，等下一次切换
+    if (found < 0) return -1;
+    index = found;
+  }
+  const target = targets[index];
+  return target && target.provider && target.modelId ? index : -1;
+};
 const modelCount = computed(() => (isMappingMode.value ? readyMappings.value : config.value.selection.length));
 const baseUrl = computed(() => (status.value.running ? status.value.baseUrl : `http://127.0.0.1:${config.value.port}`));
 // 下发弹窗说明里的模型范围随模式变化
@@ -327,6 +355,103 @@ const onMappingIndexKeydown = (event, index) => {
   saveMappings(mappings);
 };
 
+// ==================== 行内多模型手动排序 ====================
+// 一行内最多 3 个目标模型，数组顺序就是调配顺序（first 只用第一个；failover 是降级链；
+// round-robin 按序轮换），所以重排后直接落库。只在本行内重排：跟行拖拽不同，
+// 跨行搬运会牵扯 alias / strategy 语义，不提供。
+// 同样用 Pointer Events（Tauri 桌面窗口接管了原生拖放，收不到 HTML5 DnD）。
+const modelDraft = ref(null); // { row, models } 行内拖动中的草稿顺序
+const modelDragRow = ref(-1); // 正在拖的映射行下标（高亮用）
+const dragModelIndex = ref(-1); // 正在拖的模型在该行内的位置
+let modelPress = null;
+// 模板统一走这里取目标列表：拖动中返回草稿顺序，否则就是落库顺序
+const rowTargets = (m, i) => (modelDraft.value && modelDraft.value.row === i ? modelDraft.value.models : mappingTargets(m));
+
+// 命中哪个模型行：必须属于同一个映射行（dataset.index 相同），否则不重排
+const modelIndexAtPoint = (x, y, rowIndex) => {
+  const el = document.elementFromPoint(x, y);
+  const row = el && el.closest ? el.closest(".autoroute-mapping-model-row") : null;
+  if (!row || row.dataset.modelIndex === undefined) return -1;
+  const parent = row.closest ? row.closest(".autoroute-mapping-row") : null;
+  if (!parent || Number(parent.dataset.index) !== rowIndex) return -1;
+  return Number(row.dataset.modelIndex);
+};
+
+const detachModelDrag = () => {
+  window.removeEventListener("pointermove", onModelPointerMove);
+  window.removeEventListener("pointerup", onModelPointerUp);
+  window.removeEventListener("pointercancel", onModelPointerUp);
+  const press = modelPress;
+  if (press && press.handle.hasPointerCapture && press.handle.hasPointerCapture(press.pointerId)) {
+    try { press.handle.releasePointerCapture(press.pointerId); } catch (e) { /* ignore */ }
+  }
+  const draft = modelDraft.value;
+  const moved = modelDragRow.value >= 0;
+  modelPress = null;
+  modelDraft.value = null;
+  modelDragRow.value = -1;
+  dragModelIndex.value = -1;
+  document.body.classList.remove("autoroute-sorting");
+  return moved ? draft : null;
+};
+
+const onModelPointerUp = () => {
+  // 只有真正拖动过才落库：单击序号不应触发一次写库
+  const draft = detachModelDrag();
+  if (!draft) return;
+  saveMappings(mappingRows.value.map((m, i) => (i === draft.row ? { ...m, models: draft.models } : m)));
+};
+
+const onModelPointerMove = (event) => {
+  if (!modelPress || event.pointerId !== modelPress.pointerId) return;
+  const rowIndex = modelPress.rowIndex;
+  if (!modelDraft.value) {
+    // 超过 4px 才算拖动，避免误触打乱顺序
+    if (Math.hypot(event.clientX - modelPress.x, event.clientY - modelPress.y) < 4) return;
+    const mapping = mappingRows.value[rowIndex];
+    if (!mapping) return;
+    modelDraft.value = { row: rowIndex, models: [...mappingTargets(mapping)] };
+    modelDragRow.value = rowIndex;
+    dragModelIndex.value = modelPress.modelIndex;
+    document.body.classList.add("autoroute-sorting");
+  }
+  event.preventDefault();
+  const target = modelIndexAtPoint(event.clientX, event.clientY, rowIndex);
+  if (target < 0 || target === dragModelIndex.value) return;
+  const order = [...modelDraft.value.models];
+  const [moved] = order.splice(dragModelIndex.value, 1);
+  order.splice(target, 0, moved);
+  modelDraft.value = { row: rowIndex, models: order };
+  dragModelIndex.value = target;
+};
+
+const startModelDrag = (event, rowIndex, modelIndex) => {
+  if (event.button !== 0) return;
+  // 单模型行没有可调整的顺序，直接放过（不拦事件，保留默认行为）
+  if (mappingTargets(mappingRows.value[rowIndex] || {}).length < 2) return;
+  event.preventDefault();
+  try { event.currentTarget.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+  modelPress = { rowIndex, modelIndex, x: event.clientX, y: event.clientY, pointerId: event.pointerId, handle: event.currentTarget };
+  window.addEventListener("pointermove", onModelPointerMove);
+  window.addEventListener("pointerup", onModelPointerUp);
+  window.addEventListener("pointercancel", onModelPointerUp);
+};
+
+// 键盘等价：模型序号可聚焦，↑/↓ 在本行内移动一位
+const onModelIndexKeydown = (event, rowIndex, modelIndex, total) => {
+  const delta = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+  if (!delta) return;
+  const target = modelIndex + delta;
+  if (target < 0 || target >= total) return;
+  const mapping = mappingRows.value[rowIndex];
+  if (!mapping) return;
+  event.preventDefault();
+  const models = [...mappingTargets(mapping)];
+  const [moved] = models.splice(modelIndex, 1);
+  models.splice(target, 0, moved);
+  saveMappings(mappingRows.value.map((m, i) => (i === rowIndex ? { ...m, models } : m)));
+};
+
 // 响应 model 改写开关（映射模式）：agent 的用量统计读的是它自己会话记录里的模型名，
 // 这个开关决定记录的是映射名还是上游真实模型名
 const onRewriteModelChange = (val) => {
@@ -542,6 +667,7 @@ onUnmounted(() => {
   window.removeEventListener("focus", reloadConfig);
   if (logTimer) clearInterval(logTimer);
   detachMappingDrag();
+  detachModelDrag();
 });
 </script>
 
@@ -701,11 +827,27 @@ onUnmounted(() => {
             </div>
             <div class="autoroute-mapping-models">
               <div
-                v-for="(target, mi) in mappingTargets(m)"
+                v-for="(target, mi) in rowTargets(m, i)"
                 :key="mi"
                 class="autoroute-mapping-model-row"
+                :class="{ 'is-model-dragging': modelDragRow === i && dragModelIndex === mi }"
+                :data-model-index="mi"
               >
-                <span class="autoroute-mapping-model-index">{{ mi + 1 }}</span>
+                <span
+                  class="autoroute-mapping-model-index"
+                  :class="{
+                    'is-active': activeModelSlot(rowTargets(m, i), m) === mi,
+                    'is-sortable': rowTargets(m, i).length > 1,
+                  }"
+                  :role="rowTargets(m, i).length > 1 ? 'button' : undefined"
+                  :tabindex="rowTargets(m, i).length > 1 ? 0 : undefined"
+                  :title="activeModelSlot(rowTargets(m, i), m) === mi
+                    ? (rowTargets(m, i).length > 1 ? t('commonApp.autoRoute.modelInUseSortable') : t('commonApp.autoRoute.modelInUse'))
+                    : (rowTargets(m, i).length > 1 ? t('commonApp.autoRoute.dragModelHint') : undefined)"
+                  :aria-label="rowTargets(m, i).length > 1 ? t('commonApp.autoRoute.dragModelHint') : undefined"
+                  @pointerdown="startModelDrag($event, i, mi)"
+                  @keydown="onModelIndexKeydown($event, i, mi, rowTargets(m, i).length)"
+                >{{ mi + 1 }}</span>
                 <Cascader
                   :value="target.provider && target.modelId ? `${target.provider}::${target.modelId}` : undefined"
                   :options="routeOptions"
@@ -717,14 +859,14 @@ onUnmounted(() => {
                   :placeholder="t('commonApp.autoRoute.selectTargetPlaceholder')"
                   @change="(val) => onMappingTargetChange(i, mi, val)"
                 />
-                <Tooltip v-if="mappingTargets(m).length > 1" :content="t('commonApp.autoRoute.removeMappingModel')" placement="top">
+                <Tooltip v-if="rowTargets(m, i).length > 1" :content="t('commonApp.autoRoute.removeMappingModel')" placement="top">
                   <Button size="small" variant="text" theme="danger" @click="removeMappingModel(i, mi)">
                     <template #icon><DeleteIcon /></template>
                   </Button>
                 </Tooltip>
               </div>
               <Button
-                v-if="mappingTargets(m).length < MAX_MODELS_PER_MAPPING"
+                v-if="rowTargets(m, i).length < MAX_MODELS_PER_MAPPING"
                 size="small"
                 variant="text"
                 class="autoroute-add-mapping-model"

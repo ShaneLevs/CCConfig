@@ -82,7 +82,6 @@
       "noBaseUrl": "未配置 Base URL，无法自动获取",
       "noModelsReturned": "端点未返回模型",
       "currentConfigOption": "{protocol}（当前配置，来自下发）",
-      "modelOption": "{name}（{id}）",
       "officialTarget": "DeepSeek 官方（{route}）",
       "providerTarget": "{name}（{route}）"
     },
